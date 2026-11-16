@@ -373,6 +373,7 @@ struct Panel {
   Fl_Group *tasks = nullptr;
   fld::FlatButton *volume = nullptr;
   fld::FlatButton *keyboard = nullptr;
+  fld::FlatButton *network = nullptr;
   fld::FlatButton *battery = nullptr;
   fld::FlatButton *clock = nullptr;
   fld::FlatButton *power = nullptr;
@@ -691,6 +692,38 @@ static bool have_physical_keyboard() {
   return false;
 }
 
+#ifdef FLD_HAVE_NM
+#include "network_ui.h"
+#include "nmclient.h"
+
+static std::string g_net_tip;
+
+static void network_changed() {
+  const nm::State &st = nm::Client::get().state();
+  if (!st.running) {
+    if (P.network->visible()) { P.network->hide(); relayout(); }
+    return;
+  }
+  const char *icon;
+  if (st.primary_type == "802-11-wireless") icon = nm::signal_icon(st.primary_strength);
+  else if (!st.primary_type.empty()) icon = "network-wired";
+  else if (!st.networking) icon = "network-offline";
+  else icon = "network-wired-disconnected";
+  bool connecting = false;
+  for (auto &d : st.devices) if (d.connecting) connecting = true;
+  if (connecting && st.primary_type.empty()) icon = "network-wired-acquiring";
+  P.network->icon_name(icon, 18);
+  if (!fld::icon(icon, 18)) P.network->icon_name("fl-network", 18);
+  g_net_tip = st.primary_id.empty() ? (st.networking ? "Not connected" : "Networking is off")
+                                    : "Connected to " + st.primary_id;
+  for (auto &d : st.devices)
+    if (d.connected && !d.ip4.empty()) { g_net_tip += "\n" + d.iface + ": " + d.ip4[0]; break; }
+  P.network->tooltip(g_net_tip.c_str());
+  if (!P.network->visible()) { P.network->show(); relayout(); }
+  P.network->redraw();
+}
+#endif
+
 static void relayout() {
   if (!P.win) return;
   int W = P.win->w(), H = P.win->h();
@@ -713,6 +746,10 @@ static void relayout() {
     int bw = (int)fl_width(P.battery->label() ? P.battery->label() : "100%") + 40;
     P.battery->resize(r - bw, 2, bw, H - 4);
     r -= bw + 2;
+  }
+  if (P.network && P.network->visible()) {
+    P.network->resize(r - 34, 2, 34, H - 4);
+    r -= 36;
   }
   if (P.keyboard && P.keyboard->visible()) {
     P.keyboard->resize(r - 34, 2, 34, H - 4);
@@ -825,6 +862,10 @@ int main(int argc, char **argv) {
                           [](Fl_Widget *, void *) { fld::spawn({"fl-osk"}); });
     if (!fld::icon("input-keyboard", 20)) P.keyboard->copy_label("⌨");
   }
+#ifdef FLD_HAVE_NM
+  P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *, void *) { fld::spawn({"fl-network"}); });
+  P.network->hide();
+#endif
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);
@@ -841,6 +882,14 @@ int main(int argc, char **argv) {
     g_audio->on_changed = audio_changed;
     g_audio->on_connection = [](bool) { audio_changed(); };
   }
+#endif
+#ifdef FLD_HAVE_NM
+  Fl::lock();
+  nm::Client::get().on_changed = network_changed;
+  // the panel also answers NetworkManager's requests for Wi-Fi passwords
+  nm::Client::get().start_secret_agent([](const std::string &ssid, std::function<void(const std::string &)> reply) {
+    reply(nm::ask_wifi_password(ssid, true));
+  });
 #endif
   query_volume();
   update_volume_widget();

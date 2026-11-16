@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Network
+GenericName=Network Settings
+Comment=Manage wired and Wi-Fi network connections
+Exec=fl-network
+Icon=fl-network
+Categories=Settings;Network;
+Keywords=network;wifi;wlan;ethernet;ip;dns;networkmanager;
+StartupWMClass=fl-network

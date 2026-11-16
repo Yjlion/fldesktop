@@ -1,0 +1,16 @@
+pkg_check_modules(LIBNM IMPORTED_TARGET libnm)
+if(LIBNM_FOUND AND TARGET fld-glib)
+  add_library(fld-nm STATIC nmclient.cpp)
+  target_include_directories(fld-nm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-nm PUBLIC fld-glib PkgConfig::LIBNM)
+  # libnm's headers use GLib macros that trip -Wextra in C++
+  target_compile_options(fld-nm PRIVATE -Wno-cast-function-type)
+  message(STATUS "libnm ${LIBNM_VERSION}: building fld-nm")
+else()
+  message(STATUS "libnm not found: no network settings")
+endif()
+
+if(TARGET fld-nm)
+  add_library(fld-nm-ui STATIC network_ui.cpp)
+  target_link_libraries(fld-nm-ui PUBLIC fld-nm fld)
+endif()

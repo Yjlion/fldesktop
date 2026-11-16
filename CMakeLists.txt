@@ -72,6 +72,9 @@ if(FLD_NEED_FLTK)
   if(FLD_BUILD_MIXER OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
     add_subdirectory(common/audio)
   endif()
+  if(FLD_BUILD_NETWORK OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/nm)
+  endif()
 endif()
 
 # ---- Wayland protocol code generation --------------------------------------

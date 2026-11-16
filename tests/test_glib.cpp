@@ -13,7 +13,8 @@ int main() {
   bool owner = false;
   fld::glib_call_sync([&] {
     glib_id = std::this_thread::get_id();
-    owner = g_main_context_is_owner(g_main_context_default());
+    owner = g_main_context_is_owner(g_main_context_get_thread_default()) &&
+            g_main_context_get_thread_default() != g_main_context_default();
   });
   CHECK(glib_id != main_id);
   CHECK(owner);

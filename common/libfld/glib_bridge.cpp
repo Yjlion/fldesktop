@@ -11,6 +11,7 @@ namespace fld {
 
 namespace {
 GMainLoop *g_loop = nullptr;
+GMainContext *g_ctx = nullptr;
 std::thread g_thread;
 
 gboolean run_fn(gpointer data) {
@@ -29,20 +30,24 @@ void awake_fn(void *data) {
 
 void glib_start() {
   if (g_loop) return;
-  g_loop = g_main_loop_new(nullptr, FALSE);
+  // A context of our own, pushed as the worker's thread-default: GObject
+  // libraries attach their sources to it. The global default context stays
+  // with the FLTK thread, where GTK (libdecor's GTK plugin) iterates it.
+  g_ctx = g_main_context_new();
+  g_loop = g_main_loop_new(g_ctx, FALSE);
   std::mutex m;
   std::condition_variable cv;
   bool started = false;
   g_thread = std::thread([&] {
     GMainLoop *loop = g_loop;
-    g_main_context_acquire(g_main_context_default());
+    g_main_context_push_thread_default(g_ctx);
     {
       std::lock_guard<std::mutex> l(m);
       started = true;
     }
     cv.notify_one();
     g_main_loop_run(loop);
-    g_main_context_release(g_main_context_default());
+    g_main_context_pop_thread_default(g_ctx);
   });
   std::unique_lock<std::mutex> l(m);
   cv.wait(l, [&] { return started; });
@@ -51,18 +56,24 @@ void glib_start() {
 void glib_stop() {
   if (!g_loop) return;
   g_main_loop_quit(g_loop);
-  g_main_context_wakeup(g_main_context_default());
+  g_main_context_wakeup(g_ctx);
   if (g_thread.joinable()) g_thread.join();
   g_main_loop_unref(g_loop);
   g_loop = nullptr;
+  g_main_context_unref(g_ctx);
+  g_ctx = nullptr;
 }
 
 bool glib_running() { return g_loop != nullptr; }
 
 void glib_call(std::function<void()> fn) {
-  // an idle source on the default context always runs on the loop thread
+  // an idle source on our context always runs on the loop thread
   // (g_main_context_invoke might run it right here instead)
-  g_idle_add_full(G_PRIORITY_DEFAULT, run_fn, new std::function<void()>(std::move(fn)), nullptr);
+  GSource *src = g_idle_source_new();
+  g_source_set_priority(src, G_PRIORITY_DEFAULT);
+  g_source_set_callback(src, run_fn, new std::function<void()>(std::move(fn)), nullptr);
+  g_source_attach(src, g_ctx);
+  g_source_unref(src);
 }
 
 void glib_call_sync(std::function<void()> fn) {
@@ -77,6 +88,14 @@ void glib_call_sync(std::function<void()> fn) {
   });
   std::unique_lock<std::mutex> l(m);
   cv.wait(l, [&] { return done; });
+}
+
+unsigned glib_timeout(unsigned ms, int (*fn)(void *), void *data) {
+  GSource *src = g_timeout_source_new(ms);
+  g_source_set_callback(src, (GSourceFunc)fn, data, nullptr);
+  unsigned id = g_source_attach(src, g_ctx);
+  g_source_unref(src);
+  return id;
 }
 
 void ui_call(std::function<void()> fn) {

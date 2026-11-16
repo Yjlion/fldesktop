@@ -1,0 +1,672 @@
+/* fl-wm input: keyboards, pointer, key bindings, cursor shapes, DnD */
+#define _POSIX_C_SOURCE 200809L
+#include <linux/input-event-codes.h>
+#include <stdlib.h>
+#include <string.h>
+#include <wlr/backend/libinput.h>
+#include <wlr/types/wlr_cursor_shape_v1.h>
+#include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_input_device.h>
+#include <wlr/types/wlr_keyboard.h>
+#include <wlr/types/wlr_pointer.h>
+#include <wlr/types/wlr_primary_selection.h>
+#include <wlr/util/edges.h>
+#include <wlr/util/log.h>
+
+#include "server.h"
+
+#define MOD_MASK (WLR_MODIFIER_LOGO | WLR_MODIFIER_ALT | WLR_MODIFIER_CTRL | WLR_MODIFIER_SHIFT)
+#define DOUBLE_CLICK_MS 400
+
+/* ---- hit testing --------------------------------------------------------- */
+
+struct flwm_node_desc *input_desc_at(struct flwm_server *server, double lx, double ly,
+		struct wlr_surface **surface, double *sx, double *sy) {
+	*surface = NULL;
+	struct wlr_scene_node *node = wlr_scene_node_at(&server->scene->tree.node, lx, ly, sx, sy);
+	if (!node) return NULL;
+	if (node->type == WLR_SCENE_NODE_BUFFER) {
+		struct wlr_scene_buffer *sb = wlr_scene_buffer_from_node(node);
+		struct wlr_scene_surface *ss = wlr_scene_surface_try_from_buffer(sb);
+		if (ss) *surface = ss->surface;
+	}
+	/* walk up to the first node that carries a descriptor */
+	struct wlr_scene_node *n = node;
+	while (n && !n->data) n = n->parent ? &n->parent->node : NULL;
+	return n ? n->data : NULL;
+}
+
+/* ---- actions ------------------------------------------------------------- */
+
+static struct flwm_view *focused_normal(struct flwm_server *server) {
+	struct flwm_view *v = view_focused(server);
+	return (v && v->role == FLWM_ROLE_NORMAL) ? v : NULL;
+}
+
+static void cycle(struct flwm_server *server, bool backwards) {
+	/* candidates: mapped normal views in focus order */
+	struct flwm_view *list[256];
+	int n = 0;
+	struct flwm_view *v;
+	wl_list_for_each(v, &server->views, link)
+		if (v->mapped && v->role == FLWM_ROLE_NORMAL && n < 256) list[n++] = v;
+	if (n < 2) return;
+	int cur = 0;
+	struct flwm_view *from = server->cycle_current ? server->cycle_current : focused_normal(server);
+	for (int i = 0; i < n; i++)
+		if (list[i] == from) cur = i;
+	int next = backwards ? (cur - 1 + n) % n : (cur + 1) % n;
+	server->cycling = true;
+	server->cycle_current = list[next];
+	view_focus(list[next]);
+}
+
+static void finish_cycle(struct flwm_server *server) {
+	if (!server->cycling) return;
+	server->cycling = false;
+	struct flwm_view *v = server->cycle_current;
+	server->cycle_current = NULL;
+	if (v && v->mapped) {
+		wl_list_remove(&v->link);
+		wl_list_insert(&server->views, &v->link);
+	}
+}
+
+static void reload_config(struct flwm_server *server) {
+	char *path = server->config.path ? strdup(server->config.path) : config_default_path();
+	config_free(&server->config);
+	config_init_defaults(&server->config);
+	if (!config_load(&server->config, path)) wlr_log(WLR_INFO, "reload: no config at %s", path);
+	free(path);
+	input_apply_config(server);
+	output_apply_config(server);
+	struct flwm_view *v;
+	wl_list_for_each(v, &server->views, link) {
+		if (!v->mapped) continue;
+		if (v->decor.tree) {
+			decor_destroy(v);
+		}
+		decor_update(v);
+	}
+	arrange_all(server);
+	wlr_log(WLR_INFO, "configuration reloaded");
+}
+
+bool input_run_action(struct flwm_server *server, enum flwm_action_type action, const char *arg) {
+	struct flwm_view *v = focused_normal(server);
+	switch (action) {
+	case FLWM_ACTION_EXEC:
+		if (arg) flwm_spawn(server, arg);
+		return true;
+	case FLWM_ACTION_CLOSE:
+		if (v) view_close(v);
+		return true;
+	case FLWM_ACTION_MAXIMIZE:
+		if (v) view_set_maximized(v, !v->maximized);
+		return true;
+	case FLWM_ACTION_MINIMIZE:
+		if (v) view_set_minimized(v, true);
+		return true;
+	case FLWM_ACTION_FULLSCREEN:
+		if (v) view_set_fullscreen(v, !v->fullscreen);
+		return true;
+	case FLWM_ACTION_SNAP_LEFT:
+		if (v) view_snap(v, -1);
+		return true;
+	case FLWM_ACTION_SNAP_RIGHT:
+		if (v) view_snap(v, 1);
+		return true;
+	case FLWM_ACTION_CYCLE:
+		cycle(server, false);
+		return true;
+	case FLWM_ACTION_CYCLE_BACK:
+		cycle(server, true);
+		return true;
+	case FLWM_ACTION_LAUNCHER: {
+		struct flwm_view *l = view_find_role(server, FLWM_ROLE_LAUNCHER);
+		if (l) view_close(l);
+		else flwm_spawn(server, server->config.launcher_cmd ? server->config.launcher_cmd : "fl-launcher");
+		return true;
+	}
+	case FLWM_ACTION_QUIT:
+		wl_display_terminate(server->wl_display);
+		return true;
+	case FLWM_ACTION_RELOAD:
+		reload_config(server);
+		return true;
+	case FLWM_ACTION_SHOW_DESKTOP:
+		views_show_desktop(server);
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* ---- keyboard ------------------------------------------------------------ */
+
+static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) {
+	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, modifiers);
+	struct flwm_server *server = keyboard->server;
+	if (server->cycling) {
+		uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
+		if (!(mods & server->cycle_modifier)) finish_cycle(server);
+	}
+	wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
+	wlr_seat_keyboard_notify_modifiers(server->seat, &keyboard->wlr_keyboard->modifiers);
+}
+
+static bool handle_binding(struct flwm_server *server, uint32_t mods, xkb_keysym_t sym) {
+	sym = xkb_keysym_to_lower(sym);
+	for (int i = 0; i < server->config.nbindings; i++) {
+		struct flwm_binding *b = &server->config.bindings[i];
+		if (b->sym != sym || b->modifiers != (mods & MOD_MASK)) continue;
+		if (b->action == FLWM_ACTION_CYCLE || b->action == FLWM_ACTION_CYCLE_BACK)
+			server->cycle_modifier = b->modifiers & ~WLR_MODIFIER_SHIFT;
+		return input_run_action(server, b->action, b->arg);
+	}
+	return false;
+}
+
+static void keyboard_handle_key(struct wl_listener *listener, void *data) {
+	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+	struct flwm_server *server = keyboard->server;
+	struct wlr_keyboard_key_event *event = data;
+	struct wlr_seat *seat = server->seat;
+	uint32_t keycode = event->keycode + 8;
+	bool handled = false;
+
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		struct xkb_state *state = keyboard->wlr_keyboard->xkb_state;
+		const xkb_keysym_t *syms;
+		/* VT switching (Ctrl+Alt+Fn yields XF86Switch_VT_n) */
+		int nsyms = xkb_state_key_get_syms(state, keycode, &syms);
+		for (int i = 0; i < nsyms; i++) {
+			if (syms[i] >= XKB_KEY_XF86Switch_VT_1 && syms[i] <= XKB_KEY_XF86Switch_VT_12) {
+				if (server->session)
+					wlr_session_change_vt(server->session, syms[i] - XKB_KEY_XF86Switch_VT_1 + 1);
+				handled = true;
+			}
+		}
+		/* bindings match on the unshifted keysym of the active layout */
+		uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
+		if (!handled && !server->focused_layer) {
+			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
+			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap,
+				keycode, layout, 0, &syms);
+			for (int i = 0; i < nsyms && !handled; i++) handled = handle_binding(server, mods, syms[i]);
+		}
+		/* Ctrl+Alt+BackSpace and friends even when a layer surface owns the keyboard */
+		if (!handled && server->focused_layer && (mods & MOD_MASK) == (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)) {
+			nsyms = xkb_state_key_get_syms(state, keycode, &syms);
+			for (int i = 0; i < nsyms; i++)
+				if (syms[i] == XKB_KEY_BackSpace || syms[i] == XKB_KEY_Terminate_Server) {
+					wl_display_terminate(server->wl_display);
+					handled = true;
+				}
+		}
+	}
+	if (!handled) {
+		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
+		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
+	}
+}
+
+static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
+	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, destroy);
+	wl_list_remove(&keyboard->modifiers.link);
+	wl_list_remove(&keyboard->key.link);
+	wl_list_remove(&keyboard->destroy.link);
+	wl_list_remove(&keyboard->link);
+	free(keyboard);
+}
+
+static void keyboard_apply_config(struct flwm_server *server, struct wlr_keyboard *kb) {
+	struct flwm_config *c = &server->config;
+	struct xkb_rule_names rules = {
+		.layout = c->kb_layout, .variant = c->kb_variant,
+		.options = c->kb_options, .model = c->kb_model,
+	};
+	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	struct xkb_keymap *keymap = xkb_keymap_new_from_names(context, &rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	if (!keymap) {
+		wlr_log(WLR_ERROR, "invalid keyboard layout, using defaults");
+		keymap = xkb_keymap_new_from_names(context, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	}
+	wlr_keyboard_set_keymap(kb, keymap);
+	xkb_keymap_unref(keymap);
+	xkb_context_unref(context);
+	wlr_keyboard_set_repeat_info(kb, c->repeat_rate, c->repeat_delay);
+}
+
+static void server_new_keyboard(struct flwm_server *server, struct wlr_input_device *device) {
+	struct wlr_keyboard *wlr_keyboard = wlr_keyboard_from_input_device(device);
+	struct flwm_keyboard *keyboard = calloc(1, sizeof(*keyboard));
+	keyboard->server = server;
+	keyboard->wlr_keyboard = wlr_keyboard;
+	keyboard_apply_config(server, wlr_keyboard);
+	keyboard->modifiers.notify = keyboard_handle_modifiers;
+	wl_signal_add(&wlr_keyboard->events.modifiers, &keyboard->modifiers);
+	keyboard->key.notify = keyboard_handle_key;
+	wl_signal_add(&wlr_keyboard->events.key, &keyboard->key);
+	keyboard->destroy.notify = keyboard_handle_destroy;
+	wl_signal_add(&device->events.destroy, &keyboard->destroy);
+	wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
+	wl_list_insert(&server->keyboards, &keyboard->link);
+}
+
+/* ---- pointer devices ----------------------------------------------------- */
+
+static void pointer_apply_config(struct flwm_server *server, struct wlr_input_device *device) {
+	if (!wlr_input_device_is_libinput(device)) return;
+	struct libinput_device *li = wlr_libinput_get_device_handle(device);
+	struct flwm_config *c = &server->config;
+	if (libinput_device_config_tap_get_finger_count(li) > 0)
+		libinput_device_config_tap_set_enabled(li, c->tap_to_click
+			? LIBINPUT_CONFIG_TAP_ENABLED : LIBINPUT_CONFIG_TAP_DISABLED);
+	if (libinput_device_config_scroll_has_natural_scroll(li))
+		libinput_device_config_scroll_set_natural_scroll_enabled(li, c->natural_scroll);
+	if (libinput_device_config_accel_is_available(li))
+		libinput_device_config_accel_set_speed(li, c->pointer_accel);
+}
+
+static void pointer_destroy(struct wl_listener *listener, void *data) {
+	struct flwm_pointer *p = wl_container_of(listener, p, destroy);
+	wl_list_remove(&p->destroy.link);
+	wl_list_remove(&p->link);
+	free(p);
+}
+
+static void server_new_pointer(struct flwm_server *server, struct wlr_input_device *device) {
+	struct flwm_pointer *p = calloc(1, sizeof(*p));
+	p->device = device;
+	p->destroy.notify = pointer_destroy;
+	wl_signal_add(&device->events.destroy, &p->destroy);
+	wl_list_insert(&server->pointers, &p->link);
+	pointer_apply_config(server, device);
+	wlr_cursor_attach_input_device(server->cursor, device);
+}
+
+static void server_new_input(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, new_input);
+	struct wlr_input_device *device = data;
+	switch (device->type) {
+	case WLR_INPUT_DEVICE_KEYBOARD:
+		server_new_keyboard(server, device);
+		break;
+	case WLR_INPUT_DEVICE_POINTER:
+	case WLR_INPUT_DEVICE_TOUCH:
+	case WLR_INPUT_DEVICE_TABLET:
+		server_new_pointer(server, device);
+		break;
+	default:
+		break;
+	}
+	uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
+	if (!wl_list_empty(&server->keyboards)) caps |= WL_SEAT_CAPABILITY_KEYBOARD;
+	wlr_seat_set_capabilities(server->seat, caps);
+}
+
+static void load_cursor_theme(struct flwm_server *server) {
+	if (server->cursor_mgr) wlr_xcursor_manager_destroy(server->cursor_mgr);
+	const char *theme = server->config.cursor_theme ? server->config.cursor_theme : getenv("XCURSOR_THEME");
+	int size = server->config.cursor_size > 0 ? server->config.cursor_size : 24;
+	server->cursor_mgr = wlr_xcursor_manager_create(theme, size);
+	char sz[16];
+	snprintf(sz, sizeof sz, "%d", size);
+	if (theme) setenv("XCURSOR_THEME", theme, 1);
+	setenv("XCURSOR_SIZE", sz, 1);
+	wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+}
+
+void input_apply_config(struct flwm_server *server) {
+	struct flwm_keyboard *kb;
+	wl_list_for_each(kb, &server->keyboards, link) keyboard_apply_config(server, kb->wlr_keyboard);
+	struct flwm_pointer *p;
+	wl_list_for_each(p, &server->pointers, link) pointer_apply_config(server, p->device);
+	load_cursor_theme(server);
+}
+
+/* ---- seat requests --------------------------------------------------------- */
+
+static void seat_request_cursor(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, request_cursor);
+	struct wlr_seat_pointer_request_set_cursor_event *event = data;
+	if (server->cursor_mode != FLWM_CURSOR_PASSTHROUGH) return;
+	if (server->seat->pointer_state.focused_client == event->seat_client)
+		wlr_cursor_set_surface(server->cursor, event->surface, event->hotspot_x, event->hotspot_y);
+}
+
+static void request_set_cursor_shape(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, request_set_cursor_shape);
+	struct wlr_cursor_shape_manager_v1_request_set_shape_event *event = data;
+	if (server->cursor_mode != FLWM_CURSOR_PASSTHROUGH) return;
+	if (server->seat->pointer_state.focused_client == event->seat_client)
+		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, wlr_cursor_shape_v1_name(event->shape));
+}
+
+static void seat_pointer_focus_change(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, pointer_focus_change);
+	struct wlr_seat_pointer_focus_change_event *event = data;
+	if (event->new_surface == NULL && server->cursor_mode == FLWM_CURSOR_PASSTHROUGH)
+		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+}
+
+static void seat_request_set_selection(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, request_set_selection);
+	struct wlr_seat_request_set_selection_event *event = data;
+	wlr_seat_set_selection(server->seat, event->source, event->serial);
+}
+
+static void seat_request_set_primary_selection(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, request_set_primary_selection);
+	struct wlr_seat_request_set_primary_selection_event *event = data;
+	wlr_seat_set_primary_selection(server->seat, event->source, event->serial);
+}
+
+static void seat_request_start_drag(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, request_start_drag);
+	struct wlr_seat_request_start_drag_event *event = data;
+	if (wlr_seat_validate_pointer_grab_serial(server->seat, event->origin, event->serial))
+		wlr_seat_start_pointer_drag(server->seat, event->drag, event->serial);
+	else
+		wlr_data_source_destroy(event->drag->source);
+}
+
+static void drag_destroy(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, drag_destroy);
+	wl_list_remove(&server->drag_destroy.link);
+	if (server->drag_icon) wlr_scene_node_destroy(&server->drag_icon->node);
+	server->drag_icon = NULL;
+}
+
+static void seat_start_drag(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, start_drag);
+	struct wlr_drag *drag = data;
+	server->drag_destroy.notify = drag_destroy;
+	wl_signal_add(&drag->events.destroy, &server->drag_destroy);
+	if (drag->icon) {
+		server->drag_icon = wlr_scene_drag_icon_create(server->layer_popups, drag->icon);
+		wlr_scene_node_set_position(&server->drag_icon->node, server->cursor->x, server->cursor->y);
+	}
+}
+
+/* ---- cursor ---------------------------------------------------------------- */
+
+void input_reset_cursor_mode(struct flwm_server *server) {
+	if (server->cursor_mode == FLWM_CURSOR_RESIZE && server->grabbed_view)
+		wlr_xdg_toplevel_set_resizing(server->grabbed_view->xdg_toplevel, false);
+	server->cursor_mode = FLWM_CURSOR_PASSTHROUGH;
+	server->grabbed_view = NULL;
+	server->pressed_part = FLWM_PART_NONE;
+}
+
+static void process_cursor_resize(struct flwm_server *server) {
+	struct flwm_view *view = server->grabbed_view;
+	double bx = server->cursor->x - server->grab_x;
+	double by = server->cursor->y - server->grab_y;
+	struct wlr_box g = server->grab_geobox;
+	int left = g.x, right = g.x + g.width, top = g.y, bottom = g.y + g.height;
+	const int min = 64;
+	if (server->resize_edges & WLR_EDGE_TOP) {
+		top = (int)by;
+		if (top > bottom - min) top = bottom - min;
+	} else if (server->resize_edges & WLR_EDGE_BOTTOM) {
+		bottom = (int)by;
+		if (bottom < top + min) bottom = top + min;
+	}
+	if (server->resize_edges & WLR_EDGE_LEFT) {
+		left = (int)bx;
+		if (left > right - min) left = right - min;
+	} else if (server->resize_edges & WLR_EDGE_RIGHT) {
+		right = (int)bx;
+		if (right < left + min) right = left + min;
+	}
+	/* position is fixed up on commit for top/left edges (see view_commit) */
+	wlr_xdg_toplevel_set_size(view->xdg_toplevel, right - left, bottom - top);
+}
+
+static const char *edge_cursor(uint32_t edges) {
+	switch (edges) {
+	case WLR_EDGE_TOP: return "n-resize";
+	case WLR_EDGE_BOTTOM: return "s-resize";
+	case WLR_EDGE_LEFT: return "w-resize";
+	case WLR_EDGE_RIGHT: return "e-resize";
+	case WLR_EDGE_TOP | WLR_EDGE_LEFT: return "nw-resize";
+	case WLR_EDGE_TOP | WLR_EDGE_RIGHT: return "ne-resize";
+	case WLR_EDGE_BOTTOM | WLR_EDGE_LEFT: return "sw-resize";
+	case WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT: return "se-resize";
+	}
+	return "default";
+}
+
+static void set_hover(struct flwm_server *server, struct flwm_view *view, enum flwm_decor_part part) {
+	if (server->hover_view && server->hover_view != view)
+		decor_set_hover(server->hover_view, FLWM_PART_NONE);
+	server->hover_view = view;
+	if (view) decor_set_hover(view, part);
+}
+
+void input_update_pointer_focus(struct flwm_server *server, uint32_t time) {
+	double sx, sy;
+	struct wlr_surface *surface = NULL;
+	struct flwm_node_desc *desc = input_desc_at(server, server->cursor->x, server->cursor->y,
+		&surface, &sx, &sy);
+	if (desc && desc->kind == FLWM_NODE_DECOR) {
+		struct flwm_view *view = desc->ptr;
+		if (desc->part == FLWM_PART_EDGE) {
+			wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, edge_cursor(desc->edges));
+			set_hover(server, NULL, FLWM_PART_NONE);
+		} else {
+			wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+			set_hover(server, view, decor_part_at(view, server->cursor->x, server->cursor->y));
+		}
+		wlr_seat_pointer_clear_focus(server->seat);
+		return;
+	}
+	set_hover(server, NULL, FLWM_PART_NONE);
+	if (!desc) wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+	if (surface) {
+		wlr_seat_pointer_notify_enter(server->seat, surface, sx, sy);
+		wlr_seat_pointer_notify_motion(server->seat, time, sx, sy);
+		if (server->config.focus_follows_mouse && desc && desc->kind == FLWM_NODE_VIEW) {
+			struct flwm_view *view = desc->ptr;
+			if (view->role == FLWM_ROLE_NORMAL && view_focused(server) != view) view_focus(view);
+		}
+	} else {
+		wlr_seat_pointer_clear_focus(server->seat);
+	}
+}
+
+static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
+	if (server->drag_icon)
+		wlr_scene_node_set_position(&server->drag_icon->node, server->cursor->x, server->cursor->y);
+	switch (server->cursor_mode) {
+	case FLWM_CURSOR_MOVE:
+		view_set_position(server->grabbed_view, (int)(server->cursor->x - server->grab_x),
+			(int)(server->cursor->y - server->grab_y));
+		return;
+	case FLWM_CURSOR_RESIZE:
+		process_cursor_resize(server);
+		return;
+	case FLWM_CURSOR_PRESSED_BUTTON:
+		if (server->grabbed_view) {
+			enum flwm_decor_part p = decor_part_at(server->grabbed_view, server->cursor->x, server->cursor->y);
+			decor_set_hover(server->grabbed_view, p == server->pressed_part ? p : FLWM_PART_NONE);
+		}
+		return;
+	default:
+		input_update_pointer_focus(server, time);
+	}
+}
+
+static void server_cursor_motion(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, cursor_motion);
+	struct wlr_pointer_motion_event *event = data;
+	wlr_cursor_move(server->cursor, &event->pointer->base, event->delta_x, event->delta_y);
+	process_cursor_motion(server, event->time_msec);
+}
+
+static void server_cursor_motion_absolute(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, cursor_motion_absolute);
+	struct wlr_pointer_motion_absolute_event *event = data;
+	wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
+	process_cursor_motion(server, event->time_msec);
+}
+
+static uint32_t edges_for_point(struct flwm_view *view, double lx, double ly) {
+	struct wlr_box g;
+	view_get_geometry(view, &g);
+	uint32_t e = 0;
+	e |= (lx < g.x + g.width / 2.0) ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
+	e |= (ly < g.y + g.height / 2.0) ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+	return e;
+}
+
+static void server_cursor_button(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, cursor_button);
+	struct wlr_pointer_button_event *event = data;
+
+	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+		enum flwm_cursor_mode mode = server->cursor_mode;
+		if (mode == FLWM_CURSOR_PRESSED_BUTTON && server->grabbed_view) {
+			struct flwm_view *view = server->grabbed_view;
+			enum flwm_decor_part part = decor_part_at(view, server->cursor->x, server->cursor->y);
+			enum flwm_decor_part pressed = server->pressed_part;
+			input_reset_cursor_mode(server);
+			if (part == pressed) {
+				if (part == FLWM_PART_CLOSE) view_close(view);
+				else if (part == FLWM_PART_MAXIMIZE) view_set_maximized(view, !view->maximized);
+				else if (part == FLWM_PART_MINIMIZE) view_set_minimized(view, true);
+			}
+			input_update_pointer_focus(server, event->time_msec);
+			return;
+		}
+		input_reset_cursor_mode(server);
+		if (mode == FLWM_CURSOR_PASSTHROUGH)
+			wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
+		else
+			input_update_pointer_focus(server, event->time_msec);
+		return;
+	}
+
+	double sx, sy;
+	struct wlr_surface *surface = NULL;
+	struct flwm_node_desc *desc = input_desc_at(server, server->cursor->x, server->cursor->y,
+		&surface, &sx, &sy);
+
+	struct wlr_keyboard *kb = wlr_seat_get_keyboard(server->seat);
+	uint32_t mods = kb ? wlr_keyboard_get_modifiers(kb) : 0;
+
+	if (desc && desc->kind == FLWM_NODE_LAYER) {
+		layer_clicked(desc->ptr);
+		wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
+		return;
+	}
+	/* clicking a window takes the keyboard back from an on-demand layer surface */
+	if (server->focused_layer && server->focused_layer->layer_surface->current.keyboard_interactive !=
+			ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE)
+		server->focused_layer = NULL;
+
+	struct flwm_view *view = desc ? desc->ptr : NULL;
+	if (view) view_focus(view);
+
+	/* Super + drag moves / resizes any normal window */
+	if (view && view->role == FLWM_ROLE_NORMAL && (mods & WLR_MODIFIER_LOGO)) {
+		if (event->button == BTN_LEFT) {
+			view_begin_interactive(view, FLWM_CURSOR_MOVE, 0);
+			return;
+		}
+		if (event->button == BTN_RIGHT) {
+			view_begin_interactive(view, FLWM_CURSOR_RESIZE,
+				edges_for_point(view, server->cursor->x, server->cursor->y));
+			return;
+		}
+	}
+
+	if (desc && desc->kind == FLWM_NODE_DECOR) {
+		if (desc->part == FLWM_PART_EDGE) {
+			view_begin_interactive(view, FLWM_CURSOR_RESIZE, desc->edges);
+			return;
+		}
+		enum flwm_decor_part part = decor_part_at(view, server->cursor->x, server->cursor->y);
+		if (event->button != BTN_LEFT) {
+			if (event->button == BTN_MIDDLE) {
+				/* middle click on the title sends the window to the back */
+				wlr_scene_node_lower_to_bottom(&view->tree->node);
+			}
+			return;
+		}
+		if (part == FLWM_PART_CLOSE || part == FLWM_PART_MAXIMIZE || part == FLWM_PART_MINIMIZE) {
+			server->cursor_mode = FLWM_CURSOR_PRESSED_BUTTON;
+			server->grabbed_view = view;
+			server->pressed_part = part;
+			return;
+		}
+		/* title: double click toggles maximize, otherwise start moving */
+		if (server->last_click_view == view && event->time_msec - server->last_click_time < DOUBLE_CLICK_MS) {
+			server->last_click_view = NULL;
+			view_set_maximized(view, !view->maximized);
+			return;
+		}
+		server->last_click_view = view;
+		server->last_click_time = event->time_msec;
+		view_begin_interactive(view, FLWM_CURSOR_MOVE, 0);
+		return;
+	}
+
+	wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
+}
+
+static void server_cursor_axis(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, cursor_axis);
+	struct wlr_pointer_axis_event *event = data;
+	wlr_seat_pointer_notify_axis(server->seat, event->time_msec, event->orientation, event->delta,
+		event->delta_discrete, event->source, event->relative_direction);
+}
+
+static void server_cursor_frame(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, cursor_frame);
+	wlr_seat_pointer_notify_frame(server->seat);
+}
+
+void input_init(struct flwm_server *server) {
+	server->cursor = wlr_cursor_create();
+	wlr_cursor_attach_output_layout(server->cursor, server->output_layout);
+	load_cursor_theme(server);
+
+	server->cursor_mode = FLWM_CURSOR_PASSTHROUGH;
+	server->cursor_motion.notify = server_cursor_motion;
+	wl_signal_add(&server->cursor->events.motion, &server->cursor_motion);
+	server->cursor_motion_absolute.notify = server_cursor_motion_absolute;
+	wl_signal_add(&server->cursor->events.motion_absolute, &server->cursor_motion_absolute);
+	server->cursor_button.notify = server_cursor_button;
+	wl_signal_add(&server->cursor->events.button, &server->cursor_button);
+	server->cursor_axis.notify = server_cursor_axis;
+	wl_signal_add(&server->cursor->events.axis, &server->cursor_axis);
+	server->cursor_frame.notify = server_cursor_frame;
+	wl_signal_add(&server->cursor->events.frame, &server->cursor_frame);
+
+	wl_list_init(&server->keyboards);
+	wl_list_init(&server->pointers);
+	server->new_input.notify = server_new_input;
+	wl_signal_add(&server->backend->events.new_input, &server->new_input);
+
+	server->seat = wlr_seat_create(server->wl_display, "seat0");
+	server->request_cursor.notify = seat_request_cursor;
+	wl_signal_add(&server->seat->events.request_set_cursor, &server->request_cursor);
+	server->pointer_focus_change.notify = seat_pointer_focus_change;
+	wl_signal_add(&server->seat->pointer_state.events.focus_change, &server->pointer_focus_change);
+	server->request_set_selection.notify = seat_request_set_selection;
+	wl_signal_add(&server->seat->events.request_set_selection, &server->request_set_selection);
+	server->request_set_primary_selection.notify = seat_request_set_primary_selection;
+	wl_signal_add(&server->seat->events.request_set_primary_selection,
+		&server->request_set_primary_selection);
+	server->request_start_drag.notify = seat_request_start_drag;
+	wl_signal_add(&server->seat->events.request_start_drag, &server->request_start_drag);
+	server->start_drag.notify = seat_start_drag;
+	wl_signal_add(&server->seat->events.start_drag, &server->start_drag);
+
+	server->cursor_shape_mgr = wlr_cursor_shape_manager_v1_create(server->wl_display, 1);
+	server->request_set_cursor_shape.notify = request_set_cursor_shape;
+	wl_signal_add(&server->cursor_shape_mgr->events.request_set_shape, &server->request_set_cursor_shape);
+}

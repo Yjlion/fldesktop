@@ -1,0 +1,394 @@
+/* fl-wm: the fldesktop Wayland compositor */
+#ifndef FLWM_SERVER_H
+#define FLWM_SERVER_H
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <wayland-server-core.h>
+#include <wlr/backend.h>
+#include <wlr/backend/session.h>
+#include <wlr/render/allocator.h>
+#include <wlr/render/wlr_renderer.h>
+#include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_foreign_toplevel_management_v1.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_scene.h>
+#include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_xcursor_manager.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_xdg_shell.h>
+#include <xkbcommon/xkbcommon.h>
+
+#include "compat.h"
+
+#define FLWM_MAX_BINDINGS 64
+#define FLWM_MAX_AUTOSTART 32
+
+enum flwm_cursor_mode {
+	FLWM_CURSOR_PASSTHROUGH,
+	FLWM_CURSOR_MOVE,
+	FLWM_CURSOR_RESIZE,
+	FLWM_CURSOR_PRESSED_BUTTON, /* pressed a titlebar button, waiting for release */
+};
+
+/* Special fldesktop shell clients, recognised by app_id + executable */
+enum flwm_role {
+	FLWM_ROLE_NORMAL = 0,
+	FLWM_ROLE_PANEL,
+	FLWM_ROLE_DESKTOP,
+	FLWM_ROLE_LAUNCHER,
+	FLWM_ROLE_OSD, /* notifications / volume popups: overlay, no focus */
+};
+
+/* What a scene node belongs to (stored in wlr_scene_node.data) */
+enum flwm_node_kind {
+	FLWM_NODE_VIEW,
+	FLWM_NODE_DECOR,
+	FLWM_NODE_LAYER,
+};
+
+enum flwm_decor_part {
+	FLWM_PART_NONE = 0,
+	FLWM_PART_TITLE,
+	FLWM_PART_CLOSE,
+	FLWM_PART_MAXIMIZE,
+	FLWM_PART_MINIMIZE,
+	FLWM_PART_EDGE, /* resize handle; edges stored separately */
+};
+
+struct flwm_node_desc {
+	enum flwm_node_kind kind;
+	void *ptr;
+	uint32_t edges; /* for FLWM_PART_EDGE */
+	enum flwm_decor_part part;
+};
+
+enum flwm_action_type {
+	FLWM_ACTION_NONE,
+	FLWM_ACTION_EXEC,
+	FLWM_ACTION_CLOSE,
+	FLWM_ACTION_MAXIMIZE,
+	FLWM_ACTION_MINIMIZE,
+	FLWM_ACTION_FULLSCREEN,
+	FLWM_ACTION_CYCLE,
+	FLWM_ACTION_CYCLE_BACK,
+	FLWM_ACTION_SNAP_LEFT,
+	FLWM_ACTION_SNAP_RIGHT,
+	FLWM_ACTION_LAUNCHER,
+	FLWM_ACTION_QUIT,
+	FLWM_ACTION_RELOAD,
+	FLWM_ACTION_SHOW_DESKTOP,
+};
+
+struct flwm_binding {
+	uint32_t modifiers; /* WLR_MODIFIER_* */
+	xkb_keysym_t sym;
+	enum flwm_action_type action;
+	char *arg;
+};
+
+#define FLWM_MAX_OUTPUT_CONFIGS 16
+
+struct flwm_output_config {
+	char *name;
+	float scale;        /* 0 = default */
+	int width, height;  /* 0 = preferred */
+	int refresh_mhz;    /* 0 = any */
+	int x, y;
+	bool has_position;
+	bool disabled;
+	int transform;      /* enum wl_output_transform */
+};
+
+struct flwm_config {
+	/* appearance */
+	int title_height;
+	int border_width;
+	uint32_t active_title, inactive_title, active_text, inactive_text, border_color;
+	char *font; /* pango font description, e.g. "Sans Bold 10" */
+	bool panel_top;
+	bool focus_follows_mouse;
+	/* keyboard */
+	char *kb_layout, *kb_variant, *kb_options, *kb_model;
+	int repeat_rate, repeat_delay;
+	/* pointer */
+	bool tap_to_click, natural_scroll;
+	double pointer_accel;
+	/* cursor */
+	char *cursor_theme;
+	int cursor_size;
+	/* outputs: default scale */
+	float default_scale;
+	struct flwm_output_config outputs[FLWM_MAX_OUTPUT_CONFIGS];
+	int noutputs;
+	char *launcher_cmd;
+	/* key bindings & autostart */
+	struct flwm_binding bindings[FLWM_MAX_BINDINGS];
+	int nbindings;
+	char *autostart[FLWM_MAX_AUTOSTART];
+	int nautostart;
+	char *path; /* loaded file */
+};
+
+struct flwm_server {
+	struct wl_display *wl_display;
+	struct wl_event_loop *event_loop;
+	struct wlr_backend *backend;
+	struct wlr_session *session;
+	struct wlr_renderer *renderer;
+	struct wlr_allocator *allocator;
+	struct wlr_compositor *compositor;
+	struct wlr_scene *scene;
+	struct wlr_scene_output_layout *scene_layout;
+
+	/* stacking layers, bottom to top */
+	struct wlr_scene_tree *layer_background; /* layer-shell background + fl-desktop */
+	struct wlr_scene_tree *layer_bottom;
+	struct wlr_scene_tree *layer_views;
+	struct wlr_scene_tree *layer_top;        /* layer-shell top + fl-panel */
+	struct wlr_scene_tree *layer_overlay;    /* layer-shell overlay + launcher */
+	struct wlr_scene_tree *layer_popups;     /* popups of panel/launcher */
+
+	struct wlr_xdg_shell *xdg_shell;
+	struct wl_listener new_xdg_toplevel;
+	struct wl_listener new_xdg_popup;
+	struct wl_list views; /* flwm_view.link, most recently focused first */
+
+	struct wlr_layer_shell_v1 *layer_shell;
+	struct wl_listener new_layer_surface;
+
+	struct wlr_xdg_decoration_manager_v1 *xdg_decoration_mgr;
+	struct wl_listener new_toplevel_decoration;
+
+	struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_mgr;
+
+	struct wlr_xdg_activation_v1 *xdg_activation;
+	struct wl_listener request_activate;
+
+	struct wlr_cursor_shape_manager_v1 *cursor_shape_mgr;
+	struct wl_listener request_set_cursor_shape;
+
+	struct wlr_cursor *cursor;
+	struct wlr_xcursor_manager *cursor_mgr;
+	struct wl_listener cursor_motion;
+	struct wl_listener cursor_motion_absolute;
+	struct wl_listener cursor_button;
+	struct wl_listener cursor_axis;
+	struct wl_listener cursor_frame;
+
+	struct wlr_seat *seat;
+	struct wl_listener new_input;
+	struct wl_listener request_cursor;
+	struct wl_listener pointer_focus_change;
+	struct wl_listener request_set_selection;
+	struct wl_listener request_set_primary_selection;
+	struct wl_listener request_start_drag;
+	struct wl_listener start_drag;
+	struct wl_list keyboards;
+	struct wl_list pointers; /* flwm_pointer.link (for libinput config) */
+
+	enum flwm_cursor_mode cursor_mode;
+	struct flwm_view *grabbed_view;
+	enum flwm_decor_part pressed_part;
+	double grab_x, grab_y;
+	struct wlr_box grab_geobox;
+	uint32_t resize_edges;
+
+	/* Alt+Tab cycling */
+	bool cycling;
+	uint32_t cycle_modifier;
+	struct flwm_view *cycle_current;
+
+	struct flwm_layer_surface *focused_layer; /* exclusive keyboard focus */
+
+	struct wlr_scene_tree *drag_icon;
+	struct wl_listener drag_destroy;
+	struct flwm_view *hover_view;      /* view whose title buttons show hover */
+	uint32_t last_click_time;
+	struct flwm_view *last_click_view;
+
+	struct wlr_output_layout *output_layout;
+	struct wl_list outputs;
+	struct wl_listener new_output;
+	struct wl_listener layout_change;
+
+	struct flwm_config config;
+	char exe_dir[4096]; /* directory of our own executable */
+	bool desktop_shown; /* show-desktop toggled */
+};
+
+struct flwm_output {
+	struct wl_list link;
+	struct flwm_server *server;
+	struct wlr_output *wlr_output;
+	struct wlr_scene_output *scene_output;
+	struct wlr_box full_area;   /* layout coordinates */
+	struct wlr_box usable_area; /* minus panel/exclusive zones */
+	struct wl_list layers[4];   /* flwm_layer_surface.link per zwlr layer */
+	struct wl_listener frame;
+	struct wl_listener request_state;
+	struct wl_listener destroy;
+};
+
+struct flwm_decor {
+	struct wlr_scene_tree *tree;
+	struct wlr_scene_buffer *title;     /* rendered title bar */
+	struct wlr_scene_rect *border[4];   /* visible 1px border: top/bottom/left/right */
+	struct wlr_scene_rect *handle[8];   /* invisible resize handles */
+	struct flwm_node_desc title_desc;
+	struct flwm_node_desc handle_desc[8];
+	int width, height;                  /* content size the decor was built for */
+	bool active;
+	char *title_text;
+	float scale;
+	int hover_button; /* enum flwm_decor_part under the pointer */
+};
+
+struct flwm_view {
+	struct wl_list link;
+	struct flwm_server *server;
+	struct wlr_xdg_toplevel *xdg_toplevel;
+	struct wlr_scene_tree *tree;          /* positioned at content top-left */
+	struct wlr_scene_tree *surface_tree;
+	struct flwm_node_desc desc;
+	struct flwm_decor decor;
+	bool ssd;          /* we draw decorations */
+	bool mapped;
+	bool minimized, maximized, fullscreen;
+	bool placed;       /* initial position chosen */
+	bool hidden_by_show_desktop;
+	int requested_w, requested_h; /* last size we asked a shell client for */
+	enum flwm_role role;
+	bool role_checked;
+	int x, y;          /* content (window geometry) position, layout coords */
+	struct wlr_box saved; /* geometry before maximize/fullscreen/snap */
+	struct wlr_xdg_toplevel_decoration_v1 *decoration;
+	struct wlr_foreign_toplevel_handle_v1 *ftl;
+
+	struct wl_listener map;
+	struct wl_listener unmap;
+	struct wl_listener commit;
+	struct wl_listener destroy;
+	struct wl_listener request_move;
+	struct wl_listener request_resize;
+	struct wl_listener request_maximize;
+	struct wl_listener request_minimize;
+	struct wl_listener request_fullscreen;
+	struct wl_listener set_title;
+	struct wl_listener set_app_id;
+
+	struct wl_listener decoration_request_mode;
+	struct wl_listener decoration_destroy;
+
+	struct wl_listener ftl_request_activate;
+	struct wl_listener ftl_request_maximize;
+	struct wl_listener ftl_request_minimize;
+	struct wl_listener ftl_request_fullscreen;
+	struct wl_listener ftl_request_close;
+	struct wl_listener ftl_destroy;
+};
+
+struct flwm_popup {
+	struct wlr_xdg_popup *xdg_popup;
+	struct wl_listener commit;
+	struct wl_listener destroy;
+};
+
+struct flwm_layer_surface {
+	struct wl_list link; /* flwm_output.layers[layer] */
+	struct flwm_server *server;
+	struct flwm_output *output;
+	struct wlr_layer_surface_v1 *layer_surface;
+	struct wlr_scene_layer_surface_v1 *scene;
+	struct wlr_scene_tree *popup_tree;
+	struct flwm_node_desc desc;
+	bool mapped;
+	struct wl_listener map;
+	struct wl_listener unmap;
+	struct wl_listener commit;
+	struct wl_listener destroy;
+	struct wl_listener new_popup;
+	struct wl_listener output_destroy;
+};
+
+struct flwm_keyboard {
+	struct wl_list link;
+	struct flwm_server *server;
+	struct wlr_keyboard *wlr_keyboard;
+	struct wl_listener modifiers;
+	struct wl_listener key;
+	struct wl_listener destroy;
+};
+
+struct flwm_pointer {
+	struct wl_list link;
+	struct wlr_input_device *device;
+	struct wl_listener destroy;
+};
+
+/* main.c */
+void flwm_spawn(struct flwm_server *server, const char *cmd);
+
+/* config.c */
+void config_init_defaults(struct flwm_config *c);
+bool config_load(struct flwm_config *c, const char *path);
+void config_free(struct flwm_config *c);
+char *config_default_path(void);
+
+/* output.c */
+void output_init(struct flwm_server *server);
+struct flwm_output *output_at(struct flwm_server *server, double lx, double ly);
+struct flwm_output *output_primary(struct flwm_server *server);
+struct flwm_output *output_for_view(struct flwm_view *view);
+void output_arrange(struct flwm_output *output);
+void arrange_all(struct flwm_server *server);
+void output_apply_config(struct flwm_server *server);
+
+/* view.c */
+void view_init(struct flwm_server *server);
+void view_focus(struct flwm_view *view);
+void view_raise(struct flwm_view *view);
+void view_set_position(struct flwm_view *view, int x, int y);
+void view_get_geometry(struct flwm_view *view, struct wlr_box *box);
+void view_close(struct flwm_view *view);
+void view_set_maximized(struct flwm_view *view, bool maximized);
+void view_set_minimized(struct flwm_view *view, bool minimized);
+void view_set_fullscreen(struct flwm_view *view, bool fullscreen);
+void view_snap(struct flwm_view *view, int side); /* -1 left, +1 right */
+void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, uint32_t edges);
+struct flwm_view *view_focused(struct flwm_server *server);
+struct flwm_view *view_find_role(struct flwm_server *server, enum flwm_role role);
+void view_focus_next_available(struct flwm_server *server);
+void view_reposition_shell(struct flwm_view *view);
+void view_update_decor(struct flwm_view *view);
+bool view_is_normal(struct flwm_view *view);
+void views_reconfigure_maximized(struct flwm_server *server);
+void views_show_desktop(struct flwm_server *server);
+void view_popup_create(struct wlr_xdg_popup *xdg_popup, struct wlr_scene_tree *parent_tree);
+
+/* decor.c */
+void decor_create(struct flwm_view *view);
+void decor_update(struct flwm_view *view);
+void decor_destroy(struct flwm_view *view);
+void decor_set_hover(struct flwm_view *view, enum flwm_decor_part part);
+enum flwm_decor_part decor_part_at(struct flwm_view *view, double lx, double ly);
+int decor_title_height(struct flwm_server *server);
+int decor_border(struct flwm_server *server);
+
+/* layer.c */
+void layer_init(struct flwm_server *server);
+void layers_arrange(struct flwm_output *output);
+void layer_focus_none(struct flwm_server *server);
+void layer_clicked(struct flwm_layer_surface *ls);
+
+/* input.c */
+void input_init(struct flwm_server *server);
+void input_apply_config(struct flwm_server *server);
+void input_reset_cursor_mode(struct flwm_server *server);
+void input_update_pointer_focus(struct flwm_server *server, uint32_t time);
+struct flwm_node_desc *input_desc_at(struct flwm_server *server, double lx, double ly,
+		struct wlr_surface **surface, double *sx, double *sy);
+bool input_run_action(struct flwm_server *server, enum flwm_action_type action, const char *arg);
+
+#endif

@@ -1,0 +1,28 @@
+// freedesktop.org icon theme lookup and image loading
+#pragma once
+#include <string>
+#include <vector>
+
+class Fl_Image;
+
+namespace fld {
+
+// Returns the file of the best matching icon for `name` at `size` px,
+// following the configured theme, its parents, hicolor and /usr/share/pixmaps.
+// `name` may also be an absolute path. Returns "" if nothing was found.
+std::string icon_path(const std::string &name, int size);
+
+// Loads (and caches) an icon scaled to size x size. The image is owned by the
+// cache: never delete it. Returns nullptr if not found.
+Fl_Image *icon(const std::string &name, int size);
+// Tries several names in order.
+Fl_Image *icon(const std::vector<std::string> &names, int size);
+
+// Loads any supported image file (png, jpg, gif, bmp, svg, xpm, ...).
+// The caller owns the returned image. Returns nullptr on failure.
+Fl_Image *load_image(const std::string &path);
+
+// Name of the icon theme in use (desktop.ini [General] IconTheme or Adwaita).
+std::string icon_theme_name();
+
+} // namespace fld

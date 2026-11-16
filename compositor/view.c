@@ -1,0 +1,904 @@
+/* fl-wm toplevel windows ("views") */
+#define _POSIX_C_SOURCE 200809L
+#include <assert.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <wlr/types/wlr_xdg_activation_v1.h>
+#include "xdg-shell-protocol.h"
+#include <wlr/util/edges.h>
+#include <wlr/util/log.h>
+
+#include "server.h"
+
+/* ---- geometry helpers -------------------------------------------------- */
+
+static int deco_top(struct flwm_view *v) {
+	return (v->ssd && !v->fullscreen && v->role == FLWM_ROLE_NORMAL)
+		? decor_title_height(v->server) + decor_border(v->server) : 0;
+}
+
+static int deco_side(struct flwm_view *v) {
+	return (v->ssd && !v->fullscreen && v->role == FLWM_ROLE_NORMAL) ? decor_border(v->server) : 0;
+}
+
+bool view_is_normal(struct flwm_view *view) {
+	return view->role == FLWM_ROLE_NORMAL;
+}
+
+void view_get_geometry(struct flwm_view *view, struct wlr_box *box) {
+	struct wlr_box geo;
+	flwm_xdg_geometry(view->xdg_toplevel->base, &geo);
+	box->x = view->x;
+	box->y = view->y;
+	box->width = geo.width;
+	box->height = geo.height;
+}
+
+static void update_surface_offset(struct flwm_view *view) {
+	struct wlr_box geo;
+	flwm_xdg_geometry(view->xdg_toplevel->base, &geo);
+	wlr_scene_node_set_position(&view->surface_tree->node, -geo.x, -geo.y);
+}
+
+void view_set_position(struct flwm_view *view, int x, int y) {
+	view->x = x;
+	view->y = y;
+	wlr_scene_node_set_position(&view->tree->node, x, y);
+	update_surface_offset(view);
+}
+
+struct flwm_view *view_focused(struct flwm_server *server) {
+	struct wlr_surface *s = server->seat->keyboard_state.focused_surface;
+	if (!s) return NULL;
+	struct wlr_xdg_toplevel *t = wlr_xdg_toplevel_try_from_wlr_surface(s);
+	if (!t || !t->base->data) return NULL;
+	struct flwm_view *view;
+	wl_list_for_each(view, &server->views, link)
+		if (view->xdg_toplevel == t) return view;
+	return NULL;
+}
+
+struct flwm_view *view_find_role(struct flwm_server *server, enum flwm_role role) {
+	struct flwm_view *view;
+	wl_list_for_each(view, &server->views, link)
+		if (view->role == role && view->mapped) return view;
+	return NULL;
+}
+
+/* ---- shell role detection ------------------------------------------------ */
+
+static const struct {
+	const char *app_id;
+	const char *exe;
+	enum flwm_role role;
+} shell_roles[] = {
+	{"fldesktop.panel", "fl-panel", FLWM_ROLE_PANEL},
+	{"fldesktop.desktop", "fl-desktop", FLWM_ROLE_DESKTOP},
+	{"fldesktop.launcher", "fl-launcher", FLWM_ROLE_LAUNCHER},
+	{"fldesktop.osd", "fl-panel", FLWM_ROLE_OSD},
+};
+
+static bool client_exe_is(struct flwm_server *server, struct wl_client *client, const char *exe) {
+	if (getenv("FLWM_TRUST_SHELL")) return true;
+	pid_t pid;
+	uid_t uid;
+	gid_t gid;
+	wl_client_get_credentials(client, &pid, &uid, &gid);
+	char link[64], path[PATH_MAX];
+	snprintf(link, sizeof link, "/proc/%d/exe", (int)pid);
+	ssize_t n = readlink(link, path, sizeof path - 1);
+	if (n <= 0) return false;
+	path[n] = 0;
+	char *slash = strrchr(path, '/');
+	if (!slash || strcmp(slash + 1, exe) != 0) return false;
+	*slash = 0;
+	return !strcmp(path, server->exe_dir) || !strcmp(path, FLD_BINDIR);
+}
+
+static void detect_role(struct flwm_view *view) {
+	const char *app_id = view->xdg_toplevel->app_id;
+	if (!app_id || view->role_checked) return;
+	view->role_checked = true;
+	for (size_t i = 0; i < sizeof shell_roles / sizeof shell_roles[0]; i++) {
+		if (strcmp(app_id, shell_roles[i].app_id) != 0) continue;
+		struct wl_client *client = wl_resource_get_client(view->xdg_toplevel->resource);
+		if (!client_exe_is(view->server, client, shell_roles[i].exe)) {
+			wlr_log(WLR_INFO, "app_id %s claimed by a foreign program; treating as normal", app_id);
+			return;
+		}
+		view->role = shell_roles[i].role;
+		struct wlr_scene_tree *layer = view->server->layer_views;
+		switch (view->role) {
+		case FLWM_ROLE_DESKTOP: layer = view->server->layer_background; break;
+		case FLWM_ROLE_PANEL: layer = view->server->layer_top; break;
+		case FLWM_ROLE_LAUNCHER:
+		case FLWM_ROLE_OSD: layer = view->server->layer_overlay; break;
+		default: break;
+		}
+		wlr_scene_node_reparent(&view->tree->node, layer);
+		wlr_log(WLR_DEBUG, "shell client %s mapped with role %d", app_id, view->role);
+		return;
+	}
+}
+
+/* ---- foreign toplevel (taskbar) ----------------------------------------- */
+
+static void ftl_request_activate(struct wl_listener *l, void *data) {
+	struct flwm_view *view = wl_container_of(l, view, ftl_request_activate);
+	if (view->minimized) view_set_minimized(view, false);
+	view_focus(view);
+}
+
+static void ftl_request_maximize(struct wl_listener *l, void *data) {
+	struct flwm_view *view = wl_container_of(l, view, ftl_request_maximize);
+	struct wlr_foreign_toplevel_handle_v1_maximized_event *ev = data;
+	view_set_maximized(view, ev->maximized);
+}
+
+static void ftl_request_minimize(struct wl_listener *l, void *data) {
+	struct flwm_view *view = wl_container_of(l, view, ftl_request_minimize);
+	struct wlr_foreign_toplevel_handle_v1_minimized_event *ev = data;
+	view_set_minimized(view, ev->minimized);
+}
+
+static void ftl_request_fullscreen(struct wl_listener *l, void *data) {
+	struct flwm_view *view = wl_container_of(l, view, ftl_request_fullscreen);
+	struct wlr_foreign_toplevel_handle_v1_fullscreen_event *ev = data;
+	view_set_fullscreen(view, ev->fullscreen);
+}
+
+static void ftl_request_close(struct wl_listener *l, void *data) {
+	struct flwm_view *view = wl_container_of(l, view, ftl_request_close);
+	view_close(view);
+}
+
+static void ftl_destroy(struct wl_listener *l, void *data) {
+	struct flwm_view *view = wl_container_of(l, view, ftl_destroy);
+	wl_list_remove(&view->ftl_request_activate.link);
+	wl_list_remove(&view->ftl_request_maximize.link);
+	wl_list_remove(&view->ftl_request_minimize.link);
+	wl_list_remove(&view->ftl_request_fullscreen.link);
+	wl_list_remove(&view->ftl_request_close.link);
+	wl_list_remove(&view->ftl_destroy.link);
+	view->ftl = NULL;
+}
+
+static void ftl_create(struct flwm_view *view) {
+	if (view->ftl || view->role != FLWM_ROLE_NORMAL) return;
+	view->ftl = wlr_foreign_toplevel_handle_v1_create(view->server->foreign_toplevel_mgr);
+	if (!view->ftl) return;
+	if (view->xdg_toplevel->title)
+		wlr_foreign_toplevel_handle_v1_set_title(view->ftl, view->xdg_toplevel->title);
+	if (view->xdg_toplevel->app_id)
+		wlr_foreign_toplevel_handle_v1_set_app_id(view->ftl, view->xdg_toplevel->app_id);
+	view->ftl_request_activate.notify = ftl_request_activate;
+	wl_signal_add(&view->ftl->events.request_activate, &view->ftl_request_activate);
+	view->ftl_request_maximize.notify = ftl_request_maximize;
+	wl_signal_add(&view->ftl->events.request_maximize, &view->ftl_request_maximize);
+	view->ftl_request_minimize.notify = ftl_request_minimize;
+	wl_signal_add(&view->ftl->events.request_minimize, &view->ftl_request_minimize);
+	view->ftl_request_fullscreen.notify = ftl_request_fullscreen;
+	wl_signal_add(&view->ftl->events.request_fullscreen, &view->ftl_request_fullscreen);
+	view->ftl_request_close.notify = ftl_request_close;
+	wl_signal_add(&view->ftl->events.request_close, &view->ftl_request_close);
+	view->ftl_destroy.notify = ftl_destroy;
+	wl_signal_add(&view->ftl->events.destroy, &view->ftl_destroy);
+	struct flwm_output *o = output_for_view(view);
+	if (o) wlr_foreign_toplevel_handle_v1_output_enter(view->ftl, o->wlr_output);
+}
+
+static void ftl_update_output(struct flwm_view *view) {
+	if (!view->ftl) return;
+	struct flwm_output *cur = output_for_view(view), *o;
+	wl_list_for_each(o, &view->server->outputs, link) {
+		if (o == cur) wlr_foreign_toplevel_handle_v1_output_enter(view->ftl, o->wlr_output);
+		else wlr_foreign_toplevel_handle_v1_output_leave(view->ftl, o->wlr_output);
+	}
+}
+
+/* ---- focus & stacking ------------------------------------------------------ */
+
+void view_raise(struct flwm_view *view) {
+	wlr_scene_node_raise_to_top(&view->tree->node);
+}
+
+void view_focus(struct flwm_view *view) {
+	if (!view || !view->mapped) return;
+	struct flwm_server *server = view->server;
+	if (server->focused_layer) return; /* an exclusive layer surface owns the keyboard */
+	struct wlr_seat *seat = server->seat;
+	struct flwm_view *prev = view_focused(server);
+	if (view->minimized) view_set_minimized(view, false);
+	if (view->role == FLWM_ROLE_NORMAL || view->role == FLWM_ROLE_LAUNCHER) view_raise(view);
+	if (prev == view) return;
+
+	/* the launcher closes itself when another window gets focus (not the panel,
+	 * whose launcher button toggles it) */
+	if (prev && prev->role == FLWM_ROLE_LAUNCHER && view->role != FLWM_ROLE_PANEL)
+		wlr_xdg_toplevel_send_close(prev->xdg_toplevel);
+
+	if (prev) {
+		wlr_xdg_toplevel_set_activated(prev->xdg_toplevel, false);
+		if (prev->ftl) wlr_foreign_toplevel_handle_v1_set_activated(prev->ftl, false);
+	}
+	if (!server->cycling) {
+		/* while Alt+Tab cycling the focus order stays fixed until the modifier is released */
+		wl_list_remove(&view->link);
+		wl_list_insert(&server->views, &view->link);
+	}
+	wlr_xdg_toplevel_set_activated(view->xdg_toplevel, true);
+	if (view->ftl) wlr_foreign_toplevel_handle_v1_set_activated(view->ftl, true);
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+	if (keyboard)
+		wlr_seat_keyboard_notify_enter(seat, view->xdg_toplevel->base->surface,
+			keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+	else
+		wlr_seat_keyboard_notify_enter(seat, view->xdg_toplevel->base->surface, NULL, 0, NULL);
+	if (prev) decor_update(prev);
+	decor_update(view);
+}
+
+void view_focus_next_available(struct flwm_server *server) {
+	struct flwm_view *v;
+	wl_list_for_each(v, &server->views, link) {
+		if (v->mapped && !v->minimized && v->role == FLWM_ROLE_NORMAL) {
+			view_focus(v);
+			return;
+		}
+	}
+	/* nothing left: give the desktop the keyboard, or clear focus */
+	struct flwm_view *desk = view_find_role(server, FLWM_ROLE_DESKTOP);
+	if (desk) view_focus(desk);
+	else wlr_seat_keyboard_notify_clear_focus(server->seat);
+}
+
+/* ---- window states ------------------------------------------------------- */
+
+static void usable_area_for(struct flwm_view *view, struct wlr_box *ua) {
+	struct flwm_output *o = output_for_view(view);
+	if (o) *ua = o->usable_area;
+	else *ua = (struct wlr_box){0, 0, 1280, 720};
+}
+
+static void apply_box(struct flwm_view *view, struct wlr_box *box) {
+	/* box is the outer frame (decorations included) */
+	int T = deco_top(view), B = deco_side(view);
+	int w = box->width - 2 * B, h = box->height - T - B;
+	if (w < 1) w = 1;
+	if (h < 1) h = 1;
+	wlr_xdg_toplevel_set_size(view->xdg_toplevel, w, h);
+	view_set_position(view, box->x + B, box->y + T);
+}
+
+static void save_geometry(struct flwm_view *view) {
+	struct wlr_box geo;
+	view_get_geometry(view, &geo);
+	view->saved = geo;
+}
+
+static void restore_geometry(struct flwm_view *view) {
+	if (view->saved.width <= 0) return;
+	wlr_xdg_toplevel_set_size(view->xdg_toplevel, view->saved.width, view->saved.height);
+	view_set_position(view, view->saved.x, view->saved.y);
+}
+
+void view_set_maximized(struct flwm_view *view, bool maximized) {
+	if (view->role != FLWM_ROLE_NORMAL || !view->xdg_toplevel->base->initialized) return;
+	if (view->fullscreen) view_set_fullscreen(view, false);
+	if (view->maximized == maximized) {
+		wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
+		return;
+	}
+	if (maximized) {
+		save_geometry(view);
+		view->maximized = true;
+		struct wlr_box ua;
+		usable_area_for(view, &ua);
+		apply_box(view, &ua);
+	} else {
+		view->maximized = false;
+		restore_geometry(view);
+	}
+	wlr_xdg_toplevel_set_maximized(view->xdg_toplevel, maximized);
+	if (view->ftl) wlr_foreign_toplevel_handle_v1_set_maximized(view->ftl, maximized);
+	view->decor.width = -1; /* force re-render (rounded corners, handles) */
+	decor_update(view);
+}
+
+void view_snap(struct flwm_view *view, int side) {
+	if (view->role != FLWM_ROLE_NORMAL) return;
+	if (view->maximized) view_set_maximized(view, false);
+	if (view->fullscreen) view_set_fullscreen(view, false);
+	struct wlr_box ua;
+	usable_area_for(view, &ua);
+	if (view->saved.width <= 0) save_geometry(view);
+	struct wlr_box box = ua;
+	box.width = ua.width / 2;
+	if (side > 0) box.x = ua.x + ua.width - box.width;
+	apply_box(view, &box);
+}
+
+void view_set_minimized(struct flwm_view *view, bool minimized) {
+	if (view->role != FLWM_ROLE_NORMAL || view->minimized == minimized) return;
+	view->minimized = minimized;
+	wlr_scene_node_set_enabled(&view->tree->node, !minimized);
+	if (view->ftl) wlr_foreign_toplevel_handle_v1_set_minimized(view->ftl, minimized);
+	if (minimized) {
+		if (view_focused(view->server) == view) {
+			wlr_xdg_toplevel_set_activated(view->xdg_toplevel, false);
+			if (view->ftl) wlr_foreign_toplevel_handle_v1_set_activated(view->ftl, false);
+			wlr_seat_keyboard_notify_clear_focus(view->server->seat);
+			/* move to the end of the focus list so it is not picked again */
+			wl_list_remove(&view->link);
+			wl_list_insert(view->server->views.prev, &view->link);
+			view_focus_next_available(view->server);
+		}
+	} else {
+		view->hidden_by_show_desktop = false;
+	}
+}
+
+void view_set_fullscreen(struct flwm_view *view, bool fullscreen) {
+	if (view->role != FLWM_ROLE_NORMAL || !view->xdg_toplevel->base->initialized) return;
+	if (view->fullscreen == fullscreen) {
+		wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
+		return;
+	}
+	struct flwm_server *server = view->server;
+	if (fullscreen) {
+		if (!view->maximized) save_geometry(view);
+		struct flwm_output *o = output_for_view(view);
+		view->fullscreen = true;
+		wlr_scene_node_reparent(&view->tree->node, server->layer_top);
+		if (o) {
+			wlr_xdg_toplevel_set_size(view->xdg_toplevel, o->full_area.width, o->full_area.height);
+			view_set_position(view, o->full_area.x, o->full_area.y);
+		}
+	} else {
+		view->fullscreen = false;
+		wlr_scene_node_reparent(&view->tree->node, server->layer_views);
+		if (view->maximized) {
+			struct wlr_box ua;
+			usable_area_for(view, &ua);
+			apply_box(view, &ua);
+		} else {
+			restore_geometry(view);
+		}
+	}
+	wlr_xdg_toplevel_set_fullscreen(view->xdg_toplevel, fullscreen);
+	if (view->ftl) wlr_foreign_toplevel_handle_v1_set_fullscreen(view->ftl, fullscreen);
+	decor_update(view);
+}
+
+void view_close(struct flwm_view *view) {
+	wlr_xdg_toplevel_send_close(view->xdg_toplevel);
+}
+
+void views_reconfigure_maximized(struct flwm_server *server) {
+	struct flwm_view *view;
+	wl_list_for_each(view, &server->views, link) {
+		if (!view->mapped || view->role != FLWM_ROLE_NORMAL) continue;
+		if (view->fullscreen) {
+			struct flwm_output *o = output_for_view(view);
+			if (!o) continue;
+			wlr_xdg_toplevel_set_size(view->xdg_toplevel, o->full_area.width, o->full_area.height);
+			view_set_position(view, o->full_area.x, o->full_area.y);
+		} else if (view->maximized) {
+			struct wlr_box ua;
+			usable_area_for(view, &ua);
+			apply_box(view, &ua);
+		}
+	}
+}
+
+void views_show_desktop(struct flwm_server *server) {
+	bool any_visible = false;
+	struct flwm_view *view;
+	wl_list_for_each(view, &server->views, link)
+		if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized) any_visible = true;
+	if (any_visible) {
+		wl_list_for_each(view, &server->views, link) {
+			if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized) {
+				view_set_minimized(view, true);
+				view->hidden_by_show_desktop = true;
+			}
+		}
+	} else {
+		struct flwm_view *tmp;
+		wl_list_for_each_safe(view, tmp, &server->views, link)
+			if (view->hidden_by_show_desktop) view_set_minimized(view, false);
+		view_focus_next_available(server);
+	}
+}
+
+/* ---- shell role placement ------------------------------------------------ */
+
+static void request_size(struct flwm_view *view, int w, int h) {
+	if (view->requested_w == w && view->requested_h == h) return;
+	view->requested_w = w;
+	view->requested_h = h;
+	if (view->xdg_toplevel->base->initialized) wlr_xdg_toplevel_set_size(view->xdg_toplevel, w, h);
+}
+
+void view_reposition_shell(struct flwm_view *view) {
+	struct flwm_server *server = view->server;
+	struct wlr_box geo;
+	flwm_xdg_geometry(view->xdg_toplevel->base, &geo);
+	struct flwm_output *o;
+	switch (view->role) {
+	case FLWM_ROLE_PANEL:
+		o = output_primary(server);
+		if (!o) return;
+		request_size(view, o->full_area.width, 0);
+		view_set_position(view, o->full_area.x,
+			server->config.panel_top ? o->full_area.y
+				: o->full_area.y + o->full_area.height - geo.height);
+		break;
+	case FLWM_ROLE_DESKTOP:
+		o = output_primary(server);
+		if (!o) return;
+		request_size(view, o->full_area.width, o->full_area.height);
+		view_set_position(view, o->full_area.x, o->full_area.y);
+		break;
+	case FLWM_ROLE_LAUNCHER: {
+		o = output_at(server, server->cursor->x, server->cursor->y);
+		if (!o) return;
+		struct wlr_box ua = o->usable_area;
+		int y = server->config.panel_top ? ua.y + 4 : ua.y + ua.height - geo.height - 4;
+		view_set_position(view, ua.x + 4, y);
+		break;
+	}
+	case FLWM_ROLE_OSD:
+		o = output_primary(server);
+		if (!o) return;
+		view_set_position(view, o->usable_area.x + (o->usable_area.width - geo.width) / 2,
+			o->usable_area.y + o->usable_area.height - geo.height - 48);
+		break;
+	default:
+		break;
+	}
+}
+
+/* ---- initial placement of normal windows --------------------------------- */
+
+static struct flwm_view *view_from_toplevel(struct flwm_server *server, struct wlr_xdg_toplevel *t) {
+	struct flwm_view *v;
+	wl_list_for_each(v, &server->views, link)
+		if (v->xdg_toplevel == t) return v;
+	return NULL;
+}
+
+static void place_new_view(struct flwm_view *view) {
+	struct flwm_server *server = view->server;
+	struct wlr_box geo;
+	flwm_xdg_geometry(view->xdg_toplevel->base, &geo);
+	int T = deco_top(view), B = deco_side(view);
+	struct flwm_view *parent = view->xdg_toplevel->parent
+		? view_from_toplevel(server, view->xdg_toplevel->parent) : NULL;
+	struct flwm_output *o = parent ? output_for_view(parent)
+		: output_at(server, server->cursor->x, server->cursor->y);
+	struct wlr_box ua = o ? o->usable_area : (struct wlr_box){0, 0, 1280, 720};
+	int x, y;
+	if (parent) {
+		/* dialogs: centered over the parent */
+		struct wlr_box pg;
+		view_get_geometry(parent, &pg);
+		x = pg.x + (pg.width - geo.width) / 2;
+		y = pg.y + (pg.height - geo.height) / 2;
+	} else {
+		x = ua.x + (ua.width - geo.width) / 2;
+		y = ua.y + T + (ua.height - T - B - geo.height) / 2;
+		/* cascade if another window sits exactly there */
+		for (int tries = 0; tries < 20; tries++) {
+			bool clash = false;
+			struct flwm_view *v;
+			wl_list_for_each(v, &server->views, link) {
+				if (v != view && v->mapped && v->role == FLWM_ROLE_NORMAL &&
+						abs(v->x - x) < 8 && abs(v->y - y) < 8)
+					clash = true;
+			}
+			if (!clash) break;
+			x += 32;
+			y += 32;
+		}
+	}
+	/* keep the title bar reachable */
+	if (x + geo.width > ua.x + ua.width) x = ua.x + ua.width - geo.width - B;
+	if (y + geo.height > ua.y + ua.height) y = ua.y + ua.height - geo.height - B;
+	if (x < ua.x + B) x = ua.x + B;
+	if (y < ua.y + T) y = ua.y + T;
+	view_set_position(view, x, y);
+	view->placed = true;
+}
+
+/* ---- xdg toplevel events ------------------------------------------------- */
+
+static void view_map(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, map);
+	struct flwm_server *server = view->server;
+	detect_role(view);
+	view->mapped = true;
+	wlr_scene_node_set_enabled(&view->tree->node, true);
+	if (view->role != FLWM_ROLE_NORMAL) {
+		view_reposition_shell(view);
+		if (view->role == FLWM_ROLE_PANEL) arrange_all(server);
+		if (view->role == FLWM_ROLE_LAUNCHER) view_focus(view);
+		if (view->role == FLWM_ROLE_DESKTOP && !view_focused(server)) view_focus(view);
+		return;
+	}
+	if (!view->placed) place_new_view(view);
+	ftl_create(view);
+	decor_update(view);
+	if (view->xdg_toplevel->requested.maximized) view_set_maximized(view, true);
+	if (view->xdg_toplevel->requested.fullscreen) view_set_fullscreen(view, true);
+	view_focus(view);
+}
+
+static void view_unmap(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, unmap);
+	struct flwm_server *server = view->server;
+	if (view == server->grabbed_view) input_reset_cursor_mode(server);
+	if (server->cycle_current == view) server->cycle_current = NULL;
+	if (server->hover_view == view) server->hover_view = NULL;
+	if (server->last_click_view == view) server->last_click_view = NULL;
+	bool was_focused = view_focused(server) == view;
+	view->mapped = false;
+	if (view->ftl) {
+		wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
+		view->ftl = NULL;
+	}
+	if (view->role == FLWM_ROLE_PANEL) arrange_all(server);
+	if (was_focused) {
+		wlr_seat_keyboard_notify_clear_focus(server->seat);
+		wl_list_remove(&view->link);
+		wl_list_insert(server->views.prev, &view->link);
+		view_focus_next_available(server);
+	}
+}
+
+static void view_commit(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, commit);
+	struct wlr_xdg_surface *base = view->xdg_toplevel->base;
+	if (base->initial_commit) {
+		detect_role(view);
+		if (view->decoration) {
+			wlr_xdg_toplevel_decoration_v1_set_mode(view->decoration,
+				WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+			view->ssd = true;
+		}
+		switch (view->role) {
+		case FLWM_ROLE_PANEL:
+		case FLWM_ROLE_DESKTOP:
+			view->requested_w = view->requested_h = -1;
+			view_reposition_shell(view);
+			break;
+		default: {
+			wlr_xdg_toplevel_set_size(view->xdg_toplevel, 0, 0);
+			struct flwm_output *o = output_at(view->server, view->server->cursor->x,
+				view->server->cursor->y);
+			if (o && wl_resource_get_version(view->xdg_toplevel->resource) >=
+					XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION)
+				wlr_xdg_toplevel_set_bounds(view->xdg_toplevel,
+					o->usable_area.width - 2 * decor_border(view->server),
+					o->usable_area.height - deco_top(view) - decor_border(view->server));
+			break;
+		}
+		}
+		return;
+	}
+	update_surface_offset(view);
+	if (!view->mapped) return;
+	if (view->role != FLWM_ROLE_NORMAL) {
+		struct wlr_box geo;
+		flwm_xdg_geometry(base, &geo);
+		if (view->role == FLWM_ROLE_PANEL) {
+			/* panel height may have changed: re-arrange usable areas */
+			struct flwm_output *o = output_primary(view->server);
+			int expect = o ? o->full_area.height - o->usable_area.height : 0;
+			view_reposition_shell(view);
+			if (o && expect != geo.height) arrange_all(view->server);
+		} else {
+			view_reposition_shell(view);
+		}
+		return;
+	}
+	/* while resizing from the top/left edge keep the opposite edge anchored */
+	struct flwm_server *server = view->server;
+	if (server->cursor_mode == FLWM_CURSOR_RESIZE && server->grabbed_view == view) {
+		struct wlr_box geo;
+		flwm_xdg_geometry(base, &geo);
+		int x = view->x, y = view->y;
+		if (server->resize_edges & WLR_EDGE_LEFT)
+			x = server->grab_geobox.x + server->grab_geobox.width - geo.width;
+		if (server->resize_edges & WLR_EDGE_TOP)
+			y = server->grab_geobox.y + server->grab_geobox.height - geo.height;
+		if (x != view->x || y != view->y) view_set_position(view, x, y);
+	}
+	decor_update(view);
+	ftl_update_output(view);
+}
+
+static void view_destroy(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, destroy);
+	if (view->ftl) wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
+	wl_list_remove(&view->map.link);
+	wl_list_remove(&view->unmap.link);
+	wl_list_remove(&view->commit.link);
+	wl_list_remove(&view->destroy.link);
+	wl_list_remove(&view->request_move.link);
+	wl_list_remove(&view->request_resize.link);
+	wl_list_remove(&view->request_maximize.link);
+	wl_list_remove(&view->request_minimize.link);
+	wl_list_remove(&view->request_fullscreen.link);
+	wl_list_remove(&view->set_title.link);
+	wl_list_remove(&view->set_app_id.link);
+	wl_list_remove(&view->link);
+	if (view->decoration) {
+		wl_list_remove(&view->decoration_request_mode.link);
+		wl_list_remove(&view->decoration_destroy.link);
+	}
+	free(view->decor.title_text);
+	free(view);
+}
+
+static void view_request_move(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, request_move);
+	if (view->role == FLWM_ROLE_NORMAL) view_begin_interactive(view, FLWM_CURSOR_MOVE, 0);
+}
+
+static void view_request_resize(struct wl_listener *listener, void *data) {
+	struct wlr_xdg_toplevel_resize_event *event = data;
+	struct flwm_view *view = wl_container_of(listener, view, request_resize);
+	if (view->role == FLWM_ROLE_NORMAL)
+		view_begin_interactive(view, FLWM_CURSOR_RESIZE, event->edges);
+}
+
+static void view_request_maximize(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, request_maximize);
+	if (!view->mapped) {
+		if (view->xdg_toplevel->base->initialized)
+			wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
+		return; /* handled on map */
+	}
+	view_set_maximized(view, view->xdg_toplevel->requested.maximized);
+}
+
+static void view_request_minimize(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, request_minimize);
+	if (view->mapped) view_set_minimized(view, true);
+}
+
+static void view_request_fullscreen(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, request_fullscreen);
+	if (!view->mapped) {
+		if (view->xdg_toplevel->base->initialized)
+			wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
+		return;
+	}
+	view_set_fullscreen(view, view->xdg_toplevel->requested.fullscreen);
+}
+
+static void view_set_title(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, set_title);
+	if (view->ftl && view->xdg_toplevel->title)
+		wlr_foreign_toplevel_handle_v1_set_title(view->ftl, view->xdg_toplevel->title);
+	if (view->mapped) decor_update(view);
+}
+
+static void view_set_app_id(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, set_app_id);
+	if (view->ftl && view->xdg_toplevel->app_id)
+		wlr_foreign_toplevel_handle_v1_set_app_id(view->ftl, view->xdg_toplevel->app_id);
+}
+
+static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, new_xdg_toplevel);
+	struct wlr_xdg_toplevel *xdg_toplevel = data;
+
+	struct flwm_view *view = calloc(1, sizeof(*view));
+	view->server = server;
+	view->xdg_toplevel = xdg_toplevel;
+	view->tree = wlr_scene_tree_create(server->layer_views);
+	view->desc.kind = FLWM_NODE_VIEW;
+	view->desc.ptr = view;
+	view->tree->node.data = &view->desc;
+	view->surface_tree = wlr_scene_xdg_surface_create(view->tree, xdg_toplevel->base);
+	xdg_toplevel->base->data = view->surface_tree;
+	wlr_scene_node_set_enabled(&view->tree->node, false);
+	wl_list_insert(server->views.prev, &view->link);
+
+	view->map.notify = view_map;
+	wl_signal_add(&xdg_toplevel->base->surface->events.map, &view->map);
+	view->unmap.notify = view_unmap;
+	wl_signal_add(&xdg_toplevel->base->surface->events.unmap, &view->unmap);
+	view->commit.notify = view_commit;
+	wl_signal_add(&xdg_toplevel->base->surface->events.commit, &view->commit);
+	view->destroy.notify = view_destroy;
+	wl_signal_add(&xdg_toplevel->events.destroy, &view->destroy);
+	view->request_move.notify = view_request_move;
+	wl_signal_add(&xdg_toplevel->events.request_move, &view->request_move);
+	view->request_resize.notify = view_request_resize;
+	wl_signal_add(&xdg_toplevel->events.request_resize, &view->request_resize);
+	view->request_maximize.notify = view_request_maximize;
+	wl_signal_add(&xdg_toplevel->events.request_maximize, &view->request_maximize);
+	view->request_minimize.notify = view_request_minimize;
+	wl_signal_add(&xdg_toplevel->events.request_minimize, &view->request_minimize);
+	view->request_fullscreen.notify = view_request_fullscreen;
+	wl_signal_add(&xdg_toplevel->events.request_fullscreen, &view->request_fullscreen);
+	view->set_title.notify = view_set_title;
+	wl_signal_add(&xdg_toplevel->events.set_title, &view->set_title);
+	view->set_app_id.notify = view_set_app_id;
+	wl_signal_add(&xdg_toplevel->events.set_app_id, &view->set_app_id);
+}
+
+/* ---- popups ------------------------------------------------------------- */
+
+static void popup_unconstrain(struct flwm_popup *popup) {
+	struct wlr_xdg_popup *xdg_popup = popup->xdg_popup;
+	/* find the toplevel at the root of the popup chain */
+	struct wlr_surface *parent = xdg_popup->parent;
+	struct wlr_xdg_toplevel *top = NULL;
+	while (parent) {
+		struct wlr_xdg_popup *pp = wlr_xdg_popup_try_from_wlr_surface(parent);
+		if (!pp) {
+			top = wlr_xdg_toplevel_try_from_wlr_surface(parent);
+			break;
+		}
+		parent = pp->parent;
+	}
+	if (!top || !top->base->data) return;
+	struct wlr_scene_tree *tree = top->base->data; /* the toplevel's surface tree */
+	struct wlr_scene_node *n = &tree->node;
+	while (n && !(n->data && ((struct flwm_node_desc *)n->data)->kind == FLWM_NODE_VIEW))
+		n = n->parent ? &n->parent->node : NULL;
+	if (!n) return;
+	struct flwm_view *view = ((struct flwm_node_desc *)n->data)->ptr;
+	int lx, ly; /* toplevel surface origin in layout coordinates */
+	wlr_scene_node_coords(&tree->node, &lx, &ly);
+	struct wlr_box geo;
+	view_get_geometry(view, &geo);
+	struct flwm_output *o = output_at(view->server, geo.x + geo.width / 2.0, geo.y + geo.height / 2.0);
+	if (!o) return;
+	struct wlr_box box = o->full_area;
+	box.x -= lx;
+	box.y -= ly;
+	wlr_xdg_popup_unconstrain_from_box(xdg_popup, &box);
+}
+
+static void popup_commit(struct wl_listener *listener, void *data) {
+	struct flwm_popup *popup = wl_container_of(listener, popup, commit);
+	if (popup->xdg_popup->base->initial_commit) {
+		popup_unconstrain(popup);
+		wlr_xdg_surface_schedule_configure(popup->xdg_popup->base);
+	}
+}
+
+static void popup_destroy(struct wl_listener *listener, void *data) {
+	struct flwm_popup *popup = wl_container_of(listener, popup, destroy);
+	wl_list_remove(&popup->commit.link);
+	wl_list_remove(&popup->destroy.link);
+	free(popup);
+}
+
+void view_popup_create(struct wlr_xdg_popup *xdg_popup, struct wlr_scene_tree *parent_tree) {
+	struct flwm_popup *popup = calloc(1, sizeof(*popup));
+	popup->xdg_popup = xdg_popup;
+	xdg_popup->base->data = wlr_scene_xdg_surface_create(parent_tree, xdg_popup->base);
+
+	popup->commit.notify = popup_commit;
+	wl_signal_add(&xdg_popup->base->surface->events.commit, &popup->commit);
+	popup->destroy.notify = popup_destroy;
+	wl_signal_add(&xdg_popup->events.destroy, &popup->destroy);
+}
+
+static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
+	struct wlr_xdg_popup *xdg_popup = data;
+	/* popups of layer surfaces get their parent later; layer.c handles them */
+	if (!xdg_popup->parent) return;
+	struct wlr_xdg_surface *parent = wlr_xdg_surface_try_from_wlr_surface(xdg_popup->parent);
+	if (!parent || !parent->data) return;
+	view_popup_create(xdg_popup, parent->data);
+}
+
+/* ---- xdg-decoration ------------------------------------------------------ */
+
+static void decoration_request_mode(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, decoration_request_mode);
+	if (view->xdg_toplevel->base->initialized)
+		wlr_xdg_toplevel_decoration_v1_set_mode(view->decoration,
+			WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+	view->ssd = true;
+}
+
+static void decoration_destroy(struct wl_listener *listener, void *data) {
+	struct flwm_view *view = wl_container_of(listener, view, decoration_destroy);
+	wl_list_remove(&view->decoration_request_mode.link);
+	wl_list_remove(&view->decoration_destroy.link);
+	view->decoration = NULL;
+	view->ssd = false;
+	if (view->mapped) decor_update(view);
+}
+
+static void server_new_toplevel_decoration(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, new_toplevel_decoration);
+	struct wlr_xdg_toplevel_decoration_v1 *deco = data;
+	struct flwm_view *view = view_from_toplevel(server, deco->toplevel);
+	if (!view) return;
+	view->decoration = deco;
+	view->decoration_request_mode.notify = decoration_request_mode;
+	wl_signal_add(&deco->events.request_mode, &view->decoration_request_mode);
+	view->decoration_destroy.notify = decoration_destroy;
+	wl_signal_add(&deco->events.destroy, &view->decoration_destroy);
+	view->ssd = true;
+	if (deco->toplevel->base->initialized)
+		wlr_xdg_toplevel_decoration_v1_set_mode(deco, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+}
+
+/* ---- xdg-activation ------------------------------------------------------ */
+
+static void request_activate(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, request_activate);
+	struct wlr_xdg_activation_v1_request_activate_event *ev = data;
+	struct wlr_xdg_toplevel *t = wlr_xdg_toplevel_try_from_wlr_surface(ev->surface);
+	if (!t) return;
+	struct flwm_view *view = view_from_toplevel(server, t);
+	if (view && view->mapped) view_focus(view);
+}
+
+void view_init(struct flwm_server *server) {
+	wl_list_init(&server->views);
+	server->xdg_shell = wlr_xdg_shell_create(server->wl_display, 6);
+	server->new_xdg_toplevel.notify = server_new_xdg_toplevel;
+	wl_signal_add(&server->xdg_shell->events.new_toplevel, &server->new_xdg_toplevel);
+	server->new_xdg_popup.notify = server_new_xdg_popup;
+	wl_signal_add(&server->xdg_shell->events.new_popup, &server->new_xdg_popup);
+
+	server->xdg_decoration_mgr = wlr_xdg_decoration_manager_v1_create(server->wl_display);
+	server->new_toplevel_decoration.notify = server_new_toplevel_decoration;
+	wl_signal_add(&server->xdg_decoration_mgr->events.new_toplevel_decoration,
+		&server->new_toplevel_decoration);
+
+	server->foreign_toplevel_mgr = wlr_foreign_toplevel_manager_v1_create(server->wl_display);
+
+	server->xdg_activation = wlr_xdg_activation_v1_create(server->wl_display);
+	server->request_activate.notify = request_activate;
+	wl_signal_add(&server->xdg_activation->events.request_activate, &server->request_activate);
+}
+
+/* ---- interactive move / resize ------------------------------------------- */
+
+void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, uint32_t edges) {
+	struct flwm_server *server = view->server;
+	if (view->fullscreen) return;
+	if (mode == FLWM_CURSOR_RESIZE && view->maximized) return;
+	if (mode == FLWM_CURSOR_MOVE && view->maximized) {
+		/* un-maximize, keeping the pointer at the same relative x in the title */
+		struct wlr_box cur;
+		view_get_geometry(view, &cur);
+		double rel = cur.width > 0 ? (server->cursor->x - cur.x) / cur.width : 0.5;
+		view_set_maximized(view, false);
+		int w = view->saved.width > 0 ? view->saved.width : cur.width;
+		int x = (int)(server->cursor->x - rel * w);
+		int y = (int)server->cursor->y + deco_top(view) / 2;
+		view_set_position(view, x, y);
+	}
+	server->grabbed_view = view;
+	server->cursor_mode = mode;
+	if (mode == FLWM_CURSOR_MOVE) {
+		server->grab_x = server->cursor->x - view->x;
+		server->grab_y = server->cursor->y - view->y;
+	} else {
+		struct wlr_box geo;
+		view_get_geometry(view, &geo);
+		double border_x = geo.x + ((edges & WLR_EDGE_RIGHT) ? geo.width : 0);
+		double border_y = geo.y + ((edges & WLR_EDGE_BOTTOM) ? geo.height : 0);
+		server->grab_x = server->cursor->x - border_x;
+		server->grab_y = server->cursor->y - border_y;
+		server->grab_geobox = geo;
+		server->resize_edges = edges;
+		wlr_xdg_toplevel_set_resizing(view->xdg_toplevel, true);
+	}
+}

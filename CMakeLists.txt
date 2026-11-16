@@ -1,0 +1,108 @@
+cmake_minimum_required(VERSION 3.19)
+project(fldesktop VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
+
+include(GNUInstallDirs)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+include(CTest)
+
+option(FLD_BUILD_WM       "Build the fl-wm Wayland compositor"            ON)
+option(FLD_BUILD_SHELL    "Build fl-panel, fl-launcher, fl-desktop"        ON)
+option(FLD_BUILD_GREETER  "Build the fl-greet greetd greeter"              ON)
+option(FLD_BUILD_TERM     "Build the fl-term terminal (needs libvterm)"    ON)
+option(FLD_BUILD_CALC     "Build the fl-calc calculator"                   ON)
+option(FLD_BUILD_VIEW     "Build the fl-view image viewer"                 ON)
+option(FLD_BUILD_FILES    "Build the fl-files file manager"                ON)
+option(FLD_BUILD_EDIT     "Build the fl-edit text editor"                  ON)
+
+find_package(PkgConfig REQUIRED)
+
+add_compile_options(-Wall -Wextra -Wno-unused-parameter)
+add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
+                        FLD_PREFIX="${CMAKE_INSTALL_PREFIX}"
+                        FLD_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/fldesktop"
+                        FLD_BINDIR="${CMAKE_INSTALL_FULL_BINDIR}")
+
+# ---- FLTK 1.4 (needed by everything except the compositor) ----------------
+set(FLD_NEED_FLTK OFF)
+foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT)
+  if(FLD_BUILD_${opt})
+    set(FLD_NEED_FLTK ON)
+  endif()
+endforeach()
+
+if(FLD_NEED_FLTK)
+  find_package(FLTK 1.4 CONFIG QUIET)
+  if(FLTK_FOUND AND TARGET fltk::fltk)
+    message(STATUS "FLTK ${FLTK_VERSION} found via CMake config")
+  else()
+    find_program(FLTK_CONFIG fltk-config REQUIRED)
+    execute_process(COMMAND ${FLTK_CONFIG} --version OUTPUT_VARIABLE _fv OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(_fv VERSION_LESS 1.4)
+      message(FATAL_ERROR "FLTK >= 1.4 required (found ${_fv})")
+    endif()
+    execute_process(COMMAND ${FLTK_CONFIG} --use-images --cxxflags OUTPUT_VARIABLE _fc OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND ${FLTK_CONFIG} --use-images --ldflags  OUTPUT_VARIABLE _fl OUTPUT_STRIP_TRAILING_WHITESPACE)
+    separate_arguments(_fc UNIX_COMMAND "${_fc}")
+    separate_arguments(_fl UNIX_COMMAND "${_fl}")
+    add_library(fld_fltk_imported INTERFACE)
+    target_compile_options(fld_fltk_imported INTERFACE ${_fc})
+    target_link_libraries(fld_fltk_imported INTERFACE ${_fl})
+    add_library(fltk::fltk ALIAS fld_fltk_imported)
+    add_library(fltk::images ALIAS fld_fltk_imported)
+    message(STATUS "FLTK ${_fv} found via fltk-config")
+  endif()
+  pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
+  add_subdirectory(common/libfld)
+endif()
+
+# ---- Wayland protocol code generation --------------------------------------
+pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+if(NOT WAYLAND_PROTOCOLS_DIR)
+  message(FATAL_ERROR "wayland-protocols not found")
+endif()
+find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
+set(FLD_PROTO_OUT ${CMAKE_BINARY_DIR}/protocols)
+file(MAKE_DIRECTORY ${FLD_PROTO_OUT})
+
+# fld_wayland_protocol(<var> <xml> <server|client>) generates the header and
+# glue code at configure time (so several targets can share the files) and
+# appends the .c file to <var>.
+function(fld_wayland_protocol out xml side)
+  get_filename_component(name ${xml} NAME_WE)
+  set(hdr ${FLD_PROTO_OUT}/${name}-${side}-protocol.h)
+  set(src ${FLD_PROTO_OUT}/${name}-protocol.c)
+  set_property(DIRECTORY ${CMAKE_SOURCE_DIR} APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${xml})
+  execute_process(COMMAND ${WAYLAND_SCANNER} ${side}-header ${xml} ${hdr} COMMAND_ERROR_IS_FATAL ANY)
+  execute_process(COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${src} COMMAND_ERROR_IS_FATAL ANY)
+  set(${out} ${${out}} ${src} PARENT_SCOPE)
+endfunction()
+
+if(FLD_BUILD_WM)
+  add_subdirectory(compositor)
+endif()
+if(FLD_BUILD_SHELL)
+  add_subdirectory(shell)
+endif()
+if(FLD_BUILD_GREETER)
+  add_subdirectory(greeter)
+endif()
+foreach(app TERM CALC VIEW FILES EDIT)
+  if(FLD_BUILD_${app})
+    string(TOLOWER ${app} lc)
+    add_subdirectory(apps/fl-${lc})
+  endif()
+endforeach()
+
+add_subdirectory(data)
+
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()

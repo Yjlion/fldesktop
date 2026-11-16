@@ -866,6 +866,9 @@ int main(int argc, char **argv) {
   P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *, void *) { fld::spawn({"fl-network"}); });
   P.network->hide();
 #endif
+#ifdef FLD_HAVE_PRINTERS
+  P.printer = printer_indicator_create();
+#endif
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);

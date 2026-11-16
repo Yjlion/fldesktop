@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Bluetooth
+GenericName=Bluetooth Settings
+Comment=Pair and connect Bluetooth devices
+Exec=fl-bluetooth
+Icon=fl-bluetooth
+Categories=Settings;HardwareSettings;
+Keywords=bluetooth;pair;headset;mouse;keyboard;speaker;wireless;
+StartupWMClass=fl-bluetooth

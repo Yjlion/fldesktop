@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Software Updates
+GenericName=Package Manager
+Comment=Install, remove and update the software of the system
+Exec=fl-packages
+Icon=fl-packages
+Categories=System;Settings;PackageManager;
+Keywords=software;packages;updates;install;remove;upgrade;apt;pacman;repository;
+StartupWMClass=fl-packages

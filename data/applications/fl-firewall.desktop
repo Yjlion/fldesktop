@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Firewall
+GenericName=Firewall Settings
+Comment=Configure firewalld zones, services and ports
+Exec=fl-firewall
+Icon=fl-firewall
+Categories=Settings;System;Security;
+Keywords=firewall;firewalld;zone;port;service;security;network;
+StartupWMClass=fl-firewall

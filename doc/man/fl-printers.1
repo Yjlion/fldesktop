@@ -1,0 +1,32 @@
+.TH FL-PRINTERS 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-printers \- printer settings for fldesktop
+.SH SYNOPSIS
+\fBfl-printers\fR [\fB\-\-add\fR] [\fIPRINTER\fR]
+.SH DESCRIPTION
+Lists the printers of the CUPS printing service and their jobs. A printer can
+be added (found printers are offered; network printers are set up
+driverless with IPP Everywhere, others with a matching driver), removed,
+made the default, paused, set to accept or reject jobs, shared, renamed and
+given a location. Its default paper size, two-sided and color settings can
+be changed, and a test page printed. Jobs can be canceled.
+.PP
+The same view is the Printers page of \fBfl-settings\fR(1). While documents
+are printing, \fBfl-panel\fR(1) shows a printer button with the queue, and a
+notification tells when a document has been printed or could not be.
+.PP
+Changing printers needs administrator rights in CUPS (membership of the
+lpadmin or sys group, or root); otherwise fl-printers asks for a password.
+.SH OPTIONS
+.TP
+\fB\-\-add\fR
+Open the Add Printer dialog right away.
+.TP
+\fIPRINTER\fR
+Select this printer (queue name).
+.SH ENVIRONMENT
+.TP
+\fBCUPS_SERVER\fR
+The CUPS server to use (default: the local scheduler).
+.SH SEE ALSO
+\fBlpadmin\fR(8), \fBlpstat\fR(1), \fBcupsd\fR(8), \fBfl-settings\fR(1)

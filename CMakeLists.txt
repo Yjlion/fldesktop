@@ -29,6 +29,7 @@ option(FLD_BUILD_NETWORK  "Build fl-network (NetworkManager)"              ON)
 option(FLD_BUILD_SETTINGS "Build the fl-settings settings center"          ON)
 option(FLD_BUILD_NOTIFYD  "Build the fl-notifyd notification server"       ON)
 option(FLD_BUILD_PORTAL   "Build xdg-desktop-portal-fl"                    ON)
+option(FLD_BUILD_PRINTERS "Build fl-printers (CUPS)"                       ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -40,7 +41,7 @@ add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL)
+foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -77,6 +78,9 @@ if(FLD_NEED_FLTK)
   if(FLD_BUILD_NETWORK OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
     add_subdirectory(common/nm)
   endif()
+  if(FLD_BUILD_PRINTERS OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/printers)
+  endif()
 endif()
 
 # ---- Wayland protocol code generation --------------------------------------
@@ -110,7 +114,7 @@ endif()
 if(FLD_BUILD_GREETER)
   add_subdirectory(greeter)
 endif()
-foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD)
+foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD PRINTERS)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     add_subdirectory(apps/fl-${lc})

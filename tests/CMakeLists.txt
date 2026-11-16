@@ -13,6 +13,12 @@ if(TARGET fld-glib)
   add_test(NAME notify COMMAND test_notify)
 endif()
 
+if(TARGET fld-printers)
+  add_executable(test_printers test_printers.cpp)
+  target_link_libraries(test_printers PRIVATE fld-printers)
+  add_test(NAME printers COMMAND test_printers)
+endif()
+
 if(TARGET fld-portal-util)
   add_executable(test_portal test_portal.cpp)
   target_link_libraries(test_portal PRIVATE fld-portal-util)

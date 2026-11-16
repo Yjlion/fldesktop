@@ -44,6 +44,12 @@ if(TARGET fld-fp-perms)
   add_test(NAME flatpak COMMAND test_flatpak)
 endif()
 
+if(TARGET fld-fw)
+  add_executable(test_firewall test_firewall.cpp)
+  target_link_libraries(test_firewall PRIVATE fld-fw)
+  add_test(NAME firewall COMMAND test_firewall)
+endif()
+
 if(TARGET fld-portal-util)
   add_executable(test_portal test_portal.cpp)
   target_link_libraries(test_portal PRIVATE fld-portal-util)

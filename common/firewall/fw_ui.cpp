@@ -66,12 +66,12 @@ FirewallView::FirewallView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     }
   }, this);
   int dx = X + 180, dw = W - 180;
-  zone_info_ = new Fl_Box(dx, Y + 100, dw, 44);
+  zone_info_ = new Fl_Box(dx, Y + 100, dw, 54);
   zone_info_->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_WRAP);
   zone_info_->labelsize(12);
   zone_info_->labelcolor(fld::palette().fg_dim);
-  tabs_ = new Fl_Tabs(dx, Y + 148, dw, H - 148);
-  int ty = Y + 178, th = H - 178;
+  tabs_ = new Fl_Tabs(dx, Y + 158, dw, H - 158);
+  int ty = Y + 188, th = H - 188;
   // services
   Fl_Group *g1 = new Fl_Group(dx, ty, dw, th, "Services");
   services_ = new Fl_Check_Browser(dx + 6, ty + 6, dw - 12, th - 12);
@@ -117,7 +117,7 @@ FirewallView::FirewallView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   g2->resizable(ports_);
   g2->end();
   // interfaces and sources
-  Fl_Group *g3 = new Fl_Group(dx, ty, dw, th, "Interfaces & Sources");
+  Fl_Group *g3 = new Fl_Group(dx, ty, dw, th, "Interfaces && Sources");
   int half = (th - 12) / 2;
   Fl_Box *il = new Fl_Box(dx + 6, ty + 6, 300, 22, "Network interfaces in this zone");
   il->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);

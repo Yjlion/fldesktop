@@ -77,6 +77,8 @@ std::string user_dir(const char *key) {
   return home_dir();
 }
 
+std::string fld_data_dir() { return getenv_or("FLD_DATADIR", FLD_DATADIR); }
+
 bool file_exists(const std::string &path) {
   struct stat st;
   return stat(path.c_str(), &st) == 0;

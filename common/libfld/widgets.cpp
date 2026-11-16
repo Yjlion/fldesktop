@@ -37,15 +37,11 @@ int FlatButton::handle(int e) {
 
 void FlatButton::draw() {
   bool pressed = value() || active_look_;
-  Fl_Color bg = color();
-  if (pressed) bg = fl_color_average(color(), palette().accent, 0.65f);
-  else if (hover_ && active_r()) bg = hover_c();
-  // rounded background (inset by 2px) on parent background
-  fl_color(parent() ? parent()->color() : color());
+  fl_color(color());
   fl_rectf(x(), y(), w(), h());
-  if (bg != (parent() ? parent()->color() : color()) || pressed || hover_) {
-    fl_color(bg);
-    fl_rounded_rectf(x() + 1, y() + 1, w() - 2, h() - 2, 4);
+  if (pressed || (hover_ && active_r())) {
+    fl_color(pressed ? fl_color_average(color(), palette().accent, 0.65f) : hover_c());
+    fl_rounded_rectf(x() + 1, y() + 1, w() - 2, h() - 2, 5);
   }
   int ix = x(), iw = 0;
   const char *l = label();
@@ -65,7 +61,7 @@ void FlatButton::draw() {
   }
   if (lw) {
     fl_color(active_r() ? labelcolor() : fl_inactive(labelcolor()));
-    fl_draw(l, ix, y(), w() - (ix - x()), h(), FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+    fl_draw(escape_at(l).c_str(), ix, y(), w() - (ix - x()), h(), FL_ALIGN_LEFT | FL_ALIGN_CLIP);
   }
   if (Fl::focus() == this && visible_focus()) draw_focus();
 }
@@ -112,6 +108,15 @@ void Toolbar::draw() {
   Fl_Group::draw();
   fl_color(palette().border);
   fl_xyline(x(), y() + h() - 1, x() + w() - 1);
+}
+
+std::string escape_at(const std::string &s) {
+  std::string r;
+  for (char c : s) {
+    if (c == '@') r += '@';
+    r += c;
+  }
+  return r;
 }
 
 void about_dialog(const char *app_name, const char *icon_n, const char *description) {

@@ -1,0 +1,8 @@
+# /etc/greetd/config.toml for fldesktop's greeter.
+# fl-greet runs inside the `cage` kiosk compositor.
+[terminal]
+vt = 1
+
+[default_session]
+command = "cage -s -d -- fl-greet"
+user = "greeter"

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Starts an fldesktop Wayland session. Used by the wayland-sessions entry
+# (display managers, greetd/fl-greet) and can be run from a text console.
+export XDG_CURRENT_DESKTOP=fldesktop
+export XDG_SESSION_DESKTOP=fldesktop
+export XDG_SESSION_TYPE=wayland
+
+# Per-user environment (KEY=value lines, sourced by the shell)
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/fldesktop/environment"
+if [ -r "$conf" ]; then
+	set -a
+	. "$conf"
+	set +a
+fi
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-run-session >/dev/null 2>&1; then
+	exec dbus-run-session -- fl-wm "$@"
+fi
+exec fl-wm "$@"

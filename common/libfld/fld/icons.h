@@ -16,7 +16,7 @@ std::string icon_path(const std::string &name, int size);
 // cache: never delete it. Returns nullptr if not found.
 Fl_Image *icon(const std::string &name, int size);
 // Tries several names in order.
-Fl_Image *icon(const std::vector<std::string> &names, int size);
+Fl_Image *icon_first(const std::vector<std::string> &names, int size);
 
 // Loads any supported image file (png, jpg, gif, bmp, svg, xpm, ...).
 // The caller owns the returned image. Returns nullptr on failure.

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=fldesktop
+Comment=A lightweight Wayland desktop built with FLTK
+Exec=fl-session
+TryExec=fl-wm
+Type=Application
+DesktopNames=fldesktop

@@ -24,7 +24,7 @@ option(FLD_BUILD_EDIT     "Build the fl-edit text editor"                  ON)
 
 find_package(PkgConfig REQUIRED)
 
-add_compile_options(-Wall -Wextra -Wno-unused-parameter)
+add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
                         FLD_PREFIX="${CMAKE_INSTALL_PREFIX}"
                         FLD_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/fldesktop"

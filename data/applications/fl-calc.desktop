@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator
+GenericName=Calculator
+Comment=Perform arithmetic and scientific calculations
+Exec=fl-calc
+Icon=fl-calc
+Categories=Utility;Calculator;
+Keywords=calculation;arithmetic;scientific;math;
+StartupWMClass=fl-calc

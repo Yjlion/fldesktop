@@ -17,6 +17,7 @@ std::vector<std::string> data_dirs();      // data_home + $XDG_DATA_DIRS
 std::vector<std::string> config_dirs();    // config_home + $XDG_CONFIG_DIRS
 std::string fld_config_dir();              // ~/.config/fldesktop (created)
 std::string user_dir(const char *key);     // XDG user dir, e.g. "DESKTOP"
+std::string fld_data_dir();                // $FLD_DATADIR or the installed share/fldesktop
 
 // Filesystem helpers
 bool file_exists(const std::string &path);

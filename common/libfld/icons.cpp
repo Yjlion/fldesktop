@@ -99,6 +99,24 @@ int dir_distance(const ThemeDir &d, int size) {
 
 const char *kExts[] = {".png", ".svg", ".xpm"};
 
+// FLTK renders SVG with nanosvg, which ignores masks, filters and clip paths;
+// icons using them come out as black blobs, so such files are skipped.
+bool svg_usable(const std::string &path) {
+  static std::map<std::string, bool> cache;
+  auto it = cache.find(path);
+  if (it != cache.end()) return it->second;
+  std::string text;
+  bool ok = read_file(path, text, 1 << 20) && text.find("<mask") == std::string::npos &&
+            text.find("<filter") == std::string::npos && text.find("<clipPath") == std::string::npos;
+  cache[path] = ok;
+  return ok;
+}
+
+bool usable_file(const std::string &p) {
+  if (!file_exists(p)) return false;
+  return !ends_with(p, ".svg") || svg_usable(p);
+}
+
 std::string lookup_in_theme(Theme *t, const std::string &name, int size) {
   std::string best;
   int best_dist = INT_MAX;
@@ -108,7 +126,7 @@ std::string lookup_in_theme(Theme *t, const std::string &name, int size) {
     for (auto &b : t->bases) {
       for (auto ext : kExts) {
         std::string p = b + "/" + d.subdir + "/" + name + ext;
-        if (file_exists(p)) {
+        if (usable_file(p)) {
           best = p;
           best_dist = dist;
           goto next_dir;
@@ -167,13 +185,35 @@ std::string icon_path(const std::string &name, int size) {
     for (auto &d : data_dirs()) {
       for (auto ext : kExts) {
         std::string p = path_join(d, "pixmaps/" + n + ext);
-        if (file_exists(p)) { r = p; break; }
+        if (usable_file(p)) { r = p; break; }
       }
       if (!r.empty()) break;
     }
   }
   cache[key] = r;
   return r;
+}
+
+// FLTK's cairo drawing does not blend gray+alpha (depth 2) images correctly
+// (the transparent parts come out black), so expand them to RGBA.
+static Fl_Image *normalize_depth(Fl_Image *img) {
+  Fl_RGB_Image *rgb = dynamic_cast<Fl_RGB_Image *>(img);
+  if (!rgb || rgb->d() != 2 || rgb->count() < 1 || !rgb->data()[0]) return img;
+  int w = rgb->data_w(), h = rgb->data_h();
+  int ld = rgb->ld() ? rgb->ld() : w * 2;
+  const unsigned char *src = (const unsigned char *)rgb->data()[0];
+  unsigned char *dst = new unsigned char[(size_t)w * h * 4];
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++) {
+      const unsigned char *s = src + (size_t)y * ld + x * 2;
+      unsigned char *d = dst + ((size_t)y * w + x) * 4;
+      d[0] = d[1] = d[2] = s[0];
+      d[3] = s[1];
+    }
+  Fl_RGB_Image *n = new Fl_RGB_Image(dst, w, h, 4);
+  n->alloc_array = 1;
+  delete img;
+  return n;
 }
 
 Fl_Image *load_image(const std::string &path) {
@@ -195,7 +235,7 @@ Fl_Image *load_image(const std::string &path) {
     delete img;
     return nullptr;
   }
-  return img;
+  return normalize_depth(img);
 }
 
 Fl_Image *icon(const std::string &name, int size) {
@@ -227,7 +267,7 @@ Fl_Image *icon(const std::string &name, int size) {
   return img;
 }
 
-Fl_Image *icon(const std::vector<std::string> &names, int size) {
+Fl_Image *icon_first(const std::vector<std::string> &names, int size) {
   for (auto &n : names)
     if (Fl_Image *i = icon(n, size)) return i;
   return nullptr;

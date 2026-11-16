@@ -41,6 +41,9 @@ private:
   int next_x_;
 };
 
+// Escapes '@' so FLTK does not treat it as a symbol prefix in labels/fl_draw boxes.
+std::string escape_at(const std::string &s);
+
 void about_dialog(const char *app_name, const char *icon, const char *description);
 
 } // namespace fld

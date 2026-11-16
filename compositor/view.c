@@ -99,14 +99,19 @@ static bool client_exe_is(struct flwm_server *server, struct wl_client *client, 
 }
 
 static void detect_role(struct flwm_view *view) {
+	/* FLTK does not set an app_id on borderless windows, so the shell clients
+	 * may also identify themselves with their title; the executable check
+	 * below keeps other programs from claiming a shell role. */
 	const char *app_id = view->xdg_toplevel->app_id;
-	if (!app_id || view->role_checked) return;
+	const char *title = view->xdg_toplevel->title;
+	if (view->role_checked || (!app_id && !title)) return;
 	view->role_checked = true;
 	for (size_t i = 0; i < sizeof shell_roles / sizeof shell_roles[0]; i++) {
-		if (strcmp(app_id, shell_roles[i].app_id) != 0) continue;
+		const char *want = shell_roles[i].app_id;
+		if (!(app_id && !strcmp(app_id, want)) && !(title && !strcmp(title, want))) continue;
 		struct wl_client *client = wl_resource_get_client(view->xdg_toplevel->resource);
 		if (!client_exe_is(view->server, client, shell_roles[i].exe)) {
-			wlr_log(WLR_INFO, "app_id %s claimed by a foreign program; treating as normal", app_id);
+			wlr_log(WLR_INFO, "%s claimed by a foreign program; treating as normal", want);
 			return;
 		}
 		view->role = shell_roles[i].role;
@@ -119,7 +124,7 @@ static void detect_role(struct flwm_view *view) {
 		default: break;
 		}
 		wlr_scene_node_reparent(&view->tree->node, layer);
-		wlr_log(WLR_DEBUG, "shell client %s mapped with role %d", app_id, view->role);
+		wlr_log(WLR_DEBUG, "shell client %s gets role %d", want, view->role);
 		return;
 	}
 }
@@ -432,7 +437,10 @@ void view_reposition_shell(struct flwm_view *view) {
 	case FLWM_ROLE_PANEL:
 		o = output_primary(server);
 		if (!o) return;
-		request_size(view, o->full_area.width, 0);
+		/* never send a 0 height: FLTK treats it as a zero sized window and
+		 * stops drawing. Before the first buffer let the client choose. */
+		if (geo.height > 0) request_size(view, o->full_area.width, geo.height);
+		else request_size(view, 0, 0);
 		view_set_position(view, o->full_area.x,
 			server->config.panel_top ? o->full_area.y
 				: o->full_area.y + o->full_area.height - geo.height);
@@ -521,6 +529,9 @@ static void view_map(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = view->server;
 	detect_role(view);
 	view->mapped = true;
+	wlr_log(WLR_DEBUG, "map: app_id=%s title=%s role=%d",
+		view->xdg_toplevel->app_id ? view->xdg_toplevel->app_id : "(null)",
+		view->xdg_toplevel->title ? view->xdg_toplevel->title : "(null)", view->role);
 	wlr_scene_node_set_enabled(&view->tree->node, true);
 	if (view->role != FLWM_ROLE_NORMAL) {
 		view_reposition_shell(view);

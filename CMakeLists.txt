@@ -27,6 +27,7 @@ option(FLD_BUILD_MIXER    "Build the fl-mixer PipeWire mixer"              ON)
 option(FLD_BUILD_POLKIT   "Build the fl-polkit-agent authentication agent" ON)
 option(FLD_BUILD_NETWORK  "Build fl-network (NetworkManager)"              ON)
 option(FLD_BUILD_SETTINGS "Build the fl-settings settings center"          ON)
+option(FLD_BUILD_NOTIFYD  "Build the fl-notifyd notification server"       ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -38,7 +39,7 @@ add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS)
+foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -108,7 +109,7 @@ endif()
 if(FLD_BUILD_GREETER)
   add_subdirectory(greeter)
 endif()
-foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS)
+foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     add_subdirectory(apps/fl-${lc})

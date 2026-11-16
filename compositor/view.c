@@ -81,6 +81,7 @@ static const struct {
 	{"fldesktop.osd", "fl-panel", FLWM_ROLE_OSD},
 	{"fldesktop.osk", "fl-osk", FLWM_ROLE_OSK},
 	{"fldesktop.panel-popup", "fl-panel", FLWM_ROLE_POPUP},
+	{"fldesktop.notification", "fl-notifyd", FLWM_ROLE_NOTIFY},
 };
 
 static bool client_exe_is(struct flwm_server *server, struct wl_client *client, const char *exe) {
@@ -124,6 +125,7 @@ static void detect_role(struct flwm_view *view) {
 		case FLWM_ROLE_LAUNCHER:
 		case FLWM_ROLE_OSD:
 		case FLWM_ROLE_OSK:
+		case FLWM_ROLE_NOTIFY:
 		case FLWM_ROLE_POPUP: layer = view->server->layer_overlay; break;
 		default: break;
 		}
@@ -493,6 +495,13 @@ void view_reposition_shell(struct flwm_view *view) {
 		}
 		break;
 	}
+	case FLWM_ROLE_NOTIFY:
+		/* top right corner of the usable area (below a top panel) */
+		o = output_primary(server);
+		if (!o) return;
+		view_set_position(view, o->usable_area.x + o->usable_area.width - geo.width - 8,
+			o->usable_area.y + 8);
+		break;
 	case FLWM_ROLE_OSK: {
 		/* docked at the bottom, above a bottom panel */
 		o = output_primary(server);

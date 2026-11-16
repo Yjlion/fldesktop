@@ -18,6 +18,7 @@ endfunction()
 
 fld_settings_page(appearance pages/appearance.cpp)
 fld_settings_page(panel      pages/panel.cpp)
+fld_settings_page(notifications pages/notifications.cpp REQUIRES fld-glib)
 fld_settings_page(language   pages/language.cpp)
 fld_settings_page(defaultapps pages/default_apps.cpp)
 fld_settings_page(keyboard   pages/keyboard.cpp)

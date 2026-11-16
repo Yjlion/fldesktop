@@ -645,8 +645,9 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 		server->focused_layer = NULL;
 
 	struct flwm_view *view = desc ? desc->ptr : NULL;
-	/* the on-screen keyboard gets pointer events but never the keyboard focus */
-	if (view && view->role != FLWM_ROLE_OSK) view_focus(view);
+	/* the on-screen keyboard and notifications get pointer events but never
+	 * the keyboard focus */
+	if (view && view->role != FLWM_ROLE_OSK && view->role != FLWM_ROLE_NOTIFY) view_focus(view);
 
 	/* Super + drag moves / resizes any normal window */
 	if (view && view->role == FLWM_ROLE_NORMAL && (mods & WLR_MODIFIER_LOGO)) {

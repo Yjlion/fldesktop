@@ -34,8 +34,8 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "panel.h"
 
-static const int PANEL_H = 38;
 
 // ---------------------------------------------------------------------------
 // Task list model (foreign toplevels)
@@ -134,9 +134,9 @@ static const wl_registry_listener kRegListener = {reg_global, reg_global_remove}
 // ---------------------------------------------------------------------------
 // Widgets
 
-static Fl_Color panel_bg() { return fld::palette().panel_bg; }
-static Fl_Color panel_fg() { return fld::palette().panel_fg; }
-static Fl_Color panel_hover() { return fl_color_average(panel_bg(), FL_WHITE, 0.85f); }
+Fl_Color panel_bg() { return fld::palette().panel_bg; }
+Fl_Color panel_fg() { return fld::palette().panel_fg; }
+Fl_Color panel_hover() { return fl_color_average(panel_bg(), FL_WHITE, 0.85f); }
 
 static Fl_Image *icon_for_app_id(const std::string &app_id, int size) {
   static std::map<std::string, std::string> cache;
@@ -330,40 +330,6 @@ public:
   }
 };
 
-// A popup window anchored to a panel widget (an xdg_popup on Wayland).
-// A popup above the panel (calendar, volume). It is a borderless toplevel
-// titled "fldesktop.panel-popup": fl-wm places it at the pointer next to the
-// panel, keeps it out of the task list and closes it when another window is
-// focused. (FLTK only creates xdg_popups for its own menus.)
-class PanelPopup : public Fl_Double_Window {
-public:
-  PanelPopup(int w, int h) : Fl_Double_Window(w, h, "fldesktop.panel-popup") {
-    box(FL_BORDER_BOX);
-    color(fld::palette().bg2);
-    border(0);
-    callback([](Fl_Widget *w, void *) { w->hide(); });
-  }
-  int handle(int e) override {
-    if (e == FL_KEYBOARD && Fl::event_key() == FL_Escape) {
-      hide();
-      return 1;
-    }
-    return Fl_Double_Window::handle(e);
-  }
-  void popup_at(Fl_Widget *, bool) {
-    show();
-    // FLTK ignores xdg_toplevel.close for borderless windows, so the popup
-    // closes itself once the program has lost the keyboard focus (fl-wm moves
-    // it away when another window is clicked)
-    bool had_focus = false;
-    while (shown()) {
-      Fl::wait();
-      if (Fl::focus()) had_focus = true;
-      else if (had_focus) hide();
-    }
-  }
-};
-
 // ---------------------------------------------------------------------------
 // Panel window
 
@@ -375,7 +341,10 @@ struct Panel {
   fld::FlatButton *volume = nullptr;
   fld::FlatButton *keyboard = nullptr;
   fld::FlatButton *network = nullptr;
+  fld::FlatButton *bluetooth = nullptr;
+  fld::FlatButton *printer = nullptr;
   fld::FlatButton *battery = nullptr;
+  fld::FlatButton *bell = nullptr;
   fld::FlatButton *clock = nullptr;
   fld::FlatButton *power = nullptr;
   bool top = false;
@@ -388,7 +357,6 @@ struct Panel {
 
 static Panel P;
 
-static void relayout();
 
 static void update_task_button(Task *t) {
   if (t->button) t->button->redraw();
@@ -725,7 +693,7 @@ static void network_changed() {
 }
 #endif
 
-static void relayout() {
+void relayout() {
   if (!P.win) return;
   int W = P.win->w(), H = P.win->h();
   int x = 4;
@@ -738,7 +706,12 @@ static void relayout() {
   // right side, right to left
   int r = W - 4;
   P.power->resize(r - 34, 2, 34, H - 4);
-  r -= 38;
+  r -= 36;
+  if (P.bell && P.bell->visible()) {
+    P.bell->resize(r - 34, 2, 34, H - 4);
+    r -= 36;
+  }
+  r -= 2;
   fl_font(FL_HELVETICA, 14);
   int cw = (int)fl_width(P.clock->label() ? P.clock->label() : "00:00") + 24;
   P.clock->resize(r - cw, 2, cw, H - 4);
@@ -747,6 +720,12 @@ static void relayout() {
     int bw = (int)fl_width(P.battery->label() ? P.battery->label() : "100%") + 40;
     P.battery->resize(r - bw, 2, bw, H - 4);
     r -= bw + 2;
+  }
+  for (fld::FlatButton *b : {P.printer, P.bluetooth}) {
+    if (b && b->visible()) {
+      b->resize(r - 34, 2, 34, H - 4);
+      r -= 36;
+    }
   }
   if (P.network && P.network->visible()) {
     P.network->resize(r - 34, 2, 34, H - 4);
@@ -793,7 +772,7 @@ static void tick(void *) {
   Fl::repeat_timeout(1.0, tick);
 }
 
-static fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Callback *cb) {
+fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Callback *cb) {
   auto *b = new fld::FlatButton(0, 0, w, PANEL_H - 4);
   b->color(panel_bg());
   b->labelcolor(panel_fg());
@@ -890,7 +869,12 @@ int main(int argc, char **argv) {
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);
+#ifdef FLD_HAVE_NOTIFY
+  Fl::lock();
+  P.bell = notify_indicator_create();
+#endif
   P.power = make_btn(34, "system-shutdown", "Power", power_cb);
+  if (Fl_Image *pi = fld::symbolic_icon("system-shutdown", 18, panel_fg())) P.power->icon_image(pi);
   P.win->end();
   P.win->resizable(P.tasks);
   P.win->size_range(200, PANEL_H, 0, PANEL_H);

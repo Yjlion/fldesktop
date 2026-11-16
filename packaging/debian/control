@@ -66,7 +66,7 @@ Description: fldesktop Wayland compositor
 
 Package: fldesktop-shell
 Architecture: any
-Depends: fldesktop-wm (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: fldesktop-wm (= ${binary:Version}), xdg-user-dirs, ${shlibs:Depends}, ${misc:Depends}
 Recommends: dbus-user-session, pipewire, wireplumber, network-manager,
             fldesktop-polkit-agent
 Description: fldesktop panel, launcher and desktop
@@ -172,3 +172,12 @@ Description: fldesktop network settings for NetworkManager
  fl-network shows wired and Wi-Fi devices, connects to wireless networks
  and edits saved NetworkManager connections (IPv4/IPv6, DNS, Wi-Fi
  security).
+
+Package: fldesktop-archive-keyring
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Description: OpenPGP key of the fldesktop package repository
+ The key that signs the fldesktop apt repository at
+ https://yjlion.github.io/fldesktop/debian, installed as
+ /usr/share/keyrings/fldesktop-archive-keyring.asc for use with signed-by.

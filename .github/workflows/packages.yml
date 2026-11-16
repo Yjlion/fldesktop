@@ -1,0 +1,107 @@
+name: Packages
+
+# Builds the Debian and Arch packages. Called by ci.yml (pull requests) and
+# repo.yml (publishing); can also be started by hand.
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: "stable (version from debian/changelog) or devel (version + git count)"
+        type: string
+        default: devel
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "stable or devel"
+        type: choice
+        options: [devel, stable]
+        default: devel
+
+jobs:
+  debian:
+    name: Debian trixie (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            # also builds the architecture independent packages
+            build: -b
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            build: -B
+    runs-on: ${{ matrix.runner }}
+    container: debian:trixie
+    env:
+      DEBEMAIL: yjlion@users.noreply.github.com
+      DEBFULLNAME: Yjlion
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential devscripts debhelper git ca-certificates cmake ninja-build pkgconf \
+            libfltk1.4-dev libwlroots-0.18-dev libwayland-dev wayland-protocols libxkbcommon-dev \
+            libinput-dev libpango1.0-dev libcairo2-dev libdrm-dev libpixman-1-dev libvterm-dev \
+            libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
+            xkb-data shared-mime-info lintian
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set the version
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          git config --global --add safe.directory "$PWD"
+          cp -r packaging/debian debian
+          base=$(dpkg-parsechangelog -S Version)
+          if [ "$CHANNEL" = stable ]; then
+            # a release tag must match debian/changelog
+            if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$base" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match debian/changelog version $base"
+              exit 1
+            fi
+          else
+            v="$base+git$(git rev-list --count HEAD).g$(git rev-parse --short=7 HEAD)"
+            dch --newversion "$v" --distribution trixie-devel --force-distribution \
+              "Development build of $(git rev-parse --short=7 HEAD)."
+          fi
+          dpkg-parsechangelog -S Version
+      - name: Build
+        run: |
+          dpkg-buildpackage ${{ matrix.build }} -us -uc
+          mkdir -p dist && mv ../*.deb dist/
+          ls -l dist
+      - name: Lintian
+        run: lintian --no-tag-display-limit dist/*.deb || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian-trixie-${{ matrix.arch }}
+          path: dist/*.deb
+
+  arch:
+    name: Arch Linux (x86_64)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git cmake ninja pkgconf wayland-protocols \
+            fltk wlroots0.20 libvterm pango cairo libinput libxkbcommon pixman shared-mime-info \
+            glib2 libpipewire polkit libnm fontconfig xkeyboard-config ttf-dejavu
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build
+        run: |
+          useradd -m builder
+          chown -R builder .
+          su builder -c "git config --global --add safe.directory '*'"
+          su builder -c "cd packaging/arch && FLDESKTOP_SRC=$PWD makepkg --nodeps --noconfirm"
+          mkdir -p dist && cp packaging/arch/*.pkg.tar.zst dist/
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-x86_64
+          path: dist/*.pkg.tar.zst

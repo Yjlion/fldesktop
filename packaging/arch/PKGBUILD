@@ -5,14 +5,14 @@ pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
-         fldesktop-polkit-agent fldesktop-network)
+         fldesktop-polkit-agent fldesktop-network fldesktop-keyring)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig)
 checkdepends=()
@@ -29,6 +29,11 @@ pkgver() {
   local v
   v=$(sed -n 's/^project(fldesktop VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
   local n h
+  # a build of the release tag itself gets the plain version
+  if [[ "$(git describe --tags --exact-match 2>/dev/null)" == "v$v" ]]; then
+    echo "$v"
+    return
+  fi
   if n=$(git rev-list --count HEAD 2>/dev/null) && h=$(git rev-parse --short HEAD 2>/dev/null); then
     printf "%s.r%s.g%s" "$v" "$n" "$h"
   else
@@ -84,7 +89,7 @@ package_fldesktop-wm() {
 
 package_fldesktop-shell() {
   pkgdesc="fldesktop panel, launcher, desktop icons and session"
-  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm)
+  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm xdg-user-dirs)
   optdepends=('pipewire: volume control' 'wireplumber: volume control'
               'networkmanager: network indicator and Wi-Fi passwords'
               'fldesktop-polkit-agent: administrator password prompts')
@@ -148,4 +153,18 @@ package_fldesktop-network() {
   depends=(fltk glib2 libnm)
   optdepends=('networkmanager: the network service' 'fldesktop-polkit-agent: password prompts')
   _app network
+}
+package_fldesktop-keyring() {
+  pkgdesc="OpenPGP key of the fldesktop pacman repository"
+  arch=(any)
+  # pacman-key (run by the install script) must be upgraded before this
+  depends=(pacman)
+  install=fldesktop-keyring.install
+  local key="$(_srcdir)/packaging/repo/fldesktop-archive-keyring.asc"
+  local fpr
+  fpr=$(gpg --with-colons --show-keys "$key" | awk -F: '/^fpr/ {print $10; exit}')
+  install -Dm644 "$key" "$pkgdir/usr/share/pacman/keyrings/fldesktop.gpg"
+  printf '%s:4:\n' "$fpr" > fldesktop-trusted
+  install -Dm644 fldesktop-trusted "$pkgdir/usr/share/pacman/keyrings/fldesktop-trusted"
+  rm fldesktop-trusted
 }

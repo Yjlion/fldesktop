@@ -13,6 +13,12 @@ if [ -r "$conf" ]; then
 	set +a
 fi
 
+# Create the XDG user folders (Desktop, Documents, ...) and keep their names
+# in step with the language.
+if command -v xdg-user-dirs-update >/dev/null 2>&1; then
+	xdg-user-dirs-update
+fi
+
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-run-session >/dev/null 2>&1; then
 	exec dbus-run-session -- fl-wm "$@"
 fi

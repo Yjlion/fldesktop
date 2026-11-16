@@ -1,0 +1,121 @@
+name: Package repositories
+
+# Builds the packages and publishes the signed apt and pacman repositories on
+# GitHub Pages (https://yjlion.github.io/fldesktop/):
+#   push to main -> devel channel (trixie-devel, arch/devel)
+#   tag v*       -> stable channel (trixie, arch/stable) + GitHub release
+# The repository tree is kept on the gh-pages branch (one commit, rewritten
+# on every publish) and deployed from there.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  packages:
+    uses: ./.github/workflows/packages.yml
+    with:
+      channel: ${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'devel' }}
+
+  publish:
+    name: Publish repositories
+    needs: packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      CHANNEL: ${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'devel' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends reprepro pacman-package-manager \
+            libarchive-tools zstd gnupg
+
+      - name: Import the signing key
+        env:
+          FLD_REPO_GPG_KEY: ${{ secrets.FLD_REPO_GPG_KEY }}
+        run: |
+          test -n "$FLD_REPO_GPG_KEY" || { echo "::error::Secret FLD_REPO_GPG_KEY is not set"; exit 1; }
+          printf '%s\n' "$FLD_REPO_GPG_KEY" | gpg --batch --import
+          fpr=$(gpg --with-colons --list-secret-keys | awk -F: '/^fpr/ {print $10; exit}')
+          echo "FLD_REPO_KEY=$fpr" >> "$GITHUB_ENV"
+          # the key in the source tree must be the one we sign with
+          gpg --with-colons --show-keys src/packaging/repo/fldesktop-archive-keyring.asc | grep -q ":$fpr:"
+
+      - name: Check out the repository tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$url" gh-pages >/dev/null; then
+            git clone --depth 1 --branch gh-pages "$url" site
+          else
+            git init -b gh-pages site
+            git -C site remote add origin "$url"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: debian-trixie-*
+          path: debs
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch-x86_64
+          path: pkgs
+
+      - name: Add the packages
+        run: src/packaging/repo/publish.sh "$CHANNEL" debs pkgs site
+
+      - name: Verify the signatures
+        run: |
+          for d in site/debian/dists/*/; do
+            gpg --verify "$d/InRelease"
+            gpg --verify "$d/Release.gpg" "$d/Release"
+          done
+          for s in site/arch/*/x86_64/*.sig; do
+            gpg --verify "$s" "${s%.sig}"
+          done
+
+      - name: Store the repository tree
+        run: |
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # one commit only: the history of binary packages is not kept
+          git checkout --orphan publish
+          git add -A
+          git commit -q -m "Publish $CHANNEL build of ${GITHUB_SHA::7}"
+          git push -f origin publish:gh-pages
+
+      - name: Prepare the site
+        run: rsync -a --exclude .git --exclude state site/ public/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Attach the packages to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            debs/*.deb
+            pkgs/*.pkg.tar.zst

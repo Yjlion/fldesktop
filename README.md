@@ -73,7 +73,38 @@ the FLTK applications for use under another compositor.
   produces the same set of `.deb` packages.
 
 CI (`.github/workflows/ci.yml`) builds and tests on Arch (wlroots 0.20) and
-Debian trixie (wlroots 0.18) and attaches the packages to `v*` releases.
+Debian trixie (wlroots 0.18). `.github/workflows/repo.yml` builds the packages
+(Debian amd64 + arm64, Arch x86_64) and publishes them to the package
+repositories below: every push to `main` goes to the *devel* channel, every
+`v*` tag to the *stable* channel and to the GitHub release.
+
+### Package repositories
+
+Signed apt and pacman repositories are at <https://yjlion.github.io/fldesktop/>
+(key fingerprint `4A49 3D03 7B26 F761 9470  F830 60F9 733B 07BD AA7B`).
+
+```sh
+# Debian 13 (trixie); use the suite trixie-devel for builds of main
+sudo curl -fsSLo /usr/share/keyrings/fldesktop-archive-keyring.asc \
+  https://yjlion.github.io/fldesktop/fldesktop-archive-keyring.asc
+echo "deb [signed-by=/usr/share/keyrings/fldesktop-archive-keyring.asc] https://yjlion.github.io/fldesktop/debian trixie main" \
+  | sudo tee /etc/apt/sources.list.d/fldesktop.list
+sudo apt update && sudo apt install fldesktop fldesktop-greeter fldesktop-archive-keyring
+```
+
+```sh
+# Arch Linux
+curl -fsSLO https://yjlion.github.io/fldesktop/fldesktop-archive-keyring.asc
+sudo pacman-key --add fldesktop-archive-keyring.asc
+sudo pacman-key --lsign-key 4A493D037B26F7619470F83060F9733B07BDAA7B
+# add to /etc/pacman.conf (arch/devel/$arch for builds of main):
+#   [fldesktop]
+#   Server = https://yjlion.github.io/fldesktop/arch/stable/$arch
+sudo pacman -Syu fldesktop fldesktop-greeter fldesktop-keyring
+```
+
+The repository tree lives on the `gh-pages` branch; `packaging/repo/publish.sh`
+adds packages to it (needs the `FLD_REPO_GPG_KEY` secret in CI).
 
 ## Running
 

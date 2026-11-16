@@ -15,6 +15,16 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
 
+![fldesktop](screenshots/desktop.png)
+
+| | |
+|---|---|
+| ![launcher](screenshots/launcher.png) | ![files](screenshots/files.png) |
+| ![editor](screenshots/editor.png) | ![terminal](screenshots/terminal.png) |
+| ![calculator](screenshots/calculator.png) | ![greeter](screenshots/greeter.png) |
+
+Screenshots are made in a headless session by `tools/screenshots.sh`.
+
 All programs share `libfld` (XDG directories, desktop entries, icon themes,
 mime types, trash, theme) and read their settings from `~/.config/fldesktop/`.
 
@@ -61,10 +71,11 @@ Debian trixie (wlroots 0.18) and attaches the packages to `v*` releases.
   `command = "cage -s -d -- fl-greet"` (see `/usr/share/fldesktop/config.toml`).
   `fl-greet --demo` shows the greeter without greetd.
 
-Running uninstalled from the build tree:
+Running uninstalled from the build tree (nested in your current session):
 
 ```sh
-XDG_DATA_DIRS=$PWD/build/share:/usr/share FLD_DATADIR=$PWD/build/share/fldesktop build/bin/fl-wm
+tools/run-dev.sh            # whole desktop
+tools/run-dev.sh -s fl-term # only a terminal
 ```
 
 ### Default shortcuts

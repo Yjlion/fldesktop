@@ -28,3 +28,9 @@ if(FLD_BUILD_WM AND FLD_BUILD_CALC)
   add_test(NAME wm-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/wm-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   set_tests_properties(wm-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
 endif()
+
+if(FLD_BUILD_WM AND FLD_BUILD_SHELL AND FLD_BUILD_CALC)
+  add_test(NAME session-keys COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/session-keys.sh
+           ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${CMAKE_BINARY_DIR}/share)
+  set_tests_properties(session-keys PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
+endif()

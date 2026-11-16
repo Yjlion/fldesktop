@@ -15,3 +15,6 @@ file(COPY ${_apps} DESTINATION ${_out}/applications)
 file(COPY icons/hicolor DESTINATION ${_out}/icons)
 file(COPY backgrounds/default.svg DESTINATION ${_out}/fldesktop/backgrounds)
 file(COPY wayland-sessions/fldesktop.desktop DESTINATION ${_out}/wayland-sessions)
+
+file(GLOB _man ${CMAKE_SOURCE_DIR}/doc/man/*.1)
+install(FILES ${_man} DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)

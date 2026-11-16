@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+include /usr/share/dpkg/architecture.mk
 
 %:
 	dh $@ --buildsystem=cmake+ninja
@@ -7,7 +8,8 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 override_dh_auto_configure:
 	dh_auto_configure -- -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-# the compositor smoke test needs a writable XDG_RUNTIME_DIR and pixman
-# rendering; it is run in CI instead
+# The compositor smoke test needs a writable XDG_RUNTIME_DIR; CI runs it.
 override_dh_auto_test:
-	dh_auto_test -- ARGS="-E wm-smoke"
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	ctest --test-dir obj-$(DEB_HOST_GNU_TYPE) --output-on-failure -E "wm-smoke|session-keys"
+endif

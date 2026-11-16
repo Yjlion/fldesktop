@@ -16,7 +16,7 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed base-devel git cmake ninja pkgconf wayland-protocols \
             fltk wlroots0.20 libvterm pango cairo libinput libxkbcommon pixman shared-mime-info \
-            ttf-dejavu
+            ttf-dejavu wtype
       - uses: actions/checkout@v4
       - name: Build
         run: |
@@ -49,7 +49,7 @@ jobs:
             build-essential devscripts debhelper git ca-certificates cmake ninja-build pkgconf \
             libfltk1.4-dev libwlroots-0.18-dev libwayland-dev wayland-protocols libxkbcommon-dev \
             libinput-dev libpango1.0-dev libcairo2-dev libdrm-dev libpixman-1-dev libvterm-dev \
-            shared-mime-info lintian
+            shared-mime-info lintian wtype
       - uses: actions/checkout@v4
       - name: Build and test
         run: |

@@ -4,7 +4,7 @@
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit)
-pkgver=0.1.0
+pkgver=0.1.0.r7.gfbd8c9f
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
@@ -40,7 +40,7 @@ build() {
 }
 
 check() {
-  ctest --test-dir build --output-on-failure -E wm-smoke
+  ctest --test-dir build --output-on-failure -E "wm-smoke|session-keys"
 }
 
 _install_files() {
@@ -73,7 +73,7 @@ package_fldesktop-wm() {
   optdepends=('grim: screenshots' 'slurp: area screenshots' 'wl-clipboard: copy screenshots'
               'swaylock: screen locking')
   _stage
-  _install_files usr/bin/fl-wm usr/share/fldesktop/wm.ini.example
+  _install_files usr/bin/fl-wm usr/share/fldesktop/wm.ini.example usr/share/man/man1/fl-wm.1
   install -Dm644 "$(_srcdir)/COPYING" "$pkgdir/usr/share/licenses/$pkgname/COPYING"
 }
 
@@ -85,19 +85,23 @@ package_fldesktop-shell() {
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
     usr/bin/fl-session usr/bin/fl-screenshot usr/share/wayland-sessions/fldesktop.desktop \
     usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
+  local m
+  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot; do
+    _install_files usr/share/man/man1/$m.1
+  done
 }
 
 package_fldesktop-greeter() {
   pkgdesc="FLTK greeter for greetd"
   depends=(fltk greetd cage)
   _stage
-  _install_files usr/bin/fl-greet usr/share/fldesktop/config.toml
+  _install_files usr/bin/fl-greet usr/share/fldesktop/config.toml usr/share/man/man1/fl-greet.1
 }
 
 _app() {
   _stage
   _install_files usr/bin/fl-$1 usr/share/applications/fl-$1.desktop \
-    usr/share/icons/hicolor/scalable/apps/fl-$1.svg
+    usr/share/icons/hicolor/scalable/apps/fl-$1.svg usr/share/man/man1/fl-$1.1
 }
 
 package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); _app term; }

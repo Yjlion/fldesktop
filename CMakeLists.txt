@@ -28,6 +28,7 @@ option(FLD_BUILD_POLKIT   "Build the fl-polkit-agent authentication agent" ON)
 option(FLD_BUILD_NETWORK  "Build fl-network (NetworkManager)"              ON)
 option(FLD_BUILD_SETTINGS "Build the fl-settings settings center"          ON)
 option(FLD_BUILD_NOTIFYD  "Build the fl-notifyd notification server"       ON)
+option(FLD_BUILD_PORTAL   "Build xdg-desktop-portal-fl"                    ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -39,7 +40,7 @@ add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD)
+foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -118,6 +119,9 @@ endforeach()
 
 if(FLD_BUILD_POLKIT)
   add_subdirectory(apps/fl-polkit-agent)
+endif()
+if(FLD_BUILD_PORTAL)
+  add_subdirectory(portal)
 endif()
 
 add_subdirectory(data)

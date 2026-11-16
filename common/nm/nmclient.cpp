@@ -275,7 +275,7 @@ gboolean do_refresh(gpointer) {
 }
 
 void schedule_refresh() {
-  if (!g_refresh_source) g_refresh_source = g_timeout_add(120, do_refresh, nullptr);
+  if (!g_refresh_source) g_refresh_source = fld::glib_timeout(120, do_refresh, nullptr);
 }
 
 void on_any(GObject *, GParamSpec *, gpointer) { schedule_refresh(); }

@@ -1,0 +1,45 @@
+.TH XDG-DESKTOP-PORTAL-FL 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+xdg-desktop-portal-fl \- fldesktop backend for xdg-desktop-portal
+.SH SYNOPSIS
+\fBxdg-desktop-portal-fl\fR [\fB\-\-replace\fR]
+.SH DESCRIPTION
+Implements the desktop side of the XDG desktop portals for fldesktop
+sessions, so that sandboxed (Flatpak, Snap) and portal aware programs get
+fldesktop dialogs and settings:
+.TP
+\fBFileChooser\fR
+open, save and "save several files" dialogs with places, bookmarks
+(\fI~/.config/gtk-3.0/bookmarks\fR), filters and choices.
+.TP
+\fBAppChooser\fR
+the "open with" dialog.
+.TP
+\fBSettings\fR
+the color scheme, accent color, icon theme and fonts of
+\fI~/.config/fldesktop/desktop.ini\fR; changes are announced right away.
+.TP
+\fBScreenshot\fR
+screenshots with \fBgrim\fR(1) (areas and color picking with \fBslurp\fR(1)),
+saved in the Screenshots folder of the Pictures directory.
+.TP
+\fBAccess\fR, \fBAccount\fR
+permission and "share your details" dialogs.
+.TP
+\fBNotification\fR
+passes notifications on to \fBfl-notifyd\fR(1).
+.TP
+\fBWallpaper\fR
+sets the desktop background.
+.PP
+Screen casting is left to xdg-desktop-portal-wlr, other portals to the GTK
+backend, as listed in
+\fI/usr/share/xdg-desktop-portal/fldesktop-portals.conf\fR. The program is
+started by D-Bus; \fBfl-autostart\fR(1) passes WAYLAND_DISPLAY to D-Bus
+activated programs at login.
+.SH OPTIONS
+.TP
+\fB\-r\fR, \fB\-\-replace\fR
+Take over from a running instance.
+.SH SEE ALSO
+\fBfl-notifyd\fR(1), \fBflatpak\fR(1), \fBgrim\fR(1), \fBslurp\fR(1)

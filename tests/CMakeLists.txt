@@ -13,6 +13,17 @@ if(TARGET fld-glib)
   add_test(NAME notify COMMAND test_notify)
 endif()
 
+if(TARGET fld-portal-util)
+  add_executable(test_portal test_portal.cpp)
+  target_link_libraries(test_portal PRIVATE fld-portal-util)
+  add_test(NAME portal COMMAND test_portal)
+endif()
+
+if(FLD_BUILD_WM AND TARGET fl-notifyd AND TARGET xdg-desktop-portal-fl)
+  add_test(NAME portal-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/portal-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  set_tests_properties(portal-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
+endif()
+
 if(FLD_BUILD_WM AND TARGET fl-notifyd)
   add_test(NAME notify-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/notify-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   set_tests_properties(notify-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)

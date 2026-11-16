@@ -16,6 +16,12 @@ if(TARGET fl-osk-keymap)
   add_test(NAME vkeymap COMMAND test_vkeymap)
 endif()
 
+if(TARGET fl-charmap-data)
+  add_executable(test_charmap test_charmap.cpp)
+  target_link_libraries(test_charmap PRIVATE fl-charmap-data)
+  add_test(NAME charmap COMMAND test_charmap)
+endif()
+
 if(TARGET fl-calc-engine)
   add_executable(test_calc test_calc.cpp)
   target_link_libraries(test_calc PRIVATE fl-calc-engine)

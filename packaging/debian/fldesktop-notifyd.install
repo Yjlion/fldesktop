@@ -1,0 +1,4 @@
+usr/bin/fl-notifyd
+usr/share/dbus-1/services/org.fldesktop.Notifyd.service
+etc/xdg/autostart/fl-notifyd.desktop
+usr/share/man/man1/fl-notifyd.1

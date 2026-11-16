@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Text Editor
+GenericName=Text Editor
+Comment=Edit text files and source code
+Exec=fl-edit %F
+Icon=fl-edit
+Categories=Utility;TextEditor;
+MimeType=text/plain;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/x-python;text/x-shellscript;application/x-shellscript;text/markdown;text/x-cmake;application/json;application/xml;text/html;text/css;text/x-makefile;
+Keywords=text;editor;code;notepad;
+StartupWMClass=fl-edit

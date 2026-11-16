@@ -1,0 +1,106 @@
+Source: fldesktop
+Section: x11
+Priority: optional
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13),
+               cmake,
+               ninja-build,
+               pkgconf,
+               libfltk1.4-dev,
+               libwlroots-0.18-dev | libwlroots-0.19-dev,
+               libwayland-dev,
+               wayland-protocols,
+               libxkbcommon-dev,
+               libinput-dev,
+               libpango1.0-dev,
+               libcairo2-dev,
+               libdrm-dev,
+               libpixman-1-dev,
+               libvterm-dev,
+               shared-mime-info
+Standards-Version: 4.7.0
+Homepage: https://github.com/Yjlion/fldesktop
+Vcs-Browser: https://github.com/Yjlion/fldesktop
+Vcs-Git: https://github.com/Yjlion/fldesktop.git
+Rules-Requires-Root: no
+
+Package: fldesktop
+Architecture: all
+Depends: fldesktop-wm (>= ${source:Version}),
+         fldesktop-shell (>= ${source:Version}),
+         fldesktop-term (>= ${source:Version}),
+         fldesktop-files (>= ${source:Version}),
+         fldesktop-edit (>= ${source:Version}),
+         fldesktop-calc (>= ${source:Version}),
+         fldesktop-view (>= ${source:Version}),
+         ${misc:Depends}
+Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core
+Description: lightweight Wayland desktop built with FLTK (metapackage)
+ fldesktop is a small desktop environment for Wayland made with the FLTK
+ toolkit: its own wlroots compositor, a taskbar panel, an application
+ launcher, wallpaper and desktop icons, a greetd greeter and a set of
+ core applications.
+ .
+ This metapackage installs the whole desktop.
+
+Package: fldesktop-wm
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: fldesktop-shell, xdg-utils
+Suggests: grim, slurp, wl-clipboard, swaylock
+Description: fldesktop Wayland compositor
+ fl-wm is a stacking Wayland compositor based on wlroots with server side
+ decorations, keyboard shortcuts, window snapping and the protocols used by
+ the fldesktop panel (wlr-foreign-toplevel-management, layer-shell).
+
+Package: fldesktop-shell
+Architecture: any
+Depends: fldesktop-wm (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Recommends: dbus-user-session, wireplumber | pulseaudio-utils
+Description: fldesktop panel, launcher and desktop
+ The fldesktop session: fl-panel (taskbar, clock, volume, battery and power
+ menu), fl-launcher (searchable application menu), fl-desktop (wallpaper and
+ desktop icons), XDG autostart support and the wayland-sessions entry.
+
+Package: fldesktop-greeter
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, greetd, cage
+Description: FLTK greeter for greetd
+ fl-greet is a graphical login screen for the greetd login manager. It runs
+ inside the cage kiosk compositor and offers user and session selection and
+ power buttons.
+
+Package: fldesktop-term
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop terminal emulator
+ fl-term is a terminal emulator built with FLTK and libvterm, with
+ scrollback, 256 and true colour support, mouse reporting and bracketed paste.
+
+Package: fldesktop-calc
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop calculator
+ fl-calc is a basic and scientific calculator with history and memory.
+
+Package: fldesktop-view
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop image viewer
+ fl-view shows PNG, JPEG, GIF (animated), BMP, SVG and other images with
+ zoom, rotation, slideshow and folder navigation.
+
+Package: fldesktop-files
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, shared-mime-info
+Recommends: xdg-utils
+Description: fldesktop file manager
+ fl-files is a file manager with icon and list views, thumbnails, the XDG
+ trash, background copy and move, drag and drop and "open with".
+
+Package: fldesktop-edit
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop text editor
+ fl-edit is a tabbed text and code editor with syntax highlighting,
+ find and replace, auto-indent and line numbers.

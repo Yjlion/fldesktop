@@ -1,0 +1,15 @@
+usr/bin/fl-panel
+usr/bin/fl-launcher
+usr/bin/fl-desktop
+usr/bin/fl-autostart
+usr/bin/fl-session
+usr/bin/fl-screenshot
+usr/share/wayland-sessions/fldesktop.desktop
+usr/share/fldesktop/backgrounds
+usr/share/icons/hicolor/scalable/apps/fldesktop.svg
+usr/share/man/man1/fl-session.1
+usr/share/man/man1/fl-panel.1
+usr/share/man/man1/fl-launcher.1
+usr/share/man/man1/fl-desktop.1
+usr/share/man/man1/fl-autostart.1
+usr/share/man/man1/fl-screenshot.1

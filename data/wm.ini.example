@@ -1,0 +1,77 @@
+# fl-wm configuration: copy to ~/.config/fldesktop/wm.ini
+# Reload with Super+Shift+R (or `kill -HUP $FLWM_PID`).
+
+[appearance]
+title_height=30
+border_width=1
+font=Sans Bold 10
+# colors: #rrggbb or #rrggbbaa
+active_title=#2b2d31
+inactive_title=#e8e9eb
+active_text=#ffffff
+inactive_text=#6b6f76
+border_color=#7a7f87
+
+[behaviour]
+# bottom or top
+panel_position=bottom
+focus_follows_mouse=false
+launcher=fl-launcher
+
+[keyboard]
+# xkb names, e.g. layout=us,de  options=grp:alt_shift_toggle
+layout=
+variant=
+options=
+repeat_rate=25
+repeat_delay=600
+
+[pointer]
+tap_to_click=true
+natural_scroll=false
+# -1.0 .. 1.0
+accel=0
+
+[cursor]
+theme=Adwaita
+size=24
+
+[output]
+# default scale for all outputs
+scale=1
+
+# per output settings, the name comes from the log or `wlr-randr`
+#[output:HDMI-A-1]
+#mode=1920x1080@60
+#scale=1.25
+#position=1920,0
+#transform=normal
+#enabled=true
+
+[keys]
+# Modifiers: Super, Alt, Ctrl, Shift. Keys are xkb keysym names.
+# Actions: exec CMD, close, maximize, minimize, fullscreen, cycle, cycle-back,
+#          snap-left, snap-right, launcher, show-desktop, reload, quit
+Super+Return=exec fl-term
+Super+e=exec fl-files
+Super+space=launcher
+Super+d=show-desktop
+Super+q=close
+Alt+F4=close
+Super+Up=maximize
+Super+Down=minimize
+Super+Left=snap-left
+Super+Right=snap-right
+F11=fullscreen
+Alt+Tab=cycle
+Alt+Shift+Tab=cycle-back
+Print=exec fl-screenshot
+Shift+Print=exec fl-screenshot --area
+Ctrl+Alt+BackSpace=quit
+
+# An [autostart] section replaces the default list
+# (fl-desktop, fl-panel, fl-autostart)
+#[autostart]
+#1=fl-desktop
+#2=fl-panel
+#3=fl-autostart

@@ -1,0 +1,43 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: fldesktop
+Upstream-Contact: https://github.com/Yjlion/fldesktop/issues
+Source: https://github.com/Yjlion/fldesktop
+
+Files: *
+Copyright: 2026 Yjlion
+License: GPL-2+
+
+Files: protocols/wlr-foreign-toplevel-management-unstable-v1.xml
+Copyright: 2018 Ilia Bozhinov
+License: MIT-wlr
+
+Files: protocols/wlr-layer-shell-unstable-v1.xml
+Copyright: 2017 Drew DeVault
+License: MIT-wlr
+
+License: GPL-2+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ On Debian systems, the complete text of the GNU General Public
+ License version 2 can be found in "/usr/share/common-licenses/GPL-2".
+
+License: MIT-wlr
+ Permission to use, copy, modify, distribute, and sell this
+ software and its documentation for any purpose is hereby granted
+ without fee, provided that the above copyright notice appear in
+ all copies and that both that copyright notice and this permission
+ notice appear in supporting documentation, and that the name of
+ the copyright holders not be used in advertising or publicity
+ pertaining to distribution of the software without specific,
+ written prior permission.  The copyright holders make no
+ representations about the suitability of this software for any
+ purpose.  It is provided "as is" without express or implied
+ warranty.

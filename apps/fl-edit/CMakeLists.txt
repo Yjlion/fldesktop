@@ -1,0 +1,5 @@
+add_library(fl-edit-syntax STATIC syntax.cpp)
+target_include_directories(fl-edit-syntax PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(fl-edit main.cpp)
+target_link_libraries(fl-edit PRIVATE fl-edit-syntax fld)
+install(TARGETS fl-edit RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

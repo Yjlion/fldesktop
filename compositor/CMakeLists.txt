@@ -1,0 +1,38 @@
+set(_wlr_found FALSE)
+foreach(v 0.20 0.19 0.18)
+  pkg_check_modules(WLROOTS QUIET IMPORTED_TARGET wlroots-${v})
+  if(WLROOTS_FOUND)
+    message(STATUS "fl-wm: using wlroots ${WLROOTS_VERSION}")
+    set(_wlr_found TRUE)
+    break()
+  endif()
+endforeach()
+if(NOT _wlr_found)
+  message(FATAL_ERROR "fl-wm needs wlroots 0.18, 0.19 or 0.20 (or pass -DFLD_BUILD_WM=OFF)")
+endif()
+
+pkg_check_modules(WM_DEPS REQUIRED IMPORTED_TARGET
+  wayland-server xkbcommon libinput pangocairo cairo libdrm pixman-1)
+
+set(WM_PROTO_SRC)
+fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml server)
+fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/staging/cursor-shape/cursor-shape-v1.xml server)
+fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml server)
+# wlroots 0.18 headers include "tablet-v2-protocol.h"
+if(EXISTS ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml)
+  fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml server)
+endif()
+fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml server)
+
+add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c)
+# wlroots headers include "<name>-protocol.h" for some protocols
+file(GLOB _hdrs ${FLD_PROTO_OUT}/*-server-protocol.h)
+foreach(h ${_hdrs})
+  get_filename_component(n ${h} NAME)
+  string(REPLACE "-server-protocol.h" "-protocol.h" alias ${n})
+  configure_file(${h} ${FLD_PROTO_OUT}/server/${alias} COPYONLY)
+endforeach()
+target_include_directories(fl-wm PRIVATE ${FLD_PROTO_OUT}/server ${FLD_PROTO_OUT} ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(fl-wm PRIVATE WLR_USE_UNSTABLE _GNU_SOURCE)
+target_link_libraries(fl-wm PRIVATE PkgConfig::WLROOTS PkgConfig::WM_DEPS m)
+install(TARGETS fl-wm RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

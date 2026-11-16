@@ -376,7 +376,7 @@ int main(int argc, char **argv) {
   g_apps = ordered;
 
   refilter();
-  g_win->show(argc, argv);
+  g_win->show(); // not show(argc, argv): it resets the theme colors
   g_search->take_focus();
   Fl::add_check(focus_check);
   int r = Fl::run();

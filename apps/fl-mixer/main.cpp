@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
   g_backend->on_connection = [](bool) { update_status(); };
   g_backend->setPeaksEnabled(true);
   update_status();
-  win->show(argc, argv);
+  win->show(); // not show(argc, argv): it resets the theme colors
   int r = Fl::run();
   delete g_backend;
   return r;

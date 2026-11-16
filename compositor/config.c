@@ -143,6 +143,7 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+Shift+r", "reload");
 	add_binding(c, "Ctrl+Alt+BackSpace", "quit");
 	add_binding(c, "Print", "exec fl-screenshot");
+	add_binding(c, "Shift+Print", "exec fl-screenshot --area");
 
 	c->autostart[c->nautostart++] = strdup("fl-desktop");
 	c->autostart[c->nautostart++] = strdup("fl-panel");
@@ -233,6 +234,15 @@ bool config_load(struct flwm_config *c, const char *path) {
 			} else if (!strcmp(k, "enabled")) o->disabled = !parse_bool(v);
 			else if (!strcmp(k, "transform")) o->transform = parse_transform(v);
 		} else if (!strcasecmp(section, "keys")) {
+			/* "defaults=false" drops the built-in bindings, so the file can
+			 * hold the complete list (fl-settings writes it this way) */
+			if (!strcasecmp(k, "defaults")) {
+				if (!parse_bool(v)) {
+					for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);
+					c->nbindings = 0;
+				}
+				continue;
+			}
 			add_binding(c, k, v);
 		} else if (!strcasecmp(section, "autostart")) {
 			if (!autostart_reset) {

@@ -344,7 +344,7 @@ int main(int argc, char **argv) {
   Fl::add_handler(key_handler);
   layout();
   update();
-  g_win->show(argc, argv);
+  g_win->show(); // not show(argc, argv): it resets the theme colors
   g_display->take_focus();
   return Fl::run();
 }

@@ -34,6 +34,12 @@ if(TARGET fld-nm)
   add_test(NAME nm COMMAND test_nm)
 endif()
 
+if(TARGET fl-settings-xkb)
+  add_executable(test_settings test_settings.cpp)
+  target_link_libraries(test_settings PRIVATE fl-settings-xkb)
+  add_test(NAME settings COMMAND test_settings)
+endif()
+
 if(TARGET fl-calc-engine)
   add_executable(test_calc test_calc.cpp)
   target_link_libraries(test_calc PRIVATE fl-calc-engine)

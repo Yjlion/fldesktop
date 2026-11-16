@@ -457,7 +457,7 @@ int main(int argc, char **argv) {
     auto v = g_names.search(argv[1], 1);
     if (!v.empty()) select_block_for(v[0]);
   }
-  win->show(argc, argv);
+  win->show(); // not show(argc, argv): it resets the theme colors
   g_grid->take_focus();
   return Fl::run();
 }

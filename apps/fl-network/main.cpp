@@ -26,6 +26,6 @@ int main(int argc, char **argv) {
   win->size_range(640, 400);
   fld::set_window_icon(win, "fl-network");
   nm::Client::get().on_changed = [view] { view->refresh(); };
-  win->show(argc, argv);
+  win->show(); // not show(argc, argv): it resets the theme colors
   return Fl::run();
 }

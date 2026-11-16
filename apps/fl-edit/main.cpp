@@ -740,7 +740,7 @@ int main(int argc, char **argv) {
     opened++;
   }
   if (g_docs.empty()) new_doc();
-  g_win->show(argc, argv);
+  g_win->show(); // not show(argc, argv): it resets the theme colors
   current()->ed->take_focus();
   update_status();
   return Fl::run();

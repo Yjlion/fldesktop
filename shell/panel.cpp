@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "fld/config_watch.h"
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -804,8 +805,28 @@ static fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Ca
   return b;
 }
 
+// Everything that the panel reads at start; when it changes the panel restarts.
+static std::string settings_signature() {
+  fld::Ini p, d, w;
+  p.load(fld::fld_config_dir() + "/panel.ini");
+  d.load(fld::desktop_config_path());
+  w.load(fld::fld_config_dir() + "/wm.ini");
+  std::string sig = p.to_string() + "|" + w.get("behaviour", "panel_position", "bottom");
+  for (const char *k : {"Theme", "Accent", "Font", "FontSize", "Scheme"}) sig += "|" + d.get("Appearance", k);
+  return sig + "|" + d.get("General", "IconTheme");
+}
+
 int main(int argc, char **argv) {
   fld::init_app("fldesktop.panel", argc, argv);
+  static int s_argc = argc;
+  static char **s_argv = argv;
+  static std::string s_sig = settings_signature();
+  auto check_restart = [] {
+    if (settings_signature() != s_sig) fld::restart_self(s_argc, s_argv);
+  };
+  static fld::ConfigWatcher w1(fld::fld_config_dir() + "/panel.ini", check_restart);
+  static fld::ConfigWatcher w2(fld::desktop_config_path(), check_restart);
+  static fld::ConfigWatcher w3(fld::fld_config_dir() + "/wm.ini", check_restart);
   fld::Ini cfg;
   cfg.load(fld::fld_config_dir() + "/panel.ini");
   std::string wm_pos;
@@ -903,7 +924,7 @@ int main(int argc, char **argv) {
     if (e == FL_SCREEN_CONFIGURATION_CHANGED) P.win->size(Fl::w(), PANEL_H);
     return 0;
   });
-  P.win->show(argc, argv);
+  P.win->show(); // not show(argc, argv): it resets the theme colors
   wl_display *dpy = fl_wl_display();
   if (dpy) {
     wl_registry *reg = wl_display_get_registry(dpy);

@@ -69,6 +69,9 @@ if(FLD_NEED_FLTK)
   endif()
   pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
   add_subdirectory(common/libfld)
+  if(FLD_BUILD_MIXER OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/audio)
+  endif()
 endif()
 
 # ---- Wayland protocol code generation --------------------------------------

@@ -4,6 +4,10 @@ fld_wayland_protocol(PANEL_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-foreign-tople
 add_executable(fl-panel panel.cpp ${PANEL_PROTO})
 target_include_directories(fl-panel PRIVATE ${FLD_PROTO_OUT})
 target_link_libraries(fl-panel PRIVATE fld PkgConfig::WAYLAND_CLIENT)
+if(TARGET fld-audio)
+  target_link_libraries(fl-panel PRIVATE fld-audio)
+  target_compile_definitions(fl-panel PRIVATE FLD_HAVE_AUDIO=1)
+endif()
 
 add_executable(fl-launcher launcher.cpp)
 target_link_libraries(fl-launcher PRIVATE fld)

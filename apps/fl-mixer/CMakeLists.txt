@@ -1,1 +1,5 @@
-# TODO
+if(TARGET fld-audio)
+  add_executable(fl-mixer main.cpp)
+  target_link_libraries(fl-mixer PRIVATE fld-audio-ui)
+  install(TARGETS fl-mixer RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()

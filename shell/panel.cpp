@@ -5,6 +5,7 @@
 // task list comes from the wlr-foreign-toplevel-management protocol.
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Menu_Item.H>
@@ -473,7 +474,29 @@ static void update_battery() {
 static bool have_wpctl() { static int v = -1; if (v < 0) v = !fld::which("wpctl").empty(); return v; }
 static bool have_pactl() { static int v = -1; if (v < 0) v = !fld::which("pactl").empty(); return v; }
 
+#ifdef FLD_HAVE_AUDIO
+#include "audiobackend.h"
+static AudioBackend *g_audio = nullptr;
+
+static void update_volume_widget();
+static void audio_changed() {
+  const Audio::Device *d = g_audio->defaultDevice(Audio::Sink);
+  bool was_visible = P.volume->visible();
+  if (d && g_audio->isConnected()) {
+    P.volume_pct = (int)lround(Audio::level(d->volumes) * 100);
+    P.muted = d->muted;
+  } else {
+    P.volume_pct = -1;
+  }
+  update_volume_widget();
+  if (was_visible != (bool)P.volume->visible()) relayout();
+}
+#endif
+
 static void query_volume() {
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio) return; // updates arrive from the PipeWire backend
+#endif
   std::string out;
   P.volume_pct = -1;
   if (have_wpctl() && fld::run_capture({"wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"}, out) == 0) {
@@ -512,6 +535,14 @@ static void update_volume_widget() {
 
 static void set_volume(int pct) {
   pct = std::max(0, std::min(150, pct));
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio) {
+    if (const Audio::Device *d = g_audio->defaultDevice(Audio::Sink)) g_audio->setDeviceLevel(d->id, pct / 100.0f);
+    P.volume_pct = pct;
+    update_volume_widget();
+    return;
+  }
+#endif
   char v[16];
   std::string out;
   if (have_wpctl()) {
@@ -526,6 +557,12 @@ static void set_volume(int pct) {
 }
 
 static void toggle_mute() {
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio) {
+    g_audio->toggleDefaultMute(Audio::Sink);
+    return;
+  }
+#endif
   std::string out;
   if (have_wpctl()) fld::run_capture({"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"}, out);
   else if (have_pactl()) fld::run_capture({"pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"}, out);
@@ -550,7 +587,7 @@ public:
 };
 
 static void volume_cb(Fl_Widget *w, void *) {
-  PanelPopup pop(260, 64);
+  PanelPopup pop(260, 96);
   Fl_Slider *s = new Fl_Slider(12, 14, 180, 22);
   s->type(FL_HOR_NICE_SLIDER);
   s->bounds(0, 100);
@@ -565,6 +602,18 @@ static void volume_cb(Fl_Widget *w, void *) {
   more->labelsize(11);
   more->labelcolor(fld::palette().fg_dim);
   more->label("Scroll on the icon to adjust, middle-click to mute");
+  Fl_Button *settings = new Fl_Button(12, 62, 116, 26, "Sound Settings");
+  settings->labelsize(12);
+  settings->callback([](Fl_Widget *b, void *) {
+    fld::spawn({"fl-settings", "sound"});
+    b->window()->hide();
+  });
+  Fl_Button *mixer = new Fl_Button(132, 62, 116, 26, "Volume Mixer");
+  mixer->labelsize(12);
+  mixer->callback([](Fl_Widget *b, void *) {
+    fld::spawn({"fl-mixer"});
+    b->window()->hide();
+  });
   pop.end();
   pop.popup_at(w, P.top);
 }
@@ -785,6 +834,14 @@ int main(int argc, char **argv) {
   P.win->size_range(200, PANEL_H, 0, PANEL_H);
 
   update_clock();
+#ifdef FLD_HAVE_AUDIO
+  Fl::lock();
+  g_audio = AudioBackend::create();
+  if (g_audio) {
+    g_audio->on_changed = audio_changed;
+    g_audio->on_connection = [](bool) { audio_changed(); };
+  }
+#endif
   query_volume();
   update_volume_widget();
   update_battery();

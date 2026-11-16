@@ -176,7 +176,11 @@ int main(int argc, char *argv[]) {
 	wlr_viewporter_create(server.wl_display);
 	wlr_single_pixel_buffer_manager_v1_create(server.wl_display);
 	wlr_fractional_scale_manager_v1_create(server.wl_display, 1);
+#if FLWM_WLR_AT_LEAST(0, 19)
 	wlr_presentation_create(server.wl_display, server.backend, 2);
+#else
+	wlr_presentation_create(server.wl_display, server.backend);
+#endif
 	wlr_export_dmabuf_manager_v1_create(server.wl_display);
 	wlr_screencopy_manager_v1_create(server.wl_display);
 	wlr_gamma_control_manager_v1_create(server.wl_display);
@@ -248,9 +252,11 @@ int main(int argc, char *argv[]) {
 		&server.pointer_focus_change, &server.request_set_selection,
 		&server.request_set_primary_selection, &server.request_start_drag,
 		&server.start_drag, &server.new_output, &server.layout_change,
+		&server.new_virtual_keyboard, &server.new_virtual_pointer,
 	};
 	for (size_t i = 0; i < sizeof listeners / sizeof listeners[0]; i++)
 		wl_list_remove(&listeners[i]->link);
+	input_finish(&server);
 
 	wlr_scene_node_destroy(&server.scene->tree.node);
 	wlr_xcursor_manager_destroy(server.cursor_mgr);

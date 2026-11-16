@@ -4,12 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wlr/backend/libinput.h>
+#include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
 #include <wlr/types/wlr_primary_selection.h>
+#include <wlr/types/wlr_virtual_keyboard_v1.h>
+#include <wlr/types/wlr_virtual_pointer_v1.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 
@@ -144,6 +147,8 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 
 /* ---- keyboard ------------------------------------------------------------ */
 
+static void update_capabilities(struct flwm_server *server);
+
 static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) {
 	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, modifiers);
 	struct flwm_server *server = keyboard->server;
@@ -151,6 +156,7 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 		uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
 		if (!(mods & server->cycle_modifier)) finish_cycle(server);
 	}
+	if (!keyboard->wlr_keyboard->keymap) return;
 	wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
 	wlr_seat_keyboard_notify_modifiers(server->seat, &keyboard->wlr_keyboard->modifiers);
 }
@@ -205,19 +211,47 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 				}
 		}
 	}
-	if (!handled) {
+	if (!handled && keyboard->wlr_keyboard->keymap) {
 		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
 	}
 }
 
+/* A virtual keyboard got its keymap: use it right away if no keyboard is active */
+static void keyboard_handle_keymap(struct wl_listener *listener, void *data) {
+	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, keymap);
+	struct flwm_server *server = keyboard->server;
+	struct wlr_keyboard *active = wlr_seat_get_keyboard(server->seat);
+	if ((!active || active == &server->fallback_keyboard) && keyboard->wlr_keyboard->keymap)
+		wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
+}
+
 static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
 	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, destroy);
+	struct flwm_server *server = keyboard->server;
 	wl_list_remove(&keyboard->modifiers.link);
 	wl_list_remove(&keyboard->key.link);
+	wl_list_remove(&keyboard->keymap.link);
 	wl_list_remove(&keyboard->destroy.link);
 	wl_list_remove(&keyboard->link);
+	/* If the active keyboard goes away (e.g. a wtype or on-screen keyboard
+	 * exits), switch to another one. Leaving the seat without a keyboard makes
+	 * clients that start now receive keyboard focus without any keymap, which
+	 * crashes FLTK. */
+	struct wlr_keyboard *active = wlr_seat_get_keyboard(server->seat);
+	if (active == keyboard->wlr_keyboard || active == NULL) {
+		struct flwm_keyboard *other;
+		struct wlr_keyboard *next = &server->fallback_keyboard;
+		wl_list_for_each(other, &server->keyboards, link) {
+			if (other->wlr_keyboard->keymap) {
+				next = other->wlr_keyboard;
+				break;
+			}
+		}
+		wlr_seat_set_keyboard(server->seat, next);
+	}
 	free(keyboard);
+	update_capabilities(server);
 }
 
 static void keyboard_apply_config(struct flwm_server *server, struct wlr_keyboard *kb) {
@@ -238,19 +272,26 @@ static void keyboard_apply_config(struct flwm_server *server, struct wlr_keyboar
 	wlr_keyboard_set_repeat_info(kb, c->repeat_rate, c->repeat_delay);
 }
 
-static void server_new_keyboard(struct flwm_server *server, struct wlr_input_device *device) {
+static void server_new_keyboard(struct flwm_server *server, struct wlr_input_device *device,
+		bool is_virtual) {
 	struct wlr_keyboard *wlr_keyboard = wlr_keyboard_from_input_device(device);
 	struct flwm_keyboard *keyboard = calloc(1, sizeof(*keyboard));
 	keyboard->server = server;
 	keyboard->wlr_keyboard = wlr_keyboard;
-	keyboard_apply_config(server, wlr_keyboard);
+	/* virtual keyboards (wtype, on-screen keyboards) bring their own keymap */
+	if (!is_virtual) keyboard_apply_config(server, wlr_keyboard);
 	keyboard->modifiers.notify = keyboard_handle_modifiers;
 	wl_signal_add(&wlr_keyboard->events.modifiers, &keyboard->modifiers);
 	keyboard->key.notify = keyboard_handle_key;
 	wl_signal_add(&wlr_keyboard->events.key, &keyboard->key);
+	keyboard->keymap.notify = keyboard_handle_keymap;
+	wl_signal_add(&wlr_keyboard->events.keymap, &keyboard->keymap);
 	keyboard->destroy.notify = keyboard_handle_destroy;
 	wl_signal_add(&device->events.destroy, &keyboard->destroy);
-	wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
+	/* A virtual keyboard has no keymap yet; making it the seat keyboard now
+	 * would send clients a "no keymap" event (FLTK aborts on that). It becomes
+	 * the seat keyboard with its first key event instead. */
+	if (wlr_keyboard->keymap) wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
 	wl_list_insert(&server->keyboards, &keyboard->link);
 }
 
@@ -286,12 +327,20 @@ static void server_new_pointer(struct flwm_server *server, struct wlr_input_devi
 	wlr_cursor_attach_input_device(server->cursor, device);
 }
 
+/* A keyboard is always advertised: when no real keyboard is active the seat
+ * uses a fallback keyboard with the configured keymap, so clients never get
+ * keyboard focus without a keymap (FLTK crashes on that) and do not lose
+ * their wl_keyboard while on-screen / virtual keyboards come and go. */
+static void update_capabilities(struct flwm_server *server) {
+	wlr_seat_set_capabilities(server->seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD);
+}
+
 static void server_new_input(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, new_input);
 	struct wlr_input_device *device = data;
 	switch (device->type) {
 	case WLR_INPUT_DEVICE_KEYBOARD:
-		server_new_keyboard(server, device);
+		server_new_keyboard(server, device, false);
 		break;
 	case WLR_INPUT_DEVICE_POINTER:
 	case WLR_INPUT_DEVICE_TOUCH:
@@ -301,9 +350,22 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 	default:
 		break;
 	}
-	uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
-	if (!wl_list_empty(&server->keyboards)) caps |= WL_SEAT_CAPABILITY_KEYBOARD;
-	wlr_seat_set_capabilities(server->seat, caps);
+	update_capabilities(server);
+}
+
+static void new_virtual_keyboard(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, new_virtual_keyboard);
+	struct wlr_virtual_keyboard_v1 *vk = data;
+	server_new_keyboard(server, &vk->keyboard.base, true);
+	update_capabilities(server);
+}
+
+static void new_virtual_pointer(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, new_virtual_pointer);
+	struct wlr_virtual_pointer_v1_new_pointer_event *ev = data;
+	server_new_pointer(server, &ev->new_pointer->pointer.base);
+	if (ev->suggested_output)
+		wlr_cursor_map_input_to_output(server->cursor, &ev->new_pointer->pointer.base, ev->suggested_output);
 }
 
 static void load_cursor_theme(struct flwm_server *server) {
@@ -319,6 +381,7 @@ static void load_cursor_theme(struct flwm_server *server) {
 }
 
 void input_apply_config(struct flwm_server *server) {
+	keyboard_apply_config(server, &server->fallback_keyboard);
 	struct flwm_keyboard *kb;
 	wl_list_for_each(kb, &server->keyboards, link) keyboard_apply_config(server, kb->wlr_keyboard);
 	struct flwm_pointer *p;
@@ -652,6 +715,10 @@ void input_init(struct flwm_server *server) {
 	wl_signal_add(&server->backend->events.new_input, &server->new_input);
 
 	server->seat = wlr_seat_create(server->wl_display, "seat0");
+	static const struct wlr_keyboard_impl fallback_impl = {.name = "fl-wm-fallback-keyboard"};
+	wlr_keyboard_init(&server->fallback_keyboard, &fallback_impl, "fl-wm fallback keyboard");
+	keyboard_apply_config(server, &server->fallback_keyboard);
+	wlr_seat_set_keyboard(server->seat, &server->fallback_keyboard);
 	server->request_cursor.notify = seat_request_cursor;
 	wl_signal_add(&server->seat->events.request_set_cursor, &server->request_cursor);
 	server->pointer_focus_change.notify = seat_pointer_focus_change;
@@ -666,7 +733,21 @@ void input_init(struct flwm_server *server) {
 	server->start_drag.notify = seat_start_drag;
 	wl_signal_add(&server->seat->events.start_drag, &server->start_drag);
 
+	server->virtual_keyboard_mgr = wlr_virtual_keyboard_manager_v1_create(server->wl_display);
+	server->new_virtual_keyboard.notify = new_virtual_keyboard;
+	wl_signal_add(&server->virtual_keyboard_mgr->events.new_virtual_keyboard, &server->new_virtual_keyboard);
+	server->virtual_pointer_mgr = wlr_virtual_pointer_manager_v1_create(server->wl_display);
+	server->new_virtual_pointer.notify = new_virtual_pointer;
+	wl_signal_add(&server->virtual_pointer_mgr->events.new_virtual_pointer, &server->new_virtual_pointer);
+
+	update_capabilities(server);
+
 	server->cursor_shape_mgr = wlr_cursor_shape_manager_v1_create(server->wl_display, 1);
 	server->request_set_cursor_shape.notify = request_set_cursor_shape;
 	wl_signal_add(&server->cursor_shape_mgr->events.request_set_shape, &server->request_set_cursor_shape);
+}
+
+void input_finish(struct flwm_server *server) {
+	wlr_seat_set_keyboard(server->seat, NULL);
+	wlr_keyboard_finish(&server->fallback_keyboard);
 }

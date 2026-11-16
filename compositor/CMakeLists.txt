@@ -17,7 +17,11 @@ pkg_check_modules(WM_DEPS REQUIRED IMPORTED_TARGET
 set(WM_PROTO_SRC)
 fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml server)
 fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/staging/cursor-shape/cursor-shape-v1.xml server)
-fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/unstable/tablet/tablet-unstable-v2.xml server)
+fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml server)
+# wlroots 0.18 headers include "tablet-v2-protocol.h"
+if(EXISTS ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml)
+  fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml server)
+endif()
 fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml server)
 
 add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c)

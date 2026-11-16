@@ -133,6 +133,7 @@ static void detect_role(struct flwm_view *view) {
 
 static void ftl_request_activate(struct wl_listener *l, void *data) {
 	struct flwm_view *view = wl_container_of(l, view, ftl_request_activate);
+	wlr_log(WLR_DEBUG, "foreign-toplevel activate request for %s", view->xdg_toplevel->title ? view->xdg_toplevel->title : "?");
 	if (view->minimized) view_set_minimized(view, false);
 	view_focus(view);
 }
@@ -236,6 +237,7 @@ void view_focus(struct flwm_view *view) {
 	}
 	wlr_xdg_toplevel_set_activated(view->xdg_toplevel, true);
 	if (view->ftl) wlr_foreign_toplevel_handle_v1_set_activated(view->ftl, true);
+	wlr_log(WLR_DEBUG, "focus -> %s (role %d)", view->xdg_toplevel->title ? view->xdg_toplevel->title : "?", view->role);
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
 	if (keyboard)
 		wlr_seat_keyboard_notify_enter(seat, view->xdg_toplevel->base->surface,
@@ -551,6 +553,7 @@ static void view_map(struct wl_listener *listener, void *data) {
 static void view_unmap(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = wl_container_of(listener, view, unmap);
 	struct flwm_server *server = view->server;
+	wlr_log(WLR_DEBUG, "unmap: %s", view->xdg_toplevel->title ? view->xdg_toplevel->title : "?");
 	if (view == server->grabbed_view) input_reset_cursor_mode(server);
 	if (server->cycle_current == view) server->cycle_current = NULL;
 	if (server->hover_view == view) server->hover_view = NULL;
@@ -856,6 +859,7 @@ static void request_activate(struct wl_listener *listener, void *data) {
 	struct wlr_xdg_toplevel *t = wlr_xdg_toplevel_try_from_wlr_surface(ev->surface);
 	if (!t) return;
 	struct flwm_view *view = view_from_toplevel(server, t);
+	wlr_log(WLR_DEBUG, "xdg-activation request for %s", view && view->xdg_toplevel->title ? view->xdg_toplevel->title : "?");
 	if (view && view->mapped) view_focus(view);
 }
 

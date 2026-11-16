@@ -166,6 +166,11 @@ struct flwm_server {
 	struct wlr_xdg_activation_v1 *xdg_activation;
 	struct wl_listener request_activate;
 
+	struct wlr_virtual_keyboard_manager_v1 *virtual_keyboard_mgr;
+	struct wl_listener new_virtual_keyboard;
+	struct wlr_virtual_pointer_manager_v1 *virtual_pointer_mgr;
+	struct wl_listener new_virtual_pointer;
+
 	struct wlr_cursor_shape_manager_v1 *cursor_shape_mgr;
 	struct wl_listener request_set_cursor_shape;
 
@@ -186,6 +191,7 @@ struct flwm_server {
 	struct wl_listener request_start_drag;
 	struct wl_listener start_drag;
 	struct wl_list keyboards;
+	struct wlr_keyboard fallback_keyboard; /* active when no real keyboard is */
 	struct wl_list pointers; /* flwm_pointer.link (for libinput config) */
 
 	enum flwm_cursor_mode cursor_mode;
@@ -318,6 +324,7 @@ struct flwm_keyboard {
 	struct wlr_keyboard *wlr_keyboard;
 	struct wl_listener modifiers;
 	struct wl_listener key;
+	struct wl_listener keymap;
 	struct wl_listener destroy;
 };
 
@@ -384,6 +391,7 @@ void layer_clicked(struct flwm_layer_surface *ls);
 
 /* input.c */
 void input_init(struct flwm_server *server);
+void input_finish(struct flwm_server *server);
 void input_apply_config(struct flwm_server *server);
 void input_reset_cursor_mode(struct flwm_server *server);
 void input_update_pointer_focus(struct flwm_server *server, uint32_t time);

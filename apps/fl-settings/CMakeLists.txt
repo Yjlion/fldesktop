@@ -28,6 +28,7 @@ fld_settings_page(displays   pages/displays.cpp)
 fld_settings_page(sound      pages/sound.cpp REQUIRES fld-audio-ui)
 fld_settings_page(network    pages/network.cpp REQUIRES fld-nm-ui)
 fld_settings_page(printers   pages/printers.cpp REQUIRES fld-printers-ui)
+fld_settings_page(bluetooth  pages/bluetooth.cpp REQUIRES fld-bt-ui)
 fld_settings_page(datetime   pages/datetime.cpp)
 fld_settings_page(about      pages/about.cpp)
 

@@ -12,7 +12,9 @@ namespace fld {
 namespace {
 GMainLoop *g_loop = nullptr;
 GMainContext *g_ctx = nullptr;
-std::thread g_thread;
+// never destroyed: a program may exit() while the loop runs, and destroying
+// a joinable std::thread at exit would call std::terminate
+std::thread *g_thread = nullptr;
 
 gboolean run_fn(gpointer data) {
   auto *fn = static_cast<std::function<void()> *>(data);
@@ -38,7 +40,7 @@ void glib_start() {
   std::mutex m;
   std::condition_variable cv;
   bool started = false;
-  g_thread = std::thread([&] {
+  g_thread = new std::thread([&] {
     GMainLoop *loop = g_loop;
     g_main_context_push_thread_default(g_ctx);
     {
@@ -57,7 +59,9 @@ void glib_stop() {
   if (!g_loop) return;
   g_main_loop_quit(g_loop);
   g_main_context_wakeup(g_ctx);
-  if (g_thread.joinable()) g_thread.join();
+  if (g_thread && g_thread->joinable()) g_thread->join();
+  delete g_thread;
+  g_thread = nullptr;
   g_main_loop_unref(g_loop);
   g_loop = nullptr;
   g_main_context_unref(g_ctx);

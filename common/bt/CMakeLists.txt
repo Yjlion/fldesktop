@@ -1,0 +1,7 @@
+if(TARGET fld-glib)
+  add_library(fld-bt STATIC btclient.cpp)
+  target_include_directories(fld-bt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-bt PUBLIC fld-glib)
+  add_library(fld-bt-ui STATIC bt_ui.cpp)
+  target_link_libraries(fld-bt-ui PUBLIC fld-bt fld)
+endif()

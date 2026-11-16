@@ -479,6 +479,10 @@ static void config_poll(void *) {
 
 int main(int argc, char **argv) {
   fld::init_app("fldesktop.desktop", argc, argv);
+  // The shell window is borderless and fl-wm knows it by its title; any other
+  // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give
+  // it the shell role too.
+  Fl_Window::default_xclass("fl-desktop");
   g_argc = argc;
   g_argv = argv;
   g_appearance = appearance_signature();

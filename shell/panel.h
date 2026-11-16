@@ -56,3 +56,4 @@ public:
 // service; the button shows itself when there is something to show.
 fld::FlatButton *notify_indicator_create();     // panel_notify.cpp
 fld::FlatButton *printer_indicator_create();    // panel_printers.cpp
+fld::FlatButton *bluetooth_indicator_create();  // panel_bluetooth.cpp

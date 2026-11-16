@@ -141,6 +141,8 @@ public:
 
 std::string ask_wifi_password(const std::string &ssid, bool retry) {
   Fl_Double_Window w(400, 170, "Wi-Fi Password");
+  // own app id: fl-panel's windows would otherwise be taken for the panel
+  w.xclass("fl-network");
   Fl_Box *ic = new Fl_Box(16, 16, 40, 40);
   ic->image(fld::icon_first({"network-wireless-encrypted", "network-wireless", "dialog-password"}, 40));
   std::string msg = (retry ? "The password was not accepted.\n" : "") +

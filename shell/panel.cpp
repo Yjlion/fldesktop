@@ -797,6 +797,10 @@ static std::string settings_signature() {
 
 int main(int argc, char **argv) {
   fld::init_app("fldesktop.panel", argc, argv);
+  // The shell window is borderless and fl-wm knows it by its title; any other
+  // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give
+  // it the shell role too.
+  Fl_Window::default_xclass("fl-panel");
   static int s_argc = argc;
   static char **s_argv = argv;
   static std::string s_sig = settings_signature();
@@ -865,6 +869,10 @@ int main(int argc, char **argv) {
 #ifdef FLD_HAVE_NM
   P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *, void *) { fld::spawn({"fl-network"}); });
   P.network->hide();
+#endif
+#ifdef FLD_HAVE_BLUETOOTH
+  Fl::lock();
+  P.bluetooth = bluetooth_indicator_create();
 #endif
 #ifdef FLD_HAVE_PRINTERS
   P.printer = printer_indicator_create();

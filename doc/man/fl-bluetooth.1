@@ -1,0 +1,25 @@
+.TH FL-BLUETOOTH 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-bluetooth \- Bluetooth settings for fldesktop
+.SH SYNOPSIS
+\fBfl-bluetooth\fR
+.SH DESCRIPTION
+Turns Bluetooth on and off, makes the computer visible to other devices,
+lists paired devices with their state and battery level, searches for
+nearby devices while the window is open, and pairs, connects, disconnects,
+trusts and forgets devices. It talks to BlueZ (\fBbluetoothd\fR(8)) and lifts
+an rfkill soft block when Bluetooth is turned on.
+.PP
+Pairing questions (PIN, passkey confirmation, authorization) are asked by
+the pairing agent that \fBfl-panel\fR(1) runs for the whole session, and by
+fl-bluetooth itself while it is open. The panel's Bluetooth button shows the
+state, connects paired devices with one click and announces connected and
+disconnected devices as notifications.
+.PP
+The same view is the Bluetooth page of \fBfl-settings\fR(1).
+.SH ENVIRONMENT
+.TP
+\fBFLD_BLUEZ_BUS\fR=session
+Talk to a BlueZ on the session bus (for tests with python-dbusmock).
+.SH SEE ALSO
+\fBbluetoothctl\fR(1), \fBbluetoothd\fR(8), \fBrfkill\fR(8)

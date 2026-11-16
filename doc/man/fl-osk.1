@@ -1,0 +1,32 @@
+.TH FL-OSK 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-osk \- on-screen keyboard
+.SH SYNOPSIS
+\fBfl-osk\fR [\fB\-\-layout\fR \fIus\fR|\fIde\fR|\fIfr\fR] [\fB\-\-no\-toggle\fR]
+.SH DESCRIPTION
+An on-screen keyboard for touch screens and computers without a keyboard.
+It types into the focused window through the Wayland virtual-keyboard
+protocol and never takes the focus itself. \fBfl-wm\fR(1) docks it above the
+panel and keeps windows out of its area.
+.PP
+Shift applies to the next key; tap it twice for Caps Lock. The \fB?123\fR key
+switches to numbers and symbols. Starting \fBfl-osk\fR while it runs closes
+the running keyboard, so the same command (or the panel's keyboard button)
+shows and hides it.
+.SH OPTIONS
+.TP
+\fB\-\-layout\fR \fIname\fR
+Key layout: \fBus\fR (QWERTY), \fBde\fR (QWERTZ) or \fBfr\fR (AZERTY).
+.TP
+\fB\-\-no\-toggle\fR
+Do not close an instance that is already running.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/osk.ini\fR
+\fB[Keyboard]\fR \fBLayout\fR, \fBHeight\fR (pixels) and \fBMaxWidth\fR.
+.TP
+\fI~/.config/fldesktop/panel.ini\fR
+\fB[Panel] KeyboardButton=auto|always|never\fR; \fBauto\fR shows the panel
+button when no physical keyboard is present.
+.SH SEE ALSO
+\fBfl-greet\fR(1), \fBfl-panel\fR(1), \fBfl-wm\fR(1)

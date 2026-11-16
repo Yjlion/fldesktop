@@ -15,7 +15,9 @@ cp "$ROOT/apps/fl-calc/calc_engine.cpp" "$TMP/home/Documents/"
 cp -r "$ROOT/apps" "$TMP/home/Documents/fldesktop-apps"
 cp "$ROOT/data/backgrounds/default.svg" "$TMP/home/Pictures/wallpaper.svg"
 for i in "$ROOT"/data/icons/hicolor/scalable/apps/*.svg; do cp "$i" "$TMP/home/Pictures/"; done
-export HOME="$TMP/home" XDG_RUNTIME_DIR="$TMP/run" XDG_CONFIG_HOME="$TMP/home/.config"
+# fl-mixer talks to the PipeWire of the user running this script
+PW_RUN=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+export PIPEWIRE_RUNTIME_DIR="$PW_RUN" HOME="$TMP/home" XDG_RUNTIME_DIR="$TMP/run" XDG_CONFIG_HOME="$TMP/home/.config"
 export XDG_DATA_DIRS="$BUILD/share:/usr/share" FLD_DATADIR="$BUILD/share/fldesktop" PATH="$BUILD/bin:$PATH"
 export WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_HEADLESS_OUTPUTS=1 WLR_LIBINPUT_NO_DEVICES=1
 LOG="$TMP/wm.log"
@@ -24,7 +26,7 @@ session() { # session <startup> <wait> <name> [keys...]
 	"$BUILD/bin/fl-wm" -s "$1" >"$LOG" 2>&1 &
 	WM=$!
 	sleep "$2"
-	export WAYLAND_DISPLAY=$(grep -o 'WAYLAND_DISPLAY=[a-z0-9-]*' "$LOG" | head -1 | cut -d= -f2)
+	export WAYLAND_DISPLAY=$(grep -ao 'WAYLAND_DISPLAY=[a-z0-9-]*' "$LOG" | head -1 | cut -d= -f2)
 	shift 3 || true
 	grim "$OUT/$NAME.png"
 	kill $WM; wait $WM 2>/dev/null || true
@@ -37,11 +39,20 @@ NAME=files; session "fl-panel & fl-files $HOME/Pictures" 4 x
 NAME=calculator; session "fl-panel & fl-calc" 3 x
 NAME=viewer; session "fl-panel & fl-view $HOME/Pictures/wallpaper.svg" 3.5 x
 NAME=greeter; session "fl-greet --demo" 3 x
+NAME=settings; session "fl-panel & fl-settings appearance" 3.5 x
+NAME=keyboard; session "fl-panel & fl-edit $HOME/Desktop/README.md & sleep 1.2; fl-osk" 4 x
+NAME=charmap; session "fl-panel & fl-charmap" 4 x
+if [ -S "$PW_RUN/pipewire-0" ]; then
+	"$BUILD/tests/fl-tone" 15 "Music Player" >/dev/null 2>&1 &
+	NAME=mixer; session "fl-panel & fl-mixer" 4 x
+else
+	echo "no PipeWire at $PW_RUN: skipping the mixer screenshot" >&2
+fi
 # the launcher needs a key press (Super+Space) from wtype
 "$BUILD/bin/fl-wm" -s "fl-desktop & fl-panel" >"$LOG" 2>&1 &
 WM=$!
 sleep 2.5
-export WAYLAND_DISPLAY=$(grep -o 'WAYLAND_DISPLAY=[a-z0-9-]*' "$LOG" | head -1 | cut -d= -f2)
+export WAYLAND_DISPLAY=$(grep -ao 'WAYLAND_DISPLAY=[a-z0-9-]*' "$LOG" | head -1 | cut -d= -f2)
 wtype -M logo ' ' -m logo
 sleep 3
 grim "$OUT/launcher.png"

@@ -1,0 +1,21 @@
+.TH FL-POLKIT-AGENT 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-polkit-agent \- polkit authentication agent
+.SH SYNOPSIS
+\fBfl-polkit-agent\fR [\fB\-\-process\fR \fIPID\fR]
+.SH DESCRIPTION
+Shows the password dialog when a program asks polkit for an administrative
+action (for example \fBpkexec\fR, \fBtimedatectl\fR or NetworkManager system
+connections). The dialog names the action, lets you pick the administrator
+when there is more than one, and shows the action id and details on request.
+.PP
+The agent is started at login through
+\fI/etc/xdg/autostart/fl-polkit-agent.desktop\fR (fldesktop sessions only)
+and registers for the whole login session.
+.SH OPTIONS
+.TP
+\fB\-\-process\fR \fIPID\fR
+Register only for the process \fIPID\fR instead of the session (for tests,
+or for use beside another agent).
+.SH SEE ALSO
+\fBpolkit\fR(8), \fBpkexec\fR(1), \fBfl-autostart\fR(1)

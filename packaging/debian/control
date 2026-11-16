@@ -17,6 +17,11 @@ Build-Depends: debhelper-compat (= 13),
                libdrm-dev,
                libpixman-1-dev,
                libvterm-dev,
+               libglib2.0-dev,
+               libpipewire-0.3-dev,
+               libpolkit-agent-1-dev,
+               libnm-dev,
+               libfontconfig-dev,
                shared-mime-info
 Standards-Version: 4.7.0
 Homepage: https://github.com/Yjlion/fldesktop
@@ -33,13 +38,19 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-edit (>= ${source:Version}),
          fldesktop-calc (>= ${source:Version}),
          fldesktop-view (>= ${source:Version}),
+         fldesktop-settings (>= ${source:Version}),
+         fldesktop-mixer (>= ${source:Version}),
+         fldesktop-network (>= ${source:Version}),
+         fldesktop-polkit-agent (>= ${source:Version}),
+         fldesktop-osk (>= ${source:Version}),
+         fldesktop-charmap (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
  toolkit: its own wlroots compositor, a taskbar panel, an application
- launcher, wallpaper and desktop icons, a greetd greeter and a set of
- core applications.
+ launcher, wallpaper and desktop icons, a greetd greeter, a settings
+ center, system tools and a set of core applications.
  .
  This metapackage installs the whole desktop.
 
@@ -56,19 +67,21 @@ Description: fldesktop Wayland compositor
 Package: fldesktop-shell
 Architecture: any
 Depends: fldesktop-wm (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
-Recommends: dbus-user-session, wireplumber | pulseaudio-utils
+Recommends: dbus-user-session, pipewire, wireplumber, network-manager,
+            fldesktop-polkit-agent
 Description: fldesktop panel, launcher and desktop
- The fldesktop session: fl-panel (taskbar, clock, volume, battery and power
- menu), fl-launcher (searchable application menu), fl-desktop (wallpaper and
- desktop icons), XDG autostart support and the wayland-sessions entry.
+ The fldesktop session: fl-panel (taskbar, clock, network, volume, battery,
+ on-screen keyboard button and power menu), fl-launcher (searchable
+ application menu), fl-desktop (wallpaper and desktop icons), XDG
+ autostart support and the wayland-sessions entry.
 
 Package: fldesktop-greeter
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, greetd, cage
 Description: FLTK greeter for greetd
  fl-greet is a graphical login screen for the greetd login manager. It runs
- inside the cage kiosk compositor and offers user and session selection and
- power buttons.
+ inside the cage kiosk compositor and offers user and session selection,
+ power buttons and a built-in on-screen keyboard.
 
 Package: fldesktop-term
 Architecture: any
@@ -104,3 +117,58 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: fldesktop text editor
  fl-edit is a tabbed text and code editor with syntax highlighting,
  find and replace, auto-indent and line numbers.
+
+Package: fldesktop-settings
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: fldesktop-wm, xkb-data, fldesktop-polkit-agent
+Suggests: fldesktop-mixer, fldesktop-network
+Description: fldesktop settings center
+ fl-settings collects the desktop settings in one window: appearance,
+ panel and desktop, language and region, default applications, keyboard
+ layouts, shortcuts, mouse and touchpad, displays, sound, network, date and
+ time, and system information. Settings tools of other programs are listed
+ as well.
+
+Package: fldesktop-osk
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: fldesktop-wm
+Description: fldesktop on-screen keyboard
+ fl-osk is an on-screen keyboard for touch screens. It types into the
+ focused window through the Wayland virtual-keyboard protocol and offers
+ US, German and French layouts plus a symbols page.
+
+Package: fldesktop-charmap
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: unicode-data
+Description: fldesktop character map
+ fl-charmap browses the Unicode characters by block in any installed font,
+ searches them by name or code point and copies them to the clipboard.
+
+Package: fldesktop-mixer
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: pipewire, wireplumber
+Description: fldesktop volume mixer for PipeWire
+ fl-mixer sets the volume of applications, output and input devices,
+ chooses the default devices and ports and selects sound card profiles.
+
+Package: fldesktop-polkit-agent
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: polkitd
+Provides: polkit-1-auth-agent
+Description: fldesktop polkit authentication agent
+ fl-polkit-agent asks for the administrator password when a program needs
+ polkit authorization in an fldesktop session.
+
+Package: fldesktop-network
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: network-manager, fldesktop-polkit-agent
+Description: fldesktop network settings for NetworkManager
+ fl-network shows wired and Wi-Fi devices, connects to wireless networks
+ and edits saved NetworkManager connections (IPv4/IPv6, DNS, Wi-Fi
+ security).

@@ -7,7 +7,7 @@ install(DIRECTORY icons/hicolor DESTINATION ${FLD_SHARE}/icons)
 install(FILES backgrounds/default.svg DESTINATION ${FLD_SHARE}/fldesktop/backgrounds)
 install(FILES charmap/Blocks.txt charmap/LICENSE.unicode DESTINATION ${FLD_SHARE}/fldesktop/charmap)
 install(FILES wm.ini.example greetd/config.toml DESTINATION ${FLD_SHARE}/fldesktop)
-install(FILES autostart/fl-polkit-agent.desktop DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg/autostart)
+install(FILES autostart/fl-polkit-agent.desktop DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
 
 # Mirror the data into the build tree so programs can run uninstalled:
 #   XDG_DATA_DIRS=build/share:/usr/share FLD_DATADIR=build/share/fldesktop

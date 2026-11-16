@@ -2,5 +2,7 @@ fldesktop (0.1.0) unstable; urgency=medium
 
   * Initial release: fl-wm compositor, fl-panel, fl-launcher, fl-desktop,
     fl-greet, fl-term, fl-calc, fl-view, fl-files and fl-edit.
+  * fl-settings, fl-osk (also built into fl-greet), fl-charmap, fl-mixer
+    (PipeWire), fl-polkit-agent and fl-network (NetworkManager).
 
  -- Yjlion <yjlion@users.noreply.github.com>  Sun, 15 Nov 2026 22:00:00 +0000

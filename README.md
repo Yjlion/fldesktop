@@ -5,15 +5,21 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | Component | What it is |
 |-----------|------------|
 | **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, Alt+Tab, window snapping and layer-shell |
-| **fl-panel** | Taskbar: application button, quick launch, window list, volume, battery, calendar clock, power menu |
+| **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, battery, calendar clock, power menu |
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space) |
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder |
-| **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/) |
+| **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard |
+| **fl-settings** | Settings center: appearance, panel, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, network, date & time |
 | **fl-term** | Terminal emulator (libvterm): scrollback, true colour, mouse, bracketed paste |
 | **fl-files** | File manager: icon/list views, thumbnails, trash, background copy/move, drag and drop |
 | **fl-edit** | Tabbed text editor with syntax highlighting, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
+| **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
+| **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor |
+| **fl-polkit-agent** | Password dialog for polkit (administrator actions) |
+| **fl-osk** | On-screen keyboard (Wayland virtual-keyboard protocol) |
+| **fl-charmap** | Unicode character map with search by name |
 
 ![fldesktop](screenshots/desktop.png)
 
@@ -22,6 +28,8 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | ![launcher](screenshots/launcher.png) | ![files](screenshots/files.png) |
 | ![editor](screenshots/editor.png) | ![terminal](screenshots/terminal.png) |
 | ![calculator](screenshots/calculator.png) | ![greeter](screenshots/greeter.png) |
+| ![settings](screenshots/settings.png) | ![keyboard](screenshots/keyboard.png) |
+| ![mixer](screenshots/mixer.png) | ![charmap](screenshots/charmap.png) |
 
 Screenshots are made in a headless session by `tools/screenshots.sh`.
 
@@ -32,14 +40,20 @@ mime types, trash, theme) and read their settings from `~/.config/fldesktop/`.
 
 Dependencies: CMake ≥ 3.19, a C11/C++17 compiler, FLTK ≥ 1.4 (built with
 Wayland support), wlroots 0.18/0.19/0.20, wayland, wayland-protocols,
-xkbcommon, libinput, pango/cairo, libdrm, pixman and libvterm.
+xkbcommon, libinput, pango/cairo, libdrm, pixman and libvterm. The system
+tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
+polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
+page) and fontconfig (fl-charmap); without one of them the parts that need it
+are left out.
 
 ```sh
 # Arch Linux
-sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango libinput
+sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango libinput \
+  glib2 libpipewire polkit libnm fontconfig
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
-  wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev libdrm-dev
+  wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev libdrm-dev \
+  libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev
 
 cmake -B build -G Ninja
 cmake --build build
@@ -54,7 +68,7 @@ the FLTK applications for use under another compositor.
 
 * **Arch:** `cd packaging/arch && makepkg -si` builds split packages
   (`fldesktop`, `fldesktop-wm`, `fldesktop-shell`, `fldesktop-greeter`,
-  `fldesktop-term`, …) from the checkout.
+  `fldesktop-term`, `fldesktop-settings`, `fldesktop-mixer`, …) from the checkout.
 * **Debian/Ubuntu:** `cp -r packaging/debian debian && dpkg-buildpackage -b -us -uc`
   produces the same set of `.deb` packages.
 
@@ -69,7 +83,9 @@ Debian trixie (wlroots 0.18) and attaches the packages to `v*` releases.
 * Nested inside another Wayland session for testing: run `fl-wm`.
 * With greetd: install `fldesktop-greeter` and set `/etc/greetd/config.toml` to
   `command = "cage -s -d -- fl-greet"` (see `/usr/share/fldesktop/config.toml`).
-  `fl-greet --demo` shows the greeter without greetd.
+  `fl-greet --demo` shows the greeter without greetd. Its **Keyboard** button
+  shows an on-screen keyboard; `Keyboard=always` in `/etc/fldesktop/greeter.ini`
+  shows it from the start (touch-only devices), `Keyboard=never` removes it.
 
 Running uninstalled from the build tree (nested in your current session):
 
@@ -100,21 +116,44 @@ Bindings, keyboard layout, pointer settings, outputs and autostart programs
 are configured in `~/.config/fldesktop/wm.ini`; an annotated example is
 installed as `/usr/share/fldesktop/wm.ini.example`.
 
+## Settings
+
+`fl-settings` (or `fl-settings PAGE`, see `fl-settings --list`) edits the
+files below. Changes apply at once where possible: fl-wm reloads `wm.ini`, and
+fl-panel and fl-desktop restart themselves when their settings or the theme
+change. Other applications use a new theme at their next start. The Displays
+page uses the wlr-output-management protocol (so `wlr-randr` and `kanshi` work
+too) and reverts a change after 15 seconds unless you keep it. Language &
+Region writes `~/.config/fldesktop/environment`, read by `fl-session` at login.
+
+Programs whose desktop entry has `Categories=Settings` (or
+`X-FLDesktop-Settings=true`) appear under **More**. A new built-in page is one
+C++ file in `apps/fl-settings/pages/` plus one `fld_settings_page()` line in
+`apps/fl-settings/CMakeLists.txt`.
+
+The session also starts `fl-polkit-agent` (from `/etc/xdg/autostart`) for
+administrator password prompts, and fl-panel answers NetworkManager's Wi-Fi
+password requests.
+
 ## Configuration files
 
 | File | Used by |
 |------|---------|
 | `~/.config/fldesktop/wm.ini` | compositor: appearance, keys, input, outputs, autostart |
 | `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts; `[Desktop]` wallpaper; `[General]` icon theme, terminal |
-| `~/.config/fldesktop/panel.ini` | `[Panel] QuickLaunch=`, `[Clock] Format=` |
-| `~/.config/fldesktop/term.ini` | `[Terminal] ColorScheme=dark|light`, `FontSize`, `Scrollback` |
-| `/etc/fldesktop/greeter.ini` | `[Greeter] Background`, `MinUid`, `HideUsers` |
+| `~/.config/fldesktop/panel.ini` | `[Panel] QuickLaunch=`, `KeyboardButton=auto\|always\|never`; `[Clock] Format=` |
+| `~/.config/fldesktop/environment` | `LANG`, `LC_*` and other variables for the session |
+| `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth` |
+| `~/.config/fldesktop/charmap.ini` | font, size, recently used characters |
+| `~/.config/fldesktop/term.ini` | `[Terminal] ColorScheme=dark\|light`, `FontSize`, `Scrollback` |
+| `/etc/fldesktop/greeter.ini` | `[Greeter] Background`, `MinUid`, `HideUsers`, `Keyboard=button\|always\|never`, `KeyboardLayout` |
 
 ## How the shell works
 
 FLTK cannot create layer-shell surfaces, so the panel, desktop and launcher are
 ordinary borderless toplevels. fl-wm recognises them by their app id/title
-(`fldesktop.panel`, `fldesktop.desktop`, `fldesktop.launcher`) **and** checks
+(`fldesktop.panel`, `fldesktop.desktop`, `fldesktop.launcher`, `fldesktop.osk`,
+`fldesktop.panel-popup`) **and** checks
 that the client executable is the matching program installed next to `fl-wm`,
 then pins them to the right layer and position and reserves the panel's space.
 The taskbar uses the standard wlr-foreign-toplevel-management protocol, and
@@ -124,4 +163,5 @@ work as well.
 ## License
 
 GPL-2.0-or-later, see [COPYING](COPYING). The wlr protocol XML files in
-`protocols/` keep their own MIT-style license.
+`protocols/` keep their own MIT-style licenses; `data/charmap/Blocks.txt` is
+under the Unicode License v3 ([LICENSE.unicode](data/charmap/LICENSE.unicode)).

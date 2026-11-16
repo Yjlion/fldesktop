@@ -1,0 +1,25 @@
+.TH FL-CHARMAP 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-charmap \- character map
+.SH SYNOPSIS
+\fBfl-charmap\fR
+.SH DESCRIPTION
+Browses the Unicode characters by block, in any installed font. The details
+pane shows the character's name, code point, UTF-8 bytes and HTML entity.
+Search by name ("right arrow"), by the character itself or by hex code
+("U+2192", "2192"). Double-click a character to add it to the text field and
+press \fBCopy\fR to put the text on the clipboard. "Only in this font"
+hides code points the font (via fontconfig) does not cover.
+.PP
+Character names come from \fIUnicodeData.txt\fR (Debian package
+\fBunicode-data\fR, Arch package \fBunicode-character-database\fR); without
+it, search works on code points and block names only.
+.SH FILES
+.TP
+\fI/usr/share/fldesktop/charmap/Blocks.txt\fR
+Unicode block list.
+.TP
+\fI~/.config/fldesktop/charmap.ini\fR
+Font, size and recently used characters.
+.SH SEE ALSO
+\fBfl-edit\fR(1)

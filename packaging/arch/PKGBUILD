@@ -3,15 +3,18 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit)
-pkgver=0.1.0.r7.gfbd8c9f
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit
+         fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
+         fldesktop-polkit-agent fldesktop-network)
+pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
 makedepends=(cmake ninja pkgconf wayland-protocols git)
-depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info)
+depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
+         glib2 libpipewire polkit libnm fontconfig)
 checkdepends=()
 # Builds the checkout this PKGBUILD is part of; set FLDESKTOP_SRC to override.
 source=()
@@ -62,7 +65,8 @@ _stage() {
 package_fldesktop() {
   pkgdesc="Lightweight Wayland desktop built with FLTK (meta package)"
   depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
-           fldesktop-calc fldesktop-view)
+           fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap
+           fldesktop-mixer fldesktop-polkit-agent fldesktop-network)
   optdepends=('fldesktop-greeter: graphical login with greetd'
               'adwaita-icon-theme: default icon theme')
   arch=(any)
@@ -80,8 +84,10 @@ package_fldesktop-wm() {
 
 package_fldesktop-shell() {
   pkgdesc="fldesktop panel, launcher, desktop icons and session"
-  depends=(fldesktop-wm fltk wayland)
-  optdepends=('wireplumber: volume control' 'libpulse: volume control with pactl')
+  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm)
+  optdepends=('pipewire: volume control' 'wireplumber: volume control'
+              'networkmanager: network indicator and Wi-Fi passwords'
+              'fldesktop-polkit-agent: administrator password prompts')
   _stage
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
     usr/bin/fl-session usr/bin/fl-screenshot usr/share/wayland-sessions/fldesktop.desktop \
@@ -94,7 +100,7 @@ package_fldesktop-shell() {
 
 package_fldesktop-greeter() {
   pkgdesc="FLTK greeter for greetd"
-  depends=(fltk greetd cage)
+  depends=(fltk libxkbcommon greetd cage)
   _stage
   _install_files usr/bin/fl-greet usr/share/fldesktop/config.toml usr/share/man/man1/fl-greet.1
 }
@@ -110,3 +116,36 @@ package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
 package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shared-mime-info); _app files; }
 package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _app edit; }
+package_fldesktop-settings() {
+  pkgdesc="fldesktop settings center"
+  depends=(fltk wayland glib2 libpipewire libnm)
+  optdepends=('xkeyboard-config: keyboard layout names' 'fldesktop-polkit-agent: date and time changes')
+  _app settings
+}
+package_fldesktop-osk()   { pkgdesc="fldesktop on-screen keyboard"; depends=(fltk wayland libxkbcommon); _app osk; }
+package_fldesktop-charmap() {
+  pkgdesc="fldesktop character map"
+  depends=(fltk fontconfig)
+  optdepends=('unicode-character-database: character names')
+  _app charmap
+  _install_files usr/share/fldesktop/charmap
+}
+package_fldesktop-mixer() {
+  pkgdesc="fldesktop volume mixer for PipeWire"
+  depends=(fltk libpipewire)
+  optdepends=('pipewire: sound server' 'wireplumber: session manager')
+  _app mixer
+}
+package_fldesktop-polkit-agent() {
+  pkgdesc="fldesktop polkit authentication agent"
+  depends=(fltk glib2 polkit)
+  _stage
+  _install_files usr/bin/fl-polkit-agent etc/xdg/autostart/fl-polkit-agent.desktop \
+    usr/share/man/man1/fl-polkit-agent.1
+}
+package_fldesktop-network() {
+  pkgdesc="fldesktop network settings for NetworkManager"
+  depends=(fltk glib2 libnm)
+  optdepends=('networkmanager: the network service' 'fldesktop-polkit-agent: password prompts')
+  _app network
+}

@@ -27,6 +27,13 @@ if(TARGET fld-bt)
   set_tests_properties(bt-mock PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
 endif()
 
+if(TARGET fld-pk)
+  add_executable(test_packages test_packages.cpp)
+  target_compile_definitions(test_packages PRIVATE I_KNOW_THE_PACKAGEKIT_GLIB2_API_IS_SUBJECT_TO_CHANGE)
+  target_link_libraries(test_packages PRIVATE fld-pk)
+  add_test(NAME packages COMMAND test_packages)
+endif()
+
 if(TARGET fld-portal-util)
   add_executable(test_portal test_portal.cpp)
   target_link_libraries(test_portal PRIVATE fld-portal-util)

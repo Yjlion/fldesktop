@@ -30,6 +30,7 @@ fld_settings_page(network    pages/network.cpp REQUIRES fld-nm-ui)
 fld_settings_page(printers   pages/printers.cpp REQUIRES fld-printers-ui)
 fld_settings_page(bluetooth  pages/bluetooth.cpp REQUIRES fld-bt-ui)
 fld_settings_page(datetime   pages/datetime.cpp)
+fld_settings_page(updates    pages/updates.cpp)
 fld_settings_page(about      pages/about.cpp)
 
 # generate the registry (explicit list: no static constructors to lose)

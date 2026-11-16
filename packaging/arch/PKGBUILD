@@ -1,0 +1,107 @@
+# Maintainer: Yjlion <yjlion@users.noreply.github.com>
+# Split package for the fldesktop Wayland desktop.
+# Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
+pkgbase=fldesktop
+pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit)
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Lightweight Wayland desktop built with FLTK"
+arch=(x86_64 aarch64)
+url="https://github.com/Yjlion/fldesktop"
+license=(GPL-2.0-or-later)
+makedepends=(cmake ninja pkgconf wayland-protocols git)
+depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info)
+checkdepends=()
+# Builds the checkout this PKGBUILD is part of; set FLDESKTOP_SRC to override.
+source=()
+sha256sums=()
+
+_srcdir() {
+  if [[ -n "$FLDESKTOP_SRC" ]]; then echo "$FLDESKTOP_SRC"; else echo "$startdir/../.."; fi
+}
+
+pkgver() {
+  cd "$(_srcdir)"
+  local v
+  v=$(sed -n 's/^project(fldesktop VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    printf "%s.r%s.g%s" "$v" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  else
+    echo "$v"
+  fi
+}
+
+build() {
+  cmake -S "$(_srcdir)" -B build -G Ninja \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  cmake --build build
+}
+
+check() {
+  ctest --test-dir build --output-on-failure -E wm-smoke
+}
+
+_install_files() {
+  # _install_files <files...> : copy paths from the staged install into $pkgdir
+  local f
+  for f in "$@"; do
+    install -d "$pkgdir/$(dirname "$f")"
+    cp -a "$srcdir/stage/$f" "$pkgdir/$f"
+  done
+}
+
+_stage() {
+  if [[ ! -d "$srcdir/stage" ]]; then
+    DESTDIR="$srcdir/stage" cmake --install "$srcdir/build"
+  fi
+}
+
+package_fldesktop() {
+  pkgdesc="Lightweight Wayland desktop built with FLTK (meta package)"
+  depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
+           fldesktop-calc fldesktop-view)
+  optdepends=('fldesktop-greeter: graphical login with greetd'
+              'adwaita-icon-theme: default icon theme')
+  arch=(any)
+}
+
+package_fldesktop-wm() {
+  pkgdesc="fldesktop Wayland compositor (wlroots)"
+  depends=(wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman)
+  optdepends=('grim: screenshots' 'slurp: area screenshots' 'wl-clipboard: copy screenshots'
+              'swaylock: screen locking')
+  _stage
+  _install_files usr/bin/fl-wm usr/share/fldesktop/wm.ini.example
+  install -Dm644 "$(_srcdir)/COPYING" "$pkgdir/usr/share/licenses/$pkgname/COPYING"
+}
+
+package_fldesktop-shell() {
+  pkgdesc="fldesktop panel, launcher, desktop icons and session"
+  depends=(fldesktop-wm fltk wayland)
+  optdepends=('wireplumber: volume control' 'libpulse: volume control with pactl')
+  _stage
+  _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
+    usr/bin/fl-session usr/bin/fl-screenshot usr/share/wayland-sessions/fldesktop.desktop \
+    usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
+}
+
+package_fldesktop-greeter() {
+  pkgdesc="FLTK greeter for greetd"
+  depends=(fltk greetd cage)
+  _stage
+  _install_files usr/bin/fl-greet usr/share/fldesktop/config.toml
+}
+
+_app() {
+  _stage
+  _install_files usr/bin/fl-$1 usr/share/applications/fl-$1.desktop \
+    usr/share/icons/hicolor/scalable/apps/fl-$1.svg
+}
+
+package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); _app term; }
+package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
+package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
+package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shared-mime-info); _app files; }
+package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _app edit; }

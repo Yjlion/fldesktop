@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  arch:
+    name: Arch Linux (wlroots 0.20)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git cmake ninja pkgconf wayland-protocols \
+            fltk wlroots0.20 libvterm pango cairo libinput libxkbcommon pixman shared-mime-info \
+            ttf-dejavu
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build
+      - name: Test
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d)
+          ctest --test-dir build --output-on-failure
+      - name: Build packages
+        run: |
+          useradd -m builder
+          chown -R builder .
+          su builder -c "cd packaging/arch && FLDESKTOP_SRC=$PWD/../.. makepkg --nodeps --noconfirm"
+          mkdir -p dist && cp packaging/arch/*.pkg.tar.zst dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-packages
+          path: dist/*.pkg.tar.zst
+
+  debian:
+    name: Debian trixie (wlroots 0.18)
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential devscripts debhelper git ca-certificates cmake ninja-build pkgconf \
+            libfltk1.4-dev libwlroots-0.18-dev libwayland-dev wayland-protocols libxkbcommon-dev \
+            libinput-dev libpango1.0-dev libcairo2-dev libdrm-dev libpixman-1-dev libvterm-dev \
+            shared-mime-info lintian
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build
+          export XDG_RUNTIME_DIR=$(mktemp -d)
+          ctest --test-dir build --output-on-failure
+      - name: Build .deb packages
+        run: |
+          rm -rf build
+          cp -r packaging/debian debian
+          dpkg-buildpackage -b -us -uc
+          mkdir -p dist && mv ../*.deb dist/
+          lintian --no-tag-display-limit dist/*.deb || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian-trixie-packages
+          path: dist/*.deb
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [arch, debian]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/*.deb
+            dist/**/*.pkg.tar.zst

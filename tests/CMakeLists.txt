@@ -10,6 +10,12 @@ if(TARGET fld-glib)
   add_test(NAME glib COMMAND test_glib)
 endif()
 
+if(TARGET fl-osk-keymap)
+  add_executable(test_vkeymap test_vkeymap.cpp)
+  target_link_libraries(test_vkeymap PRIVATE fl-osk-keymap)
+  add_test(NAME vkeymap COMMAND test_vkeymap)
+endif()
+
 if(TARGET fl-calc-engine)
   add_executable(test_calc test_calc.cpp)
   target_link_libraries(test_calc PRIVATE fl-calc-engine)

@@ -125,12 +125,11 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	case FLWM_ACTION_CYCLE_BACK:
 		cycle(server, true);
 		return true;
-	case FLWM_ACTION_LAUNCHER: {
-		struct flwm_view *l = view_find_role(server, FLWM_ROLE_LAUNCHER);
-		if (l) view_close(l);
-		else flwm_spawn(server, server->config.launcher_cmd ? server->config.launcher_cmd : "fl-launcher");
+	case FLWM_ACTION_LAUNCHER:
+		/* fl-launcher toggles: a second instance closes the running one (FLTK
+		 * ignores xdg_toplevel.close for borderless windows) */
+		flwm_spawn(server, server->config.launcher_cmd ? server->config.launcher_cmd : "fl-launcher");
 		return true;
-	}
 	case FLWM_ACTION_QUIT:
 		wl_display_terminate(server->wl_display);
 		return true;

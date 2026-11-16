@@ -8,7 +8,6 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Menu_Item.H>
-#include <FL/Fl_Menu_Window.H>
 #include <FL/Fl_Slider.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
@@ -330,36 +329,36 @@ public:
 };
 
 // A popup window anchored to a panel widget (an xdg_popup on Wayland).
-class PanelPopup : public Fl_Menu_Window {
+// A popup above the panel (calendar, volume). It is a borderless toplevel
+// titled "fldesktop.panel-popup": fl-wm places it at the pointer next to the
+// panel, keeps it out of the task list and closes it when another window is
+// focused. (FLTK only creates xdg_popups for its own menus.)
+class PanelPopup : public Fl_Double_Window {
 public:
-  PanelPopup(int w, int h) : Fl_Menu_Window(w, h) {
+  PanelPopup(int w, int h) : Fl_Double_Window(w, h, "fldesktop.panel-popup") {
     box(FL_BORDER_BOX);
     color(fld::palette().bg2);
-    clear_border();
+    border(0);
+    callback([](Fl_Widget *w, void *) { w->hide(); });
   }
   int handle(int e) override {
-    if (e == FL_PUSH && !Fl::event_inside(0, 0, w(), h())) {
-      hide();
-      return 1;
-    }
     if (e == FL_KEYBOARD && Fl::event_key() == FL_Escape) {
       hide();
       return 1;
     }
-    return Fl_Menu_Window::handle(e);
+    return Fl_Double_Window::handle(e);
   }
-  // Shows above (bottom panel) or below (top panel) the anchor widget.
-  void popup_at(Fl_Widget *anchor, bool panel_top) {
-    Fl_Window *top = anchor->top_window();
-    int ax = anchor->x() + anchor->w() - w();
-    if (ax < 4) ax = 4;
-    if (ax + w() > top->w() - 4) ax = top->w() - 4 - w();
-    int ay = panel_top ? top->h() + 2 : -h() - 2;
-    position(top->x() + ax, top->y() + ay);
+  void popup_at(Fl_Widget *, bool) {
     show();
-    Fl::grab(this);
-    while (shown()) Fl::wait();
-    Fl::grab(nullptr);
+    // FLTK ignores xdg_toplevel.close for borderless windows, so the popup
+    // closes itself once the program has lost the keyboard focus (fl-wm moves
+    // it away when another window is clicked)
+    bool had_focus = false;
+    while (shown()) {
+      Fl::wait();
+      if (Fl::focus()) had_focus = true;
+      else if (had_focus) hide();
+    }
   }
 };
 
@@ -372,6 +371,7 @@ struct Panel {
   Fl_Group *quick = nullptr;
   Fl_Group *tasks = nullptr;
   fld::FlatButton *volume = nullptr;
+  fld::FlatButton *keyboard = nullptr;
   fld::FlatButton *battery = nullptr;
   fld::FlatButton *clock = nullptr;
   fld::FlatButton *power = nullptr;
@@ -619,6 +619,29 @@ static void power_cb(Fl_Widget *, void *) {
   }
 }
 
+// True if a real keyboard is connected (a key device with auto repeat and the
+// kbd handler in /proc/bus/input/devices); virtual keyboards are not counted.
+static bool have_physical_keyboard() {
+  std::string data;
+  if (!fld::read_file("/proc/bus/input/devices", data)) return true;
+  bool kbd = false, virt = false;
+  unsigned long ev = 0;
+  for (auto &line : fld::split(data + "\n\n", '\n', true)) {
+    if (line.empty()) {
+      if (kbd && (ev & 0x100000) && !virt) return true;
+      kbd = virt = false;
+      ev = 0;
+    } else if (fld::starts_with(line, "H: Handlers=")) {
+      kbd = (" " + line.substr(12) + " ").find(" kbd ") != std::string::npos;
+    } else if (fld::starts_with(line, "B: EV=")) {
+      ev = strtoul(line.c_str() + 6, nullptr, 16);
+    } else if (fld::starts_with(line, "S: Sysfs=")) {
+      virt = line.find("/virtual/") != std::string::npos;
+    }
+  }
+  return false;
+}
+
 static void relayout() {
   if (!P.win) return;
   int W = P.win->w(), H = P.win->h();
@@ -641,6 +664,10 @@ static void relayout() {
     int bw = (int)fl_width(P.battery->label() ? P.battery->label() : "100%") + 40;
     P.battery->resize(r - bw, 2, bw, H - 4);
     r -= bw + 2;
+  }
+  if (P.keyboard && P.keyboard->visible()) {
+    P.keyboard->resize(r - 34, 2, 34, H - 4);
+    r -= 36;
   }
   if (P.volume->visible()) {
     P.volume->resize(r - 34, 2, 34, H - 4);
@@ -742,6 +769,13 @@ int main(int argc, char **argv) {
   P.volume->hover_color(panel_hover());
   P.volume->callback(volume_cb);
   P.volume->hide();
+  // on-screen keyboard button: KeyboardButton=auto (no physical keyboard) | always | never
+  std::string kb_mode = fld::lower(cfg.get("Panel", "KeyboardButton", "auto"));
+  if (kb_mode == "always" || (kb_mode == "auto" && !have_physical_keyboard())) {
+    P.keyboard = make_btn(34, "input-keyboard", "On-screen keyboard",
+                          [](Fl_Widget *, void *) { fld::spawn({"fl-osk"}); });
+    if (!fld::icon("input-keyboard", 20)) P.keyboard->copy_label("⌨");
+  }
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);

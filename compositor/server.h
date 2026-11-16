@@ -40,6 +40,7 @@ enum flwm_role {
 	FLWM_ROLE_LAUNCHER,
 	FLWM_ROLE_OSD, /* notifications / volume popups: overlay, no focus */
 	FLWM_ROLE_OSK, /* on-screen keyboard: overlay, never takes keyboard focus */
+	FLWM_ROLE_POPUP, /* panel popups (calendar, volume): at the pointer, close on focus loss */
 };
 
 /* What a scene node belongs to (stored in wlr_scene_node.data) */

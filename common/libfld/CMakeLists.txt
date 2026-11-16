@@ -9,6 +9,7 @@ add_library(fld STATIC
   trash.cpp
   widgets.cpp
   config_watch.cpp
+  osk.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fld PUBLIC fltk::images fltk::fltk)

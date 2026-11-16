@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=On-Screen Keyboard
+GenericName=Virtual Keyboard
+Comment=Type with the mouse or a touch screen
+Exec=fl-osk
+Icon=fl-osk
+Categories=Utility;Accessibility;
+Keywords=keyboard;osk;touch;virtual;accessibility;

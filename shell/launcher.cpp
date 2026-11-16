@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <csignal>
 #include <cstring>
+#include <ctime>
 #include <fcntl.h>
 #include <string>
 #include <sys/file.h>
@@ -298,8 +299,39 @@ static bool toggle_existing() {
 
 static void on_term(int) { _exit(0); }
 
+// The launcher closes when another window gets the keyboard focus. Clicking the
+// panel's Apps button to close it would otherwise immediately start a new one,
+// so the time of such a close is remembered for a moment.
+static std::string closed_stamp() {
+  return fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-launcher-" + std::to_string(getuid()) + ".closed";
+}
+
+static double now_s() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+static bool just_closed() {
+  std::string s;
+  if (!fld::read_file(closed_stamp(), s)) return false;
+  unlink(closed_stamp().c_str());
+  return now_s() - atof(s.c_str()) < 0.6;
+}
+
+static void focus_check(void *) {
+  static bool had_focus = false;
+  if (Fl::focus()) had_focus = true;
+  else if (had_focus && g_win->shown()) {
+    char buf[64];
+    snprintf(buf, sizeof buf, "%.3f", now_s());
+    fld::write_file(closed_stamp(), buf);
+    quit_launcher();
+  }
+}
+
 int main(int argc, char **argv) {
-  if (toggle_existing()) return 0;
+  if (toggle_existing() || just_closed()) return 0;
   fld::write_file(pidfile(), std::to_string(getpid()));
   signal(SIGTERM, on_term);
 
@@ -346,6 +378,7 @@ int main(int argc, char **argv) {
   refilter();
   g_win->show(argc, argv);
   g_search->take_focus();
+  Fl::add_check(focus_check);
   int r = Fl::run();
   unlink(pidfile().c_str());
   return r;

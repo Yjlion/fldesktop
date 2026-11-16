@@ -1,0 +1,8 @@
+pkg_check_modules(POLKIT_AGENT IMPORTED_TARGET polkit-agent-1)
+if(POLKIT_AGENT_FOUND AND TARGET fld-glib)
+  add_executable(fl-polkit-agent main.cpp)
+  target_link_libraries(fl-polkit-agent PRIVATE fld-glib PkgConfig::POLKIT_AGENT)
+  install(TARGETS fl-polkit-agent RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+else()
+  message(STATUS "polkit-agent-1 not found: not building fl-polkit-agent")
+endif()

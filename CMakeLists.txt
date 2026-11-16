@@ -105,12 +105,16 @@ endif()
 if(FLD_BUILD_GREETER)
   add_subdirectory(greeter)
 endif()
-foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS)
+foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     add_subdirectory(apps/fl-${lc})
   endif()
 endforeach()
+
+if(FLD_BUILD_POLKIT)
+  add_subdirectory(apps/fl-polkit-agent)
+endif()
 
 add_subdirectory(data)
 

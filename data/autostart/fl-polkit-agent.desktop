@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Authentication Agent
+Comment=Asks for passwords when applications need administrator rights
+Exec=fl-polkit-agent
+OnlyShowIn=fldesktop;
+NoDisplay=true
+X-GNOME-AutoRestart=true

@@ -1,1 +1,5 @@
-# TODO
+add_library(fl-calc-engine STATIC calc_engine.cpp)
+target_include_directories(fl-calc-engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(fl-calc main.cpp)
+target_link_libraries(fl-calc PRIVATE fl-calc-engine fld)
+install(TARGETS fl-calc RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

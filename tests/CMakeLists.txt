@@ -1,1 +1,30 @@
-# TODO
+if(TARGET fld)
+  add_executable(test_libfld test_libfld.cpp)
+  target_link_libraries(test_libfld PRIVATE fld)
+  add_test(NAME libfld COMMAND test_libfld)
+endif()
+
+if(TARGET fl-calc-engine)
+  add_executable(test_calc test_calc.cpp)
+  target_link_libraries(test_calc PRIVATE fl-calc-engine)
+  add_test(NAME calc COMMAND test_calc)
+endif()
+
+if(TARGET fl-edit-syntax)
+  add_executable(test_syntax test_syntax.cpp)
+  target_link_libraries(test_syntax PRIVATE fl-edit-syntax)
+  add_test(NAME syntax COMMAND test_syntax)
+endif()
+
+if(FLD_BUILD_GREETER)
+  find_package(Threads REQUIRED)
+  add_executable(test_greetd test_greetd.cpp ${CMAKE_SOURCE_DIR}/greeter/greetd_ipc.cpp)
+  target_include_directories(test_greetd PRIVATE ${CMAKE_SOURCE_DIR}/greeter)
+  target_link_libraries(test_greetd PRIVATE fld Threads::Threads)
+  add_test(NAME greetd COMMAND test_greetd)
+endif()
+
+if(FLD_BUILD_WM AND FLD_BUILD_CALC)
+  add_test(NAME wm-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/wm-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  set_tests_properties(wm-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+endif()

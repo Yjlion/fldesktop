@@ -336,6 +336,10 @@ int main(int argc, char **argv) {
   signal(SIGTERM, on_term);
 
   fld::init_app("fldesktop.launcher", argc, argv);
+  // The shell window is borderless and fl-wm knows it by its title; any other
+  // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give
+  // it the shell role too.
+  Fl_Window::default_xclass("fl-launcher");
   g_apps = fld::all_applications();
   load_recent();
 

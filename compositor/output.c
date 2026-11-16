@@ -5,6 +5,8 @@
 #include <string.h>
 #include <time.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_output_management_v1.h>
+#include <wlr/util/box.h>
 #include <wlr/util/log.h>
 
 #include "server.h"
@@ -45,6 +47,7 @@ static void output_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&output->link);
 	free(output);
 	arrange_all(server);
+	output_manager_update(server);
 }
 
 static struct flwm_output_config *find_output_config(struct flwm_server *server, const char *name) {
@@ -111,13 +114,15 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	wl_list_insert(server->outputs.prev, &output->link);
 
 	struct flwm_output_config *oc = find_output_config(server, wlr_output->name);
-	struct wlr_output_layout_output *l_output;
-	if (oc && oc->has_position)
-		l_output = wlr_output_layout_add(server->output_layout, wlr_output, oc->x, oc->y);
-	else
-		l_output = wlr_output_layout_add_auto(server->output_layout, wlr_output);
 	output->scene_output = wlr_scene_output_create(server->scene, wlr_output);
-	wlr_scene_output_layout_add_output(server->scene_layout, l_output, output->scene_output);
+	if (wlr_output->enabled) {
+		struct wlr_output_layout_output *l_output;
+		if (oc && oc->has_position)
+			l_output = wlr_output_layout_add(server->output_layout, wlr_output, oc->x, oc->y);
+		else
+			l_output = wlr_output_layout_add_auto(server->output_layout, wlr_output);
+		wlr_scene_output_layout_add_output(server->scene_layout, l_output, output->scene_output);
+	}
 
 	wlr_log(WLR_INFO, "output %s: %dx%d scale %.2f", wlr_output->name,
 		wlr_output->width, wlr_output->height, wlr_output->scale);
@@ -127,7 +132,11 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 static void layout_change(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, layout_change);
 	arrange_all(server);
+	output_manager_update(server);
 }
+
+static void output_manager_apply(struct wl_listener *listener, void *data);
+static void output_manager_test(struct wl_listener *listener, void *data);
 
 void output_init(struct flwm_server *server) {
 	wl_list_init(&server->outputs);
@@ -135,6 +144,11 @@ void output_init(struct flwm_server *server) {
 	wl_signal_add(&server->backend->events.new_output, &server->new_output);
 	server->layout_change.notify = layout_change;
 	wl_signal_add(&server->output_layout->events.change, &server->layout_change);
+	server->output_manager = wlr_output_manager_v1_create(server->wl_display);
+	server->output_manager_apply.notify = output_manager_apply;
+	wl_signal_add(&server->output_manager->events.apply, &server->output_manager_apply);
+	server->output_manager_test.notify = output_manager_test;
+	wl_signal_add(&server->output_manager->events.test, &server->output_manager_test);
 }
 
 struct flwm_output *output_at(struct flwm_server *server, double lx, double ly) {
@@ -172,7 +186,83 @@ void output_arrange(struct flwm_output *output) {
 		if (server->config.panel_top) output->usable_area.y += h;
 		output->usable_area.height -= h;
 	}
+	/* a visible on-screen keyboard reserves its height above a bottom panel */
+	struct flwm_view *osk = view_find_role(server, FLWM_ROLE_OSK);
+	if (osk && osk->mapped && output == output_primary(server)) {
+		struct wlr_box geo;
+		flwm_xdg_geometry(osk->xdg_toplevel->base, &geo);
+		output->usable_area.height -= geo.height;
+	}
 	layers_arrange(output); /* shrinks usable_area further for exclusive zones */
+}
+
+/* ---- wlr-output-management (wlr-randr, kanshi, fl-settings Displays) ---- */
+
+void output_manager_update(struct flwm_server *server) {
+	if (!server->output_manager) return;
+	struct wlr_output_configuration_v1 *config = wlr_output_configuration_v1_create();
+	struct flwm_output *o;
+	wl_list_for_each(o, &server->outputs, link) {
+		struct wlr_output_configuration_head_v1 *head =
+			wlr_output_configuration_head_v1_create(config, o->wlr_output);
+		struct wlr_box box;
+		wlr_output_layout_get_box(server->output_layout, o->wlr_output, &box);
+		if (!wlr_box_empty(&box)) {
+			head->state.x = box.x;
+			head->state.y = box.y;
+		}
+	}
+	wlr_output_manager_v1_set_configuration(server->output_manager, config);
+}
+
+static void apply_output_config(struct flwm_server *server,
+		struct wlr_output_configuration_v1 *config, bool test) {
+	bool ok = true;
+	struct wlr_output_configuration_head_v1 *head;
+	wl_list_for_each(head, &config->heads, link) {
+		struct wlr_output *wo = head->state.output;
+		struct flwm_output *o = wo->data;
+		struct wlr_output_state st;
+		wlr_output_state_init(&st);
+		wlr_output_head_v1_state_apply(&head->state, &st);
+		if (test) {
+			ok = wlr_output_test_state(wo, &st) && ok;
+		} else if (wlr_output_commit_state(wo, &st)) {
+			if (head->state.enabled) {
+				struct wlr_output_layout_output *lo =
+					wlr_output_layout_add(server->output_layout, wo, head->state.x, head->state.y);
+				if (o && o->scene_output)
+					wlr_scene_output_layout_add_output(server->scene_layout, lo, o->scene_output);
+			} else {
+				wlr_output_layout_remove(server->output_layout, wo);
+			}
+		} else {
+			ok = false;
+		}
+		wlr_output_state_finish(&st);
+	}
+	if (ok) wlr_output_configuration_v1_send_succeeded(config);
+	else wlr_output_configuration_v1_send_failed(config);
+	wlr_output_configuration_v1_destroy(config);
+	if (!test) {
+		arrange_all(server);
+		output_manager_update(server);
+	}
+}
+
+static void output_manager_apply(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, output_manager_apply);
+	apply_output_config(server, data, false);
+}
+
+static void output_manager_test(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, output_manager_test);
+	apply_output_config(server, data, true);
+}
+
+void output_finish(struct flwm_server *server) {
+	wl_list_remove(&server->output_manager_apply.link);
+	wl_list_remove(&server->output_manager_test.link);
 }
 
 void arrange_all(struct flwm_server *server) {

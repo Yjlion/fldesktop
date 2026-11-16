@@ -437,3 +437,28 @@ std::string terminal_command() {
 }
 
 } // namespace fld
+
+namespace fld {
+
+bool reload_wm() {
+  const char *pid = getenv("FLWM_PID");
+  if (!pid || atoi(pid) <= 1) return false;
+  // make sure the pid still belongs to fl-wm
+  std::string comm;
+  read_file(std::string("/proc/") + pid + "/comm", comm);
+  if (trim(comm) != "fl-wm") return false;
+  return kill(atoi(pid), SIGHUP) == 0;
+}
+
+std::string wm_config_path() { return fld_config_dir() + "/wm.ini"; }
+
+void restart_self(int argc, char **argv) {
+  (void)argc;
+  char exe[PATH_MAX];
+  ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+  if (n <= 0) return;
+  exe[n] = 0;
+  execv(exe, argv);
+}
+
+} // namespace fld

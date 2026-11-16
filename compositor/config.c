@@ -120,6 +120,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->repeat_rate = 25;
 	c->repeat_delay = 600;
 	c->tap_to_click = true;
+	c->disable_while_typing = true;
 	c->cursor_size = 24;
 	c->default_scale = 1.0f;
 	c->launcher_cmd = strdup("fl-launcher");
@@ -210,6 +211,10 @@ bool config_load(struct flwm_config *c, const char *path) {
 			if (!strcmp(k, "tap_to_click")) c->tap_to_click = parse_bool(v);
 			else if (!strcmp(k, "natural_scroll")) c->natural_scroll = parse_bool(v);
 			else if (!strcmp(k, "accel")) c->pointer_accel = atof(v);
+			else if (!strcmp(k, "left_handed")) c->left_handed = parse_bool(v);
+			else if (!strcmp(k, "disable_while_typing")) c->disable_while_typing = parse_bool(v);
+			else if (!strcmp(k, "middle_emulation")) c->middle_emulation = parse_bool(v);
+			else if (!strcmp(k, "scroll_method")) set_str(&c->scroll_method, v);
 		} else if (!strcasecmp(section, "cursor")) {
 			if (!strcmp(k, "theme")) set_str(&c->cursor_theme, v);
 			else if (!strcmp(k, "size")) c->cursor_size = atoi(v);
@@ -252,6 +257,7 @@ void config_free(struct flwm_config *c) {
 	free(c->kb_model);
 	free(c->cursor_theme);
 	free(c->launcher_cmd);
+	free(c->scroll_method);
 	free(c->path);
 	for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);
 	for (int i = 0; i < c->nautostart; i++) free(c->autostart[i]);

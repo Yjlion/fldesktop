@@ -60,4 +60,11 @@ std::string which(const std::string &prog);
 // Preferred terminal emulator command (fl-term, then fallbacks)
 std::string terminal_command();
 
+// Session helpers
+// Asks fl-wm ($FLWM_PID) to reload wm.ini. Returns false outside an fl-wm session.
+bool reload_wm();
+std::string wm_config_path();      // ~/.config/fldesktop/wm.ini
+// Replaces the running program with a fresh copy of itself (same arguments).
+void restart_self(int argc, char **argv);
+
 } // namespace fld

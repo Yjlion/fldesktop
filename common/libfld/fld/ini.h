@@ -1,4 +1,5 @@
-// Minimal INI / desktop-entry style key file
+// Minimal INI / desktop-entry style key file. Comments and blank lines are
+// preserved when a file is loaded, changed and saved again.
 #pragma once
 #include <map>
 #include <string>
@@ -23,6 +24,8 @@ public:
   void set_int(const std::string &group, const std::string &key, int v);
   void set_bool(const std::string &group, const std::string &key, bool v);
   void remove(const std::string &group, const std::string &key);
+  // removes a whole group
+  void remove_group(const std::string &group);
 
   std::vector<std::string> groups() const;
   std::vector<std::string> keys(const std::string &group) const; // in file order

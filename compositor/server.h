@@ -39,6 +39,7 @@ enum flwm_role {
 	FLWM_ROLE_DESKTOP,
 	FLWM_ROLE_LAUNCHER,
 	FLWM_ROLE_OSD, /* notifications / volume popups: overlay, no focus */
+	FLWM_ROLE_OSK, /* on-screen keyboard: overlay, never takes keyboard focus */
 };
 
 /* What a scene node belongs to (stored in wlr_scene_node.data) */
@@ -114,6 +115,8 @@ struct flwm_config {
 	int repeat_rate, repeat_delay;
 	/* pointer */
 	bool tap_to_click, natural_scroll;
+	bool left_handed, disable_while_typing, middle_emulation;
+	char *scroll_method; /* two-finger, edge, none (NULL = device default) */
 	double pointer_accel;
 	/* cursor */
 	char *cursor_theme;
@@ -218,6 +221,9 @@ struct flwm_server {
 	struct wl_list outputs;
 	struct wl_listener new_output;
 	struct wl_listener layout_change;
+	struct wlr_output_manager_v1 *output_manager;
+	struct wl_listener output_manager_apply;
+	struct wl_listener output_manager_test;
 
 	struct flwm_config config;
 	char exe_dir[4096]; /* directory of our own executable */
@@ -265,6 +271,7 @@ struct flwm_view {
 	bool placed;       /* initial position chosen */
 	bool hidden_by_show_desktop;
 	int requested_w, requested_h; /* last size we asked a shell client for */
+	int committed_w, committed_h; /* last committed size of a shell client */
 	enum flwm_role role;
 	bool role_checked;
 	int x, y;          /* content (window geometry) position, layout coords */
@@ -351,6 +358,9 @@ struct flwm_output *output_for_view(struct flwm_view *view);
 void output_arrange(struct flwm_output *output);
 void arrange_all(struct flwm_server *server);
 void output_apply_config(struct flwm_server *server);
+void output_manager_update(struct flwm_server *server);
+void output_finish(struct flwm_server *server);
+int shell_reserved_bottom(struct flwm_server *server, struct flwm_output *output);
 
 /* view.c */
 void view_init(struct flwm_server *server);

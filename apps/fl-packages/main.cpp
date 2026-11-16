@@ -236,7 +236,7 @@ public:
   Fl_Box *status;
   pk::Job busy;
 
-  MainWindow() : Fl_Double_Window(980, 660, "Software Updates") {
+  MainWindow() : Fl_Double_Window(980, 620, "Software Updates") {
     const int W = w(), H = h();
     tabs = new Fl_Tabs(8, 8, W - 16, H - 40);
     // --- updates

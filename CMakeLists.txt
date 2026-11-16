@@ -32,6 +32,8 @@ option(FLD_BUILD_PORTAL   "Build xdg-desktop-portal-fl"                    ON)
 option(FLD_BUILD_PRINTERS "Build fl-printers (CUPS)"                       ON)
 option(FLD_BUILD_BLUETOOTH "Build fl-bluetooth (BlueZ)"                    ON)
 option(FLD_BUILD_PACKAGES "Build fl-packages (PackageKit)"                 ON)
+option(FLD_BUILD_FLATPAK  "Build fl-flatpak (libflatpak, appstream)"       ON)
+option(FLD_BUILD_FIREWALL "Build fl-firewall (firewalld)"                  ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -43,7 +45,7 @@ add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES)
+foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -86,6 +88,9 @@ if(FLD_NEED_FLTK)
   if(FLD_BUILD_BLUETOOTH OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
     add_subdirectory(common/bt)
   endif()
+  if(FLD_BUILD_FIREWALL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/firewall)
+  endif()
 endif()
 
 # ---- Wayland protocol code generation --------------------------------------
@@ -119,7 +124,7 @@ endif()
 if(FLD_BUILD_GREETER)
   add_subdirectory(greeter)
 endif()
-foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD PRINTERS BLUETOOTH PACKAGES)
+foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     add_subdirectory(apps/fl-${lc})

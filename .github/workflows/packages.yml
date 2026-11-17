@@ -45,7 +45,7 @@ jobs:
             libfltk1.4-dev libwlroots-0.18-dev libwayland-dev wayland-protocols libxkbcommon-dev \
             libinput-dev libpango1.0-dev libcairo2-dev libdrm-dev libpixman-1-dev libvterm-dev \
             libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
-            libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev libpam0g-dev \
+            libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libarchive-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev libpam0g-dev \
             xkb-data shared-mime-info lintian
       - uses: actions/checkout@v4
         with:
@@ -99,7 +99,7 @@ jobs:
           pacman -Syu --noconfirm --needed base-devel git cmake ninja pkgconf wayland-protocols \
             fltk wlroots0.20 libvterm pango cairo libinput libxkbcommon pixman shared-mime-info \
             glib2 libpipewire polkit libnm fontconfig xkeyboard-config ttf-dejavu \
-            libcups packagekit flatpak appstream gstreamer gst-plugins-base gst-plugins-good
+            libcups packagekit flatpak appstream libarchive gstreamer gst-plugins-base gst-plugins-good
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

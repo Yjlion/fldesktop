@@ -168,6 +168,12 @@ if(TARGET fl-term-ssh)
   add_test(NAME term COMMAND test_term)
 endif()
 
+if(TARGET fl-archive-core)
+  add_executable(test_archive test_archive.cpp)
+  target_link_libraries(test_archive PRIVATE fl-archive-core fld)
+  add_test(NAME archive COMMAND test_archive)
+endif()
+
 if(TARGET fl-webcam-util)
   add_executable(test_webcam test_webcam.cpp)
   target_link_libraries(test_webcam PRIVATE fl-webcam-util)

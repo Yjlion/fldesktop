@@ -309,6 +309,13 @@ bool set_default_app_for_mime(const std::string &mime, const std::string &deskto
   return ini.save(f);
 }
 
+bool is_archive_mime(const std::string &m) {
+  static const char *archives[] = {"application/zip", "application/x-7z-compressed", "application/x-tar", "application/x-compressed-tar", "application/x-xz-compressed-tar", "application/x-zstd-compressed-tar", "application/x-bzip2-compressed-tar", "application/x-bzip-compressed-tar", "application/x-lzma-compressed-tar", "application/x-lzip-compressed-tar", "application/x-tarz", "application/gzip", "application/x-gzip", "application/x-xz", "application/zstd", "application/x-bzip2", "application/x-bzip", "application/x-lzma", "application/x-lz4", "application/vnd.rar", "application/x-rar", "application/x-rar-compressed", "application/x-cd-image", "application/x-iso9660-image", "application/x-cpio", "application/x-archive", "application/x-xar", "application/vnd.ms-cab-compressed", "application/x-lha", "application/x-lzh-compressed", "application/java-archive", "application/vnd.debian.binary-package", "application/x-rpm"};
+  for (const char *a : archives)
+    if (m == a) return true;
+  return false;
+}
+
 bool open_path(const std::string &path) {
   if (path.find("://") != std::string::npos && !starts_with(path, "file://"))
     return spawn({"xdg-open", path});
@@ -331,6 +338,7 @@ bool open_path(const std::string &path) {
   if (starts_with(m, "image/")) return spawn({"fl-view", p});
   if ((starts_with(m, "video/") || starts_with(m, "audio/")) && !which("fl-video").empty())
     return spawn({"fl-video", p});
+  if (is_archive_mime(m) && !which("fl-archive").empty()) return spawn({"fl-archive", p});
   return spawn({"xdg-open", p});
 }
 

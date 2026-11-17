@@ -26,6 +26,7 @@ Build-Depends: debhelper-compat (= 13),
                libpackagekit-glib2-dev,
                libflatpak-dev,
                libappstream-dev,
+               libarchive-dev,
                libgstreamer1.0-dev,
                libgstreamer-plugins-base1.0-dev,
                libpam0g-dev,
@@ -60,7 +61,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-lock (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
-            fldesktop-webcam, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
+            fldesktop-webcam, fldesktop-archive, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
@@ -289,6 +290,15 @@ Description: fldesktop printer settings
  fl-printers adds printers (driverless IPP Everywhere or with a driver),
  changes their settings and defaults, prints test pages and shows and
  cancels print jobs.
+
+Package: fldesktop-archive
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop archive manager
+ fl-archive browses, extracts, creates and changes archives with
+ libarchive: zip (optionally encrypted), 7z and tar with gzip, xz, zstd or
+ bzip2; it also reads rar, iso, cpio, deb, rpm and single compressed files.
+ The file manager uses it for Extract Here, Extract To and Compress.
 
 Package: fldesktop-bluetooth
 Architecture: any

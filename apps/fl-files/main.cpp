@@ -1132,7 +1132,11 @@ void FileView::context_menu(int i) {
   if (!e.is_dir && !many && !in_trash()) apps = fld::apps_for_mime(e.get_mime());
   std::vector<Fl_Menu_Item> m;
   enum { OPEN = 1, OPEN_TAB, OPEN_TERM, OPEN_WITH_OTHER, CUT, COPY, PASTE, RENAME, TRASH, DELETE, PROPS,
-         RESTORE, COPY_PATH, CONTAINING, BOOKMARK, NEW_WINDOW, APP = 100 };
+         RESTORE, COPY_PATH, CONTAINING, BOOKMARK, NEW_WINDOW, EXTRACT_HERE, EXTRACT_TO, COMPRESS, APP = 100 };
+  // archives: extract / compress with fl-archive
+  bool have_archiver = !in_trash() && !fld::which("fl-archive").empty();
+  bool all_archives = have_archiver && !paths.empty();
+  for (int k : sel) all_archives = all_archives && !entry(k).is_dir && fld::is_archive_mime(entry(k).get_mime());
   if (in_trash()) {
     m.push_back({"Restore", 0, nullptr, (void *)RESTORE});
     m.push_back({"Delete Permanently", 0, nullptr, (void *)DELETE});
@@ -1150,6 +1154,11 @@ void FileView::context_menu(int i) {
       m.push_back({nullptr});
     }
     m.back().flags |= FL_MENU_DIVIDER;
+    if (all_archives) {
+      m.push_back({"Extract Here", 0, nullptr, (void *)EXTRACT_HERE});
+      m.push_back({"Extract To…", 0, nullptr, (void *)EXTRACT_TO});
+    }
+    if (have_archiver) m.push_back({"Compress…", 0, nullptr, (void *)COMPRESS, FL_MENU_DIVIDER});
     m.push_back({"Cut", FL_CTRL + 'x', nullptr, (void *)CUT});
     m.push_back({"Copy", FL_CTRL + 'c', nullptr, (void *)COPY});
     if (e.is_dir && !many) m.push_back({"Paste Into Folder", 0, nullptr, (void *)PASTE, g_clip.paths.empty() ? FL_MENU_INACTIVE : 0});
@@ -1186,6 +1195,16 @@ void FileView::context_menu(int i) {
     case DELETE: trash_selected(true); break;
     case PROPS: properties(paths); break;
     case RESTORE: restore_selected(); break;
+    case EXTRACT_HERE:
+    case EXTRACT_TO:
+    case COMPRESS: {
+      std::vector<std::string> argv{"fl-archive", id == EXTRACT_HERE ? "--extract-here"
+                                                  : id == EXTRACT_TO ? "--extract-ask"
+                                                                     : "--compress"};
+      argv.insert(argv.end(), paths.begin(), paths.end());
+      fld::spawn(argv, g_cwd);
+      break;
+    }
     default:
       if (id >= APP) apps[id - APP].launch(paths);
   }

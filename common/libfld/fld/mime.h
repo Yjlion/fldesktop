@@ -25,5 +25,8 @@ bool set_default_app_for_mime(const std::string &mime, const std::string &deskto
 
 // Opens a file or URL with its default application (falls back to xdg-open).
 bool open_path(const std::string &path);
+// Archives and compressed files (zip, tar.*, 7z, rar, iso, ...) that
+// fl-archive opens.
+bool is_archive_mime(const std::string &mime);
 
 } // namespace fld

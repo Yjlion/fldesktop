@@ -1,6 +1,7 @@
 #include "fld/theme.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/styles.h"
 #include "fld/util.h"
 
 #include <FL/Fl.H>
@@ -55,7 +56,6 @@ void init_app(const char *app_id, int argc, char **argv) {
   p.selection = p.accent;
   p.danger = fl_rgb_color(0xe0, 0x1b, 0x24);
 
-  Fl::scheme(cfg.get(A, "Scheme", "gtk+").c_str());
   unsigned char r, g, b;
   Fl::get_color(p.bg, r, g, b);
   Fl::background(r, g, b);
@@ -64,6 +64,7 @@ void init_app(const char *app_id, int argc, char **argv) {
   Fl::get_color(p.fg, r, g, b);
   Fl::foreground(r, g, b);
   Fl::set_color(FL_SELECTION_COLOR, p.selection);
+  apply_style(cfg.get(A, "Scheme", "gtk+"), cfg.get_int(A, "Radius", 4));
   Fl::set_color(FL_INACTIVE_COLOR, p.fg_dim);
   Fl_Tooltip::color(dark ? fl_rgb_color(0x10, 0x10, 0x12) : fl_rgb_color(0x30, 0x32, 0x36));
   Fl_Tooltip::textcolor(FL_WHITE);

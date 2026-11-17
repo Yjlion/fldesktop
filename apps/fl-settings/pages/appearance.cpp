@@ -4,6 +4,11 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Color_Chooser.H>
 #include <FL/Fl_File_Chooser.H>
+#include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Input.H>
+#include <FL/Fl_Progress.H>
+#include <FL/Fl_Round_Button.H>
+#include <FL/Fl_Slider.H>
 #include <FL/Fl_Spinner.H>
 #include <FL/fl_draw.H>
 
@@ -11,6 +16,7 @@
 #include <set>
 
 #include "fld/icons.h"
+#include "fld/styles.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -95,8 +101,8 @@ public:
 class AppearancePage : public Fl_Group {
 public:
   ConfigFile desk{desktop_ini_path()}, wm{wm_ini_path()};
-  Fl_Choice *theme, *ui_font, *mono_font, *icons, *cursors, *titlebar, *wp_mode;
-  Fl_Spinner *ui_size, *mono_size, *cursor_size;
+  Fl_Choice *theme, *style, *ui_font, *mono_font, *icons, *cursors, *titlebar, *wp_mode;
+  Fl_Spinner *radius, *ui_size, *mono_size, *cursor_size;
   Fl_Button *accent;
   WallpaperPreview *preview;
   std::vector<std::string> fonts, icon_themes, cursor_themes;
@@ -131,6 +137,50 @@ public:
         p->save();
       }
     }, this);
+    f.row("Widget style:", 28, wx, wy, ww);
+    style = new Fl_Choice(wx, wy, 200, 28);
+    std::string cur_style = normalize_style(desk.ini.get("Appearance", "Scheme", "gtk+"));
+    for (size_t i = 0; i < widget_styles().size(); i++) {
+      std::string n = widget_styles()[i].name;
+      std::string e;
+      for (char ch : n) {
+        if (ch == '/' || ch == '\\' || ch == '&' || ch == '_' || ch == '+') e += '\\';
+        e += ch;
+      }
+      style->add(e.c_str());
+      if (cur_style == widget_styles()[i].id) style->value((int)i);
+    }
+    style->tooltip("How buttons, fields and frames are drawn");
+    style->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->style_changed(); }, this);
+    radius = new Fl_Spinner(wx + 290, wy, 60, 28, "Corners:");
+    radius->range(0, 12);
+    radius->value(desk.ini.get_int("Appearance", "Radius", 4));
+    radius->tooltip("Corner radius of the Rounded style");
+    radius->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->style_changed(); }, this);
+    f.row("Preview:", 64, wx, wy, ww);
+    {
+      Fl_Group *pv = new Fl_Group(wx, wy, ww, 64);
+      new Fl_Button(wx, wy, 90, 28, "Button");
+      Fl_Button *def = new Fl_Button(wx + 98, wy, 90, 28, "Pressed");
+      def->type(FL_TOGGLE_BUTTON);
+      def->value(1);
+      def->selection_color(fl_darker(palette().bg));
+      Fl_Input *in = new Fl_Input(wx + 196, wy, std::max(80, ww - 196), 28);
+      in->value("Text field");
+      Fl_Check_Button *cb = new Fl_Check_Button(wx, wy + 34, 90, 26, "Check");
+      cb->value(1);
+      Fl_Round_Button *rb = new Fl_Round_Button(wx + 92, wy + 34, 80, 26, "Radio");
+      rb->type(FL_RADIO_BUTTON);
+      rb->value(1);
+      Fl_Slider *sl = new Fl_Slider(wx + 176, wy + 37, 110, 20);
+      sl->type(FL_HOR_NICE_SLIDER);
+      sl->value(0.6);
+      Fl_Progress *pr = new Fl_Progress(wx + 296, wy + 37, std::max(60, ww - 296), 20);
+      pr->value(60);
+      pr->selection_color(palette().accent);
+      pv->end();
+    }
+    update_radius();
     f.row("Title bars:", 28, wx, wy, ww);
     titlebar = new Fl_Choice(wx, wy, 200, 28);
     titlebar->add("Dark");
@@ -201,6 +251,21 @@ public:
     end();
   }
 
+  void update_radius() {
+    size_t i = (size_t)std::max(0, style->value());
+    if (i < widget_styles().size() && std::string(widget_styles()[i].id) == "fld-rounded") radius->activate();
+    else radius->deactivate();
+  }
+
+  // applied to Settings itself right away, as a live preview
+  void style_changed() {
+    size_t i = (size_t)std::max(0, style->value());
+    if (i >= widget_styles().size()) return;
+    update_radius();
+    apply_style(widget_styles()[i].id, (int)radius->value());
+    save();
+  }
+
   void choose_wallpaper() {
     Fl_File_Chooser fc(dirname(preview->path).c_str(), "Images (*.{png,jpg,jpeg,svg,gif,bmp,webp})",
                        Fl_File_Chooser::SINGLE, "Choose Wallpaper");
@@ -221,6 +286,9 @@ public:
     char hex[8];
     snprintf(hex, sizeof hex, "#%02x%02x%02x", r, g, b);
     desk.ini.set("Appearance", "Accent", hex);
+    size_t si = (size_t)std::max(0, style->value());
+    if (si < widget_styles().size()) desk.ini.set("Appearance", "Scheme", widget_styles()[si].id);
+    desk.ini.set_int("Appearance", "Radius", (int)radius->value());
     desk.ini.set("Appearance", "Font", choice_text(ui_font, fonts));
     desk.ini.set_int("Appearance", "FontSize", (int)ui_size->value());
     desk.ini.set("Appearance", "MonoFont", choice_text(mono_font, fonts));
@@ -261,7 +329,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new AppearancePage(x, y, w
 
 PageInfo page_appearance() {
   return {"appearance", "Appearance", "preferences-desktop-theme", "Personal",
-          "theme dark light accent color font icons cursor wallpaper background title bar", create};
+          "theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar", create};
 }
 
 } // namespace fld

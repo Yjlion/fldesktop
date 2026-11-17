@@ -4,6 +4,7 @@ add_library(fld STATIC
   desktop_entry.cpp
   icons.cpp
   mime.cpp
+  styles.cpp
   theme.cpp
   json.cpp
   trash.cpp

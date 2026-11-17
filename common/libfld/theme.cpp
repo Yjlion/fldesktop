@@ -25,7 +25,17 @@ static Fl_Color parse_color(const std::string &s, Fl_Color def) {
   return def;
 }
 
-std::string desktop_config_path() { return fld_config_dir() + "/desktop.ini"; }
+static std::string &config_override() {
+  static std::string p;
+  return p;
+}
+
+void set_desktop_config_path(const std::string &path) { config_override() = path; }
+
+std::string desktop_config_path() {
+  if (!config_override().empty()) return config_override();
+  return fld_config_dir() + "/desktop.ini";
+}
 
 void init_app(const char *app_id, int argc, char **argv) {
   Ini cfg;

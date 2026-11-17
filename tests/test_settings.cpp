@@ -1,4 +1,7 @@
+#include "fld/ini.h"
+#include "greeter_config.h"
 #include "locale_env.h"
+#include "proxy_env.h"
 #include "test.h"
 #include "xkb_rules.h"
 
@@ -56,5 +59,84 @@ int main() {
 
   CHECK_EQ(locale_env::normalize("de_DE.utf8"), std::string("de_DE.UTF-8"));
   CHECK_EQ(locale_env::normalize("C.UTF-8"), std::string("C.UTF-8"));
+
+  // proxy
+  using namespace fld;
+  CHECK(valid_proxy(""));
+  CHECK(valid_proxy("proxy.example.com:3128"));
+  CHECK(valid_proxy("http://user:pw@proxy:8080/"));
+  CHECK(valid_proxy("socks5h://[::1]:1080"));
+  CHECK(valid_proxy("proxy"));
+  CHECK(!valid_proxy("proxy:"));
+  CHECK(!valid_proxy("proxy:99999"));
+  CHECK(!valid_proxy("ftp://proxy:21"));
+  CHECK(!valid_proxy("prox y:80"));
+  CHECK(!valid_proxy("http://proxy:80/path"));
+  CHECK_EQ(proxy_url("p:3128"), std::string("http://p:3128"));
+  CHECK_EQ(proxy_url("p:1080", "socks5"), std::string("socks5://p:1080"));
+  CHECK_EQ(proxy_url("https://p"), std::string("https://p"));
+  CHECK_EQ(proxy_variables().size(), 10u);
+  std::map<std::string, std::string> penv{{"HTTP_PROXY", "http://a:1"}, {"PATH", "/bin"}, {"no_proxy", "x"}};
+  auto inh = inherited_proxy(penv);
+  CHECK_EQ(inh.size(), 2u);
+  CHECK(default_mode(inh) == ProxySettings::Inherit);
+  CHECK(default_mode({{"no_proxy", "x"}}) == ProxySettings::None);
+  ProxySettings ps;
+  ps.mode = ProxySettings::Manual;
+  ps.http = "p:3128";
+  ps.socks = "s:1080";
+  ps.no_proxy = "localhost, .lan";
+  auto pe = proxy_environment(ps);
+  CHECK_EQ(pe.size(), 10u);
+  CHECK_EQ(pe[0].second, std::string("http://p:3128"));   // http_proxy
+  CHECK_EQ(pe[1].second, std::string(""));                // https_proxy not set
+  CHECK_EQ(pe[3].second, std::string("socks5://s:1080")); // all_proxy
+  CHECK_EQ(pe[4].second, std::string("localhost,.lan"));  // no_proxy
+  CHECK_EQ(pe[5].first, std::string("HTTP_PROXY"));
+  CHECK_EQ(pe[5].second, std::string("http://p:3128"));
+  ps.use_http_for_all = true;
+  pe = proxy_environment(ps);
+  CHECK_EQ(pe[1].second, std::string("http://p:3128"));
+  CHECK_EQ(pe[3].second, std::string(""));
+  ps.mode = ProxySettings::Inherit;
+  CHECK_EQ(proxy_environment(ps)[7].second, std::string("@inherit"));
+  ps.mode = ProxySettings::None;
+  CHECK_EQ(proxy_environment(ps)[0].second, std::string(""));
+  Ini pi;
+  ps.mode = ProxySettings::Manual;
+  save_proxy(pi, ps);
+  ProxySettings back = load_proxy(pi);
+  CHECK(back.mode == ProxySettings::Manual);
+  CHECK_EQ(back.http, ps.http);
+  CHECK(back.use_http_for_all);
+
+  // greeter.ini validation
+  Ini in, out;
+  in.parse("[Greeter]\nMinUid=1000\nHideUsers=guest, test\nKeyboard=always\nBackground=/usr/share/fldesktop/backgrounds/x.svg\n"
+           "[Appearance]\nTheme=dark\nAccent=#3584e4\n[Cursor]\nSize=32\n[Other]\nEvil=1\n");
+  std::string err;
+  CHECK(validate_greeter_config(in, out, err));
+  CHECK_EQ(out.get("Greeter", "HideUsers"), std::string("guest, test"));
+  CHECK_EQ(out.get("Cursor", "Size"), std::string("32"));
+  CHECK(!out.has("Other", "Evil"));
+  auto bad = [](const char *text) {
+    Ini i, o;
+    i.parse(text);
+    std::string e;
+    return !validate_greeter_config(i, o, e) && !e.empty();
+  };
+  CHECK(bad("[Greeter]\nMinUid=abc\n"));
+  CHECK(bad("[Greeter]\nKeyboard=sometimes\n"));
+  CHECK(bad("[Greeter]\nBackground=/home/u/secret.png\n"));
+  CHECK(bad("[Greeter]\nBackground=/usr/share/../../etc/shadow\n"));
+  CHECK(bad("[Appearance]\nAccent=red\n"));
+  CHECK(bad("[General]\nIconTheme=../x\n"));
+  CHECK(bad("[Greeter]\nHideUsers=a;rm\n"));
+  CHECK(bad("[Cursor]\nSize=500\n"));
+  CHECK_EQ(image_type(std::string("\x89PNG\r\n\x1a\nxxxx", 12)), std::string("png"));
+  CHECK_EQ(image_type("\xff\xd8\xff\xe0"), std::string("jpg"));
+  CHECK_EQ(image_type("<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\"/>"), std::string("svg"));
+  CHECK_EQ(image_type("<?xml?><!ENTITY x SYSTEM \"file:///etc/shadow\"><svg/>"), std::string(""));
+  CHECK_EQ(image_type("root:x:0:0"), std::string(""));
   return test_result("settings");
 }

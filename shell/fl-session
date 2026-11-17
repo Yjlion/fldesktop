@@ -13,6 +13,22 @@ if [ -r "$conf" ]; then
 	set +a
 fi
 
+# Remember the proxy settings the session starts with: Settings > Proxy
+# offers to keep using them ("inherit") and fl-wm / spawn() restore them
+# from here (wm.ini [environment] KEY=@inherit).
+snap="${XDG_RUNTIME_DIR:-/tmp}/fldesktop-session.env"
+( umask 077; env | grep -E '^(http|https|ftp|all|no)_proxy=|^(HTTP|HTTPS|FTP|ALL|NO)_PROXY=' > "$snap" ) 2>/dev/null || true
+
+# fldesktop's own cursors unless something else is configured
+if [ -z "$XCURSOR_THEME" ]; then
+	for d in "${XDG_DATA_HOME:-$HOME/.local/share}" $(echo "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" | tr ':' ' '); do
+		if [ -d "$d/icons/fldesktop-cursors/cursors" ]; then
+			export XCURSOR_THEME=fldesktop-cursors
+			break
+		fi
+	done
+fi
+
 # Create the XDG user folders (Desktop, Documents, ...) and keep their names
 # in step with the language.
 if command -v xdg-user-dirs-update >/dev/null 2>&1; then

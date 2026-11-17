@@ -17,6 +17,7 @@ function(fld_settings_page id file)
 endfunction()
 
 fld_settings_page(appearance pages/appearance.cpp)
+fld_settings_page(lock       pages/lock.cpp)
 fld_settings_page(panel      pages/panel.cpp)
 fld_settings_page(notifications pages/notifications.cpp REQUIRES fld-glib)
 fld_settings_page(language   pages/language.cpp)
@@ -27,11 +28,13 @@ fld_settings_page(mouse      pages/mouse.cpp)
 fld_settings_page(displays   pages/displays.cpp)
 fld_settings_page(sound      pages/sound.cpp REQUIRES fld-audio-ui)
 fld_settings_page(network    pages/network.cpp REQUIRES fld-nm-ui)
+fld_settings_page(proxy      pages/proxy.cpp)
 fld_settings_page(printers   pages/printers.cpp REQUIRES fld-printers-ui)
 fld_settings_page(firewall   pages/firewall.cpp REQUIRES fld-fw-ui)
 fld_settings_page(bluetooth  pages/bluetooth.cpp REQUIRES fld-bt-ui)
 fld_settings_page(datetime   pages/datetime.cpp)
 fld_settings_page(updates    pages/updates.cpp)
+fld_settings_page(login      pages/login.cpp)
 fld_settings_page(about      pages/about.cpp)
 
 # generate the registry (explicit list: no static constructors to lose)
@@ -58,7 +61,7 @@ configure_file(${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp.in ${CMAKE_CURRENT
 set(DISPLAYS_PROTO)
 fld_wayland_protocol(DISPLAYS_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-management-unstable-v1.xml client)
 
-add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp)
+add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp)
 target_include_directories(fl-settings-xkb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-settings-xkb PUBLIC fld)
 
@@ -66,4 +69,12 @@ add_executable(fl-settings main.cpp settings_common.cpp ${FLD_SETTINGS_PAGE_SRCS
                ${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp ${DISPLAYS_PROTO})
 target_include_directories(fl-settings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${FLD_PROTO_OUT})
 target_link_libraries(fl-settings PRIVATE fld fl-settings-xkb PkgConfig::WAYLAND_CLIENT ${FLD_SETTINGS_PAGE_LIBS})
+target_compile_definitions(fl-settings PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}/fldesktop")
 install(TARGETS fl-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# the root part of the Login Screen page, run through pkexec
+add_executable(fl-settings-helper helper.cpp)
+target_link_libraries(fl-settings-helper PRIVATE fl-settings-xkb fld)
+install(TARGETS fl-settings-helper RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/fldesktop)
+configure_file(org.fldesktop.settings.policy.in ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.settings.policy @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.settings.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)

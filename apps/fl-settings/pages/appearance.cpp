@@ -15,7 +15,9 @@
 #include <memory>
 #include <set>
 
+#include "fld/accents.h"
 #include "fld/icons.h"
+#include "fld/pickers.h"
 #include "fld/styles.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -72,39 +74,15 @@ std::string choice_text(Fl_Choice *c, const std::vector<std::string> &items) {
   return i >= 0 && i < (int)items.size() ? items[i] : "";
 }
 
-class WallpaperPreview : public Fl_Widget {
-public:
-  std::unique_ptr<Fl_Image> img;
-  std::string path;
-  WallpaperPreview(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {}
-  void set(const std::string &p) {
-    path = p;
-    img.reset();
-    std::unique_ptr<Fl_Image> src(load_image(p));
-    if (src) {
-      double s = std::max((double)w() / src->w(), (double)h() / src->h());
-      img.reset(src->copy((int)(src->w() * s) + 1, (int)(src->h() * s) + 1));
-    }
-    redraw();
-  }
-  void draw() override {
-    fl_push_clip(x(), y(), w(), h());
-    fl_color(fl_rgb_color(0x2d, 0x3a, 0x4f));
-    fl_rectf(x(), y(), w(), h());
-    if (img) img->draw(x() + (w() - img->w()) / 2, y() + (h() - img->h()) / 2);
-    fl_pop_clip();
-    fl_color(palette().border);
-    fl_rect(x(), y(), w(), h());
-  }
-};
-
 class AppearancePage : public Fl_Group {
 public:
   ConfigFile desk{desktop_ini_path()}, wm{wm_ini_path()};
   Fl_Choice *theme, *style, *ui_font, *mono_font, *icons, *cursors, *titlebar, *wp_mode;
   Fl_Spinner *radius, *ui_size, *mono_size, *cursor_size;
-  Fl_Button *accent;
-  WallpaperPreview *preview;
+  AccentSwatches *accent;
+  Fl_Check_Button *icons_follow;
+  WallpaperGallery *gallery;
+  std::string wallpaper;
   std::vector<std::string> fonts, icon_themes, cursor_themes;
   Fl_Color accent_color;
 
@@ -122,21 +100,13 @@ public:
     theme->value(lower(desk.ini.get("Appearance", "Theme", "light")) == "dark" ? 1 : 0);
     theme->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
     f.row("Accent color:", 28, wx, wy, ww);
-    accent = new Fl_Button(wx, wy, 120, 28);
+    accent = new AccentSwatches(wx, wy, AccentSwatches::preferred_width(28), 28);
     accent_color = palette().accent;
-    accent->color(accent_color);
-    accent->tooltip("Choose the accent color");
-    accent->callback([](Fl_Widget *, void *d) {
-      AppearancePage *p = (AppearancePage *)d;
-      uchar r, g, b;
-      Fl::get_color(p->accent_color, r, g, b);
-      if (fl_color_chooser("Accent color", r, g, b)) {
-        p->accent_color = fl_rgb_color(r, g, b);
-        p->accent->color(p->accent_color);
-        p->accent->redraw();
-        p->save();
-      }
-    }, this);
+    accent->value(desk.ini.get("Appearance", "Accent", "#3584e4"));
+    accent->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->accent_changed(); }, this);
+    f.row("", 24, wx, wy, ww);
+    icons_follow = new Fl_Check_Button(wx, wy, ww, 24, "Folder icons follow the accent color");
+    icons_follow->tooltip("Switches to the fldesktop icon theme in the accent color");
     f.row("Widget style:", 28, wx, wy, ww);
     style = new Fl_Choice(wx, wy, 200, 28);
     std::string cur_style = normalize_style(desk.ini.get("Appearance", "Scheme", "gtk+"));
@@ -213,12 +183,20 @@ public:
     icon_themes = theme_dirs(false);
     f.row("Icon theme:", 28, wx, wy, ww);
     icons = new Fl_Choice(wx, wy, ww, 28);
-    fill_choice(icons, icon_themes, desk.ini.get("General", "IconTheme", "Adwaita"));
-    icons->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
+    std::string cur_icons = desk.ini.get("General", "IconTheme", default_icon_theme());
+    fill_choice(icons, icon_themes, cur_icons);
+    icons->callback([](Fl_Widget *, void *d) {
+      AppearancePage *p = (AppearancePage *)d;
+      // a theme picked by hand that is not an accent theme ends "follow the accent"
+      if (!is_accent_icon_theme(choice_text(p->icons, p->icon_themes))) p->icons_follow->value(0);
+      p->save();
+    }, this);
+    icons_follow->value(desk.ini.get_bool("Appearance", "IconsFollowAccent", is_accent_icon_theme(cur_icons)));
+    icons_follow->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->accent_changed(); }, this);
     cursor_themes = theme_dirs(true);
     f.row("Cursor:", 28, wx, wy, ww);
     cursors = new Fl_Choice(wx, wy, ww - 90, 28);
-    fill_choice(cursors, cursor_themes, wm.ini.get("cursor", "theme", "Adwaita"));
+    fill_choice(cursors, cursor_themes, wm.ini.get("cursor", "theme", default_cursor_theme()));
     cursors->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
     cursor_size = new Fl_Spinner(wx + ww - 80, wy, 80, 28);
     cursor_size->range(16, 96);
@@ -227,11 +205,18 @@ public:
     cursor_size->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
 
     f.heading("Wallpaper");
-    f.row("", 120, wx, wy, ww);
-    preview = new WallpaperPreview(wx, wy, 200, 120);
-    Fl_Button *choose = new Fl_Button(wx + 214, wy, 140, 28, "Choose…");
+    f.row("", 96, wx, wy, ww);
+    gallery = new WallpaperGallery(wx, wy, ww, 96);
+    gallery->load(WallpaperGallery::default_dirs());
+    gallery->callback([](Fl_Widget *, void *d) {
+      AppearancePage *p = (AppearancePage *)d;
+      p->wallpaper = p->gallery->value();
+      p->save();
+    }, this);
+    f.row("", 28, wx, wy, ww);
+    Fl_Button *choose = new Fl_Button(wx, wy, 140, 28, "Other Image…");
     choose->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->choose_wallpaper(); }, this);
-    wp_mode = new Fl_Choice(wx + 214, wy + 40, 140, 28);
+    wp_mode = new Fl_Choice(wx + 214, wy, 140, 28, "Fit:");
     const char *modes[] = {"fill", "fit", "stretch", "center", "tile"};
     std::string cur_mode = desk.ini.get("Desktop", "WallpaperMode", "fill");
     for (int i = 0; i < 5; i++) {
@@ -244,7 +229,9 @@ public:
     wp_mode->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
     std::string wp = expand_tilde(desk.ini.get("Desktop", "Wallpaper", ""));
     if (wp.empty() || !file_exists(wp)) wp = fld_data_dir() + "/backgrounds/default.svg";
-    preview->set(wp);
+    wallpaper = wp;
+    gallery->add_file(wp);
+    gallery->value(wp);
     f.space(4);
     f.note("The panel and desktop change right away; other applications use the new style the next time they start.", 2);
     g->end();
@@ -266,14 +253,32 @@ public:
     save();
   }
 
+  // the accent picked a preset: follow it with the icon theme
+  void accent_changed() {
+    accent_color = parse_hex(accent->value());
+    if (icons_follow->value()) {
+      std::string want = accent_icon_theme(nearest_accent(accent->value()));
+      for (size_t i = 0; i < icon_themes.size(); i++)
+        if (icon_themes[i] == want) icons->value((int)i);
+    }
+    save();
+  }
+
+  static Fl_Color parse_hex(const std::string &h) {
+    unsigned v = h.size() == 7 ? (unsigned)strtoul(h.c_str() + 1, nullptr, 16) : 0x3584e4;
+    return fl_rgb_color((v >> 16) & 255, (v >> 8) & 255, v & 255);
+  }
+
   void choose_wallpaper() {
-    Fl_File_Chooser fc(dirname(preview->path).c_str(), "Images (*.{png,jpg,jpeg,svg,gif,bmp,webp})",
+    Fl_File_Chooser fc(dirname(wallpaper).c_str(), "Images (*.{png,jpg,jpeg,svg,gif,bmp,webp})",
                        Fl_File_Chooser::SINGLE, "Choose Wallpaper");
     fc.preview(1);
     fc.show();
     while (fc.shown()) Fl::wait();
     if (!fc.value()) return;
-    preview->set(fc.value());
+    wallpaper = fc.value();
+    gallery->add_file(wallpaper);
+    gallery->value(wallpaper);
     save();
   }
 
@@ -293,8 +298,16 @@ public:
     desk.ini.set_int("Appearance", "FontSize", (int)ui_size->value());
     desk.ini.set("Appearance", "MonoFont", choice_text(mono_font, fonts));
     desk.ini.set_int("Appearance", "MonoFontSize", (int)mono_size->value());
-    desk.ini.set("General", "IconTheme", choice_text(icons, icon_themes));
-    desk.ini.set("Desktop", "Wallpaper", preview->path);
+    std::string it = choice_text(icons, icon_themes);
+    // the monochrome icons come in a light and a dark version
+    bool dark = theme->value() == 1;
+    if (dark && it == "fldesktop-mono") it = "fldesktop-mono-dark";
+    if (!dark && it == "fldesktop-mono-dark") it = "fldesktop-mono";
+    for (size_t i = 0; i < icon_themes.size(); i++)
+      if (icon_themes[i] == it) icons->value((int)i);
+    desk.ini.set("General", "IconTheme", it);
+    desk.ini.set_bool("Appearance", "IconsFollowAccent", icons_follow->value() != 0);
+    desk.ini.set("Desktop", "Wallpaper", wallpaper);
     const char *modes[] = {"fill", "fit", "stretch", "center", "tile"};
     desk.ini.set("Desktop", "WallpaperMode", modes[std::max(0, wp_mode->value())]);
     desk.save();

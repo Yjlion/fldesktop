@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <fstream>
+#include <map>
 #include <limits.h>
 #include <pwd.h>
 #include <signal.h>
@@ -335,8 +336,65 @@ static void close_fds_from(int lowfd) {
   for (int fd = lowfd; fd < max; fd++) close(fd);
 }
 
+std::map<std::string, std::string> parse_env_text(const std::string &text) {
+  std::map<std::string, std::string> m;
+  for (auto &line : split(text, '\n')) {
+    std::string l = trim(line);
+    if (l.empty() || l[0] == '#') continue;
+    if (starts_with(l, "export ")) l = trim(l.substr(7));
+    size_t eq = l.find('=');
+    if (eq == std::string::npos || eq == 0) continue;
+    std::string k = trim(l.substr(0, eq)), v = trim(l.substr(eq + 1));
+    if (v.size() >= 2 && (v[0] == '"' || v[0] == '\'') && v.back() == v[0]) v = v.substr(1, v.size() - 2);
+    m[k] = v;
+  }
+  return m;
+}
+
+std::string session_env_snapshot_path() {
+  return getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fldesktop-session.env";
+}
+
+std::vector<std::pair<std::string, std::string>> session_env_changes() {
+  // wm.ini [environment]: "KEY=value" sets, "KEY=" unsets, "KEY=@inherit"
+  // restores what the session started with (fl-session's snapshot)
+  std::vector<std::pair<std::string, std::string>> out;
+  Ini wm;
+  if (!wm.load(fld_config_dir() + "/wm.ini")) return out;
+  std::string snap_text;
+  bool have_snap = read_file(session_env_snapshot_path(), snap_text);
+  auto snap = parse_env_text(snap_text);
+  for (auto &k : wm.keys("environment")) {
+    std::string v = wm.get("environment", k);
+    if (v == "@inherit") {
+      if (!have_snap) continue;  // no snapshot: keep what we have
+      auto it = snap.find(k);
+      out.push_back({k, it == snap.end() ? std::string(1, '\x01') : it->second});
+    } else {
+      out.push_back({k, v.empty() ? std::string(1, '\x01') : v});
+    }
+  }
+  return out;
+}
+
+extern "C" char **environ;
+
 bool spawn(const std::vector<std::string> &argv, const std::string &cwd) {
   if (argv.empty()) return false;
+  // the session environment as configured now (e.g. a proxy set in Settings
+  // after this program started); prepared before fork
+  std::vector<std::string> env_store;
+  for (char **e = environ; e && *e; e++) env_store.push_back(*e);
+  for (auto &kv : session_env_changes()) {
+    std::string prefix = kv.first + "=";
+    env_store.erase(std::remove_if(env_store.begin(), env_store.end(),
+                                   [&](const std::string &x) { return starts_with(x, prefix); }),
+                    env_store.end());
+    if (kv.second != std::string(1, '\x01')) env_store.push_back(prefix + kv.second);
+  }
+  std::vector<char *> envp;
+  for (auto &e : env_store) envp.push_back(const_cast<char *>(e.c_str()));
+  envp.push_back(nullptr);
   int pipefd[2];
   if (pipe2(pipefd, O_CLOEXEC) < 0) return false;
   pid_t pid = fork();
@@ -365,7 +423,7 @@ bool spawn(const std::vector<std::string> &argv, const std::string &cwd) {
     long max = sysconf(_SC_OPEN_MAX);
     if (max < 0 || max > 65536) max = 65536;
     for (int fd = 3; fd < max; fd++) if (fd != keep) close(fd);
-    execvp(args[0], args.data());
+    execvpe(args[0], args.data(), envp.data());
     int e = errno;
     if (write(keep, &e, sizeof e) < 0) { /* nothing */ }
     _exit(127);

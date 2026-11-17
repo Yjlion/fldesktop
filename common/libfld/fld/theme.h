@@ -22,6 +22,9 @@ Fl_Font mono_font();
 int mono_size();
 int ui_font_size();
 std::string desktop_config_path();
+// Reads the appearance from this file instead of ~/.config/fldesktop/desktop.ini
+// (fl-greet: /etc/fldesktop/greeter.ini). Call before init_app().
+void set_desktop_config_path(const std::string &path);
 // Sets a window icon from an icon theme name.
 void set_window_icon(Fl_Window *w, const char *icon_name);
 

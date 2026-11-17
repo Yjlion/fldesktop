@@ -6,9 +6,11 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <sys/stat.h>
 #include <thread>
 
 #include "fld/glib_bridge.h"
+#include "fld/ini.h"
 #include "fld/util.h"
 
 namespace fp {
@@ -330,6 +332,37 @@ void load_catalog(bool refresh, std::function<void(const Catalog &)> done, Progr
       if (ups) g_ptr_array_unref(ups);
       g_object_unref(inst);
     }
+    // installed runtimes and extensions (shown in their own list)
+    std::vector<App> runtimes;
+    for (const char *which : {"system", "user"}) {
+      GError *e = nullptr;
+      FlatpakInstallation *inst = open_installation(which, &e);
+      g_clear_error(&e);
+      if (!inst) continue;
+      GPtrArray *refs = flatpak_installation_list_installed_refs_by_kind(inst, FLATPAK_REF_KIND_RUNTIME, nullptr, &e);
+      g_clear_error(&e);
+      for (guint i = 0; refs && i < refs->len; i++) {
+        FlatpakInstalledRef *r = FLATPAK_INSTALLED_REF(g_ptr_array_index(refs, i));
+        App a;
+        a.id = g2s(flatpak_ref_get_name(FLATPAK_REF(r)));
+        gchar *full = flatpak_ref_format_ref(FLATPAK_REF(r));
+        a.ref = g2s(full);
+        g_free(full);
+        a.runtime = true;
+        a.installed = true;
+        a.installation = which;
+        a.remote = g2s(flatpak_installed_ref_get_origin(r));
+        a.name = g2s(flatpak_installed_ref_get_appdata_name(r));
+        if (a.name.empty()) a.name = a.id;
+        a.version = g2s(flatpak_ref_get_branch(FLATPAK_REF(r)));
+        a.summary = g2s(flatpak_installed_ref_get_appdata_summary(r));
+        if (a.summary.empty()) a.summary = "Runtime " + a.ref;
+        a.installed_size = flatpak_installed_ref_get_installed_size(r);
+        runtimes.push_back(a);
+      }
+      if (refs) g_ptr_array_unref(refs);
+      g_object_unref(inst);
+    }
     g_main_context_pop_thread_default(ctx);
     g_main_context_unref(ctx);
     // merge: catalog data, installed state
@@ -348,6 +381,7 @@ void load_catalog(bool refresh, std::function<void(const Catalog &)> done, Progr
       if (a.icon.empty()) a.icon = kv.second.icon;
     }
     for (auto &kv : apps) cat.apps.push_back(kv.second);
+    for (auto &r : runtimes) cat.apps.push_back(r);
     std::sort(cat.apps.begin(), cat.apps.end(),
               [](const App &a, const App &b) { return fld::lower(a.name) < fld::lower(b.name); });
     fld::ui_call([done, cat] { done(cat); });
@@ -488,6 +522,117 @@ std::string metadata(const App &app) {
   }
   g_clear_error(&e);
   return out;
+}
+
+namespace {
+
+struct InstalledRef {
+  std::string ref, installation, deploy, metadata;
+};
+
+std::vector<InstalledRef> all_installed_refs() {
+  std::vector<InstalledRef> out;
+  for (const char *which : {"system", "user"}) {
+    GError *e = nullptr;
+    FlatpakInstallation *inst = open_installation(which, &e);
+    g_clear_error(&e);
+    if (!inst) continue;
+    GPtrArray *refs = flatpak_installation_list_installed_refs(inst, nullptr, &e);
+    g_clear_error(&e);
+    for (guint i = 0; refs && i < refs->len; i++) {
+      FlatpakInstalledRef *r = FLATPAK_INSTALLED_REF(g_ptr_array_index(refs, i));
+      InstalledRef x;
+      gchar *full = flatpak_ref_format_ref(FLATPAK_REF(r));
+      x.ref = g2s(full);
+      g_free(full);
+      x.installation = which;
+      x.deploy = g2s(flatpak_installed_ref_get_deploy_dir(r));
+      GBytes *b = flatpak_installed_ref_load_metadata(r, nullptr, &e);
+      g_clear_error(&e);
+      if (b) {
+        gsize n = 0;
+        const char *d = (const char *)g_bytes_get_data(b, &n);
+        x.metadata.assign(d, n);
+        g_bytes_unref(b);
+      }
+      out.push_back(x);
+    }
+    if (refs) g_ptr_array_unref(refs);
+    g_object_unref(inst);
+  }
+  return out;
+}
+
+void list_files(const std::string &root, const std::string &rel, RefInfo &info, size_t max) {
+  std::vector<std::string> names = fld::list_dir(rel.empty() ? root : root + "/" + rel, true);
+  std::sort(names.begin(), names.end());
+  for (auto &n : names) {
+    if (info.files.size() >= max) {
+      info.files_truncated = true;
+      return;
+    }
+    std::string r = rel.empty() ? n : rel + "/" + n;
+    std::string full = root + "/" + r;
+    struct stat st;
+    bool dir = lstat(full.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+    info.files.push_back(dir ? r + "/" : r);
+    if (dir) list_files(root, r, info, max);
+  }
+}
+
+}  // namespace
+
+void ref_info(const App &app, std::function<void(const RefInfo &)> done) {
+  std::string ref = app.ref, installation = app.installation.empty() ? "system" : app.installation;
+  run_bg([ref, installation, done] {
+    RefInfo info;
+    auto refs = all_installed_refs();
+    const InstalledRef *self = nullptr;
+    for (auto &r : refs)
+      if (r.ref == ref && r.installation == installation) self = &r;
+    if (!self)
+      for (auto &r : refs)
+        if (r.ref == ref) self = &r;
+    if (!self) {
+      info.error = "It is not installed.";
+      fld::ui_call([done, info] { done(info); });
+      return;
+    }
+    auto installed = [&](const std::string &x) {
+      for (auto &r : refs)
+        if (r.ref == x) return true;
+      return false;
+    };
+    auto add_dep = [&](const std::string &x) {
+      if (x.empty()) return;
+      std::string label = installed(x) ? x : x + " (not installed)";
+      if (std::find(info.depends.begin(), info.depends.end(), label) == info.depends.end()) info.depends.push_back(label);
+    };
+    add_dep(metadata_runtime(self->metadata));
+    add_dep(metadata_extension_of(self->metadata));
+    for (auto &r : refs) {
+      if (r.ref == ref) continue;
+      if (metadata_runtime(r.metadata) == ref || metadata_extension_of(r.metadata) == ref)
+        if (std::find(info.used_by.begin(), info.used_by.end(), r.ref) == info.used_by.end()) info.used_by.push_back(r.ref);
+    }
+    std::sort(info.used_by.begin(), info.used_by.end());
+    if (!self->deploy.empty()) list_files(self->deploy + "/files", "", info, 20000);
+    fld::ui_call([done, info] { done(info); });
+  });
+}
+
+std::string metadata_runtime(const std::string &keyfile) {
+  fld::Ini ini;
+  ini.parse(keyfile);
+  std::string r = fld::trim(ini.get("Application", "runtime", ""));
+  if (r.empty()) return "";
+  return fld::starts_with(r, "runtime/") ? r : "runtime/" + r;
+}
+
+std::string metadata_extension_of(const std::string &keyfile) {
+  fld::Ini ini;
+  ini.parse(keyfile);
+  return fld::trim(ini.get("ExtensionOf", "ref", ""));
 }
 
 std::string overrides_path(const std::string &app_id) {

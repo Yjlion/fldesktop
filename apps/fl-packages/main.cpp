@@ -14,6 +14,7 @@
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Progress.H>
 #include <FL/Fl_Return_Button.H>
+#include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Text_Display.H>
 #include <FL/fl_ask.H>
@@ -226,6 +227,19 @@ public:
   Fl_Text_Buffer *sw_buf;
   Fl_Button *sw_action;
   std::vector<pk::Package> results;
+  // details tabs of the selected package
+  Fl_Tabs *info_tabs;
+  Fl_Group *tab_details, *tab_files, *tab_deps, *tab_rdeps;
+  Fl_Input *files_filter;
+  Fl_Browser *files_list;
+  Fl_Hold_Browser *deps_list, *rdeps_list;
+  Fl_Check_Button *deps_recursive, *rdeps_recursive;
+  pk::Package info_pkg;          // the package the tabs show
+  std::vector<std::string> files;
+  std::vector<pk::Package> deps, rdeps;
+  bool files_loaded = false, deps_loaded = false, rdeps_loaded = false;
+  pk::Job info_job;
+  std::string pending_select;    // select this name when results arrive
   // repositories
   Fl_Group *repo_tab;
   Fl_Check_Browser *repo_list;
@@ -287,14 +301,57 @@ public:
     sw_list->column_widths(widths);
     sw_list->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->result_selected(); }, this);
     int dy = 84 + (H - 120) / 2 + 48;
-    sw_detail = new Fl_Text_Display(208, dy, W - 228 - 140, H - 36 - dy);
-    sw_buf = new Fl_Text_Buffer;
-    sw_detail->buffer(sw_buf);
-    sw_detail->wrap_mode(Fl_Text_Display::WRAP_AT_BOUNDS, 0);
+    {
+      int tx = 208, tw = W - 228 - 140, th = H - 36 - dy;
+      info_tabs = new Fl_Tabs(tx, dy, tw, th);
+      int cy = dy + 26, ch = th - 26;
+      tab_details = new Fl_Group(tx, cy, tw, ch, "Details");
+      sw_detail = new Fl_Text_Display(tx, cy, tw, ch);
+      sw_buf = new Fl_Text_Buffer;
+      sw_detail->buffer(sw_buf);
+      sw_detail->wrap_mode(Fl_Text_Display::WRAP_AT_BOUNDS, 0);
+      tab_details->resizable(sw_detail);
+      tab_details->end();
+      tab_files = new Fl_Group(tx, cy, tw, ch, "Files");
+      files_filter = new Fl_Input(tx + 4, cy + 4, tw - 8, 26);
+      files_filter->tooltip("Show only the files whose path contains this text");
+      files_filter->when(FL_WHEN_CHANGED);
+      files_filter->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->show_files(); }, this);
+      files_list = new Fl_Browser(tx, cy + 34, tw, ch - 34);
+      files_list->type(FL_HOLD_BROWSER);
+      files_list->format_char(0);
+      files_list->textsize(12);
+      files_list->textfont(FL_COURIER);
+      files_list->tooltip("Double-click to open the folder");
+      files_list->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->file_clicked(); }, this);
+      tab_files->resizable(files_list);
+      tab_files->end();
+      auto dep_tab = [&](const char *label, Fl_Hold_Browser *&list, Fl_Check_Button *&rec) {
+        Fl_Group *g = new Fl_Group(tx, cy, tw, ch, label);
+        rec = new Fl_Check_Button(tx + 4, cy + 4, tw - 8, 26, "Include indirect ones");
+        rec->callback([](Fl_Widget *w, void *d) { ((MainWindow *)d)->reload_deps(w); }, this);
+        list = new Fl_Hold_Browser(tx, cy + 34, tw, ch - 34);
+        list->format_char(0);
+        list->column_char('\t');
+        list->textsize(13);
+        static int dw[] = {200, 150, 0};
+        list->column_widths(dw);
+        list->tooltip("Double-click to show the package");
+        list->callback([](Fl_Widget *w, void *d) { ((MainWindow *)d)->dep_clicked((Fl_Hold_Browser *)w); }, this);
+        g->resizable(list);
+        g->end();
+        return g;
+      };
+      tab_deps = dep_tab("Depends on", deps_list, deps_recursive);
+      tab_rdeps = dep_tab("Required by", rdeps_list, rdeps_recursive);
+      info_tabs->end();
+      info_tabs->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->info_tab_changed(); }, this);
+      info_tabs->resizable(tab_details);
+    }
     sw_action = new Fl_Button(W - 152, dy, 132, 30, "Install");
     sw_action->deactivate();
     sw_action->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->install_or_remove(); }, this);
-    sw_tab->resizable(sw_detail);
+    sw_tab->resizable(info_tabs);
     sw_tab->end();
     // --- repositories
     repo_tab = new Fl_Group(8, 38, W - 16, H - 70, "Repositories");
@@ -434,6 +491,113 @@ public:
     set_status(e ? e.text : std::to_string(results.size()) + " packages");
     sw_buf->text("");
     sw_action->deactivate();
+    clear_info();
+    if (!pending_select.empty()) {
+      for (size_t i = 0; i < results.size(); i++)
+        if (results[i].name == pending_select) {
+          sw_list->value((int)i + 1);
+          sw_list->middleline((int)i + 1);
+          result_selected();
+          break;
+        }
+      pending_select.clear();
+    }
+  }
+
+  // ---- files and dependencies of the selected package ----
+
+  void clear_info() {
+    info_job.cancel();
+    info_pkg = pk::Package();
+    files.clear();
+    deps.clear();
+    rdeps.clear();
+    files_loaded = deps_loaded = rdeps_loaded = false;
+    files_list->clear();
+    deps_list->clear();
+    rdeps_list->clear();
+  }
+
+  void info_tab_changed() {
+    if (info_pkg.id.empty()) return;
+    Fl_Widget *t = info_tabs->value();
+    if (t == tab_files && !files_loaded) load_files();
+    else if (t == tab_deps && !deps_loaded) load_deps(false);
+    else if (t == tab_rdeps && !rdeps_loaded) load_deps(true);
+  }
+
+  void load_files() {
+    files_loaded = true;
+    files_list->clear();
+    files_list->add("Loading…");
+    std::string id = info_pkg.id;
+    info_job = pk::get_files({id}, [this, id](const std::vector<std::string> &f, const pk::Error &e) {
+      if (id != info_pkg.id) return;
+      files = f;
+      show_files();
+      if (e) {
+        files_list->clear();
+        files_list->add(e.text.c_str());
+      } else if (files.empty()) {
+        files_list->add(info_pkg.installed() ? "(no files)" : "The file list of a package that is not installed is not available here.");
+      }
+    });
+  }
+
+  void show_files() {
+    files_list->clear();
+    for (auto &f : pk::filter_files(files, files_filter->value())) files_list->add(f.c_str());
+  }
+
+  void file_clicked() {
+    if (Fl::event_clicks() == 0) return;  // a double click
+    int i = files_list->value();
+    if (i <= 0) return;
+    std::string f = files_list->text(i);
+    if (f.empty() || f[0] != '/') return;
+    std::string dir = fld::is_dir(f) ? f : fld::dirname(f);
+    fld::spawn({"xdg-open", dir});
+  }
+
+  void load_deps(bool reverse) {
+    Fl_Hold_Browser *list = reverse ? rdeps_list : deps_list;
+    (reverse ? rdeps_loaded : deps_loaded) = true;
+    list->clear();
+    list->add("Loading…");
+    std::string id = info_pkg.id;
+    bool rec = (reverse ? rdeps_recursive : deps_recursive)->value();
+    auto done = [this, id, reverse, list](const std::vector<pk::Package> &l, const pk::Error &e) {
+      if (id != info_pkg.id) return;
+      auto u = pk::unique_by_name(l);
+      // a package does not depend on itself
+      u.erase(std::remove_if(u.begin(), u.end(), [&](const pk::Package &p) { return p.name == info_pkg.name; }),
+              u.end());
+      (reverse ? rdeps : deps) = u;
+      list->clear();
+      for (auto &p : u)
+        list->add((p.name + "\t" + p.version + "\t" + (p.installed() ? "installed" : p.repo)).c_str());
+      if (e) list->add(e.text.c_str());
+      else if (u.empty()) list->add(reverse ? "No installed package needs it." : "It needs no other package.");
+    };
+    info_job = reverse ? pk::required_by({id}, rec, done) : pk::depends_on({id}, rec, done);
+  }
+
+  void reload_deps(Fl_Widget *w) {
+    if (info_pkg.id.empty()) return;
+    load_deps(w == rdeps_recursive);
+  }
+
+  void dep_clicked(Fl_Hold_Browser *list) {
+    if (Fl::event_clicks() == 0) return;
+    auto &v = list == deps_list ? deps : rdeps;
+    int i = list->value() - 1;
+    if (i < 0 || i >= (int)v.size()) return;
+    // show that package: search for its name and select it
+    pending_select = v[i].name;
+    sw_search->value(v[i].name.c_str());
+    sw_where->value(0);
+    sw_show->value(0);
+    do_search();
   }
 
   void do_search() {
@@ -463,6 +627,9 @@ public:
     int i = sw_list->value() - 1;
     if (i < 0 || i >= (int)results.size()) return;
     const pk::Package p = results[i];
+    clear_info();
+    info_pkg = p;
+    info_tab_changed();  // a files / dependencies tab that is open loads now
     sw_action->label(p.installed() ? "Remove" : "Install");
     sw_action->activate();
     sw_buf->text((p.name + " " + p.version + "\n" + p.summary + "\n\nLoading…").c_str());
@@ -654,18 +821,21 @@ int check_updates_daemon(bool now) {
 
 int main(int argc, char **argv) {
   bool check = false, now = false, updates_first = false;
-  std::string search;
+  std::string search, show, show_tab;
   std::vector<std::string> files;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-packages [--updates | --search TERM | FILE... | --check-updates [--now]]\n"
+      printf("Usage: fl-packages [--updates | --search TERM | --show NAME [--tab files|depends|required-by] |\n"
+             "                   FILE... | --check-updates [--now]]\n"
              "Installs, removes and updates software through PackageKit.\n");
       return 0;
     } else if (a == "--check-updates") check = true;
     else if (a == "--now") now = true;
     else if (a == "--updates") updates_first = true;
     else if (a == "--search" && i + 1 < argc) search = argv[++i];
+    else if (a == "--show" && i + 1 < argc) show = argv[++i];
+    else if (a == "--tab" && i + 1 < argc) show_tab = argv[++i];
     else if (fld::starts_with(a, "file://")) files.push_back(fld::uri_decode(a.substr(7)));
     else files.push_back(fld::abs_path(a));
   }
@@ -692,7 +862,16 @@ int main(int argc, char **argv) {
   w->show(); // not show(argc, argv): it resets the theme colors
   w->set_status(pk::backend_name());
   w->check_updates(false);
-  if (!search.empty()) {
+  if (!show.empty()) {
+    // a package's details: search its name and select it
+    w->tabs->value(w->sw_tab);
+    w->pending_select = show;
+    w->sw_search->value(show.c_str());
+    w->do_search();
+    if (show_tab == "files") w->info_tabs->value(w->tab_files);
+    else if (show_tab == "depends") w->info_tabs->value(w->tab_deps);
+    else if (show_tab == "required-by") w->info_tabs->value(w->tab_rdeps);
+  } else if (!search.empty()) {
     w->tabs->value(w->sw_tab);
     w->sw_search->value(search.c_str());
     w->do_search();

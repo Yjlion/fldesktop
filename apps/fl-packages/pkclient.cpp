@@ -294,6 +294,50 @@ Job get_details(const std::vector<std::string> &ids,
              });
 }
 
+Job get_files(const std::vector<std::string> &ids,
+              std::function<void(const std::vector<std::string> &, const Error &)> done) {
+  return run(nullptr,
+             [done](PkResults *r, const Error &e) {
+               std::vector<std::string> out;
+               if (r) {
+                 GPtrArray *arr = pk_results_get_files_array(r);
+                 for (guint i = 0; i < arr->len; i++) {
+                   gchar **files = pk_files_get_files(PK_FILES(g_ptr_array_index(arr, i)));
+                   for (gchar **f = files; f && *f; f++) out.push_back(*f);
+                 }
+                 g_ptr_array_unref(arr);
+               }
+               std::sort(out.begin(), out.end());
+               out.erase(std::unique(out.begin(), out.end()), out.end());
+               fld::ui_call([done, out, e] { done(out, e); });
+             },
+             [ids](Call *c) {
+               gchar **v = strv_of(ids);
+               pk_client_get_files_async(c->client, v, c->job->cancel, progress_cb, c, finished_cb, c);
+               g_strfreev(v);
+             });
+}
+
+Job depends_on(const std::vector<std::string> &ids, bool recursive,
+               std::function<void(const std::vector<Package> &, const Error &)> done) {
+  return run(nullptr, packages_done(done), [ids, recursive](Call *c) {
+    gchar **v = strv_of(ids);
+    pk_client_depends_on_async(c->client, filter_for(-1), v, recursive, c->job->cancel, progress_cb, c, finished_cb, c);
+    g_strfreev(v);
+  });
+}
+
+Job required_by(const std::vector<std::string> &ids, bool recursive,
+                std::function<void(const std::vector<Package> &, const Error &)> done) {
+  return run(nullptr, packages_done(done), [ids, recursive](Call *c) {
+    gchar **v = strv_of(ids);
+    // what needs an installed package: only installed packages matter
+    PkBitfield f = pk_bitfield_value(PK_FILTER_ENUM_INSTALLED);
+    pk_client_required_by_async(c->client, f, v, recursive, c->job->cancel, progress_cb, c, finished_cb, c);
+    g_strfreev(v);
+  });
+}
+
 Job get_update_detail(const std::vector<std::string> &ids,
                       std::function<void(const std::vector<UpdateDetail> &, const Error &)> done) {
   return run(nullptr,
@@ -563,6 +607,26 @@ Package parse_id(const std::string &id) {
   size_t c = p.repo.find(':');
   if (c != std::string::npos) p.repo = p.repo.substr(c + 1);
   return p;
+}
+
+std::vector<std::string> filter_files(const std::vector<std::string> &files, const std::string &text) {
+  if (text.empty()) return files;
+  std::string t = fld::lower(text);
+  std::vector<std::string> out;
+  for (auto &f : files)
+    if (fld::lower(f).find(t) != std::string::npos) out.push_back(f);
+  return out;
+}
+
+std::vector<Package> unique_by_name(const std::vector<Package> &list) {
+  std::vector<Package> out;
+  for (auto &p : list) {
+    auto it = std::find_if(out.begin(), out.end(), [&](const Package &q) { return q.name == p.name; });
+    if (it == out.end()) out.push_back(p);
+    else if (p.installed() && !it->installed()) *it = p;
+  }
+  std::sort(out.begin(), out.end(), [](const Package &a, const Package &b) { return a.name < b.name; });
+  return out;
 }
 
 std::vector<std::string> history_lines(const std::string &data) {

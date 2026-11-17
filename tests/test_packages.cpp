@@ -33,5 +33,17 @@ int main() {
   e.text = "x";
   CHECK(e);
   CHECK(e.untrusted());
+
+  std::vector<std::string> files{"/usr/bin/bash", "/usr/share/man/man1/bash.1.gz", "/etc/bash.bashrc"};
+  CHECK_EQ(pk::filter_files(files, "").size(), 3u);
+  CHECK_EQ(pk::filter_files(files, "BIN").size(), 1u);
+  CHECK_EQ(pk::filter_files(files, "bash").size(), 3u);
+  std::vector<pk::Package> deps{pk::parse_id("zlib;1.3;x86_64;core"), pk::parse_id("glibc;2.40;x86_64;core"),
+                                pk::parse_id("zlib;1.2;x86_64;installed")};
+  deps[2].info = PK_INFO_ENUM_INSTALLED;
+  auto u = pk::unique_by_name(deps);
+  CHECK_EQ(u.size(), 2u);
+  CHECK_EQ(u[0].name, std::string("glibc"));
+  CHECK_EQ(u[1].version, std::string("1.2"));  // the installed one wins
   return test_result("packages");
 }

@@ -89,6 +89,14 @@ Job update(const std::vector<std::string> &ids, bool simulate, bool only_trusted
 // a local package file (.deb, .pkg.tar.zst)
 Job install_files(const std::vector<std::string> &paths, bool simulate, bool only_trusted,
                   std::function<void(const std::vector<Package> &, const Error &)> done, ProgressFn p = nullptr);
+// the files of (installed) packages, sorted
+Job get_files(const std::vector<std::string> &ids,
+              std::function<void(const std::vector<std::string> &, const Error &)> done);
+// what the packages need / what needs them (installed and available packages)
+Job depends_on(const std::vector<std::string> &ids, bool recursive,
+               std::function<void(const std::vector<Package> &, const Error &)> done);
+Job required_by(const std::vector<std::string> &ids, bool recursive,
+                std::function<void(const std::vector<Package> &, const Error &)> done);
 Job get_repos(std::function<void(const std::vector<Repo> &, const Error &)> done);
 Job set_repo_enabled(const std::string &id, bool on, std::function<void(const Error &)> done);
 Job get_history(unsigned max, std::function<void(const std::vector<PastTransaction> &, const Error &)> done);
@@ -103,6 +111,10 @@ std::vector<std::string> groups();       // PackageKit group ids offered for bro
 std::string group_text(const std::string &group);
 // splits "name;version;arch;data"
 Package parse_id(const std::string &id);
+// files containing `text` (case-insensitive); all when text is empty
+std::vector<std::string> filter_files(const std::vector<std::string> &files, const std::string &text);
+// one entry per package name (an installed one wins), sorted by name
+std::vector<Package> unique_by_name(const std::vector<Package> &list);
 // one line per change of a past transaction's data ("installing\tid\n...")
 std::vector<std::string> history_lines(const std::string &data);
 

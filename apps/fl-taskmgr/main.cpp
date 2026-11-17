@@ -286,7 +286,7 @@ public:
           fl_rectf(X, Y, W, H);
         }
         fl_color(sel ? pal.accent_fg : (r.p.state == 'Z' || r.p.state == 'T') ? pal.fg_dim : pal.fg);
-        fl_font(C == 0 ? FL_HELVETICA : FL_HELVETICA, 13);
+        fl_font(FL_HELVETICA, 13);
         std::string t = fld::escape_at(cell_text(r, C));
         Fl_Align al = C == 0 || C == 2 || C == 6 || C == 8 ? FL_ALIGN_LEFT : FL_ALIGN_RIGHT;
         fl_draw(t.c_str(), X + 6, Y, W - 12, H, al | FL_ALIGN_CLIP, nullptr, 0);

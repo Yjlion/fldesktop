@@ -253,10 +253,15 @@ int main(int argc, char **argv) {
       return 0;
     }
   }
-  fld::init_app("xdg-desktop-portal-fl", argc, argv);
+  // Own the bus name before FLTK opens the display: libdecor reads the cursor
+  // and colour scheme from org.freedesktop.portal.Desktop with a blocking
+  // call, and xdg-desktop-portal answers it only once it reached its backends
+  // (us). Asked for afterwards, the name came 25 s late (the D-Bus timeout)
+  // and xdg-desktop-portal had already fallen back to other backends.
   Fl::lock();
   fld::glib_start();
   portal::start_bus();
+  fld::init_app("xdg-desktop-portal-fl", argc, argv);
   portal::settings_watch();
   while (true) Fl::wait(1e20);
   return 0;

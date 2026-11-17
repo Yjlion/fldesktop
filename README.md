@@ -129,8 +129,18 @@ adds packages to it (needs the `FLD_REPO_GPG_KEY` secret in CI).
   `/usr/share/wayland-sessions`).
 * From a text console: run `fl-session`.
 * Nested inside another Wayland session for testing: run `fl-wm`.
-* With greetd: install `fldesktop-greeter` and set `/etc/greetd/config.toml` to
-  `command = "cage -s -d -- fl-greet"` (see `/usr/share/fldesktop/config.toml`).
+* With greetd: install `fldesktop-greeter`, then replace greetd's default text
+  login (`agreety`, which only starts a shell) with fl-greet and restart greetd:
+
+  ```sh
+  sudo cp /etc/greetd/config.toml /etc/greetd/config.toml.orig
+  sudo cp /usr/share/fldesktop/config.toml /etc/greetd/config.toml
+  sudo systemctl enable greetd && sudo systemctl restart greetd
+  ```
+
+  The shipped file has the right greeter user and VT for the distribution
+  (Arch: `greeter`, VT 1; Debian: `_greetd`, VT 7); elsewhere set
+  `command = "cage -s -d -- fl-greet"` and keep the `user` greetd came with.
   `fl-greet --demo` shows the greeter without greetd. Its **Keyboard** button
   shows an on-screen keyboard; `Keyboard=always` in `/etc/fldesktop/greeter.ini`
   shows it from the start (touch-only devices), `Keyboard=never` removes it.

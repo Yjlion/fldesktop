@@ -61,6 +61,12 @@ if(FLD_BUILD_WM AND TARGET fl-notifyd AND TARGET xdg-desktop-portal-fl)
   set_tests_properties(portal-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
 endif()
 
+if(FLD_BUILD_WM AND TARGET xdg-desktop-portal-fl)
+  add_test(NAME portal-activation COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/portal-activation.sh
+           ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${CMAKE_SOURCE_DIR})
+  set_tests_properties(portal-activation PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
+endif()
+
 if(FLD_BUILD_WM AND TARGET fl-notifyd)
   add_test(NAME notify-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/notify-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   set_tests_properties(notify-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)

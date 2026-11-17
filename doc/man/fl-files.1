@@ -4,9 +4,39 @@ fl-files \- file manager
 .SH SYNOPSIS
 \fBfl-files\fR [\fIFOLDER\fR|\fBtrash:///\fR]
 .SH DESCRIPTION
-Browse and manage files: icon and list
-views, thumbnails, copy/move in the background, the XDG trash, open with, properties and
-permissions. Alt+arrows navigate, Ctrl+L edits the location, Ctrl+H toggles hidden files,
-F2 renames, Delete moves to the trash, Shift+Delete deletes.
+Browse and manage files: thumbnails, copy/move in the background, the XDG trash, open with,
+properties and permissions, bookmarks, a folder tree and file search.
+.SS Views
+\fBIcons\fR (Ctrl+1), \fBCompact\fR (Ctrl+2, small icons in columns) and \fBDetails\fR (Ctrl+3, a
+table). Ctrl+plus/minus, Ctrl+mouse wheel and Ctrl+0 change the icon size. In the Details view,
+click a column header to sort, drag a header border to resize a column, and right-click the
+header to choose columns: Size, Type, Modified, Permissions and Owner. By default each folder
+remembers its own view, sort order and icon size.
+.PP
+F9 shows a folder tree instead of the places list. Ctrl+D bookmarks the current folder;
+right-click a bookmark to rename or remove it (bookmarks are shared with GTK applications).
+.SS Finding files
+Ctrl+Shift+F (or F3, or the search button) opens the find bar. It searches the current folder and
+its subfolders by name (a part of the name, or a pattern with \fB*\fR and \fB?\fR), by text inside
+files, by type (files or folders), by modification date and by size; hidden items optionally.
+The \fB...\fR menu adds case-sensitive matching, regular expressions and following symbolic
+links. Results appear as they are found and can be opened, copied, renamed and deleted like
+any other files; the context menu offers \fBOpen Containing Folder\fR. Escape stops a running
+search, then closes the find bar.
+.SS Keys
+Alt+arrows navigate, Ctrl+L edits the location, Ctrl+F filters the current folder, Ctrl+H toggles
+hidden files, F2 renames, Delete moves to the trash, Shift+Delete deletes, F5 reloads,
+Ctrl+comma opens the preferences.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/files.ini\fR
+Preferences: default view, date format, single-click opening, trash confirmation, thumbnails,
+columns.
+.TP
+\fI~/.config/fldesktop/files-folders.ini\fR
+Remembered views of individual folders.
+.TP
+\fI~/.config/gtk-3.0/bookmarks\fR
+Bookmarks.
 .SH SEE ALSO
-\fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)
+\fBfl-wm\fR(1), \fBfl-term\fR(1), \fBfl-video\fR(1)

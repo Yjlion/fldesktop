@@ -132,7 +132,7 @@ _app() {
     usr/share/icons/hicolor/scalable/apps/fl-$1.svg usr/share/man/man1/fl-$1.1
 }
 
-package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); _app term; }
+package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); optdepends=("openssh: SSH connections" "sshfs: browse remote files"); _app term; }
 package_fldesktop-taskmgr() { pkgdesc="fldesktop task manager"; depends=(fltk); optdepends=("polkit: manage other users' processes"); _app taskmgr; }
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }

@@ -2,12 +2,30 @@
 .SH NAME
 fl-term \- terminal emulator
 .SH SYNOPSIS
-\fBfl-term\fR [\fB\-d\fR \fIDIR\fR] [\fB\-T\fR \fITITLE\fR] [\fB\-g\fR \fICOLS\fRx\fIROWS\fR] [\fB\-\-hold\fR] [\fB\-e\fR \fICOMMAND\fR...]
+\fBfl-term\fR [\fB\-d\fR \fIDIR\fR] [\fB\-T\fR \fITITLE\fR] [\fB\-g\fR \fICOLS\fRx\fIROWS\fR] [\fB\-\-hold\fR] [\fB\-\-scheme\fR \fINAME\fR] [\fB\-e\fR \fICOMMAND\fR...]
+.br
+\fBfl-term\fR \fB\-\-ssh\fR \fIPROFILE\fR|\fIUSER\fR@\fIHOST\fR[:\fIPORT\fR]
 .SH DESCRIPTION
 A terminal emulator using libvterm. Ctrl+Shift+C/V copy and paste, Shift+PageUp/Down
-scroll, Ctrl+plus/minus/0 change the font size, Ctrl+Shift+N opens a new window.
-Settings: \fI~/.config/fldesktop/term.ini\fR [Terminal] ColorScheme (dark, light),
+scroll, Ctrl+plus/minus/0 change the font size, Ctrl+Shift+N opens a new window,
+Ctrl+Shift+W closes it. The context menu (right-click) has the same actions.
+Settings: \fI~/.config/fldesktop/term.ini\fR [Terminal] ColorScheme (dark, light, red, green, blue),
 FontSize, Scrollback.
+.SS SSH
+The \fBSSH\fR submenu connects to remote hosts with \fBssh\fR(1) in a new window.
+\fBConnect...\fR (Ctrl+Shift+S) asks for the host, user, port, identity file, jump host (\fB\-J\fR),
+port forwards (\fBL\fR \fIport:host:port\fR, \fBR\fR \fIport:host:port\fR, \fBD\fR \fIport\fR; separated by
+semicolons), extra ssh options, a remote command and a color scheme to tell the session apart;
+it can save the connection under a name. Saved connections and the concrete \fBHost\fR entries of
+\fI~/.ssh/config\fR (wildcards skipped, \fBInclude\fR followed) are listed in the submenu for one-click
+connecting; \fBManage Connections...\fR edits and deletes saved ones.
+Passwords and passphrases are typed in the terminal and never stored; a failed connection keeps
+the window open so the error stays readable.
+.PP
+\fBCopy Public Key to Host...\fR runs \fBssh-copy-id\fR(1), \fBCreate SSH Key...\fR runs
+\fBssh-keygen\fR(1) for an Ed25519 key. When \fBsshfs\fR(1) is installed, \fBBrowse Files\fR mounts
+a host under \fI$XDG_RUNTIME_DIR/fl-sshfs/\fR and opens it in \fBfl-files\fR(1); the \fBUnmount\fR
+submenu lists those mounts.
 .SH OPTIONS
 .TP
 \fB\-e COMMAND...\fR
@@ -24,5 +42,15 @@ Initial size.
 .TP
 \fB\-\-hold\fR
 Keep the window open after the command exits.
+.TP
+\fB\-\-ssh PROFILE\fR
+Connect to a saved connection, an \fI~/.ssh/config\fR host, or \fIuser\fR@\fIhost\fR[:\fIport\fR].
+.TP
+\fB\-\-scheme NAME\fR
+Color scheme for this window.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/ssh.ini\fR
+Saved SSH connections, one [Profile \fIname\fR] section each.
 .SH SEE ALSO
-\fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)
+\fBssh\fR(1), \fBssh_config\fR(5), \fBfl-wm\fR(1), \fBfl-files\fR(1)

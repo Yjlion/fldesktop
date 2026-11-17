@@ -97,9 +97,13 @@ Description: FLTK greeter for greetd
 Package: fldesktop-term
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: openssh-client
+Suggests: sshfs
 Description: fldesktop terminal emulator
  fl-term is a terminal emulator built with FLTK and libvterm, with
  scrollback, 256 and true colour support, mouse reporting and bracketed paste.
+ It keeps a list of SSH connections (and reads ~/.ssh/config) for
+ one-click remote sessions, and can browse remote files with sshfs.
 
 Package: fldesktop-calc
 Architecture: any

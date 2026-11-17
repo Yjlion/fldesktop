@@ -1,0 +1,5 @@
+add_library(fl-webcam-util STATIC cam_util.cpp)
+target_include_directories(fl-webcam-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(fl-webcam main.cpp camera.cpp)
+target_link_libraries(fl-webcam PRIVATE fl-webcam-util fld-gst fld)
+install(TARGETS fl-webcam RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

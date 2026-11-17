@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -88,7 +88,8 @@ package_fldesktop() {
               'fldesktop-packages: software updates through PackageKit'
               'fldesktop-flatpak: Flatpak app store'
               'fldesktop-firewall: firewall settings'
-              'fldesktop-video: video player')
+              'fldesktop-video: video player'
+              'fldesktop-webcam: camera app')
   arch=(any)
 }
 
@@ -160,6 +161,13 @@ _app() {
 
 package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); optdepends=("openssh: SSH connections" "sshfs: browse remote files"); _app term; }
 package_fldesktop-taskmgr() { pkgdesc="fldesktop task manager"; depends=(fltk); optdepends=("polkit: manage other users' processes"); _app taskmgr; }
+package_fldesktop-webcam() {
+  pkgdesc="fldesktop camera app"
+  depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
+  optdepends=("gst-plugin-pipewire: cameras and microphones through PipeWire")
+  _app webcam
+}
+
 package_fldesktop-video() {
   pkgdesc="fldesktop video player"
   depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)

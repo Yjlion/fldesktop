@@ -151,7 +151,7 @@ APPS_MONO = {
     "fl-osk": "input-keyboard", "fl-packages": "system-software-install", "fl-printers": "printer",
     "fl-settings": "preferences-system", "fl-term": "utilities-terminal", "fl-view": "image-viewer",
     "fldesktop": "start-here", "fl-taskmgr": "utilities-system-monitor", "fl-video": "multimedia-video-player",
-    "fl-lock": "system-lock-screen",
+    "fl-lock": "system-lock-screen", "fl-webcam": "camera-web", "fl-archive": "application-x-archive",
 }
 
 

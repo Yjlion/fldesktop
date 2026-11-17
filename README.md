@@ -17,6 +17,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
 | **fl-video** | Video and audio player on GStreamer: playlists, subtitles, track selection, speed, screenshots, resume |
+| **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor |
@@ -84,7 +85,7 @@ tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
 polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
 page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
 packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak),
-GStreamer with its base plugins (fl-video), PAM (fl-lock);
+GStreamer with its base plugins (fl-video, fl-webcam), PAM (fl-lock);
 gio is used for notifications, the portal, Bluetooth and the firewall. Without
 one of them the parts that need it are left out.
 
@@ -250,6 +251,7 @@ dialogs.
 | `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth`, `KeyPreview=true\|false` |
 | `~/.config/fldesktop/charmap.ini` | font, size, recently used characters |
 | `~/.config/fldesktop/term.ini` | `[Terminal] ColorScheme=dark\|light`, `FontSize`, `Scrollback`, `Opacity=0.2..1`, `ShowMenuBar`, `ShowTabs=auto\|always\|never` (Edit > Preferences) |
+| `~/.config/fldesktop/webcam.ini` | `[Webcam] Camera`, `Resolution`, `Mode=photo\|video`, `Mirror`, `RecordSound`, `Timer=0\|3\|10`, `PhotoFormat=jpg\|png` |
 | `~/.config/fldesktop/notifications.ini` | `[Notifications] DoNotDisturb`, `Timeout`, `HistorySize`, `Muted` |
 | `~/.config/fldesktop/updates.ini` | `[Updates] Check=hourly\|daily\|weekly\|never`, `Notify` |
 | `/etc/fldesktop/greeter.ini` | `[Greeter] Background`, `MinUid`, `HideUsers`, `RememberUser`, `Clock24`, `ShowPowerButtons`, `Keyboard=button\|always\|never`, `KeyboardLayout`; `[Appearance] Theme`, `Accent`, `FontSize`; `[General] IconTheme`; `[Cursor] Theme`, `Size` |

@@ -36,7 +36,7 @@ option(FLD_BUILD_FLATPAK  "Build fl-flatpak (libflatpak, appstream)"       ON)
 option(FLD_BUILD_FIREWALL "Build fl-firewall (firewalld)"                  ON)
 option(FLD_BUILD_TASKMGR  "Build the fl-taskmgr task manager"             ON)
 option(FLD_BUILD_VIDEO    "Build the fl-video video player (needs GStreamer)" ON)
-
+option(FLD_BUILD_WEBCAM   "Build the fl-webcam camera app (needs GStreamer)" ON)
 option(FLD_BUILD_LOCK     "Build the fl-lock screen locker (needs PAM)"    ON)
 
 find_package(PkgConfig REQUIRED)
@@ -49,7 +49,7 @@ add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO)
+foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO WEBCAM)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -95,7 +95,7 @@ if(FLD_NEED_FLTK)
   if(FLD_BUILD_FIREWALL OR FLD_BUILD_SETTINGS)
     add_subdirectory(common/firewall)
   endif()
-  if(FLD_BUILD_VIDEO)
+  if(FLD_BUILD_VIDEO OR FLD_BUILD_WEBCAM)
     add_subdirectory(common/gst)
   endif()
 endif()
@@ -138,7 +138,7 @@ foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD
   endif()
 endforeach()
 
-foreach(app VIDEO)
+foreach(app VIDEO WEBCAM)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     if(TARGET fld-gst)

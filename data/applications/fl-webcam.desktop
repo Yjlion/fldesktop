@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Webcam
+GenericName=Camera
+Comment=Take photos and record videos with a camera
+Exec=fl-webcam
+Icon=fl-webcam
+Terminal=false
+Categories=AudioVideo;Video;Recorder;
+Keywords=camera;webcam;photo;picture;video;record;selfie;
+StartupWMClass=fl-webcam

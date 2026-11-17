@@ -60,7 +60,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-lock (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
-            fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
+            fldesktop-webcam, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
@@ -162,6 +162,16 @@ Description: fldesktop video player
  fl-video plays video and audio files, playlists and network streams with
  GStreamer: subtitles, audio and subtitle track selection, playback speed,
  screenshots, full screen and resuming where playback stopped.
+
+Package: fldesktop-webcam
+Architecture: any
+Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, ${shlibs:Depends}, ${misc:Depends}
+Recommends: gstreamer1.0-pipewire
+Description: fldesktop camera app
+ fl-webcam shows a live preview of a webcam and takes photos (JPEG or PNG)
+ or records videos with sound (WebM), with a self-timer, a choice of camera
+ and resolution, and a mirrored preview. Cameras are found through
+ Video4Linux and PipeWire.
 
 Package: fldesktop-view
 Architecture: any

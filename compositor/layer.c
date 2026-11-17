@@ -41,6 +41,7 @@ void layers_arrange(struct flwm_output *output) {
 
 static void focus_layer(struct flwm_layer_surface *ls) {
 	struct flwm_server *server = ls->server;
+	if (server->locked) return; /* the lock client keeps the keyboard */
 	struct wlr_keyboard *kb = wlr_seat_get_keyboard(server->seat);
 	server->focused_layer = ls;
 	struct wlr_surface *s = ls->layer_surface->surface;

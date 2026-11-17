@@ -14,8 +14,6 @@
 #include <wlr/types/wlr_export_dmabuf_v1.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
-#include <wlr/types/wlr_idle_inhibit_v1.h>
-#include <wlr/types/wlr_idle_notify_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_presentation_time.h>
@@ -58,6 +56,10 @@ static int handle_signal(int sig, void *data) {
 	struct flwm_server *server = data;
 	if (sig == SIGHUP) {
 		input_run_action(server, FLWM_ACTION_RELOAD, NULL);
+		return 0;
+	}
+	if (sig == SIGUSR1) {
+		lock_request(server);
 		return 0;
 	}
 	wl_display_terminate(server->wl_display);
@@ -186,8 +188,6 @@ int main(int argc, char *argv[]) {
 	wlr_gamma_control_manager_v1_create(server.wl_display);
 	wlr_relative_pointer_manager_v1_create(server.wl_display);
 	wlr_pointer_constraints_v1_create(server.wl_display);
-	wlr_idle_inhibit_v1_create(server.wl_display);
-	wlr_idle_notifier_v1_create(server.wl_display);
 	/* KDE's protocol, used by some toolkits to ask for server side decorations */
 	struct wlr_server_decoration_manager *sdm = wlr_server_decoration_manager_create(server.wl_display);
 	wlr_server_decoration_manager_set_default_mode(sdm, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
@@ -203,6 +203,7 @@ int main(int argc, char *argv[]) {
 	server.layer_top = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_overlay = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_popups = wlr_scene_tree_create(&server.scene->tree);
+	lock_init(&server); /* its layer goes above all the others */
 
 	output_init(&server);
 	view_init(&server);
@@ -225,6 +226,7 @@ int main(int argc, char *argv[]) {
 	struct wl_event_source *sig_int = wl_event_loop_add_signal(server.event_loop, SIGINT, handle_signal, &server);
 	struct wl_event_source *sig_term = wl_event_loop_add_signal(server.event_loop, SIGTERM, handle_signal, &server);
 	struct wl_event_source *sig_hup = wl_event_loop_add_signal(server.event_loop, SIGHUP, handle_signal, &server);
+	struct wl_event_source *sig_usr1 = wl_event_loop_add_signal(server.event_loop, SIGUSR1, handle_signal, &server);
 
 	/* export the session to D-Bus / systemd activated services when available */
 	flwm_spawn(&server, "command -v dbus-update-activation-environment >/dev/null && "
@@ -240,6 +242,8 @@ int main(int argc, char *argv[]) {
 	wl_event_source_remove(sig_int);
 	wl_event_source_remove(sig_term);
 	wl_event_source_remove(sig_hup);
+	wl_event_source_remove(sig_usr1);
+	lock_finish(&server);
 	wl_display_destroy_clients(server.wl_display);
 
 	/* wlroots asserts that no listeners remain when objects are destroyed */

@@ -80,7 +80,7 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 		{"fullscreen", FLWM_ACTION_FULLSCREEN}, {"cycle", FLWM_ACTION_CYCLE},
 		{"cycle-back", FLWM_ACTION_CYCLE_BACK}, {"snap-left", FLWM_ACTION_SNAP_LEFT},
 		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"launcher", FLWM_ACTION_LAUNCHER},
-		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD},
+		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
 		{"show-desktop", FLWM_ACTION_SHOW_DESKTOP},
 	};
 	enum flwm_action_type type = FLWM_ACTION_NONE;
@@ -107,6 +107,36 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 	b->arg = xstrdup(arg);
 }
 
+/* [environment] KEY=value sets a variable for the programs started from now
+ * on; "KEY=" unsets it and "KEY=@inherit" restores the value fl-wm started
+ * with (Settings uses this for the proxy variables). */
+#define MAX_ENV 64
+static struct { char *key, *orig; bool had; } env_orig[MAX_ENV];
+static int nenv_orig;
+
+static void env_apply(const char *k, const char *v) {
+	if (!*k || strchr(k, '=')) return;
+	int i;
+	for (i = 0; i < nenv_orig; i++)
+		if (!strcmp(env_orig[i].key, k)) break;
+	if (i == nenv_orig) {
+		if (nenv_orig == MAX_ENV) return;
+		const char *o = getenv(k);
+		env_orig[i].key = strdup(k);
+		env_orig[i].had = o != NULL;
+		env_orig[i].orig = o ? strdup(o) : NULL;
+		nenv_orig++;
+	}
+	if (!strcmp(v, "@inherit")) {
+		if (env_orig[i].had) setenv(k, env_orig[i].orig, 1);
+		else unsetenv(k);
+	} else if (!*v) {
+		unsetenv(k);
+	} else {
+		setenv(k, v, 1);
+	}
+}
+
 void config_init_defaults(struct flwm_config *c) {
 	memset(c, 0, sizeof *c);
 	c->title_height = 30;
@@ -124,6 +154,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->cursor_size = 24;
 	c->default_scale = 1.0f;
 	c->launcher_cmd = strdup("fl-launcher");
+	c->lock_color = 0xff1e1f22;
 
 	add_binding(c, "Super+Return", "exec fl-term");
 	add_binding(c, "Super+t", "exec fl-term");
@@ -141,6 +172,7 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Alt+Tab", "cycle");
 	add_binding(c, "Alt+Shift+Tab", "cycle-back");
 	add_binding(c, "Super+Shift+r", "reload");
+	add_binding(c, "Super+l", "lock");
 	add_binding(c, "Ctrl+Alt+BackSpace", "quit");
 	add_binding(c, "Print", "exec fl-screenshot");
 	add_binding(c, "Shift+Print", "exec fl-screenshot --area");
@@ -220,6 +252,12 @@ bool config_load(struct flwm_config *c, const char *path) {
 		} else if (!strcasecmp(section, "cursor")) {
 			if (!strcmp(k, "theme")) set_str(&c->cursor_theme, v);
 			else if (!strcmp(k, "size")) c->cursor_size = atoi(v);
+		} else if (!strcasecmp(section, "lock")) {
+			if (!strcmp(k, "idle_minutes")) c->lock_idle_minutes = atoi(v);
+			else if (!strcmp(k, "command")) set_str(&c->lock_cmd, v);
+			else if (!strcmp(k, "color")) c->lock_color = parse_color(v, c->lock_color);
+		} else if (!strcasecmp(section, "environment")) {
+			env_apply(k, v);
 		} else if (!strcasecmp(section, "output")) {
 			if (!strcmp(k, "scale")) c->default_scale = (float)atof(v);
 		} else if (!strncasecmp(section, "output:", 7)) {
@@ -268,6 +306,7 @@ void config_free(struct flwm_config *c) {
 	free(c->kb_model);
 	free(c->cursor_theme);
 	free(c->launcher_cmd);
+	free(c->lock_cmd);
 	free(c->scroll_method);
 	free(c->path);
 	for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);

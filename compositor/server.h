@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <sys/types.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
 #include <wlr/backend/session.h>
@@ -42,6 +43,7 @@ enum flwm_role {
 	FLWM_ROLE_OSK, /* on-screen keyboard: overlay, never takes keyboard focus */
 	FLWM_ROLE_POPUP, /* panel popups (calendar, volume): at the pointer, close on focus loss */
 	FLWM_ROLE_NOTIFY, /* notification popups: top right corner, overlay, never takes keyboard focus */
+	FLWM_ROLE_LOCK, /* fl-lock started by us: above everything while the session is locked */
 };
 
 /* What a scene node belongs to (stored in wlr_scene_node.data) */
@@ -82,6 +84,7 @@ enum flwm_action_type {
 	FLWM_ACTION_QUIT,
 	FLWM_ACTION_RELOAD,
 	FLWM_ACTION_SHOW_DESKTOP,
+	FLWM_ACTION_LOCK,
 };
 
 struct flwm_binding {
@@ -128,6 +131,10 @@ struct flwm_config {
 	struct flwm_output_config outputs[FLWM_MAX_OUTPUT_CONFIGS];
 	int noutputs;
 	char *launcher_cmd;
+	/* screen lock */
+	int lock_idle_minutes; /* 0 = never */
+	char *lock_cmd;        /* default "fl-lock --locker" */
+	uint32_t lock_color;
 	/* key bindings & autostart */
 	struct flwm_binding bindings[FLWM_MAX_BINDINGS];
 	int nbindings;
@@ -226,6 +233,23 @@ struct flwm_server {
 	struct wlr_output_manager_v1 *output_manager;
 	struct wl_listener output_manager_apply;
 	struct wl_listener output_manager_test;
+
+	/* screen locking (lock.c) */
+	bool locked;
+	struct wlr_scene_tree *layer_lock; /* above everything; enabled while locked */
+	struct wlr_scene_rect *lock_cover;
+	pid_t lock_pid; /* our fl-lock --locker child */
+	long lock_started;
+	struct wl_event_source *lock_restart_timer, *idle_timer, *sigchld;
+	struct wlr_session_lock_manager_v1 *lock_mgr;
+	struct wl_listener new_ext_lock;
+	struct wlr_session_lock_v1 *ext_lock;
+	struct wl_listener ext_new_surface, ext_unlock, ext_destroy;
+	struct wl_list lock_surfaces; /* flwm_lock_surface.link */
+	struct wlr_idle_notifier_v1 *idle_notifier;
+	struct wlr_idle_inhibit_manager_v1 *idle_inhibit_mgr;
+	struct wl_listener new_idle_inhibitor;
+	int idle_inhibitors;
 
 	struct flwm_config config;
 	char exe_dir[4096]; /* directory of our own executable */
@@ -402,6 +426,15 @@ void layer_focus_none(struct flwm_server *server);
 void layer_clicked(struct flwm_layer_surface *ls);
 
 /* input.c */
+/* lock.c */
+void lock_init(struct flwm_server *server);
+void lock_finish(struct flwm_server *server);
+void lock_request(struct flwm_server *server);
+void lock_arrange(struct flwm_server *server);
+void lock_activity(struct flwm_server *server);
+void lock_view_mapped(struct flwm_server *server, struct flwm_view *view);
+bool lock_client_is_locker(struct flwm_server *server, struct wl_client *client);
+
 void input_init(struct flwm_server *server);
 void input_finish(struct flwm_server *server);
 void input_apply_config(struct flwm_server *server);

@@ -105,7 +105,7 @@ Description: fldesktop icon and cursor themes
 Package: fldesktop-shell
 Architecture: any
 Depends: fldesktop-wm (= ${binary:Version}), xdg-user-dirs, ${shlibs:Depends}, ${misc:Depends}
-Recommends: dbus-user-session, pipewire, wireplumber, network-manager,
+Recommends: dbus-user-session, pipewire-audio | pipewire, wireplumber, network-manager,
             fldesktop-polkit-agent, fldesktop-notifyd, xdg-desktop-portal-fl,
             bluez, cups
 Description: fldesktop panel, launcher and desktop
@@ -128,6 +128,7 @@ Description: FLTK greeter for greetd
 Package: fldesktop-term
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: x-terminal-emulator
 Recommends: openssh-client
 Suggests: sshfs
 Description: fldesktop terminal emulator
@@ -216,7 +217,7 @@ Description: fldesktop character map
 Package: fldesktop-mixer
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: pipewire, wireplumber
+Recommends: pipewire-audio | pipewire, wireplumber
 Description: fldesktop volume mixer for PipeWire
  fl-mixer sets the volume of applications, output and input devices,
  chooses the default devices and ports and selects sound card profiles.

@@ -106,6 +106,8 @@ package_fldesktop-shell() {
   pkgdesc="fldesktop panel, launcher, desktop icons and session"
   depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm libcups xdg-user-dirs)
   optdepends=('pipewire: volume control' 'wireplumber: volume control'
+              'pipewire-pulse: sound for PulseAudio applications'
+              'pipewire-alsa: sound for ALSA applications'
               'networkmanager: network indicator and Wi-Fi passwords'
               'fldesktop-polkit-agent: administrator password prompts'
               'fldesktop-notifyd: notifications and their history'
@@ -183,7 +185,8 @@ package_fldesktop-charmap() {
 package_fldesktop-mixer() {
   pkgdesc="fldesktop volume mixer for PipeWire"
   depends=(fltk libpipewire)
-  optdepends=('pipewire: sound server' 'wireplumber: session manager')
+  optdepends=('pipewire: sound server' 'wireplumber: session manager'
+              'pipewire-pulse: PulseAudio applications' 'pipewire-alsa: ALSA applications')
   _app mixer
 }
 package_fldesktop-polkit-agent() {

@@ -1,0 +1,21 @@
+.TH FL-FIREWALL 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-firewall \- firewall settings for fldesktop
+.SH SYNOPSIS
+\fBfl-firewall\fR
+.SH DESCRIPTION
+Configures \fBfirewalld\fR(1): the default zone, panic mode (which blocks all
+network traffic and is announced with a notification), and for each zone
+the allowed services, open ports, the network interfaces and source
+addresses that belong to it, masquerading and port forwarding.
+.PP
+Changes apply at once. With \fBSave changes permanently\fR (the default)
+they are also written to the permanent configuration, so they survive a
+reload and a restart; without it they last until the next reload.
+\fBReload\fR drops changes that were made only for now, \fBKeep Current
+Rules\fR saves the running rules as the permanent ones.
+.PP
+The same view is the Firewall page of \fBfl-settings\fR(1). Administrator
+rights are asked for by \fBfl-polkit-agent\fR(1).
+.SH SEE ALSO
+\fBfirewall-cmd\fR(1), \fBfirewalld\fR(1), \fBfirewalld.zones\fR(5)

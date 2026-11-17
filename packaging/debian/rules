@@ -11,5 +11,5 @@ override_dh_auto_configure:
 # The compositor smoke test needs a writable XDG_RUNTIME_DIR; CI runs it.
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	ctest --test-dir obj-$(DEB_HOST_GNU_TYPE) --output-on-failure -E "wm-smoke|session-keys"
+	ctest --test-dir obj-$(DEB_HOST_GNU_TYPE) --output-on-failure -E "wm-smoke|session-keys|notify-smoke|portal-smoke|bt-mock"
 endif

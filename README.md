@@ -5,11 +5,11 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | Component | What it is |
 |-----------|------------|
 | **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, Alt+Tab, window snapping and layer-shell |
-| **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, battery, calendar clock, power menu |
+| **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, Bluetooth, printing, battery, calendar clock, notification history, power menu |
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space) |
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder |
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard |
-| **fl-settings** | Settings center: appearance, panel, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, network, date & time |
+| **fl-settings** | Settings center: appearance, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, network, firewall, date & time, software updates |
 | **fl-term** | Terminal emulator (libvterm): scrollback, true colour, mouse, bracketed paste |
 | **fl-files** | File manager: icon/list views, thumbnails, trash, background copy/move, drag and drop |
 | **fl-edit** | Tabbed text editor with syntax highlighting, find/replace and auto-indent |
@@ -20,6 +20,13 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-polkit-agent** | Password dialog for polkit (administrator actions) |
 | **fl-osk** | On-screen keyboard (Wayland virtual-keyboard protocol) |
 | **fl-charmap** | Unicode character map with search by name |
+| **fl-notifyd** | Notification server (org.freedesktop.Notifications): popups with actions, history and do not disturb in the panel |
+| **xdg-desktop-portal-fl** | Portal backend: file chooser, open with, settings, screenshot, access, account, notification and wallpaper portals for Flatpak and portal aware apps |
+| **fl-printers** | CUPS printers: driverless or driver setup, defaults, jobs; a panel button while printing and a notification when done |
+| **fl-bluetooth** | BlueZ: pairing (with the panel's pairing agent), connecting, trust, battery levels; a panel button with quick connect |
+| **fl-packages** | Software updates and packages through PackageKit: updates with changelogs, search, install/remove, sources, history; update notifications |
+| **fl-flatpak** | Flatpak app store for Flathub and other sources, with a permissions editor |
+| **fl-firewall** | firewalld: zones, services, ports, interfaces, sources, forwarding, panic mode |
 
 ![fldesktop](screenshots/desktop.png)
 
@@ -30,6 +37,10 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | ![calculator](screenshots/calculator.png) | ![greeter](screenshots/greeter.png) |
 | ![settings](screenshots/settings.png) | ![keyboard](screenshots/keyboard.png) |
 | ![mixer](screenshots/mixer.png) | ![charmap](screenshots/charmap.png) |
+| ![notifications](screenshots/notifications.png) | ![file chooser](screenshots/filechooser.png) |
+| ![printers](screenshots/printers.png) | ![bluetooth](screenshots/bluetooth.png) |
+| ![packages](screenshots/packages.png) | ![flatpak](screenshots/flatpak.png) |
+| ![firewall](screenshots/firewall.png) | |
 
 Screenshots are made in a headless session by `tools/screenshots.sh`.
 
@@ -43,17 +54,20 @@ Wayland support), wlroots 0.18/0.19/0.20, wayland, wayland-protocols,
 xkbcommon, libinput, pango/cairo, libdrm, pixman and libvterm. The system
 tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
 polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
-page) and fontconfig (fl-charmap); without one of them the parts that need it
-are left out.
+page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
+packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak);
+gio is used for notifications, the portal, Bluetooth and the firewall. Without
+one of them the parts that need it are left out.
 
 ```sh
 # Arch Linux
 sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango libinput \
-  glib2 libpipewire polkit libnm fontconfig
+  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev libdrm-dev \
-  libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev
+  libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
+  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev
 
 cmake -B build -G Ninja
 cmake --build build
@@ -163,8 +177,12 @@ C++ file in `apps/fl-settings/pages/` plus one `fld_settings_page()` line in
 `apps/fl-settings/CMakeLists.txt`.
 
 The session also starts `fl-polkit-agent` (from `/etc/xdg/autostart`) for
-administrator password prompts, and fl-panel answers NetworkManager's Wi-Fi
-password requests.
+administrator password prompts, `fl-notifyd` for notifications and
+`fl-packages --check-updates` to announce updates; fl-panel answers
+NetworkManager's Wi-Fi password requests and is the Bluetooth pairing agent.
+`fl-autostart` passes `WAYLAND_DISPLAY` to D-Bus activated programs, so
+`xdg-desktop-portal-fl` (chosen by `fldesktop-portals.conf`) can show its
+dialogs.
 
 ## Configuration files
 
@@ -177,6 +195,8 @@ password requests.
 | `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth` |
 | `~/.config/fldesktop/charmap.ini` | font, size, recently used characters |
 | `~/.config/fldesktop/term.ini` | `[Terminal] ColorScheme=dark\|light`, `FontSize`, `Scrollback` |
+| `~/.config/fldesktop/notifications.ini` | `[Notifications] DoNotDisturb`, `Timeout`, `HistorySize`, `Muted` |
+| `~/.config/fldesktop/updates.ini` | `[Updates] Check=hourly\|daily\|weekly\|never`, `Notify` |
 | `/etc/fldesktop/greeter.ini` | `[Greeter] Background`, `MinUid`, `HideUsers`, `Keyboard=button\|always\|never`, `KeyboardLayout` |
 
 ## How the shell works
@@ -184,7 +204,7 @@ password requests.
 FLTK cannot create layer-shell surfaces, so the panel, desktop and launcher are
 ordinary borderless toplevels. fl-wm recognises them by their app id/title
 (`fldesktop.panel`, `fldesktop.desktop`, `fldesktop.launcher`, `fldesktop.osk`,
-`fldesktop.panel-popup`) **and** checks
+`fldesktop.panel-popup`, `fldesktop.notification`) **and** checks
 that the client executable is the matching program installed next to `fl-wm`,
 then pins them to the right layer and position and reserves the panel's space.
 The taskbar uses the standard wlr-foreign-toplevel-management protocol, and

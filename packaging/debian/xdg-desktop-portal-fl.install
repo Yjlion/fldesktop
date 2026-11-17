@@ -1,0 +1,5 @@
+usr/libexec/xdg-desktop-portal-fl
+usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.fl.service
+usr/share/xdg-desktop-portal/portals/fl.portal
+usr/share/xdg-desktop-portal/fldesktop-portals.conf
+usr/share/man/man1/xdg-desktop-portal-fl.1

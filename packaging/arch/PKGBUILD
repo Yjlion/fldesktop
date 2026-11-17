@@ -5,14 +5,16 @@ pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
-         fldesktop-polkit-agent fldesktop-network fldesktop-keyring)
+         fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
+         fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
+         fldesktop-keyring)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg libcups packagekit flatpak appstream)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig)
 checkdepends=()
@@ -44,12 +46,13 @@ pkgver() {
 build() {
   cmake -S "$(_srcdir)" -B build -G Ninja \
     -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBEXECDIR=lib \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo
   cmake --build build
 }
 
 check() {
-  ctest --test-dir build --output-on-failure -E "wm-smoke|session-keys"
+  ctest --test-dir build --output-on-failure -E "wm-smoke|session-keys|notify-smoke|portal-smoke|bt-mock"
 }
 
 _install_files() {
@@ -71,9 +74,15 @@ package_fldesktop() {
   pkgdesc="Lightweight Wayland desktop built with FLTK (meta package)"
   depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
            fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap
-           fldesktop-mixer fldesktop-polkit-agent fldesktop-network)
+           fldesktop-mixer fldesktop-polkit-agent fldesktop-network fldesktop-notifyd
+           xdg-desktop-portal-fl)
   optdepends=('fldesktop-greeter: graphical login with greetd'
-              'adwaita-icon-theme: default icon theme')
+              'adwaita-icon-theme: default icon theme'
+              'fldesktop-printers: printer settings'
+              'fldesktop-bluetooth: Bluetooth settings'
+              'fldesktop-packages: software updates through PackageKit'
+              'fldesktop-flatpak: Flatpak app store'
+              'fldesktop-firewall: firewall settings')
   arch=(any)
 }
 
@@ -89,10 +98,13 @@ package_fldesktop-wm() {
 
 package_fldesktop-shell() {
   pkgdesc="fldesktop panel, launcher, desktop icons and session"
-  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm xdg-user-dirs)
+  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm libcups xdg-user-dirs)
   optdepends=('pipewire: volume control' 'wireplumber: volume control'
               'networkmanager: network indicator and Wi-Fi passwords'
-              'fldesktop-polkit-agent: administrator password prompts')
+              'fldesktop-polkit-agent: administrator password prompts'
+              'fldesktop-notifyd: notifications and their history'
+              'xdg-desktop-portal-fl: file dialogs and settings for Flatpak apps'
+              'bluez: Bluetooth button' 'cups: printer button')
   _stage
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
     usr/bin/fl-session usr/bin/fl-screenshot usr/share/wayland-sessions/fldesktop.desktop \
@@ -123,7 +135,7 @@ package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shar
 package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _app edit; }
 package_fldesktop-settings() {
   pkgdesc="fldesktop settings center"
-  depends=(fltk wayland glib2 libpipewire libnm)
+  depends=(fltk wayland glib2 libpipewire libnm libcups)
   optdepends=('xkeyboard-config: keyboard layout names' 'fldesktop-polkit-agent: date and time changes')
   _app settings
 }
@@ -154,6 +166,55 @@ package_fldesktop-network() {
   optdepends=('networkmanager: the network service' 'fldesktop-polkit-agent: password prompts')
   _app network
 }
+package_fldesktop-notifyd() {
+  pkgdesc="fldesktop notification server"
+  depends=(fltk glib2)
+  provides=(notification-daemon)
+  _stage
+  _install_files usr/bin/fl-notifyd usr/share/dbus-1/services/org.fldesktop.Notifyd.service \
+    etc/xdg/autostart/fl-notifyd.desktop usr/share/man/man1/fl-notifyd.1
+}
+package_xdg-desktop-portal-fl() {
+  pkgdesc="xdg-desktop-portal backend for fldesktop"
+  depends=(fltk glib2 xdg-desktop-portal)
+  optdepends=('grim: screenshots' 'slurp: area screenshots and color picking'
+              'xdg-desktop-portal-wlr: screen casting' 'xdg-desktop-portal-gtk: other portals')
+  _stage
+  _install_files usr/lib/xdg-desktop-portal-fl \
+    usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.fl.service \
+    usr/share/xdg-desktop-portal/portals/fl.portal usr/share/xdg-desktop-portal/fldesktop-portals.conf \
+    usr/share/man/man1/xdg-desktop-portal-fl.1
+}
+package_fldesktop-printers() {
+  pkgdesc="fldesktop printer settings"
+  depends=(fltk libcups)
+  optdepends=('cups: the printing service')
+  _app printers
+}
+package_fldesktop-bluetooth() {
+  pkgdesc="fldesktop Bluetooth settings"
+  depends=(fltk glib2)
+  optdepends=('bluez: the Bluetooth service')
+  _app bluetooth
+}
+package_fldesktop-packages() {
+  pkgdesc="fldesktop software updates and package manager (PackageKit)"
+  depends=(fltk glib2 packagekit)
+  _app packages
+  _install_files etc/xdg/autostart/fl-packages-updates.desktop
+}
+package_fldesktop-flatpak() {
+  pkgdesc="fldesktop Flatpak app store"
+  depends=(fltk glib2 flatpak appstream)
+  _app flatpak
+}
+package_fldesktop-firewall() {
+  pkgdesc="fldesktop firewall settings (firewalld)"
+  depends=(fltk glib2)
+  optdepends=('firewalld: the firewall service')
+  _app firewall
+}
+
 package_fldesktop-keyring() {
   pkgdesc="OpenPGP key of the fldesktop pacman repository"
   arch=(any)

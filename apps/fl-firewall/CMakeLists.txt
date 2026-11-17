@@ -1,0 +1,5 @@
+if(TARGET fld-fw-ui)
+  add_executable(fl-firewall main.cpp)
+  target_link_libraries(fl-firewall PRIVATE fld-fw-ui)
+  install(TARGETS fl-firewall RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()

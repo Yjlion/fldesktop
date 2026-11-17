@@ -1,0 +1,5 @@
+if(TARGET fld-bt-ui)
+  add_executable(fl-bluetooth main.cpp)
+  target_link_libraries(fl-bluetooth PRIVATE fld-bt-ui)
+  install(TARGETS fl-bluetooth RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Flatpak Apps
+GenericName=Application Store
+Comment=Find, install and update Flatpak applications from Flathub
+Exec=fl-flatpak %F
+Icon=fl-flatpak
+Categories=System;PackageManager;
+Keywords=flatpak;flathub;apps;store;install;sandbox;permissions;
+StartupWMClass=fl-flatpak
+MimeType=application/vnd.flatpak.ref;application/vnd.flatpak.repo;application/vnd.flatpak;

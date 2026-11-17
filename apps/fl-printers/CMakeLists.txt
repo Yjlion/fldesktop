@@ -1,0 +1,5 @@
+if(TARGET fld-printers-ui)
+  add_executable(fl-printers main.cpp)
+  target_link_libraries(fl-printers PRIVATE fld-printers-ui)
+  install(TARGETS fl-printers RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()

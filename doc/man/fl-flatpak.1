@@ -1,0 +1,27 @@
+.TH FL-FLATPAK 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-flatpak \- Flatpak apps for fldesktop
+.SH SYNOPSIS
+\fBfl-flatpak\fR [\fIAPP-ID\fR]
+.br
+\fBfl-flatpak\fR \fIFILE\fR.flatpakref | \fIFILE\fR.flatpakrepo | \fIFILE\fR.flatpak
+.SH DESCRIPTION
+Shows the apps of the configured Flatpak sources (Flathub and others) with
+their icons, descriptions, licenses and versions, by category, installed or
+with an update, and searches them. Apps can be installed for all users or
+only for you, opened, updated (one or all) and removed. When Flathub is not
+set up, fl-flatpak offers to add it.
+.PP
+\fBPermissions…\fR shows what an installed app may use (network, display,
+sound, devices, files and folders...) and changes it for you, like
+\fBflatpak override \-\-user\fR: the changes are written to
+\fI~/.local/share/flatpak/overrides/APP-ID\fR and apply when the app starts
+next.
+.PP
+Given a .flatpakref, .flatpak bundle or .flatpakrepo file, fl-flatpak
+installs the app or adds the source.
+.PP
+Installing for all users asks for an administrator password through
+\fBfl-polkit-agent\fR(1).
+.SH SEE ALSO
+\fBflatpak\fR(1), \fBflatpak-override\fR(1), \fBfl-packages\fR(1)

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Printers
+GenericName=Printer Settings
+Comment=Add printers, change their settings and watch print jobs
+Exec=fl-printers
+Icon=fl-printers
+Categories=Settings;HardwareSettings;Printing;
+Keywords=printer;printing;cups;queue;job;scanner;driver;
+StartupWMClass=fl-printers

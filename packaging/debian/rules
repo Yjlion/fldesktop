@@ -6,7 +6,7 @@ include /usr/share/dpkg/architecture.mk
 	dh $@ --buildsystem=cmake+ninja
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DCMAKE_BUILD_TYPE=RelWithDebInfo -DFLD_GREETD_USER=_greetd -DFLD_GREETD_VT=7
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=RelWithDebInfo -DFLD_GREETD_USER=_greetd -DFLD_GREETD_VT=7 -DFLD_PAM_STACK=common-auth
 
 # The compositor smoke test needs a writable XDG_RUNTIME_DIR; CI runs it.
 override_dh_auto_test:

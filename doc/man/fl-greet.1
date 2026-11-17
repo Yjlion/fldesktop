@@ -4,10 +4,18 @@ fl-greet \- graphical greeter for greetd
 .SH SYNOPSIS
 \fBfl-greet\fR [\fB\-\-demo\fR]
 .SH DESCRIPTION
-A login screen for greetd(1). Run it inside the cage kiosk compositor, e.g. in
-\fI/etc/greetd/config.toml\fR: command = "cage \-s \-d \-\- fl-greet".
-Sessions are read from /usr/share/wayland-sessions. \fI/etc/fldesktop/greeter.ini\fR
-[Greeter] accepts Background, MinUid and HideUsers (comma separated).
+A login screen for greetd(1). Run it inside the cage kiosk compositor with
+\fBfl-greet-session\fR, e.g. in \fI/etc/greetd/config.toml\fR:
+command = "fl-greet-session" (it runs "cage \-s \-d \-\- fl-greet" with the
+cursor theme of greeter.ini). Sessions are read from /usr/share/wayland-sessions.
+.PP
+\fI/etc/fldesktop/greeter.ini\fR (Settings > Login Screen edits it) holds
+[Greeter] \fBBackground\fR (a world readable image), \fBMinUid\fR,
+\fBHideUsers\fR (comma separated), \fBRememberUser\fR, \fBClock24\fR and
+\fBShowPowerButtons\fR; [Appearance] \fBTheme\fR (light or dark),
+\fBAccent\fR and \fBFontSize\fR; [General] \fBIconTheme\fR; and [Cursor]
+\fBTheme\fR and \fBSize\fR. An example is installed as
+\fI/usr/share/fldesktop/greeter.ini.example\fR.
 .PP
 An on-screen keyboard is built in. \fBKeyboard=button\fR (the default) adds a
 Keyboard button that shows it, \fBalways\fR shows it from the start (for

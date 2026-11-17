@@ -1,3 +1,5 @@
 usr/bin/fl-greet
 usr/share/fldesktop/config.toml
 usr/share/man/man1/fl-greet.1
+usr/bin/fl-greet-session
+usr/share/fldesktop/greeter.ini.example

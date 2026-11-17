@@ -4,12 +4,13 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 
 | Component | What it is |
 |-----------|------------|
-| **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, Alt+Tab, window snapping and layer-shell |
+| **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, Alt+Tab, window snapping, layer-shell and session locking (also ext-session-lock for swaylock) |
+| **fl-lock** | Screen locker: clock, user picture, PAM password check, on-screen keyboard; locks on Super+L, after an idle time and before suspend |
 | **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, Bluetooth, printing, battery, calendar clock, notification history, power menu |
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space) |
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder |
-| **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard |
-| **fl-settings** | Settings center: appearance (including widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro), panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, network, firewall, date & time, software updates |
+| **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard; its look and user list are set in Settings > Login Screen |
+| **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, network, proxy, firewall, date & time, software updates, login screen |
 | **fl-term** | Terminal emulator (libvterm): scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
 | **fl-files** | File manager: icon, compact and details views with zoom and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, drag and drop, and a search for files and folders by name, text, date and size |
 | **fl-edit** | Tabbed text editor with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
@@ -26,8 +27,8 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **xdg-desktop-portal-fl** | Portal backend: file chooser, open with, settings, screenshot, access, account, notification and wallpaper portals for Flatpak and portal aware apps |
 | **fl-printers** | CUPS printers: driverless or driver setup, defaults, jobs; a panel button while printing and a notification when done |
 | **fl-bluetooth** | BlueZ: pairing (with the panel's pairing agent), connecting, trust, battery levels; a panel button with quick connect |
-| **fl-packages** | Software updates and packages through PackageKit: updates with changelogs, search, install/remove, sources, history; update notifications |
-| **fl-flatpak** | Flatpak app store for Flathub and other sources, with a permissions editor |
+| **fl-packages** | Software updates and packages through PackageKit: updates with changelogs, search, install/remove, a package's files, dependencies and reverse dependencies, sources, history; update notifications |
+| **fl-flatpak** | Flatpak app store for Flathub and other sources, with a permissions editor; files, runtime and dependents of installed apps and runtimes |
 | **fl-firewall** | firewalld: zones, services, ports, interfaces, sources, forwarding, panic mode |
 
 ![fldesktop](screenshots/desktop.png)
@@ -45,6 +46,29 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | ![firewall](screenshots/firewall.png) | ![task manager](screenshots/taskmgr.png) |
 | ![video player](screenshots/video.png) | ![find files](screenshots/files-search.png) |
 | ![performance](screenshots/taskmgr-performance.png) | ![widget styles](screenshots/styles.png) |
+| ![lock screen](screenshots/lock.png) | ![accent colors](screenshots/appearance.png) |
+| ![login screen settings](screenshots/login-screen.png) | ![proxy](screenshots/proxy.png) |
+| ![package files](screenshots/packages-files.png) | ![flatpak runtimes](screenshots/flatpak-runtimes.png) |
+
+### Icons, cursors and wallpapers
+
+fldesktop brings its own icon theme (`fldesktop`, with the folders in eight
+accent colors as `fldesktop-teal`, `-green`, `-orange`, `-red`, `-purple`,
+`-pink` and `-graphite`, plus monochrome `fldesktop-mono` and
+`fldesktop-mono-dark`, all with symbolic icons), two cursor themes
+(`fldesktop-cursors`, `fldesktop-cursors-light`) and 15 wallpapers. When
+"Folder icons follow the accent color" is on, picking an accent in Settings
+switches to the matching icon theme.
+
+![icons](screenshots/icons.png)
+
+![wallpapers](screenshots/wallpapers.png)
+
+They are generated: `tools/artwork/build.sh` (Python 3 and `rsvg-convert`)
+writes the SVGs, renders the PNG sizes and packs the Xcursor files into
+`data/icons` and `data/backgrounds`, which are committed. The SVGs only use
+what FLTK's SVG renderer (nanosvg) draws: no masks, filters or clip paths, and
+gradient coordinates in percent. `ctest -R artwork-check` checks the themes.
 
 Screenshots are made in a headless session by `tools/screenshots.sh`.
 
@@ -60,7 +84,7 @@ tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
 polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
 page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
 packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak),
-libmpv and EGL/OpenGL (fl-video);
+libmpv and EGL/OpenGL (fl-video), PAM (fl-lock);
 gio is used for notifications, the portal, Bluetooth and the firewall. Without
 one of them the parts that need it are left out.
 
@@ -72,7 +96,8 @@ sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango lib
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev libdrm-dev \
   libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
-  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libmpv-dev libegl-dev libgl-dev
+  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libmpv-dev libegl-dev libgl-dev \
+  libpam0g-dev
 
 cmake -B build -G Ninja
 cmake --build build
@@ -87,7 +112,8 @@ the FLTK applications for use under another compositor.
 
 * **Arch:** `cd packaging/arch && makepkg -si` builds split packages
   (`fldesktop`, `fldesktop-wm`, `fldesktop-shell`, `fldesktop-greeter`,
-  `fldesktop-term`, `fldesktop-settings`, `fldesktop-mixer`, …) from the checkout.
+  `fldesktop-term`, `fldesktop-settings`, `fldesktop-lock`, `fldesktop-icon-theme`,
+  `fldesktop-mixer`, …) from the checkout.
 * **Debian/Ubuntu:** `cp -r packaging/debian debian && dpkg-buildpackage -b -us -uc`
   produces the same set of `.deb` packages.
 
@@ -145,10 +171,12 @@ adds packages to it (needs the `FLD_REPO_GPG_KEY` secret in CI).
 
   The shipped file has the right greeter user and VT for the distribution
   (Arch: `greeter`, VT 1; Debian: `_greetd`, VT 7); elsewhere set
-  `command = "cage -s -d -- fl-greet"` and keep the `user` greetd came with.
-  `fl-greet --demo` shows the greeter without greetd. Its **Keyboard** button
-  shows an on-screen keyboard; `Keyboard=always` in `/etc/fldesktop/greeter.ini`
-  shows it from the start (touch-only devices), `Keyboard=never` removes it.
+  `command = "fl-greet-session"` (it runs `cage -s -d -- fl-greet` with the
+  cursor theme of `greeter.ini`) and keep the `user` greetd came with.
+  `fl-greet --demo` shows the greeter without greetd. **Settings > Login
+  Screen** sets its background, style, accent color, icons, cursor, the users
+  it lists and its on-screen keyboard (`Keyboard=button|always|never`) in
+  `/etc/fldesktop/greeter.ini`, asking for an administrator password.
 
 Running uninstalled from the build tree (nested in your current session):
 
@@ -171,6 +199,7 @@ tools/run-dev.sh -s fl-term # only a terminal
 | F11, Super+F | Fullscreen |
 | Alt+Tab, Alt+Shift+Tab | Switch windows |
 | Super+drag, Super+right-drag | Move / resize any window |
+| Super+L | Lock the screen |
 | Print | Screenshot (needs grim) |
 | Super+Shift+R | Reload configuration |
 | Ctrl+Alt+Backspace | Quit the session |
@@ -188,6 +217,13 @@ change. Other applications use a new theme at their next start. The Displays
 page uses the wlr-output-management protocol (so `wlr-randr` and `kanshi` work
 too) and reverts a change after 15 seconds unless you keep it. Language &
 Region writes `~/.config/fldesktop/environment`, read by `fl-session` at login.
+**Proxy** keeps the proxy variables the session started with (`http_proxy`
+and friends, e.g. from `/etc/environment`) or replaces them: no proxy, or
+manual HTTP/HTTPS/FTP/SOCKS proxies with a list of hosts to reach directly.
+The change goes to the `[environment]` section of `wm.ini`, so every program
+started from then on, by fl-wm or by the panel, launcher and file manager,
+gets it; D-Bus activated services get it too. **Screen Lock** sets the idle
+timeout, locking before suspend and what the lock screen shows.
 
 Programs whose desktop entry has `Categories=Settings` (or
 `X-FLDesktop-Settings=true`) appear under **More**. A new built-in page is one
@@ -206,8 +242,8 @@ dialogs.
 
 | File | Used by |
 |------|---------|
-| `~/.config/fldesktop/wm.ini` | compositor: appearance, keys, input, outputs, autostart |
-| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts; `[Desktop]` wallpaper; `[General]` icon theme, terminal |
+| `~/.config/fldesktop/wm.ini` | compositor: appearance, keys, input, outputs, autostart, `[lock] idle_minutes`, `[environment]` variables for new programs |
+| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts; `[Desktop]` wallpaper; `[General]` icon theme, terminal; `[Lock]` lock screen; `[Proxy]` proxy settings |
 | `~/.config/fldesktop/panel.ini` | `[Panel] QuickLaunch=`, `KeyboardButton=auto\|always\|never`; `[Clock] Format=` |
 | `~/.config/fldesktop/environment` | `LANG`, `LC_*` and other variables for the session |
 | `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth` |
@@ -215,7 +251,7 @@ dialogs.
 | `~/.config/fldesktop/term.ini` | `[Terminal] ColorScheme=dark\|light`, `FontSize`, `Scrollback` |
 | `~/.config/fldesktop/notifications.ini` | `[Notifications] DoNotDisturb`, `Timeout`, `HistorySize`, `Muted` |
 | `~/.config/fldesktop/updates.ini` | `[Updates] Check=hourly\|daily\|weekly\|never`, `Notify` |
-| `/etc/fldesktop/greeter.ini` | `[Greeter] Background`, `MinUid`, `HideUsers`, `Keyboard=button\|always\|never`, `KeyboardLayout` |
+| `/etc/fldesktop/greeter.ini` | `[Greeter] Background`, `MinUid`, `HideUsers`, `RememberUser`, `Clock24`, `ShowPowerButtons`, `Keyboard=button\|always\|never`, `KeyboardLayout`; `[Appearance] Theme`, `Accent`, `FontSize`; `[General] IconTheme`; `[Cursor] Theme`, `Size` |
 
 ## How the shell works
 
@@ -225,6 +261,9 @@ ordinary borderless toplevels. fl-wm recognises them by their app id/title
 `fldesktop.panel-popup`, `fldesktop.notification`) **and** checks
 that the client executable is the matching program installed next to `fl-wm`,
 then pins them to the right layer and position and reserves the panel's space.
+The lock screen (`fldesktop.lock`) must moreover be the very `fl-lock`
+process fl-wm started; the session unlocks only when that process exits with
+status 0.
 The taskbar uses the standard wlr-foreign-toplevel-management protocol, and
 third-party layer-shell clients (bars, notification daemons, wallpaper tools)
 work as well.

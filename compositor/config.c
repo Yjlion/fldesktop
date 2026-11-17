@@ -144,6 +144,7 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Ctrl+Alt+BackSpace", "quit");
 	add_binding(c, "Print", "exec fl-screenshot");
 	add_binding(c, "Shift+Print", "exec fl-screenshot --area");
+	add_binding(c, "Ctrl+Shift+Escape", "exec fl-taskmgr");
 
 	c->autostart[c->nautostart++] = strdup("fl-desktop");
 	c->autostart[c->nautostart++] = strdup("fl-panel");

@@ -1,0 +1,5 @@
+add_library(fl-taskmgr-proc STATIC procinfo.cpp)
+target_include_directories(fl-taskmgr-proc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(fl-taskmgr main.cpp)
+target_link_libraries(fl-taskmgr PRIVATE fl-taskmgr-proc fld)
+install(TARGETS fl-taskmgr RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

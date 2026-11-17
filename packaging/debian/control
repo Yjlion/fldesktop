@@ -41,6 +41,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-files (>= ${source:Version}),
          fldesktop-edit (>= ${source:Version}),
          fldesktop-calc (>= ${source:Version}),
+         fldesktop-taskmgr (>= ${source:Version}),
          fldesktop-view (>= ${source:Version}),
          fldesktop-settings (>= ${source:Version}),
          fldesktop-mixer (>= ${source:Version}),
@@ -105,6 +106,15 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: fldesktop calculator
  fl-calc is a basic and scientific calculator with history and memory.
+
+Package: fldesktop-taskmgr
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Suggests: pkexec
+Description: fldesktop task manager
+ fl-taskmgr lists running processes with their CPU and memory use and can
+ end, kill, stop, continue and re-prioritise them. Its performance view
+ graphs CPU, memory, network and disk use.
 
 Package: fldesktop-view
 Architecture: any

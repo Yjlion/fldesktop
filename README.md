@@ -90,7 +90,10 @@ CI (`.github/workflows/ci.yml`) builds and tests on Arch (wlroots 0.20) and
 Debian trixie (wlroots 0.18). `.github/workflows/repo.yml` builds the packages
 (Debian amd64 + arm64, Arch x86_64) and publishes them to the package
 repositories below: every push to `main` goes to the *devel* channel, every
-`v*` tag to the *stable* channel and to the GitHub release.
+`v*` tag to the *stable* channel and to the GitHub release. A release tag
+is `v<version>` (the version in `CMakeLists.txt` and `debian/changelog`) or
+`v<version>-<n>` for a rebuild of the same version (Debian `<version>+r<n>`,
+Arch `pkgrel=<n>`).
 
 ### Package repositories
 

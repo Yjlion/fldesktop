@@ -31,11 +31,15 @@ pkgver() {
   local v
   v=$(sed -n 's/^project(fldesktop VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
   local n h
-  # a build of the release tag itself gets the plain version
-  if [[ "$(git describe --tags --exact-match 2>/dev/null)" == "v$v" ]]; then
-    echo "$v"
-    return
-  fi
+  # a build of a release tag (v<version> or v<version>-<pkgrel>) gets the
+  # plain version; the release workflow sets pkgrel from the tag
+  local t
+  for t in $(git tag --points-at HEAD 2>/dev/null); do
+    if [[ "$t" == "v$v" || "$t" =~ ^v${v//./\\.}-[0-9]+$ ]]; then
+      echo "$v"
+      return
+    fi
+  done
   if n=$(git rev-list --count HEAD 2>/dev/null) && h=$(git rev-parse --short HEAD 2>/dev/null); then
     printf "%s.r%s.g%s" "$v" "$n" "$h"
   else

@@ -156,3 +156,29 @@ bool DemoGreetd::request(const Json &req, Json &reply, std::string &) {
   }
   return true;
 }
+
+std::string greetd_error_text(const Json &reply) {
+  std::string type = reply["error_type"].as_string();
+  std::string desc = reply["description"].as_string();
+  std::string up = desc;
+  for (auto &c : up) c = (char)toupper((unsigned char)c);
+  auto has = [&](const char *s) { return up.find(s) != std::string::npos; };
+  if (has("MAXTRIES") || has("TOO MANY") || has("ACCOUNT LOCKED") || has("TEMPORARILY LOCKED"))
+    return "Too many failed attempts. Wait a while and try again.";
+  if (has("NEW_AUTHTOK_REQD") || has("AUTHTOK_EXPIRED") || has("PASSWORD EXPIRED"))
+    return "Your password has expired. Ask an administrator to reset it.";
+  if (has("ACCT_EXPIRED") || has("ACCOUNT EXPIRED")) return "This account has expired.";
+  if (has("PERM_DENIED") || has("PERMISSION DENIED")) return "This account is not allowed to log in here.";
+  if (has("USER_UNKNOWN") || has("UNKNOWN USER")) return "Incorrect user name or password. Please try again.";
+  if (type == "auth_error" || has("AUTH_ERR") || has("AUTHENTICATION FAILURE") || has("AUTHENTICATION FAILED"))
+    return "Incorrect password. Please try again.";
+  // a readable sentence from greetd (no PAM code in capitals after a colon)
+  size_t colon = desc.find(": ");
+  bool pam_code = colon != std::string::npos && desc.compare(0, 4, "pam_") == 0;
+  if (!desc.empty() && !pam_code) {
+    std::string m = desc;
+    m[0] = (char)toupper((unsigned char)m[0]);
+    return "Login failed: " + m;
+  }
+  return "Login failed. Please try again.";
+}

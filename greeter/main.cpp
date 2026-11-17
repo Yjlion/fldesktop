@@ -52,6 +52,8 @@ static Fl_Input *g_user_input; // used when there is no user list
 static Fl_Secret_Input *g_pass;
 static Fl_Choice *g_session_choice;
 static Fl_Box *g_message;
+
+static bool caps_lock_on() { return (Fl::event_state() & FL_CAPS_LOCK) != 0; }
 static Fl_Button *g_login_btn;
 static int g_card_y = 300;
 static int g_card_y_normal = 300;
@@ -149,7 +151,8 @@ static bool start_selected_session() {
     return false;
   }
   if (reply["type"].as_string() != "success") {
-    set_message(reply["description"].as_string(), true);
+    std::string d = reply["description"].as_string();
+    set_message(d.empty() ? "The session could not be started." : "The session could not be started: " + d, true);
     cancel();
     return false;
   }
@@ -189,7 +192,10 @@ static void login() {
       break;
     }
     if (type == "error") {
-      set_message(reply["description"].as_string().empty() ? "Login failed" : reply["description"].as_string(), true);
+      std::string m = greetd_error_text(reply);
+      if (reply["error_type"].as_string() == "auth_error" && caps_lock_on())
+        m += " Caps Lock is on.";
+      set_message(m, true);
       cancel();
       break;
     }

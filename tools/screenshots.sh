@@ -61,6 +61,21 @@ if [ -S "$PW_RUN/pipewire-0" ]; then
 else
 	echo "no PipeWire at $PW_RUN: skipping the mixer screenshot" >&2
 fi
+NAME=taskmgr; session "fl-panel & fl-taskmgr" 4 x
+NAME=taskmgr-performance; session "fl-panel & fl-taskmgr --performance" 9 x
+# keys typed with wtype from inside the session
+NAME=files-search; session "fl-panel & fl-files $HOME/Documents/fldesktop-apps & sleep 1.5; wtype -M ctrl -M shift f -m shift -m ctrl; sleep 0.4; wtype '*.h'; wtype -k Return; sleep 0.8; wtype -M ctrl 3 -m ctrl" 4.5 x
+printf '[Appearance]\nScheme=fld-rounded\n' > "$HOME/.config/fldesktop/desktop.ini"
+NAME=styles; session "fl-panel & fl-settings appearance" 3.5 x
+rm -f "$HOME/.config/fldesktop/desktop.ini"
+if command -v ffmpeg >/dev/null 2>&1 && [ -x "$BUILD/bin/fl-video" ]; then
+	ffmpeg -loglevel error -y -f lavfi -i testsrc2=duration=20:size=1280x720:rate=30 -f lavfi -i sine=frequency=440:duration=20 \
+		-c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$HOME/clip.mkv"
+	printf '1\n00:00:00,500 --> 00:00:19,000\nHello from fl-video subtitles\n' > "$HOME/clip.srt"
+	NAME=video; session "fl-panel & fl-video $HOME/clip.mkv" 6 x
+else
+	echo "no ffmpeg or fl-video: skipping the video screenshot" >&2
+fi
 # the launcher needs a key press (Super+Space) from wtype
 "$BUILD/bin/fl-wm" -s "fl-desktop & fl-panel" >"$LOG" 2>&1 &
 WM=$!

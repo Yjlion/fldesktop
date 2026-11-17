@@ -9,12 +9,14 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space) |
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder |
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard |
-| **fl-settings** | Settings center: appearance, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, network, firewall, date & time, software updates |
-| **fl-term** | Terminal emulator (libvterm): scrollback, true colour, mouse, bracketed paste |
-| **fl-files** | File manager: icon/list views, thumbnails, trash, background copy/move, drag and drop |
-| **fl-edit** | Tabbed text editor with syntax highlighting, find/replace and auto-indent |
+| **fl-settings** | Settings center: appearance (including widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro), panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, network, firewall, date & time, software updates |
+| **fl-term** | Terminal emulator (libvterm): scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
+| **fl-files** | File manager: icon, compact and details views with zoom and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, drag and drop, and a search for files and folders by name, text, date and size |
+| **fl-edit** | Tabbed text editor with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
+| **fl-video** | Video and audio player on libmpv: playlists, subtitles, track selection, speed, screenshots, resume |
+| **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor |
 | **fl-polkit-agent** | Password dialog for polkit (administrator actions) |
@@ -40,7 +42,9 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | ![notifications](screenshots/notifications.png) | ![file chooser](screenshots/filechooser.png) |
 | ![printers](screenshots/printers.png) | ![bluetooth](screenshots/bluetooth.png) |
 | ![packages](screenshots/packages.png) | ![flatpak](screenshots/flatpak.png) |
-| ![firewall](screenshots/firewall.png) | |
+| ![firewall](screenshots/firewall.png) | ![task manager](screenshots/taskmgr.png) |
+| ![video player](screenshots/video.png) | ![find files](screenshots/files-search.png) |
+| ![performance](screenshots/taskmgr-performance.png) | ![widget styles](screenshots/styles.png) |
 
 Screenshots are made in a headless session by `tools/screenshots.sh`.
 
@@ -55,19 +59,20 @@ xkbcommon, libinput, pango/cairo, libdrm, pixman and libvterm. The system
 tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
 polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
 page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
-packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak);
+packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak),
+libmpv and EGL/OpenGL (fl-video);
 gio is used for notifications, the portal, Bluetooth and the firewall. Without
 one of them the parts that need it are left out.
 
 ```sh
 # Arch Linux
 sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango libinput \
-  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream
+  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream mpv
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev libdrm-dev \
   libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
-  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev
+  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libmpv-dev libegl-dev libgl-dev
 
 cmake -B build -G Ninja
 cmake --build build

@@ -1,0 +1,17 @@
+pkg_check_modules(PACKAGEKIT IMPORTED_TARGET packagekit-glib2)
+if(PACKAGEKIT_FOUND AND TARGET fld-glib)
+  add_library(fld-pk STATIC pkclient.cpp)
+  target_include_directories(fld-pk PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  # packagekit-glib2 headers want this, and use GLib macros -Wextra dislikes
+  target_compile_definitions(fld-pk PRIVATE I_KNOW_THE_PACKAGEKIT_GLIB2_API_IS_SUBJECT_TO_CHANGE)
+  target_compile_options(fld-pk PRIVATE -Wno-cast-function-type)
+  target_link_libraries(fld-pk PUBLIC fld-glib PkgConfig::PACKAGEKIT)
+  add_executable(fl-packages main.cpp)
+  target_link_libraries(fl-packages PRIVATE fld-pk)
+  install(TARGETS fl-packages RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-packages-updates.desktop
+          DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
+  message(STATUS "packagekit-glib2 ${PACKAGEKIT_VERSION}: building fl-packages")
+else()
+  message(STATUS "packagekit-glib2 not found: not building fl-packages")
+endif()

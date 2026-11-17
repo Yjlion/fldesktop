@@ -11,6 +11,8 @@ class FlatButton : public Fl_Button {
 public:
   FlatButton(int x, int y, int w, int h, const char *label = nullptr);
   void icon_name(const char *name, int size = 20);
+  // sets the icon image (not owned; e.g. from fld::icon or fld::symbolic_icon)
+  void icon_image(Fl_Image *img) { icon_ = img; redraw(); }
   void hover_color(Fl_Color c) { hover_col_ = c; }
   void text_color(Fl_Color c) { labelcolor(c); }
   void active_look(bool on) { active_look_ = on; redraw(); }

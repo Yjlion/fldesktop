@@ -1,7 +1,13 @@
 #!/bin/sh
 # Regenerates screenshots/*.png from a headless session (needs grim and wtype).
 #   tools/screenshots.sh [builddir]
+# Runs on a private D-Bus session bus (notifications, portal). The screenshots
+# of printers, bluetooth, packages, flatpak and firewall need those services;
+# they are taken in the test containers (tests/container).
 set -eu
+if [ -z "${FLD_SHOT_BUS:-}" ] && command -v dbus-run-session >/dev/null 2>&1; then
+	FLD_SHOT_BUS=1 exec dbus-run-session -- "$0" "$@"
+fi
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 BUILD=${1:-$ROOT/build}
 OUT="$ROOT/screenshots"
@@ -42,6 +48,13 @@ NAME=greeter; session "fl-greet --demo" 3 x
 NAME=settings; session "fl-panel & fl-settings appearance" 3.5 x
 NAME=keyboard; session "fl-panel & fl-edit $HOME/Desktop/README.md & sleep 1.2; fl-osk" 4 x
 NAME=charmap; session "fl-panel & fl-charmap" 4 x
+NAME=notifications; session "fl-notifyd & fl-panel & sleep 1.5; $ROOT/tools/demo-notifications.sh" 4 x
+# the file chooser of xdg-desktop-portal-fl, called the way xdg-desktop-portal does
+DOCS=$(printf '%s' "$HOME/Documents" | od -An -v -tx1 | tr -s ' \n' ' ' | sed 's/ \([0-9a-f][0-9a-f]\)/0x\1, /g')
+NAME=filechooser; session "fl-panel & xdg-desktop-portal-fl & sleep 1.5; gdbus call --session \
+	-d org.freedesktop.impl.portal.desktop.fl -o /org/freedesktop/portal/desktop \
+	-m org.freedesktop.impl.portal.FileChooser.OpenFile /org/freedesktop/portal/desktop/request/1_1/s1 \
+	org.example.App '' 'Open a Document' \"{'current_folder': <@ay [$DOCS 0x00]>, 'filters': <[('Text', [(uint32 0, '*.txt')]), ('All files', [(uint32 0, '*')])]>}\" &" 4 x
 if [ -S "$PW_RUN/pipewire-0" ]; then
 	"$BUILD/tests/fl-tone" 15 "Music Player" >/dev/null 2>&1 &
 	NAME=mixer; session "fl-panel & fl-mixer" 4 x

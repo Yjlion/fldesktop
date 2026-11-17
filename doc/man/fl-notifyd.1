@@ -1,0 +1,32 @@
+.TH FL-NOTIFYD 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-notifyd \- fldesktop notification server
+.SH SYNOPSIS
+\fBfl-notifyd\fR [\fB\-\-replace\fR]
+.SH DESCRIPTION
+Shows the desktop notifications that programs send through the
+\fIorg.freedesktop.Notifications\fR D-Bus interface (specification 1.2):
+summary, body, icon or image, action buttons and urgency. Notifications
+appear in the top right corner, stack up to five deep and disappear after
+their timeout; moving the pointer over them pauses the timeout. Clicking a
+notification runs its default action and closes it, the cross closes it
+without an action. Critical notifications stay until they are closed.
+.PP
+The panel's bell button lists the notification history and switches
+\fIdo not disturb\fR, which keeps everything but critical notifications from
+popping up. Settings are in the Notifications page of \fBfl-settings\fR(1).
+.PP
+fl-notifyd is started at login through
+\fI/etc/xdg/autostart/fl-notifyd.desktop\fR and can also be started by
+D-Bus activation.
+.SH OPTIONS
+.TP
+\fB\-r\fR, \fB\-\-replace\fR
+Take over from a notification server that is already running.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/notifications.ini\fR
+[Notifications] DoNotDisturb, Timeout (seconds), HistorySize and Muted
+(application names separated by semicolons).
+.SH SEE ALSO
+\fBnotify-send\fR(1), \fBfl-panel\fR(1), \fBfl-settings\fR(1)

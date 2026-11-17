@@ -1,5 +1,6 @@
 // freedesktop.org icon theme lookup and image loading
 #pragma once
+#include <FL/Enumerations.H>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,9 @@ std::string icon_path(const std::string &name, int size);
 // Loads (and caches) an icon scaled to size x size. The image is owned by the
 // cache: never delete it. Returns nullptr if not found.
 Fl_Image *icon(const std::string &name, int size);
+// Loads "<name>-symbolic" (or name if it already ends so) recolored to
+// `color`, falling back to the full color icon `name`. Cached; never delete.
+Fl_Image *symbolic_icon(const std::string &name, int size, Fl_Color color);
 // Tries several names in order.
 Fl_Image *icon_first(const std::vector<std::string> &names, int size);
 

@@ -1,0 +1,50 @@
+.TH FL-PACKAGES 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-packages \- software updates and packages for fldesktop
+.SH SYNOPSIS
+\fBfl-packages\fR [\fB\-\-updates\fR | \fB\-\-search\fR \fITERM\fR]
+.br
+\fBfl-packages\fR \fIFILE\fR...
+.br
+\fBfl-packages \-\-check\-updates\fR [\fB\-\-now\fR]
+.SH DESCRIPTION
+Manages the system's software through PackageKit, so it works with the
+package manager of the distribution (apt, pacman, dnf, zypper...):
+.TP
+\fBUpdates\fR
+lists the available updates (security updates first), shows their
+description, changelog and security advisories, and installs the checked
+ones. \fBCheck Now\fR refreshes the package lists.
+.TP
+\fBSoftware\fR
+searches packages by name or description, browses them by group or lists
+the installed ones, shows details and installs or removes them.
+.TP
+\fBRepositories\fR
+enables and disables software sources.
+.TP
+\fBHistory\fR
+shows the changes made through PackageKit.
+.PP
+Before a change fl-packages asks PackageKit what else it involves
+(dependencies to install, packages to remove) and lists it for
+confirmation. Packages without a trusted signature are only installed
+after a second question. Administrator rights are asked for by
+\fBfl-polkit-agent\fR(1).
+.PP
+Given package files (.deb, .rpm, .pkg.tar.zst...), fl-packages installs
+them.
+.SH UPDATE CHECKS
+\fBfl-packages \-\-check\-updates\fR is started at login
+(\fI/etc/xdg/autostart/fl-packages-updates.desktop\fR). A minute later (at
+once with \fB\-\-now\fR), and then every six hours, it refreshes the package
+lists when they are older than the configured interval and sends a
+notification when updates are available; the notification opens the
+Updates tab. The same updates are announced only once.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/updates.ini\fR
+[Updates] Check=hourly|daily|weekly|never, Notify=true|false (the Software
+Updates page of \fBfl-settings\fR(1)).
+.SH SEE ALSO
+\fBpkcon\fR(1), \fBfl-flatpak\fR(1), \fBfl-settings\fR(1)

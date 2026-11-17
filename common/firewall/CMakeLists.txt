@@ -1,0 +1,7 @@
+if(TARGET fld-glib)
+  add_library(fld-fw STATIC fwclient.cpp)
+  target_include_directories(fld-fw PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-fw PUBLIC fld-glib)
+  add_library(fld-fw-ui STATIC fw_ui.cpp)
+  target_link_libraries(fld-fw-ui PUBLIC fld-fw fld)
+endif()

@@ -22,6 +22,10 @@ Build-Depends: debhelper-compat (= 13),
                libpolkit-agent-1-dev,
                libnm-dev,
                libfontconfig-dev,
+               libcups2-dev,
+               libpackagekit-glib2-dev,
+               libflatpak-dev,
+               libappstream-dev,
                shared-mime-info
 Standards-Version: 4.7.0
 Homepage: https://github.com/Yjlion/fldesktop
@@ -44,8 +48,12 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-polkit-agent (>= ${source:Version}),
          fldesktop-osk (>= ${source:Version}),
          fldesktop-charmap (>= ${source:Version}),
+         fldesktop-notifyd (>= ${source:Version}),
+         xdg-desktop-portal-fl (>= ${source:Version}),
          ${misc:Depends}
-Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core
+Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core,
+            fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
+            fldesktop-flatpak, fldesktop-firewall
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
  toolkit: its own wlroots compositor, a taskbar panel, an application
@@ -68,10 +76,12 @@ Package: fldesktop-shell
 Architecture: any
 Depends: fldesktop-wm (= ${binary:Version}), xdg-user-dirs, ${shlibs:Depends}, ${misc:Depends}
 Recommends: dbus-user-session, pipewire, wireplumber, network-manager,
-            fldesktop-polkit-agent
+            fldesktop-polkit-agent, fldesktop-notifyd, xdg-desktop-portal-fl,
+            bluez, cups
 Description: fldesktop panel, launcher and desktop
  The fldesktop session: fl-panel (taskbar, clock, network, volume, battery,
- on-screen keyboard button and power menu), fl-launcher (searchable
+ Bluetooth, printing, notifications, on-screen keyboard button and power
+ menu), fl-launcher (searchable
  application menu), fl-desktop (wallpaper and desktop icons), XDG
  autostart support and the wayland-sessions entry.
 
@@ -122,13 +132,15 @@ Package: fldesktop-settings
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: fldesktop-wm, xkb-data, fldesktop-polkit-agent
-Suggests: fldesktop-mixer, fldesktop-network
+Suggests: fldesktop-mixer, fldesktop-network, fldesktop-printers, fldesktop-bluetooth,
+          fldesktop-packages, fldesktop-firewall, fldesktop-notifyd
 Description: fldesktop settings center
  fl-settings collects the desktop settings in one window: appearance,
- panel and desktop, language and region, default applications, keyboard
- layouts, shortcuts, mouse and touchpad, displays, sound, network, date and
- time, and system information. Settings tools of other programs are listed
- as well.
+ panel and desktop, notifications, language and region, default
+ applications, keyboard layouts, shortcuts, mouse and touchpad, displays,
+ sound, printers, Bluetooth, network, firewall, date and time, software
+ updates and system information. Settings tools of other programs are
+ listed as well.
 
 Package: fldesktop-osk
 Architecture: any
@@ -181,3 +193,65 @@ Description: OpenPGP key of the fldesktop package repository
  The key that signs the fldesktop apt repository at
  https://yjlion.github.io/fldesktop/debian, installed as
  /usr/share/keyrings/fldesktop-archive-keyring.asc for use with signed-by.
+
+Package: fldesktop-notifyd
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: notification-daemon
+Recommends: fldesktop-wm
+Description: fldesktop notification server
+ fl-notifyd shows desktop notifications (org.freedesktop.Notifications):
+ icons and images, action buttons, urgency and timeouts. The panel keeps
+ a history of them and switches "do not disturb".
+
+Package: xdg-desktop-portal-fl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, xdg-desktop-portal
+Recommends: grim, slurp, xdg-desktop-portal-wlr, xdg-desktop-portal-gtk
+Description: xdg-desktop-portal backend for fldesktop
+ Implements the file chooser, "open with" dialog, settings (color scheme,
+ accent color, fonts), screenshot and color picker, access and account
+ dialogs, notification and wallpaper portals for fldesktop sessions, so
+ that Flatpak and other portal aware programs use fldesktop dialogs.
+
+Package: fldesktop-printers
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: cups
+Description: fldesktop printer settings
+ fl-printers adds printers (driverless IPP Everywhere or with a driver),
+ changes their settings and defaults, prints test pages and shows and
+ cancels print jobs.
+
+Package: fldesktop-bluetooth
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: bluez
+Description: fldesktop Bluetooth settings
+ fl-bluetooth turns Bluetooth on and off and pairs, connects, trusts and
+ forgets devices through BlueZ.
+
+Package: fldesktop-packages
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, packagekit
+Description: fldesktop software updates and package manager
+ fl-packages installs updates (with their changelogs and security
+ advisories), searches, installs and removes packages, enables software
+ sources and shows the history, through PackageKit. At login it checks for
+ updates and announces them with a notification.
+
+Package: fldesktop-flatpak
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, flatpak
+Description: fldesktop Flatpak app store
+ fl-flatpak finds, installs, updates and removes Flatpak apps from Flathub
+ and other sources, installs .flatpakref files and edits the permissions
+ of installed apps.
+
+Package: fldesktop-firewall
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: firewalld
+Description: fldesktop firewall settings
+ fl-firewall configures firewalld: default zone, panic mode, and per zone
+ services, ports, interfaces, sources, masquerading and port forwarding.

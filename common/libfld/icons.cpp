@@ -11,6 +11,7 @@
 
 #include <climits>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <memory>
 
@@ -263,6 +264,39 @@ Fl_Image *icon(const std::string &name, int size) {
       }
     }
   }
+  cache[key] = img;
+  return img;
+}
+
+Fl_Image *symbolic_icon(const std::string &name, int size, Fl_Color color) {
+  static std::map<std::string, Fl_Image *> cache;
+  uchar r, g, b;
+  Fl::get_color(color, r, g, b);
+  char hex[8];
+  snprintf(hex, sizeof hex, "#%02x%02x%02x", r, g, b);
+  std::string key = name + "@" + std::to_string(size) + hex;
+  auto it = cache.find(key);
+  if (it != cache.end()) return it->second;
+  Fl_Image *img = nullptr;
+  std::string p = ends_with(name, "-symbolic") ? icon_path(name, size) : icon_path(name + "-symbolic", size);
+  std::string svg;
+  if (!p.empty() && extension(p) == "svg" && read_file(p, svg, 1 << 20)) {
+    // symbolic icons are drawn in one dark gray (or currentColor)
+    for (const char *from : {"#2e3436", "#2E3436", "#222222", "#232323", "#241f31", "#000000", "currentColor"}) {
+      size_t pos = 0, n = strlen(from);
+      while ((pos = svg.find(from, pos)) != std::string::npos) {
+        svg.replace(pos, n, hex);
+        pos += 7;
+      }
+    }
+    auto *s = new Fl_SVG_Image(nullptr, svg.c_str());
+    if (s->fail()) delete s;
+    else {
+      s->scale(size, size, 1, 1);
+      img = s;
+    }
+  }
+  if (!img) img = icon(name, size); // a full color icon of that name
   cache[key] = img;
   return img;
 }

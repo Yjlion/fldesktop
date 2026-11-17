@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Notifications
+Comment=Shows desktop notifications
+Exec=fl-notifyd
+OnlyShowIn=fldesktop;
+NoDisplay=true
+X-GNOME-AutoRestart=true

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Update Checker
+Comment=Tells when software updates are available
+Exec=fl-packages --check-updates
+OnlyShowIn=fldesktop;
+NoDisplay=true

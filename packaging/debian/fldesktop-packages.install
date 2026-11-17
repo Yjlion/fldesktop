@@ -1,0 +1,5 @@
+usr/bin/fl-packages
+usr/share/applications/fl-packages.desktop
+usr/share/icons/hicolor/scalable/apps/fl-packages.svg
+usr/share/man/man1/fl-packages.1
+etc/xdg/autostart/fl-packages-updates.desktop

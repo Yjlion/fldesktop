@@ -16,7 +16,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-edit** | Tabbed text editor with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
-| **fl-video** | Video and audio player on libmpv: playlists, subtitles, track selection, speed, screenshots, resume |
+| **fl-video** | Video and audio player on GStreamer: playlists, subtitles, track selection, speed, screenshots, resume |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor |
@@ -84,19 +84,20 @@ tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
 polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
 page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
 packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak),
-libmpv and EGL/OpenGL (fl-video), PAM (fl-lock);
+GStreamer with its base plugins (fl-video), PAM (fl-lock);
 gio is used for notifications, the portal, Bluetooth and the firewall. Without
 one of them the parts that need it are left out.
 
 ```sh
 # Arch Linux
 sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango libinput \
-  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream mpv
+  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream gstreamer gst-plugins-base
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev libdrm-dev \
   libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
-  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libmpv-dev libegl-dev libgl-dev \
+  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libgstreamer1.0-dev \
+  libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev \
   libpam0g-dev
 
 cmake -B build -G Ninja

@@ -4,17 +4,18 @@ fl-video \- video and audio player
 .SH SYNOPSIS
 \fBfl-video\fR [\fB\-\-fullscreen\fR] [\fB\-\-software\fR] [\fIFILE\fR|\fIURL\fR...]
 .SH DESCRIPTION
-Plays video and audio files, playlists and network streams with \fBlibmpv\fR, so every format,
-codec and subtitle type that \fBmpv\fR(1) supports works, including hardware decoding where
-available. Several files make a playlist; files dropped on the window are added to it (with Ctrl
+Plays video and audio files, playlists and network streams with \fBGStreamer\fR: the formats and
+codecs it can play depend on the GStreamer plugins installed (the "good", "bad" and "libav"
+plugin sets cover nearly everything; a missing plugin is named in the error message). Several
+files make a playlist; files dropped on the window are added to it (with Ctrl
 held, they replace it). Web addresses that \fByt-dlp\fR understands also play when it is installed.
 Subtitle files next to a video (same name) are loaded automatically.
 .PP
 The position in each file is remembered when you quit and playback resumes there next time
 (\fBResume Where I Left Off\fR in the menu turns this off). The screen stays on while a video plays.
 .PP
-Video is drawn with OpenGL; without a usable OpenGL driver fl-video falls back to mpv's software
-renderer.
+Video is drawn with OpenGL; without a usable OpenGL driver fl-video falls back to software
+rendering (GStreamer scales the picture to the window).
 .SH OPTIONS
 .TP
 \fB\-f\fR, \fB\-\-fullscreen\fR
@@ -61,7 +62,7 @@ files, speed, the playlist and the other options.
 \fI~/.config/fldesktop/video.ini\fR
 Volume and the resume setting.
 .TP
-\fI~/.cache/fldesktop/watch_later/\fR
+\fI~/.cache/fldesktop/video-positions.ini\fR
 Remembered positions.
 .SH ENVIRONMENT
 .TP
@@ -69,6 +70,6 @@ Remembered positions.
 Set to 1 to always use the software renderer.
 .TP
 \fBFLD_VIDEO_DEBUG\fR
-Print renderer and mpv log messages.
+Print renderer messages, GStreamer warnings and error details.
 .SH SEE ALSO
-\fBmpv\fR(1), \fBfl-files\fR(1)
+\fBgst-launch-1.0\fR(1), \fByt-dlp\fR(1), \fBfl-files\fR(1)

@@ -26,7 +26,8 @@ Build-Depends: debhelper-compat (= 13),
                libpackagekit-glib2-dev,
                libflatpak-dev,
                libappstream-dev,
-               libmpv-dev,
+               libgstreamer1.0-dev,
+               libgstreamer-plugins-base1.0-dev,
                libpam0g-dev,
                libegl-dev,
                libgl-dev,
@@ -154,11 +155,12 @@ Description: fldesktop task manager
 
 Package: fldesktop-video
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, ${shlibs:Depends}, ${misc:Depends}
+Recommends: gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pipewire | gstreamer1.0-pulseaudio
 Suggests: yt-dlp
 Description: fldesktop video player
  fl-video plays video and audio files, playlists and network streams with
- libmpv: subtitles, audio and subtitle track selection, playback speed,
+ GStreamer: subtitles, audio and subtitle track selection, playback speed,
  screenshots, full screen and resuming where playback stopped.
 
 Package: fldesktop-view

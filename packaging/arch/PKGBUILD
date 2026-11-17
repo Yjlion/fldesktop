@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg libcups packagekit flatpak appstream mpv)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg libcups packagekit flatpak appstream gstreamer gst-plugins-base)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -160,7 +160,13 @@ _app() {
 
 package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); optdepends=("openssh: SSH connections" "sshfs: browse remote files"); _app term; }
 package_fldesktop-taskmgr() { pkgdesc="fldesktop task manager"; depends=(fltk); optdepends=("polkit: manage other users' processes"); _app taskmgr; }
-package_fldesktop-video() { pkgdesc="fldesktop video player"; depends=(fltk mpv libglvnd wayland); optdepends=("yt-dlp: play videos from web sites"); _app video; }
+package_fldesktop-video() {
+  pkgdesc="fldesktop video player"
+  depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
+  optdepends=("gst-plugins-bad: more formats" "gst-libav: more codecs (FFmpeg)"
+              "gst-plugin-pipewire: sound through PipeWire" "yt-dlp: play videos from web sites")
+  _app video
+}
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
 package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shared-mime-info); _app files; }

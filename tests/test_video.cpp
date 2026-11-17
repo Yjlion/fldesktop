@@ -1,4 +1,8 @@
 #include "test.h"
+#include <unistd.h>
+#include "fld/util.h"
+#include <cstdlib>
+#include "fld/ini.h"
 #include "video_util.h"
 
 using namespace video;
@@ -38,5 +42,43 @@ int main() {
   CHECK_EQ(next_speed(0.25, -1), 0.25);
   CHECK_EQ(next_speed(1.1, 1), 1.25);
   CHECK_EQ(next_speed(1.1, -1), 1.0);
+
+  // URIs for GStreamer
+  CHECK_EQ(to_uri("/home/u/My Videos/a#1.mkv"), std::string("file:///home/u/My%20Videos/a%231.mkv"));
+  CHECK_EQ(to_uri("/tmp/ä.ogg"), std::string("file:///tmp/%C3%A4.ogg"));
+  CHECK_EQ(to_uri("https://example.org/v.webm"), std::string("https://example.org/v.webm"));
+  CHECK(needs_resolver("https://www.youtube.com/watch?v=x"));
+  CHECK(needs_resolver("https://youtu.be/x"));
+  CHECK(!needs_resolver("https://example.org/v.webm"));
+  CHECK(!needs_resolver("/home/u/youtube.com.mkv"));
+
+  // resume positions
+  fld::Ini ini;
+  CHECK_EQ(resume_get(ini, "/v/a.mkv"), 0.0);
+  resume_put(ini, "/v/a.mkv", 125.5, 600);
+  CHECK_EQ(resume_get(ini, "/v/a.mkv"), 125.5);
+  CHECK_EQ(resume_get(ini, "/v/b.mkv"), 0.0);
+  resume_put(ini, "/v/a.mkv", 595, 600); // near the end: forget it
+  CHECK_EQ(resume_get(ini, "/v/a.mkv"), 0.0);
+  resume_put(ini, "/v/a.mkv", 60, 600);
+  resume_put(ini, "/v/a.mkv", 2, 600); // near the start: forget it
+  CHECK_EQ(resume_get(ini, "/v/a.mkv"), 0.0);
+  resume_put(ini, "https://x/y", 30, -1); // streams without a duration
+  CHECK_EQ(resume_get(ini, "https://x/y"), 30.0);
+  CHECK(resume_key("/v/a.mkv") != resume_key("/v/b.mkv"));
+  CHECK_EQ(resume_key("/v/a.mkv").size(), (size_t)16);
+  // subtitles next to a video
+  {
+    std::string dir = "/tmp/fld-test-video-" + std::to_string(getpid());
+    fld::mkdir_p(dir);
+    fld::write_file(dir + "/film.mkv", "");
+    CHECK_EQ(find_subtitle(dir + "/film.mkv"), std::string());
+    fld::write_file(dir + "/film.en.srt", "");
+    CHECK_EQ(find_subtitle(dir + "/film.mkv"), dir + "/film.en.srt");
+    fld::write_file(dir + "/film.srt", "");
+    CHECK_EQ(find_subtitle(dir + "/film.mkv"), dir + "/film.srt");
+    CHECK_EQ(find_subtitle("https://x/film.mkv"), std::string());
+    if (system(("rm -rf '" + dir + "'").c_str()) != 0) fprintf(stderr, "cleanup failed\n");
+  }
   return test_result("video");
 }

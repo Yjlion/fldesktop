@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream gstreamer gst-plugins-base libarchive)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -252,13 +252,15 @@ package_fldesktop-bluetooth() {
 }
 package_fldesktop-packages() {
   pkgdesc="fldesktop software updates and package manager (PackageKit)"
-  depends=(fltk glib2 packagekit)
+  depends=(fltk glib2 packagekit appstream libjxl)
+  optdepends=('archlinux-appstream-data: application names and icons for packages')
   _app packages
   _install_files etc/xdg/autostart/fl-packages-updates.desktop
 }
 package_fldesktop-flatpak() {
   pkgdesc="fldesktop Flatpak app store"
   depends=(fltk glib2 flatpak appstream)
+  optdepends=('curl: icons of apps whose catalog has only a web address for them')
   _app flatpak
 }
 package_fldesktop-firewall() {

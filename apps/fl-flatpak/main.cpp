@@ -21,6 +21,8 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <set>
+#include <thread>
 #include <cstdio>
 #include <map>
 #include <memory>
@@ -37,21 +39,72 @@
 
 namespace {
 
-// icons of catalog apps are files; keep scaled copies
+// icons of catalog apps are files; keep scaled copies. Apps with only a
+// remote icon get it downloaded (curl) into ~/.cache/fldesktop/flatpak-icons.
 std::map<std::string, Fl_Image *> g_icons;
+std::set<std::string> g_downloading;
+void (*g_icons_changed)() = nullptr;
+
+std::string icon_cache_file(const std::string &url) {
+  uint64_t h = 1469598103934665603ULL;
+  for (unsigned char c : url) {
+    h ^= c;
+    h *= 1099511628211ULL;
+  }
+  char b[40];
+  snprintf(b, sizeof b, "%016llx", (unsigned long long)h);
+  std::string ext = url.size() > 4 && url.compare(url.size() - 4, 4, ".svg") == 0 ? ".svg" : ".png";
+  return fld::cache_home() + "/fldesktop/flatpak-icons/" + b + ext;
+}
+
+void icons_changed_cb(void *) {
+  if (g_icons_changed) g_icons_changed();
+}
+
+void download_icon(const std::string &url) {
+  if (url.compare(0, 8, "https://") != 0 || g_downloading.count(url) || fld::which("curl").empty()) return;
+  g_downloading.insert(url);
+  std::string dest = icon_cache_file(url);
+  fld::mkdir_p(fld::dirname(dest));
+  std::thread([url, dest] {
+    std::string out;
+    std::string tmp = dest + ".part";
+    int rc = fld::run_capture({"curl", "-fsSL", "--max-time", "20", "--max-filesize", "2000000", "-o", tmp, url}, out);
+    if (rc == 0) rename(tmp.c_str(), dest.c_str());
+    else unlink(tmp.c_str());
+    Fl::awake([](void *) {
+      // a short delay gathers several finished downloads into one redraw
+      Fl::remove_timeout(icons_changed_cb);
+      Fl::add_timeout(0.3, icons_changed_cb);
+    }, nullptr);
+  }).detach();
+}
+
 Fl_Image *app_icon(const fp::App &a, int size) {
-  std::string key = a.icon + "@" + std::to_string(size);
+  std::string key = a.id + "|" + a.icon + "@" + std::to_string(size);
   auto it = g_icons.find(key);
   if (it != g_icons.end()) return it->second;
   Fl_Image *img = nullptr;
-  if (!a.icon.empty()) {
-    if (Fl_Image *raw = fld::load_image(a.icon)) {
-      img = raw->copy(size, size);
+  std::string file = a.icon;
+  bool pending = false;
+  if (file.empty() && !a.icon_url.empty()) {
+    std::string cached = icon_cache_file(a.icon_url);
+    if (fld::file_exists(cached)) file = cached;
+    else if (fld::icon_path(a.icon_stock.empty() ? a.id : a.icon_stock, size).empty()) {
+      download_icon(a.icon_url);
+      pending = g_downloading.count(a.icon_url) > 0;
+    }
+  }
+  if (!file.empty()) {
+    if (Fl_Image *raw = fld::load_image(file)) {
+      if (raw->w() > 0 && raw->h() > 0) img = raw->copy(size, size);
       delete raw;
     }
   }
-  if (!img) img = fld::icon_first({a.id, "application-x-executable"}, size);
-  g_icons[key] = img;
+  if (!img && !a.icon_stock.empty()) img = fld::icon(a.icon_stock, size);
+  if (!img) img = fld::icon_first({a.id, a.runtime ? "application-x-addon" : "application-x-executable"}, size);
+  // a download is on its way: do not remember the placeholder
+  if (!pending) g_icons[key] = img;
   return img;
 }
 
@@ -259,6 +312,9 @@ public:
     search = new Fl_Input(12, 10, 300, 30);
     search->when(FL_WHEN_CHANGED);
     search->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->filter(); }, this);
+    static StoreWindow *self;
+    self = this;
+    g_icons_changed = [] { self->refresh_icons(); };
     search->tooltip("Search apps by name, summary or id");
     target = new Fl_Choice(W - 230, 10, 218, 30, "Install for:");
     target->add("All users");
@@ -425,6 +481,14 @@ public:
     for (auto &c : fp::browse_categories()) nav->add(("   " + fp::category_label(c)).c_str());
     nav->value(keep);
     updates ? update_all->show() : update_all->hide();
+  }
+
+  // downloaded icons arrived: set them without rebuilding the list
+  void refresh_icons() {
+    for (size_t r = 0; r < shown.size() && (int)r < list->size(); r++)
+      list->icon((int)r + 1, app_icon(catalog.apps[(size_t)shown[r]], 32));
+    if (const fp::App *a = current()) icon->image(app_icon(*a, 64));
+    redraw();
   }
 
   void filter() {
@@ -678,6 +742,7 @@ int main(int argc, char **argv) {
     else select = a;
   }
   fld::init_app("fl-flatpak", argc, argv);
+  Fl_Image::RGB_scaling(FL_RGB_SCALING_BILINEAR); // smooth scaled app icons
   Fl::lock();
   StoreWindow *w = new StoreWindow;
   w->select_id = select;

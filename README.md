@@ -29,7 +29,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **xdg-desktop-portal-fl** | Portal backend: file chooser, open with, settings, screenshot, access, account, notification and wallpaper portals for Flatpak and portal aware apps |
 | **fl-printers** | CUPS printers: driverless or driver setup, defaults, jobs; a panel button while printing and a notification when done |
 | **fl-bluetooth** | BlueZ: pairing (with the panel's pairing agent), connecting, trust, battery levels; a panel button with quick connect |
-| **fl-packages** | Software updates and packages through PackageKit: updates with changelogs, search, install/remove, a package's files, dependencies and reverse dependencies, sources, history; update notifications |
+| **fl-packages** | Software updates and packages through PackageKit, with application names and icons from AppStream: updates with changelogs, search, install/remove, a package's files, dependencies and reverse dependencies, sources, history; update notifications |
 | **fl-flatpak** | Flatpak app store for Flathub and other sources, with a permissions editor; files, runtime and dependents of installed apps and runtimes |
 | **fl-firewall** | firewalld: zones, services, ports, interfaces, sources, forwarding, panic mode |
 
@@ -93,12 +93,12 @@ one of them the parts that need it are left out.
 ```sh
 # Arch Linux
 sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango librsvg libinput \
-  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream gstreamer gst-plugins-base libarchive
+  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev librsvg2-dev libdrm-dev \
   libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
-  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libarchive-dev libgstreamer1.0-dev \
+  libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libjxl-dev libarchive-dev libgstreamer1.0-dev \
   libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev \
   libpam0g-dev
 

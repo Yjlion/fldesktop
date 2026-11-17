@@ -27,6 +27,7 @@ Build-Depends: debhelper-compat (= 13),
                libpackagekit-glib2-dev,
                libflatpak-dev,
                libappstream-dev,
+               libjxl-dev,
                libarchive-dev,
                libgstreamer1.0-dev,
                libgstreamer-plugins-base1.0-dev,
@@ -312,15 +313,19 @@ Description: fldesktop Bluetooth settings
 Package: fldesktop-packages
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, packagekit
+Recommends: appstream
 Description: fldesktop software updates and package manager
  fl-packages installs updates (with their changelogs and security
  advisories), searches, installs and removes packages, enables software
  sources and shows the history, through PackageKit. At login it checks for
- updates and announces them with a notification.
+ updates and announces them with a notification. Packages of desktop
+ applications show the application's name and icon from the AppStream
+ catalog.
 
 Package: fldesktop-flatpak
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, flatpak
+Recommends: curl
 Description: fldesktop Flatpak app store
  fl-flatpak finds, installs, updates and removes Flatpak apps from Flathub
  and other sources, installs .flatpakref files and edits the permissions

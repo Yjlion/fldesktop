@@ -43,7 +43,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends reprepro pacman-package-manager \
+          sudo apt-get install -y --no-install-recommends reprepro pacman-package-manager makepkg \
             libarchive-tools zstd gnupg
 
       - name: Import the signing key

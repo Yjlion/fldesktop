@@ -58,10 +58,18 @@ jobs:
           cp -r packaging/debian debian
           base=$(dpkg-parsechangelog -S Version)
           if [ "$CHANNEL" = stable ]; then
-            # a release tag must match debian/changelog
-            if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$base" ]; then
-              echo "::error::Tag ${GITHUB_REF_NAME} does not match debian/changelog version $base"
-              exit 1
+            # a release tag is v<version> or v<version>-<n> (a rebuild of the
+            # same version); <version> must match debian/changelog
+            if [ "${GITHUB_REF_TYPE}" = tag ]; then
+              case "${GITHUB_REF_NAME}" in
+                "v$base") ;;
+                "v$base"-*)
+                  n=${GITHUB_REF_NAME#"v$base"-}
+                  case "$n" in ''|*[!0-9]*) echo "::error::Tag ${GITHUB_REF_NAME}: expected v$base or v$base-<number>"; exit 1 ;; esac
+                  dch --newversion "$base+r$n" --distribution trixie --force-distribution \
+                    "Rebuild of $base (tag ${GITHUB_REF_NAME})." ;;
+                *) echo "::error::Tag ${GITHUB_REF_NAME} does not match debian/changelog version $base (expected v$base or v$base-<number>)"; exit 1 ;;
+              esac
             fi
           else
             v="$base+git$(git rev-list --count HEAD).g$(git rev-parse --short=7 HEAD)"
@@ -95,6 +103,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Set the release
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          git config --global --add safe.directory "$PWD"
+          v=$(sed -n 's/^project(fldesktop VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          # a release tag is v<version> or v<version>-<pkgrel>
+          if [ "$CHANNEL" = stable ] && [ "${GITHUB_REF_TYPE}" = tag ]; then
+            case "${GITHUB_REF_NAME}" in
+              "v$v") rel=1 ;;
+              "v$v"-*) rel=${GITHUB_REF_NAME#"v$v"-} ;;
+              *) echo "::error::Tag ${GITHUB_REF_NAME} does not match the version $v in CMakeLists.txt"; exit 1 ;;
+            esac
+            case "$rel" in ''|*[!0-9]*) echo "::error::Tag ${GITHUB_REF_NAME}: expected v$v or v$v-<number>"; exit 1 ;; esac
+            sed -i "s/^pkgrel=.*/pkgrel=$rel/" packaging/arch/PKGBUILD
+          fi
+          grep -E '^pkg(ver|rel)=' packaging/arch/PKGBUILD
       - name: Build
         run: |
           useradd -m builder

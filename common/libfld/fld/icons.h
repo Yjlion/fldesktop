@@ -26,7 +26,15 @@ Fl_Image *icon_first(const std::vector<std::string> &names, int size);
 // The caller owns the returned image. Returns nullptr on failure.
 Fl_Image *load_image(const std::string &path);
 
-// Name of the icon theme in use (desktop.ini [General] IconTheme or Adwaita).
+// Name of the icon theme in use (desktop.ini [General] IconTheme, else
+// default_icon_theme()).
 std::string icon_theme_name();
+// Uses this icon theme instead of the configured one (e.g. the greeter's).
+// Call before the first icon lookup.
+void set_icon_theme_name(const std::string &name);
+// "fldesktop" when that theme is installed, else "Adwaita".
+std::string default_icon_theme();
+// "fldesktop-cursors" when installed, else "Adwaita".
+std::string default_cursor_theme();
 
 } // namespace fld

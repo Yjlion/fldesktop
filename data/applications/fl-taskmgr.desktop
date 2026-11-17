@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Task Manager
+GenericName=System Monitor
+Comment=View and end running processes, and watch CPU, memory, network and disk use
+Exec=fl-taskmgr
+Icon=fl-taskmgr
+Categories=System;Monitor;
+Keywords=process;kill;end;cpu;memory;ram;load;performance;system monitor;
+StartupWMClass=fl-taskmgr
+Actions=Performance;
+
+[Desktop Action Performance]
+Name=Performance
+Exec=fl-taskmgr --performance

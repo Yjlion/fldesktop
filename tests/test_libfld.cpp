@@ -5,6 +5,7 @@
 #include "fld/ini.h"
 #include "fld/json.h"
 #include "fld/mime.h"
+#include "fld/styles.h"
 #include "fld/trash.h"
 #include "fld/util.h"
 #include "test.h"
@@ -145,6 +146,16 @@ static void test_trash_and_copy() {
   CHECK(!fld::file_exists(g_tmp + "/copy"));
 }
 
+static void test_styles() {
+  CHECK(fld::widget_styles().size() >= 8);
+  for (auto &st : fld::widget_styles()) CHECK_EQ(fld::normalize_style(st.id), std::string(st.id));
+  CHECK_EQ(fld::normalize_style("GTK+"), std::string("gtk+"));
+  CHECK_EQ(fld::normalize_style("base"), std::string("none"));
+  CHECK_EQ(fld::normalize_style(""), std::string("none"));
+  CHECK_EQ(fld::normalize_style(" Fld-Flat "), std::string("fld-flat"));
+  CHECK_EQ(fld::normalize_style("bogus"), std::string("gtk+"));
+}
+
 int main() {
   char tmpl[] = "/tmp/fld-test-XXXXXX";
   g_tmp = mkdtemp(tmpl);
@@ -153,6 +164,7 @@ int main() {
   test_desktop_entry();
   test_json();
   test_mime();
+  test_styles();
   test_trash_and_copy();
   fld::remove_recursive(g_tmp);
   return test_result("libfld");

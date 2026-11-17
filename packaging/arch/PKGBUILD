@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg libcups packagekit flatpak appstream)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg libcups packagekit flatpak appstream mpv)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig)
 checkdepends=()
@@ -77,7 +77,7 @@ _stage() {
 package_fldesktop() {
   pkgdesc="Lightweight Wayland desktop built with FLTK (meta package)"
   depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
-           fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap
+           fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-taskmgr
            fldesktop-mixer fldesktop-polkit-agent fldesktop-network fldesktop-notifyd
            xdg-desktop-portal-fl)
   optdepends=('fldesktop-greeter: graphical login with greetd'
@@ -86,7 +86,8 @@ package_fldesktop() {
               'fldesktop-bluetooth: Bluetooth settings'
               'fldesktop-packages: software updates through PackageKit'
               'fldesktop-flatpak: Flatpak app store'
-              'fldesktop-firewall: firewall settings')
+              'fldesktop-firewall: firewall settings'
+              'fldesktop-video: video player')
   arch=(any)
 }
 
@@ -132,7 +133,9 @@ _app() {
     usr/share/icons/hicolor/scalable/apps/fl-$1.svg usr/share/man/man1/fl-$1.1
 }
 
-package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); _app term; }
+package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); optdepends=("openssh: SSH connections" "sshfs: browse remote files"); _app term; }
+package_fldesktop-taskmgr() { pkgdesc="fldesktop task manager"; depends=(fltk); optdepends=("polkit: manage other users' processes"); _app taskmgr; }
+package_fldesktop-video() { pkgdesc="fldesktop video player"; depends=(fltk mpv libglvnd wayland); optdepends=("yt-dlp: play videos from web sites"); _app video; }
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
 package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shared-mime-info); _app files; }

@@ -4,8 +4,22 @@ fl-edit \- text editor
 .SH SYNOPSIS
 \fBfl-edit\fR [\fIFILE\fR...]
 .SH DESCRIPTION
-A tabbed text editor with syntax highlighting for
-common languages, find and replace (Ctrl+F, Ctrl+H, F3), go to line (Ctrl+G), auto-indent,
+A tabbed text editor with find and replace (Ctrl+F, Ctrl+H, F3), go to line (Ctrl+G), auto-indent,
 block indent with Tab/Shift+Tab, word wrap and line numbers.
+.SS Syntax highlighting
+The language is detected from the file name or the first line (\fB#!\fR interpreter,
+\fB<?php\fR, \fB<!DOCTYPE html>\fR, \fBdiff\fR headers). Supported: C/C++, C#, CMake, CSS, Diff, Go,
+HTML (with embedded JavaScript and CSS), INI, Java, JavaScript, JSON, Kotlin, Lua, Makefile, Markdown,
+Meson, Perl, PHP, Python, Ruby, Rust, Shell, SQL, TOML, TypeScript, XML and YAML.
+\fBView \(-> Language\fR overrides the detection for the current tab.
+.PP
+\fBView \(-> Color Theme\fR picks the highlighting colors: Automatic (follows the desktop's light or
+dark theme), Default Light, Default Dark, Solarized Light, Solarized Dark, Monokai or High Contrast.
+\fBView \(-> Highlight Matching Brackets\fR marks the bracket next to the cursor and its partner;
+brackets inside strings and comments are ignored.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/edit.ini\fR
+Settings: \fBColorTheme\fR, \fBMatchBrackets\fR, \fBHighlight\fR, \fBFontSize\fR, \fBTabWidth\fR and others.
 .SH SEE ALSO
 \fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)

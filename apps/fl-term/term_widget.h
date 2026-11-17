@@ -30,6 +30,8 @@ public:
   void set_colors(const TermColors &c);
   void set_scrollback_limit(size_t n) { sb_limit_ = n; }
   void set_hold(bool h) { hold_ = h; }
+  // keep the window open only when the command fails
+  void set_hold_on_error(bool h) { hold_on_error_ = h; }
   // Preferred window size for cols x rows.
   void size_for(int cols, int rows, int &w, int &h);
   int cell_w() const { return cw_; }
@@ -63,7 +65,7 @@ private:
   int cw_ = 8, ch_ = 16, ascent_ = 12;
   int font_size_ = 14;
   int pad_ = 4;
-  bool hold_ = false;
+  bool hold_ = false, hold_on_error_ = false;
   std::string title_;
 
   // scrollback: oldest first

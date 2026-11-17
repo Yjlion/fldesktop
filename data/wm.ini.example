@@ -71,6 +71,7 @@ Alt+Tab=cycle
 Alt+Shift+Tab=cycle-back
 Print=exec fl-screenshot
 Shift+Print=exec fl-screenshot --area
+Ctrl+Shift+Escape=exec fl-taskmgr
 Super+Shift+r=reload
 Ctrl+Alt+BackSpace=quit
 

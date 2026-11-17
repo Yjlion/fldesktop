@@ -190,9 +190,13 @@ void TermWidget::read_pty() {
     if (pid_ > 0) waitpid(pid_, &status, 0);
     pid_ = -1;
     if (got) vterm_screen_flush_damage(screen_);
-    if (!hold_ && on_exit) on_exit(this, status, cb_data);
+    bool failed = !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    if (!hold_ && !(hold_on_error_ && failed) && on_exit) on_exit(this, status, cb_data);
     else {
-      const char *msg = "\r\n\x1b[2m[process exited]\x1b[0m";
+      char msg[96];
+      if (WIFEXITED(status) && WEXITSTATUS(status))
+        snprintf(msg, sizeof msg, "\r\n\x1b[2m[process exited with status %d]\x1b[0m", WEXITSTATUS(status));
+      else snprintf(msg, sizeof msg, "\r\n\x1b[2m[process exited]\x1b[0m");
       vterm_input_write(vt_, msg, strlen(msg));
       redraw();
     }
@@ -634,6 +638,7 @@ int TermWidget::handle(int e) {
         switch (key) {
           case 'c': copy_selection(1); return 1;
           case 'v': paste(1); return 1;
+          case 'n': case 'w': case 's': return 0; // window shortcuts (new window, close, SSH)
         }
       }
       if (shift && !ctrl && !alt) {

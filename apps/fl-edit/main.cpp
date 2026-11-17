@@ -34,7 +34,9 @@ static Fl_Box *g_status;
 
 struct Settings {
   bool line_numbers = true, wrap = false, highlight = true, spaces = false, auto_indent = true;
+  bool brackets = true;
   int font_size = 14, tab_width = 4;
+  std::string theme = "auto";
   std::vector<std::string> recent;
 } S;
 
@@ -42,23 +44,22 @@ static const int MAX_HIGHLIGHT = 4 << 20; // skip highlighting huge files
 
 // ---- style table ---------------------------------------------------------------
 
-static Fl_Text_Display::Style_Table_Entry g_styles[9];
+static Fl_Text_Display::Style_Table_Entry g_styles[syntax::STYLE_COUNT];
+
+static Fl_Color rgb(unsigned v) { return fl_rgb_color((v >> 16) & 255, (v >> 8) & 255, v & 255); }
+static const syntax::Theme &cur_theme() { return syntax::theme(S.theme, fld::palette().dark); }
 
 static void make_styles() {
-  bool dark = fld::palette().dark;
+  const syntax::Theme &th = cur_theme();
   Fl_Font f = fld::mono_font();
   int s = S.font_size;
-  auto rgb = [](unsigned v) { return fl_rgb_color((v >> 16) & 255, (v >> 8) & 255, v & 255); };
-  Fl_Color plain = dark ? rgb(0xdcdfe4) : rgb(0x24262b);
-  g_styles[0] = {plain, f, s, 0, 0};                                          // A plain
-  g_styles[1] = {dark ? rgb(0x7f848e) : rgb(0x8a8f98), f + FL_ITALIC, s, 0, 0}; // B comment
-  g_styles[2] = {dark ? rgb(0x98c379) : rgb(0x26a269), f, s, 0, 0};           // C string
-  g_styles[3] = {dark ? rgb(0xc678dd) : rgb(0x8f3cb5), f + FL_BOLD, s, 0, 0}; // D keyword
-  g_styles[4] = {dark ? rgb(0xd19a66) : rgb(0xc64600), f, s, 0, 0};           // E number
-  g_styles[5] = {dark ? rgb(0xe5c07b) : rgb(0x9c6500), f, s, 0, 0};           // F preprocessor
-  g_styles[6] = {dark ? rgb(0x56b6c2) : rgb(0x1a7f99), f, s, 0, 0};           // G type
-  g_styles[7] = {dark ? rgb(0x61afef) : rgb(0x1c5aa8), f + FL_BOLD, s, 0, 0}; // H heading
-  g_styles[8] = {dark ? rgb(0x61afef) : rgb(0x1c5aa8), f, s, 0, 0};           // I function
+  for (int i = 0; i < syntax::STYLE_COUNT; i++) {
+    Fl_Font fi = f + (th.bold[i] ? FL_BOLD : 0) + (th.italic[i] ? FL_ITALIC : 0);
+    g_styles[i] = {rgb(th.colors[i]), fi, s, 0, 0};
+  }
+  // the matching bracket gets a background
+  g_styles[syntax::BRACKET - 'A'].attr = Fl_Text_Display::ATTR_BGCOLOR;
+  g_styles[syntax::BRACKET - 'A'].bgcolor = rgb(th.bracket_bg);
 }
 
 // ---- documents --------------------------------------------------------------------
@@ -83,7 +84,11 @@ public:
   Fl_Text_Buffer *buf, *style;
   Editor *ed;
   syntax::Language lang = syntax::NONE;
+  bool lang_forced = false;        // chosen in View > Language
   std::string tab_label;
+  std::string lexed, lexed_styles; // text and styles of the last rehighlight
+  bool dirty = true;               // edited since then
+  std::vector<int> marks;          // positions styled as BRACKET
 
   Doc(int x, int y, int w, int h) : Fl_Group(x, y, w, h) {
     buf = new Fl_Text_Buffer();
@@ -94,14 +99,9 @@ public:
     ed->textfont(fld::mono_font());
     ed->textsize(S.font_size);
     ed->box(FL_FLAT_BOX);
-    ed->color(fld::palette().dark ? fl_rgb_color(0x1e, 0x1f, 0x22) : FL_WHITE);
-    ed->cursor_color(fld::palette().accent);
     ed->cursor_style(Fl_Text_Display::SIMPLE_CURSOR);
-    ed->selection_color(fld::palette().dark ? fl_rgb_color(0x3a, 0x4d, 0x6b) : fl_rgb_color(0xb4, 0xd2, 0xf5));
     ed->linenumber_font(fld::mono_font());
     ed->linenumber_size(S.font_size - 2);
-    ed->linenumber_bgcolor(fld::palette().dark ? fl_rgb_color(0x26, 0x27, 0x2b) : fl_rgb_color(0xf3, 0xf4, 0xf6));
-    ed->linenumber_fgcolor(fld::palette().fg_dim);
     ed->scrollbar_size(12);
     resizable(ed);
     end();
@@ -117,15 +117,26 @@ public:
     delete style;
   }
 
+  // the style buffer is used for highlighting and for bracket matching
+  bool styled() const { return (S.highlight || S.brackets) && buf->length() < MAX_HIGHLIGHT; }
+  syntax::Language effective_lang() const { return S.highlight ? lang : syntax::NONE; }
+
   void apply_settings() {
     make_styles();
+    const syntax::Theme &th = cur_theme();
+    ed->color(rgb(th.bg));
+    ed->textcolor(rgb(th.colors[0]));
+    ed->cursor_color(rgb(th.cursor));
+    ed->selection_color(rgb(th.selection));
+    ed->linenumber_bgcolor(rgb(th.line_bg));
+    ed->linenumber_fgcolor(rgb(th.line_fg));
     ed->textsize(S.font_size);
     ed->linenumber_size(std::max(8, S.font_size - 2));
     ed->linenumber_width(S.line_numbers ? std::max(40, (int)(S.font_size * 3.5)) : 0);
     ed->wrap_mode(S.wrap ? Fl_Text_Display::WRAP_AT_BOUNDS : Fl_Text_Display::WRAP_NONE, 0);
     buf->tab_distance(S.tab_width);
-    if (S.highlight && lang != syntax::NONE && buf->length() < MAX_HIGHLIGHT)
-      ed->highlight_data(style, g_styles, 9, 'A', nullptr, nullptr);
+    if (styled())
+      ed->highlight_data(style, g_styles, syntax::STYLE_COUNT, 'A', nullptr, nullptr);
     else
       ed->highlight_data(nullptr, nullptr, 0, 0, nullptr, nullptr);
     rehighlight();
@@ -133,14 +144,43 @@ public:
   }
 
   void rehighlight() {
-    if (!S.highlight || lang == syntax::NONE || buf->length() >= MAX_HIGHLIGHT) return;
+    marks.clear();
+    if (!styled()) return;
     char *text = buf->text();
-    std::string t(text);
+    lexed = text;
     free(text);
-    std::string st;
-    syntax::highlight(lang, t, st);
-    style->text(st.c_str());
+    syntax::highlight(effective_lang(), lexed, lexed_styles);
+    style->text(lexed_styles.c_str());
+    dirty = false;
     ed->redisplay_range(0, buf->length());
+    update_brackets();
+  }
+
+  // Marks the bracket at (or just before) the cursor and its partner.
+  void update_brackets() {
+    if (!styled()) return;
+    for (int p : marks)
+      if (p < style->length() && p < (int)lexed_styles.size()) {
+        char o[2] = {lexed_styles[p], 0};
+        style->replace(p, p + 1, o);
+        ed->redisplay_range(p, p + 1);
+      }
+    marks.clear();
+    if (!S.brackets || dirty || (int)lexed.size() != buf->length()) return;
+    int pos = ed->insert_position();
+    long m = -1;
+    int at = pos;
+    if (pos < buf->length()) m = syntax::match_bracket(lexed, lexed_styles, (size_t)pos);
+    if (m < 0 && pos > 0) {
+      at = pos - 1;
+      m = syntax::match_bracket(lexed, lexed_styles, (size_t)at);
+    }
+    if (m < 0) return;
+    for (int p : {at, (int)m}) {
+      style->replace(p, p + 1, "L");
+      ed->redisplay_range(p, p + 1);
+      marks.push_back(p);
+    }
   }
 
   static void highlight_later(void *d) { static_cast<Doc *>(d)->rehighlight(); }
@@ -157,8 +197,10 @@ public:
       free(now);
       if (same) return;
     }
+    d->dirty = true;
+    d->marks.clear();
     // keep the style buffer the same length right away, re-lex shortly after
-    if (d->style->length() != d->buf->length() && S.highlight && d->lang != syntax::NONE) {
+    if (d->style->length() != d->buf->length() && d->styled()) {
       if (del) d->style->remove(pos, std::min(pos + del, d->style->length()));
       if (ins) {
         std::string fill(ins, 'A');
@@ -190,7 +232,7 @@ public:
     path = fld::abs_path(p);
     modified = false;
     std::string first = data.substr(0, data.find('\n'));
-    lang = syntax::detect(path, first);
+    if (!lang_forced) lang = syntax::detect(path, first);
     apply_settings();
     update_tab_label(this);
     return true;
@@ -209,7 +251,7 @@ public:
       char *t = buf->text();
       std::string s(t);
       free(t);
-      lang = syntax::detect(path, s.substr(0, s.find('\n')));
+      if (!lang_forced) lang = syntax::detect(path, s.substr(0, s.find('\n')));
       apply_settings();
     }
     modified = false;
@@ -306,7 +348,10 @@ int Editor::handle(int e) {
     }
   }
   int r = Fl_Text_Editor::handle(e);
-  if (e == FL_KEYBOARD || e == FL_PUSH || e == FL_DRAG || e == FL_RELEASE) update_status();
+  if (e == FL_KEYBOARD || e == FL_PUSH || e == FL_DRAG || e == FL_RELEASE) {
+    update_status();
+    doc->update_brackets();
+  }
   return r;
 }
 
@@ -322,6 +367,8 @@ static void save_settings() {
   cfg.set_bool("Editor", "Highlight", S.highlight);
   cfg.set_bool("Editor", "InsertSpaces", S.spaces);
   cfg.set_bool("Editor", "AutoIndent", S.auto_indent);
+  cfg.set_bool("Editor", "MatchBrackets", S.brackets);
+  cfg.set("Editor", "ColorTheme", S.theme);
   cfg.set_int("Editor", "FontSize", S.font_size);
   cfg.set_int("Editor", "TabWidth", S.tab_width);
   cfg.set("Editor", "Recent", fld::join(S.recent, ";"));
@@ -336,6 +383,8 @@ static void load_settings() {
   S.highlight = cfg.get_bool("Editor", "Highlight", true);
   S.spaces = cfg.get_bool("Editor", "InsertSpaces", false);
   S.auto_indent = cfg.get_bool("Editor", "AutoIndent", true);
+  S.brackets = cfg.get_bool("Editor", "MatchBrackets", true);
+  S.theme = cfg.get("Editor", "ColorTheme", "auto");
   S.font_size = cfg.get_int("Editor", "FontSize", fld::mono_size());
   S.tab_width = std::max(1, std::min(16, cfg.get_int("Editor", "TabWidth", 4)));
   S.recent = fld::split(cfg.get("Editor", "Recent", ""), ';');
@@ -615,6 +664,7 @@ static void menu_cb(Fl_Widget *, void *v) {
     case 35: S.font_size = fld::mono_size(); apply_all(); break;
     case 36: S.spaces = !S.spaces; apply_all(); break;
     case 37: S.auto_indent = !S.auto_indent; apply_all(); break;
+    case 41: S.brackets = !S.brackets; apply_all(); break;
     case 38: case 39: case 40: S.tab_width = id == 38 ? 2 : id == 39 ? 4 : 8; apply_all(); break;
     case 50: fld::about_dialog("Text Editor", "fl-edit", "A text and code editor built with FLTK."); break;
     case 60: if (d) { if (!d->path.empty()) fld::spawn({"fl-term", "--workdir", fld::dirname(d->path)}); else fld::spawn({"fl-term"}); } break;
@@ -623,6 +673,54 @@ static void menu_cb(Fl_Widget *, void *v) {
 }
 
 static void recent_cb(Fl_Widget *, void *v) { open_file((const char *)v); }
+
+static void sync_menus();
+
+static void language_cb(Fl_Widget *, void *v) {
+  Doc *d = current();
+  if (!d) return;
+  long l = (long)v;
+  if (l < 0) {
+    d->lang_forced = false;
+    char *t = d->buf->text();
+    std::string s(t);
+    free(t);
+    d->lang = syntax::detect(d->path, s.substr(0, s.find('\n')));
+  } else {
+    d->lang_forced = true;
+    d->lang = (syntax::Language)l;
+  }
+  d->apply_settings();
+  sync_menus();
+  update_status();
+}
+
+static std::vector<std::string> g_theme_ids;
+
+static void theme_cb(Fl_Widget *, void *v) {
+  long i = (long)v;
+  S.theme = i < 0 ? "auto" : g_theme_ids[(size_t)i];
+  apply_all();
+  sync_menus();
+}
+
+// radio items follow the current document / settings
+static void sync_menus() {
+  Doc *d = current();
+  for (int i = 0; i < g_menu->size(); i++) {
+    Fl_Menu_Item *m = (Fl_Menu_Item *)&g_menu->menu()[i];
+    if (!m->label()) continue;
+    bool on = false;
+    if (m->callback() == language_cb) {
+      long l = (long)m->user_data();
+      on = d && (l < 0 ? !d->lang_forced : d->lang_forced && d->lang == l);
+    } else if (m->callback() == theme_cb) {
+      long t = (long)m->user_data();
+      on = t < 0 ? S.theme == "auto" : S.theme == g_theme_ids[(size_t)t];
+    } else continue;
+    if (on) m->set(); else m->clear();
+  }
+}
 
 static void rebuild_recent_menu() {
   int idx = g_menu->find_index("&File/Open &Recent");
@@ -651,6 +749,7 @@ static void tabs_cb(Fl_Widget *, void *) {
     update_tab_label(d);
     d->ed->take_focus();
   }
+  sync_menus();
   update_status();
 }
 
@@ -705,7 +804,24 @@ int main(int argc, char **argv) {
   g_menu->add("&Edit/&Go to Line…", FL_CTRL + 'g', menu_cb, (void *)20);
   g_menu->add("&View/&Line Numbers", 0, menu_cb, (void *)30, FL_MENU_TOGGLE | (S.line_numbers ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Word Wrap", FL_ALT + 'z', menu_cb, (void *)31, FL_MENU_TOGGLE | (S.wrap ? FL_MENU_VALUE : 0));
-  g_menu->add("&View/&Syntax Highlighting", 0, menu_cb, (void *)32, FL_MENU_TOGGLE | (S.highlight ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER);
+  g_menu->add("&View/&Syntax Highlighting", 0, menu_cb, (void *)32, FL_MENU_TOGGLE | (S.highlight ? FL_MENU_VALUE : 0));
+  g_menu->add("&View/&Highlight Matching Brackets", 0, menu_cb, (void *)41, FL_MENU_TOGGLE | (S.brackets ? FL_MENU_VALUE : 0));
+  g_menu->add("&View/&Language/&Automatic", 0, language_cb, (void *)-1L, FL_MENU_RADIO | FL_MENU_DIVIDER);
+  for (auto l : syntax::all_languages()) {
+    std::string label = std::string("&View/&Language/") + syntax::language_name(l);
+    std::string esc;
+    for (char c : label.substr(16)) {
+      if (c == '/' || c == '\\' || c == '&' || c == '_' || c == '@') esc += '\\';
+      esc += c;
+    }
+    g_menu->add((label.substr(0, 16) + esc).c_str(), 0, language_cb, (void *)(long)l, FL_MENU_RADIO);
+  }
+  g_menu->add("&View/&Color Theme/&Automatic", 0, theme_cb, (void *)-1L, FL_MENU_RADIO | FL_MENU_DIVIDER);
+  for (size_t i = 0; i < syntax::themes().size(); i++) {
+    g_theme_ids.push_back(syntax::themes()[i].id);
+    g_menu->add((std::string("&View/&Color Theme/") + syntax::themes()[i].name).c_str(), 0, theme_cb, (void *)(long)i,
+                FL_MENU_RADIO | (i + 1 == syntax::themes().size() ? FL_MENU_DIVIDER : 0));
+  }
   g_menu->add("&View/Zoom &In", FL_CTRL + '=', menu_cb, (void *)33);
   g_menu->add("&View/Zoom &Out", FL_CTRL + '-', menu_cb, (void *)34);
   g_menu->add("&View/&Normal Size", FL_CTRL + '0', menu_cb, (void *)35);
@@ -747,6 +863,7 @@ int main(int argc, char **argv) {
     opened++;
   }
   if (g_docs.empty()) new_doc();
+  sync_menus();
   g_win->show(); // not show(argc, argv): it resets the theme colors
   current()->ed->take_focus();
   update_status();

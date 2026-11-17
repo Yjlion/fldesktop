@@ -1,4 +1,7 @@
 find_package(Threads REQUIRED)
+add_library(fl-files-search STATIC search.cpp)
+target_include_directories(fl-files-search PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-files-search PUBLIC Threads::Threads)
 add_executable(fl-files main.cpp fileops.cpp)
-target_link_libraries(fl-files PRIVATE fld Threads::Threads)
+target_link_libraries(fl-files PRIVATE fl-files-search fld Threads::Threads)
 install(TARGETS fl-files RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

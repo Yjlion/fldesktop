@@ -1,0 +1,28 @@
+# /etc/fldesktop/greeter.ini: settings of fl-greet, the fldesktop login screen.
+# Settings > Login Screen edits this file (as root, through polkit).
+
+[Greeter]
+# a world readable image (the greeter runs as its own user)
+#Background=/usr/share/fldesktop/backgrounds/dusk-hills-dark.svg
+# users with a lower uid, and these users, are not listed
+#MinUid=1000
+#HideUsers=guest,test
+# preselect the user (and session) used last
+#RememberUser=true
+#Clock24=true
+#ShowPowerButtons=true
+# on-screen keyboard: button | always | never; layout us, de, fr
+#Keyboard=button
+#KeyboardLayout=us
+
+[Appearance]
+#Theme=dark
+#Accent=#3584e4
+#FontSize=14
+
+[General]
+#IconTheme=fldesktop
+
+[Cursor]
+#Theme=fldesktop-cursors
+#Size=24

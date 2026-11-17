@@ -7,7 +7,7 @@ pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
-         fldesktop-keyring)
+         fldesktop-lock fldesktop-icon-theme fldesktop-keyring)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
@@ -16,7 +16,7 @@ url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
 makedepends=(cmake ninja pkgconf wayland-protocols git gnupg libcups packagekit flatpak appstream mpv)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
-         glib2 libpipewire polkit libnm fontconfig)
+         glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
 # Builds the checkout this PKGBUILD is part of; set FLDESKTOP_SRC to override.
 source=()
@@ -51,6 +51,7 @@ build() {
   cmake -S "$(_srcdir)" -B build -G Ninja \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_INSTALL_LIBEXECDIR=lib \
+    -DFLD_PAM_STACK=system-auth \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo
   cmake --build build
 }
@@ -79,7 +80,7 @@ package_fldesktop() {
   depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
            fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-taskmgr
            fldesktop-mixer fldesktop-polkit-agent fldesktop-network fldesktop-notifyd
-           xdg-desktop-portal-fl)
+           xdg-desktop-portal-fl fldesktop-lock fldesktop-icon-theme)
   optdepends=('fldesktop-greeter: graphical login with greetd'
               'adwaita-icon-theme: default icon theme'
               'fldesktop-printers: printer settings'
@@ -95,7 +96,7 @@ package_fldesktop-wm() {
   pkgdesc="fldesktop Wayland compositor (wlroots)"
   depends=(wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman)
   optdepends=('grim: screenshots' 'slurp: area screenshots' 'wl-clipboard: copy screenshots'
-              'swaylock: screen locking')
+              'fldesktop-lock: screen locking' 'fldesktop-icon-theme: the default cursors')
   _stage
   _install_files usr/bin/fl-wm usr/share/fldesktop/wm.ini.example usr/share/man/man1/fl-wm.1
   install -Dm644 "$(_srcdir)/COPYING" "$pkgdir/usr/share/licenses/$pkgname/COPYING"
@@ -123,8 +124,30 @@ package_fldesktop-shell() {
 package_fldesktop-greeter() {
   pkgdesc="FLTK greeter for greetd"
   depends=(fltk libxkbcommon greetd cage)
+  optdepends=('fldesktop-icon-theme: the fldesktop icons and cursors')
   _stage
-  _install_files usr/bin/fl-greet usr/share/fldesktop/config.toml usr/share/man/man1/fl-greet.1
+  _install_files usr/bin/fl-greet usr/bin/fl-greet-session usr/share/fldesktop/config.toml \
+    usr/share/fldesktop/greeter.ini.example usr/share/man/man1/fl-greet.1
+}
+
+package_fldesktop-lock() {
+  pkgdesc="fldesktop screen locker"
+  depends=(fltk glib2 pam)
+  optdepends=('fldesktop-wm: the compositor that keeps the session locked')
+  backup=(etc/pam.d/fl-lock)
+  _stage
+  _install_files usr/bin/fl-lock etc/pam.d/fl-lock etc/xdg/autostart/fl-lock-daemon.desktop usr/share/man/man1/fl-lock.1
+}
+
+package_fldesktop-icon-theme() {
+  pkgdesc="fldesktop icon themes (accent colors, monochrome) and cursor themes"
+  arch=(any)
+  depends=(hicolor-icon-theme)
+  _stage
+  local t
+  for t in "$srcdir"/stage/usr/share/icons/fldesktop*; do
+    _install_files usr/share/icons/$(basename "$t")
+  done
 }
 
 _app() {
@@ -143,8 +166,11 @@ package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _ap
 package_fldesktop-settings() {
   pkgdesc="fldesktop settings center"
   depends=(fltk wayland glib2 libpipewire libnm libcups)
-  optdepends=('xkeyboard-config: keyboard layout names' 'fldesktop-polkit-agent: date and time changes')
+  optdepends=('xkeyboard-config: keyboard layout names'
+              'fldesktop-polkit-agent: date and time and login screen changes'
+              'fldesktop-icon-theme: the fldesktop icons')
   _app settings
+  _install_files usr/lib/fldesktop/fl-settings-helper usr/share/polkit-1/actions/org.fldesktop.settings.policy
 }
 package_fldesktop-osk()   { pkgdesc="fldesktop on-screen keyboard"; depends=(fltk wayland libxkbcommon); _app osk; }
 package_fldesktop-charmap() {

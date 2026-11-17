@@ -136,6 +136,9 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	case FLWM_ACTION_RELOAD:
 		reload_config(server);
 		return true;
+	case FLWM_ACTION_LOCK:
+		lock_request(server);
+		return true;
 	case FLWM_ACTION_SHOW_DESKTOP:
 		views_show_desktop(server);
 		return true;
@@ -178,6 +181,7 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 	struct wlr_keyboard_key_event *event = data;
 	struct wlr_seat *seat = server->seat;
 	uint32_t keycode = event->keycode + 8;
+	lock_activity(server);
 	bool handled = false;
 
 	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
@@ -194,7 +198,8 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 		}
 		/* bindings match on the unshifted keysym of the active layout */
 		uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-		if (!handled && !server->focused_layer) {
+		/* while locked no key binding works except the lock's own keys */
+		if (!handled && !server->focused_layer && !server->locked) {
 			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
 			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap,
 				keycode, layout, 0, &syms);
@@ -385,6 +390,7 @@ static void new_virtual_pointer(struct wl_listener *listener, void *data) {
 static void load_cursor_theme(struct flwm_server *server) {
 	if (server->cursor_mgr) wlr_xcursor_manager_destroy(server->cursor_mgr);
 	const char *theme = server->config.cursor_theme ? server->config.cursor_theme : getenv("XCURSOR_THEME");
+	if (!theme) theme = "fldesktop-cursors"; /* wlroots falls back to its own cursor if it is missing */
 	int size = server->config.cursor_size > 0 ? server->config.cursor_size : 24;
 	server->cursor_mgr = wlr_xcursor_manager_create(theme, size);
 	char sz[16];
@@ -579,6 +585,7 @@ static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
 static void server_cursor_motion(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, cursor_motion);
 	struct wlr_pointer_motion_event *event = data;
+	lock_activity(server);
 	wlr_cursor_move(server->cursor, &event->pointer->base, event->delta_x, event->delta_y);
 	process_cursor_motion(server, event->time_msec);
 }
@@ -586,6 +593,7 @@ static void server_cursor_motion(struct wl_listener *listener, void *data) {
 static void server_cursor_motion_absolute(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, cursor_motion_absolute);
 	struct wlr_pointer_motion_absolute_event *event = data;
+	lock_activity(server);
 	wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
 	process_cursor_motion(server, event->time_msec);
 }
@@ -602,6 +610,7 @@ static uint32_t edges_for_point(struct flwm_view *view, double lx, double ly) {
 static void server_cursor_button(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, cursor_button);
 	struct wlr_pointer_button_event *event = data;
+	lock_activity(server);
 
 	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
 		enum flwm_cursor_mode mode = server->cursor_mode;
@@ -634,6 +643,13 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	struct wlr_keyboard *kb = wlr_seat_get_keyboard(server->seat);
 	uint32_t mods = kb ? wlr_keyboard_get_modifiers(kb) : 0;
 
+	if (server->locked) {
+		/* the cover swallows clicks; the lock client gets its own */
+		struct flwm_view *lv = desc && desc->kind == FLWM_NODE_VIEW ? desc->ptr : NULL;
+		if (lv && lv->role == FLWM_ROLE_LOCK) view_focus(lv);
+		if (surface) wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
+		return;
+	}
 	if (desc && desc->kind == FLWM_NODE_LAYER) {
 		layer_clicked(desc->ptr);
 		wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
@@ -699,6 +715,7 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 static void server_cursor_axis(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, cursor_axis);
 	struct wlr_pointer_axis_event *event = data;
+	lock_activity(server);
 	wlr_seat_pointer_notify_axis(server->seat, event->time_msec, event->orientation, event->delta,
 		event->delta_discrete, event->source, event->relative_direction);
 }

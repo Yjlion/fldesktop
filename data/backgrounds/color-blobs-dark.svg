@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0" stop-color="#14162b"/><stop offset="1" stop-color="#24143a"/></linearGradient>
+    <radialGradient id="s0" cx="30%" cy="30%" r="45%"><stop offset="0" stop-color="#3584e4" stop-opacity="0.75"/><stop offset="1" stop-color="#3584e4" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s1" cx="75%" cy="70%" r="45%"><stop offset="0" stop-color="#ed5b00" stop-opacity="0.75"/><stop offset="1" stop-color="#ed5b00" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s2" cx="80%" cy="20%" r="35%"><stop offset="0" stop-color="#9141ac" stop-opacity="0.75"/><stop offset="1" stop-color="#9141ac" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s3" cx="20%" cy="85%" r="35%"><stop offset="0" stop-color="#2190a4" stop-opacity="0.75"/><stop offset="1" stop-color="#2190a4" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#s0)"/>
+  <rect width="1920" height="1080" fill="url(#s1)"/>
+  <rect width="1920" height="1080" fill="url(#s2)"/>
+  <rect width="1920" height="1080" fill="url(#s3)"/>
+</svg>

@@ -36,6 +36,7 @@ option(FLD_BUILD_FLATPAK  "Build fl-flatpak (libflatpak, appstream)"       ON)
 option(FLD_BUILD_FIREWALL "Build fl-firewall (firewalld)"                  ON)
 option(FLD_BUILD_TASKMGR  "Build the fl-taskmgr task manager"             ON)
 option(FLD_BUILD_VIDEO    "Build the fl-video video player (needs libmpv)" ON)
+option(FLD_BUILD_LOCK     "Build the fl-lock screen locker (needs PAM)"    ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -47,7 +48,7 @@ add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO)
+foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -126,7 +127,7 @@ endif()
 if(FLD_BUILD_GREETER)
   add_subdirectory(greeter)
 endif()
-foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR)
+foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR LOCK)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     add_subdirectory(apps/fl-${lc})

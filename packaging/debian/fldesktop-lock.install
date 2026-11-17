@@ -1,0 +1,4 @@
+usr/bin/fl-lock
+etc/pam.d/fl-lock
+etc/xdg/autostart/fl-lock-daemon.desktop
+usr/share/man/man1/fl-lock.1

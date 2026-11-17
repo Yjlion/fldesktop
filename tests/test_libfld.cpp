@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <unistd.h>
 
+#include "fld/accents.h"
 #include "fld/desktop_entry.h"
 #include "fld/ini.h"
 #include "fld/json.h"
@@ -156,6 +157,49 @@ static void test_styles() {
   CHECK_EQ(fld::normalize_style("bogus"), std::string("gtk+"));
 }
 
+static void test_accents() {
+  using namespace fld;
+  CHECK_EQ(accent_presets().size(), 8u);
+  CHECK_EQ(accent_index("#3584E4"), 0);
+  CHECK_EQ(accent_index("#123456"), -1);
+  CHECK_EQ(nearest_accent("#2e9a4a"), 2);            // a green
+  CHECK_EQ(nearest_accent("#ff0000"), 4);            // red
+  CHECK_EQ(nearest_accent("#ff8000"), 3);            // orange
+  CHECK_EQ(nearest_accent("#808080"), 7);            // gray -> graphite
+  CHECK_EQ(nearest_accent("bad"), 0);
+  CHECK_EQ(accent_icon_theme(0), std::string("fldesktop"));
+  CHECK_EQ(accent_icon_theme(5), std::string("fldesktop-purple"));
+  CHECK(is_accent_icon_theme("fldesktop-teal"));
+  CHECK(!is_accent_icon_theme("fldesktop-mono"));
+}
+
+static void test_session_env() {
+  using namespace fld;
+  auto m = parse_env_text("# x\nhttp_proxy=http://p:3128\nexport NO_PROXY='localhost'\nbad\nE=\n");
+  CHECK_EQ(m.size(), 3u);
+  CHECK_EQ(m["http_proxy"], std::string("http://p:3128"));
+  CHECK_EQ(m["NO_PROXY"], std::string("localhost"));
+  CHECK_EQ(m["E"], std::string(""));
+  // wm.ini [environment] with a snapshot of the session start
+  std::string cfg = std::string(g_tmp) + "/cfg", run = std::string(g_tmp) + "/run";
+  mkdir_p(cfg + "/fldesktop");
+  mkdir_p(run);
+  setenv("XDG_CONFIG_HOME", cfg.c_str(), 1);
+  setenv("XDG_RUNTIME_DIR", run.c_str(), 1);
+  write_file(cfg + "/fldesktop/wm.ini", "[environment]\nhttp_proxy=@inherit\nhttps_proxy=@inherit\nall_proxy=\nFOO=bar\n");
+  write_file(run + "/fldesktop-session.env", "http_proxy=http://old:8080\n");
+  auto ch = session_env_changes();
+  CHECK_EQ(ch.size(), 4u);
+  if (ch.size() == 4) {
+    CHECK_EQ(ch[0].second, std::string("http://old:8080"));
+    CHECK_EQ(ch[1].second, std::string(1, '\x01'));  // not in the snapshot: unset
+    CHECK_EQ(ch[2].second, std::string(1, '\x01'));  // empty: unset
+    CHECK_EQ(ch[3].second, std::string("bar"));
+  }
+  unsetenv("XDG_CONFIG_HOME");
+  unsetenv("XDG_RUNTIME_DIR");
+}
+
 int main() {
   char tmpl[] = "/tmp/fld-test-XXXXXX";
   g_tmp = mkdtemp(tmpl);
@@ -166,6 +210,8 @@ int main() {
   test_mime();
   test_styles();
   test_trash_and_copy();
+  test_accents();
+  test_session_env();
   fld::remove_recursive(g_tmp);
   return test_result("libfld");
 }

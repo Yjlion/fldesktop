@@ -3,6 +3,8 @@
 //   fl-flatpak [APP-ID]          the store (showing the app)
 //   fl-flatpak FILE              install a .flatpakref / .flatpakrepo / .flatpak
 #include <FL/Fl.H>
+#include <FL/Fl_Browser.H>
+#include <FL/Fl_Tabs.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -241,8 +243,16 @@ public:
   Fl_Button *add_flathub, *action, *remove, *run, *perms, *update_all;
   Fl_Text_Display *desc;
   Fl_Text_Buffer *buf;
-  std::string title_s, meta_s, select_id;
-  enum { EXPLORE = 1, INSTALLED, UPDATES, FIRST_CATEGORY } ;
+  std::string title_s, meta_s, select_id, select_tab;
+  enum { EXPLORE = 1, INSTALLED, UPDATES, RUNTIMES, FIRST_CATEGORY } ;
+  // detail tabs
+  Fl_Tabs *tabs;
+  Fl_Group *tab_about, *tab_files, *tab_deps, *tab_used;
+  Fl_Input *files_filter;
+  Fl_Browser *files_list, *deps_list, *used_list;
+  std::string info_ref;          // ref the tabs show ("" = none)
+  bool info_loaded = false, info_loading = false;
+  fp::RefInfo info;
 
   StoreWindow() : Fl_Double_Window(1000, 620, "Flatpak Apps") {
     const int W = w(), H = h();
@@ -296,12 +306,46 @@ public:
       StoreWindow *s = (StoreWindow *)d;
       if (const fp::App *a = s->current()) permissions_dialog(*a);
     }, this);
-    desc = new Fl_Text_Display(dx, 204, dw, H - 240);
-    buf = new Fl_Text_Buffer;
-    desc->buffer(buf);
-    desc->wrap_mode(Fl_Text_Display::WRAP_AT_BOUNDS, 0);
-    desc->box(FL_FLAT_BOX);
-    desc->color(fld::palette().bg);
+    tabs = new Fl_Tabs(dx, 204, dw, H - 240);
+    {
+      int ty = 204 + 26, th = H - 240 - 26;
+      tab_about = new Fl_Group(dx, ty, dw, th, "About");
+      desc = new Fl_Text_Display(dx, ty, dw, th);
+      buf = new Fl_Text_Buffer;
+      desc->buffer(buf);
+      desc->wrap_mode(Fl_Text_Display::WRAP_AT_BOUNDS, 0);
+      desc->box(FL_FLAT_BOX);
+      desc->color(fld::palette().bg);
+      tab_about->resizable(desc);
+      tab_about->end();
+      tab_files = new Fl_Group(dx, ty, dw, th, "Files");
+      files_filter = new Fl_Input(dx + 4, ty + 4, dw - 8, 26);
+      files_filter->tooltip("Show only the files whose path contains this text");
+      files_filter->when(FL_WHEN_CHANGED);
+      files_filter->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->show_files(); }, this);
+      files_list = new Fl_Browser(dx, ty + 34, dw, th - 34);
+      files_list->format_char(0);
+      files_list->textfont(FL_COURIER);
+      files_list->textsize(12);
+      tab_files->resizable(files_list);
+      tab_files->end();
+      auto list_tab = [&](const char *label, Fl_Browser *&b) {
+        Fl_Group *g = new Fl_Group(dx, ty, dw, th, label);
+        b = new Fl_Hold_Browser(dx, ty, dw, th);
+        b->format_char(0);
+        b->textsize(13);
+        b->tooltip("Double-click to show it");
+        b->callback([](Fl_Widget *w, void *d) { ((StoreWindow *)d)->ref_clicked((Fl_Browser *)w); }, this);
+        g->resizable(b);
+        g->end();
+        return g;
+      };
+      tab_deps = list_tab("Depends on", deps_list);
+      tab_used = list_tab("Used by", used_list);
+    }
+    tabs->end();
+    tabs->resizable(tab_about);
+    tabs->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->tab_changed(); }, this);
     status = new Fl_Box(12, H - 32, W - 24, 28);
     status->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
     status->labelcolor(fld::palette().fg_dim);
@@ -325,9 +369,12 @@ public:
       filter();
       if (!c.error.empty()) set_status(c.error);
       else {
-        int inst = 0;
-        for (auto &a : catalog.apps) inst += a.installed;
-        set_status(std::to_string(catalog.apps.size()) + " apps, " + std::to_string(inst) + " installed · sources: " +
+        int inst = 0, apps = 0;
+        for (auto &a : catalog.apps) {
+          inst += a.installed && !a.runtime;
+          apps += !a.runtime;
+        }
+        set_status(std::to_string(apps) + " apps, " + std::to_string(inst) + " installed · sources: " +
                    (catalog.remotes.empty() ? "none" : fld::join(catalog.remotes, ", ")));
       }
       if (!catalog.have_flathub) {
@@ -338,12 +385,24 @@ public:
         add_flathub->hide();
       }
       if (!select_id.empty()) {
+        // a runtime is in its own list
+        for (auto &a : catalog.apps)
+          if (a.id == select_id && a.runtime) {
+            nav->value(RUNTIMES);
+            filter();
+            break;
+          }
         for (size_t i = 0; i < shown.size(); i++)
           if (catalog.apps[shown[i]].id == select_id) {
             list->value((int)i + 1);
             app_selected();
+            break;
           }
         select_id.clear();
+        if (select_tab == "files") tabs->value(tab_files);
+        else if (select_tab == "depends") tabs->value(tab_deps);
+        else if (select_tab == "used-by") tabs->value(tab_used);
+        tab_changed();
       }
     }, [this](const fp::Progress &p) { set_status(p.status); });
   }
@@ -354,12 +413,15 @@ public:
     int updates = 0, installed = 0;
     for (auto &a : catalog.apps) {
       updates += a.update;
-      installed += a.installed;
+      installed += a.installed && !a.runtime;
     }
     nav->add("Explore");
     nav->icon(1, fld::icon_first({"fl-flatpak", "system-software-install"}, 20));
     nav->add(("Installed (" + std::to_string(installed) + ")").c_str());
     nav->add(updates ? ("Updates (" + std::to_string(updates) + ")").c_str() : "Updates");
+    int runtimes = 0;
+    for (auto &a : catalog.apps) runtimes += a.runtime;
+    nav->add(("Runtimes (" + std::to_string(runtimes) + ")").c_str());
     for (auto &c : fp::browse_categories()) nav->add(("   " + fp::category_label(c)).c_str());
     nav->value(keep);
     updates ? update_all->show() : update_all->hide();
@@ -372,6 +434,7 @@ public:
     list->clear();
     for (size_t i = 0; i < catalog.apps.size(); i++) {
       const fp::App &a = catalog.apps[i];
+      if ((sel == RUNTIMES) != a.runtime) continue;  // runtimes only in their own list
       if (sel == INSTALLED && !a.installed) continue;
       if (sel == UPDATES && !a.update) continue;
       if (sel >= FIRST_CATEGORY) {
@@ -382,7 +445,8 @@ public:
           fld::lower(a.summary).find(q) == std::string::npos && fld::lower(a.id).find(q) == std::string::npos)
         continue;
       shown.push_back((int)i);
-      std::string label = a.name + (a.update ? "  · update available" : a.installed ? "  · installed" : "");
+      std::string label = a.runtime ? a.name + "  · " + a.version
+                                    : a.name + (a.update ? "  · update available" : a.installed ? "  · installed" : "");
       list->add(label.c_str());
       list->icon(list->size(), app_icon(a, 32));
     }
@@ -404,6 +468,17 @@ public:
   void show_detail(const fp::App *a) {
     for (Fl_Widget *w : {(Fl_Widget *)action, (Fl_Widget *)run, (Fl_Widget *)remove, (Fl_Widget *)perms})
       a ? w->show() : w->hide();
+    // the files / dependency tabs load when shown
+    info_ref = a && a->installed ? a->ref : "";
+    info_loaded = info_loading = false;
+    info = fp::RefInfo();
+    files_list->clear();
+    deps_list->clear();
+    used_list->clear();
+    if (a && !a->installed) {
+      for (Fl_Browser *b : {files_list, deps_list, used_list}) b->add("Shown once it is installed.");
+    }
+    tab_changed();
     if (!a) {
       icon->image(nullptr);
       title->label("");
@@ -423,7 +498,13 @@ public:
                                 (a->installed_size ? ", " + fld::human_size(a->installed_size) : "") + ")";
     meta_s = fld::escape_at(meta_s);
     meta->label(meta_s.c_str());
-    if (a->installed) {
+    if (a->runtime) {
+      action->label("Installed");
+      action->deactivate();
+      run->deactivate();
+      perms->deactivate();
+      remove->activate();
+    } else if (a->installed) {
       action->label(a->update ? "Update" : "Installed");
       a->update ? action->activate() : action->deactivate();
       run->activate();
@@ -441,6 +522,68 @@ public:
     if (!a->remote.empty()) t += "\nSource: " + a->remote;
     buf->text(t.c_str());
     redraw();
+  }
+
+  void tab_changed() {
+    Fl_Widget *t = tabs->value();
+    if (t == tab_about || info_ref.empty() || info_loaded || info_loading) return;
+    info_loading = true;
+    for (Fl_Browser *b : {files_list, deps_list, used_list}) {
+      b->clear();
+      b->add("Loading…");
+    }
+    const fp::App *a = current();
+    if (!a) return;
+    std::string ref = info_ref;
+    fp::ref_info(*a, [this, ref](const fp::RefInfo &r) {
+      if (ref != info_ref) return;  // another app was selected meanwhile
+      info = r;
+      info_loaded = true;
+      info_loading = false;
+      show_files();
+      deps_list->clear();
+      used_list->clear();
+      for (auto &d : r.depends) deps_list->add(d.c_str());
+      for (auto &u : r.used_by) used_list->add(u.c_str());
+      if (!r.error.empty()) {
+        deps_list->add(r.error.c_str());
+        used_list->add(r.error.c_str());
+      } else {
+        if (r.depends.empty()) deps_list->add("It needs no other runtime.");
+        if (r.used_by.empty()) used_list->add("Nothing installed uses it.");
+      }
+    });
+  }
+
+  void show_files() {
+    files_list->clear();
+    std::string q = fld::lower(files_filter->value());
+    for (auto &f : info.files)
+      if (q.empty() || fld::lower(f).find(q) != std::string::npos) files_list->add(f.c_str());
+    if (info.files_truncated) files_list->add("… (only the first 20000 entries)");
+    if (info_loaded && info.files.empty()) files_list->add(info.error.empty() ? "(no files)" : info.error.c_str());
+  }
+
+  // a double click on a ref selects that app or runtime
+  void ref_clicked(Fl_Browser *b) {
+    if (Fl::event_clicks() == 0) return;
+    int i = b->value();
+    if (i <= 0 || !b->text(i)) return;
+    std::string ref = b->text(i);
+    ref = ref.substr(0, ref.find(' '));
+    for (size_t k = 0; k < catalog.apps.size(); k++)
+      if (catalog.apps[k].ref == ref) {
+        nav->value(catalog.apps[k].runtime ? RUNTIMES : INSTALLED);
+        search->value("");
+        filter();
+        for (size_t j = 0; j < shown.size(); j++)
+          if (shown[j] == (int)k) {
+            list->value((int)j + 1);
+            list->middleline((int)j + 1);
+            show_detail(&catalog.apps[k]);
+          }
+        return;
+      }
   }
 
   void finished(bool ok, const std::string &what, const fp::App &a) {
@@ -517,13 +660,17 @@ public:
 } // namespace
 
 int main(int argc, char **argv) {
-  std::string select, file;
+  std::string select, file, tab;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-flatpak [APP-ID | FILE]\nFinds, installs and updates Flatpak apps; FILE is a .flatpakref,\n"
-             ".flatpakrepo or .flatpak bundle.\n");
+      printf("Usage: fl-flatpak [APP-ID [--tab files|depends|used-by] | FILE]\nFinds, installs and updates Flatpak "
+             "apps; FILE is a .flatpakref,\n.flatpakrepo or .flatpak bundle.\n");
       return 0;
+    }
+    if (a == "--tab" && i + 1 < argc) {
+      tab = argv[++i];
+      continue;
     }
     if (fld::starts_with(a, "file://")) a = fld::uri_decode(a.substr(7));
     std::string ext = fld::extension(a);
@@ -534,6 +681,7 @@ int main(int argc, char **argv) {
   Fl::lock();
   StoreWindow *w = new StoreWindow;
   w->select_id = select;
+  w->select_tab = tab;
   w->show(); // not show(argc, argv): it resets the theme colors
   if (!file.empty()) {
     std::string ext = fld::extension(file);

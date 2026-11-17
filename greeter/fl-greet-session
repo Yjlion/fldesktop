@@ -1,0 +1,16 @@
+#!/bin/sh
+# Runs fl-greet in the cage kiosk compositor (greetd's default_session
+# command), with the cursor theme of /etc/fldesktop/greeter.ini.
+ini=/etc/fldesktop/greeter.ini
+get() {
+	sed -n "/^\[$1\]/,/^\[/{s/^$2[[:space:]]*=[[:space:]]*//p;}" "$ini" 2>/dev/null | head -n 1
+}
+theme=$(get Cursor Theme)
+size=$(get Cursor Size)
+if [ -n "$theme" ]; then
+	export XCURSOR_THEME="$theme"
+elif [ -d /usr/share/icons/fldesktop-cursors/cursors ]; then
+	export XCURSOR_THEME=fldesktop-cursors
+fi
+[ -n "$size" ] && export XCURSOR_SIZE="$size"
+exec cage -s -d -- fl-greet "$@"

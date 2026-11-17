@@ -2,7 +2,8 @@
 .SH NAME
 fl-packages \- software updates and packages for fldesktop
 .SH SYNOPSIS
-\fBfl-packages\fR [\fB\-\-updates\fR | \fB\-\-search\fR \fITERM\fR]
+\fBfl-packages\fR [\fB\-\-updates\fR | \fB\-\-search\fR \fITERM\fR |
+\fB\-\-show\fR \fINAME\fR [\fB\-\-tab\fR \fBfiles\fR|\fBdepends\fR|\fBrequired-by\fR]]
 .br
 \fBfl-packages\fR \fIFILE\fR...
 .br
@@ -18,7 +19,10 @@ ones. \fBCheck Now\fR refreshes the package lists.
 .TP
 \fBSoftware\fR
 searches packages by name or description, browses them by group or lists
-the installed ones, shows details and installs or removes them.
+the installed ones, shows details and installs or removes them. The
+\fBFiles\fR tab lists the files of a package, \fBDepends on\fR the packages
+it needs and \fBRequired by\fR the installed packages that need it
+(directly, or also indirectly); a double click shows that package.
 .TP
 \fBRepositories\fR
 enables and disables software sources.

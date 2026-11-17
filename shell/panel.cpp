@@ -609,7 +609,9 @@ static void logout() {
 }
 
 static void power_cb(Fl_Widget *, void *) {
-  bool have_lock = !fld::which("swaylock").empty();
+  // fl-lock asks fl-wm to lock; swaylock works too (ext-session-lock)
+  std::string locker = !fld::which("fl-lock").empty() ? "fl-lock" : !fld::which("swaylock").empty() ? "swaylock" : "";
+  bool have_lock = !locker.empty();
   Fl_Menu_Item items[] = {
       {"Lock Screen", 0, nullptr, (void *)1, have_lock ? 0 : FL_MENU_INACTIVE},
       {"Log Out", 0, nullptr, (void *)2, FL_MENU_DIVIDER},
@@ -622,7 +624,10 @@ static void power_cb(Fl_Widget *, void *) {
   long id = (long)m->user_data();
   std::string out;
   switch (id) {
-    case 1: fld::spawn({"swaylock", "-f", "-c", "202124"}); break;
+    case 1:
+      if (locker == "fl-lock") fld::spawn({"fl-lock"});
+      else fld::spawn({"swaylock", "-f", "-c", "1e1f22"});
+      break;
     case 2:
       if (fl_choice("Log out of this session?", "Cancel", "Log Out", nullptr) == 1) logout();
       break;

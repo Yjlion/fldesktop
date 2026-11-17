@@ -1,5 +1,6 @@
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/theme.h"
 #include "fld/util.h"
 
 #include <FL/Fl.H>
@@ -158,12 +159,33 @@ std::string lookup_recursive(const std::string &theme, const std::string &name, 
 
 } // namespace
 
+static std::string &theme_override() {
+  static std::string name;
+  return name;
+}
+
+std::string default_icon_theme() {
+  for (auto &b : icon_bases())
+    if (file_exists(path_join(b, "fldesktop/index.theme"))) return "fldesktop";
+  return "Adwaita";
+}
+
+std::string default_cursor_theme() {
+  for (auto &b : icon_bases())
+    if (is_dir(path_join(b, "fldesktop-cursors/cursors"))) return "fldesktop-cursors";
+  return "Adwaita";
+}
+
+void set_icon_theme_name(const std::string &name) { theme_override() = name; }
+
 std::string icon_theme_name() {
   static std::string name;
+  if (!theme_override().empty()) return theme_override();
   if (name.empty()) {
     Ini cfg;
-    cfg.load(fld_config_dir() + "/desktop.ini");
-    name = cfg.get("General", "IconTheme", "Adwaita");
+    cfg.load(desktop_config_path());
+    name = cfg.get("General", "IconTheme", "");
+    if (name.empty()) name = default_icon_theme();
   }
   return name;
 }

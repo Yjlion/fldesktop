@@ -2,7 +2,7 @@
 .SH NAME
 fl-flatpak \- Flatpak apps for fldesktop
 .SH SYNOPSIS
-\fBfl-flatpak\fR [\fIAPP-ID\fR]
+\fBfl-flatpak\fR [\fIAPP-ID\fR [\fB\-\-tab\fR \fBfiles\fR|\fBdepends\fR|\fBused-by\fR]]
 .br
 \fBfl-flatpak\fR \fIFILE\fR.flatpakref | \fIFILE\fR.flatpakrepo | \fIFILE\fR.flatpak
 .SH DESCRIPTION
@@ -17,6 +17,11 @@ sound, devices, files and folders...) and changes it for you, like
 \fBflatpak override \-\-user\fR: the changes are written to
 \fI~/.local/share/flatpak/overrides/APP-ID\fR and apply when the app starts
 next.
+.PP
+The \fBFiles\fR, \fBDepends on\fR and \fBUsed by\fR tabs of an installed app
+or runtime list its files, the runtime (or, for an extension, the ref it
+extends) it needs, and the installed apps and extensions that need it.
+\fBRuntimes\fR lists the installed runtimes and extensions.
 .PP
 Given a .flatpakref, .flatpak bundle or .flatpakrepo file, fl-flatpak
 installs the app or adds the source.

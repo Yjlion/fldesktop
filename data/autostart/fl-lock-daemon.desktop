@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Screen Lock
+Comment=Locks the screen when the system suspends or logind asks for it
+Exec=fl-lock --daemon
+OnlyShowIn=fldesktop;
+NoDisplay=true
+X-GNOME-AutoRestart=true

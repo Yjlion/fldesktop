@@ -1,5 +1,6 @@
 // fldesktop common helpers
 #pragma once
+#include <map>
 #include <string>
 #include <vector>
 #include <ctime>
@@ -51,10 +52,20 @@ std::string uri_decode(const std::string &s);
 
 // Processes
 // Starts argv detached from us (double fork + setsid). Returns false on failure.
+// Starts a program detached (double fork). It gets the session environment
+// as wm.ini [environment] has it now (see session_env_changes()).
 bool spawn(const std::vector<std::string> &argv, const std::string &cwd = "");
 bool spawn_shell(const std::string &cmdline, const std::string &cwd = "");
 // Runs a command and captures stdout (blocking). Returns exit status or -1.
 int run_capture(const std::vector<std::string> &argv, std::string &out);
+// KEY=value lines (optionally "export", quoted values) -> map
+std::map<std::string, std::string> parse_env_text(const std::string &text);
+// $XDG_RUNTIME_DIR/fldesktop-session.env: the environment variables fl-session
+// started the session with (written by fl-session, used for "@inherit")
+std::string session_env_snapshot_path();
+// Changes wm.ini [environment] makes to the environment: (KEY, value); a
+// value of "\x01" means unset.
+std::vector<std::pair<std::string, std::string>> session_env_changes();
 // Finds an executable in $PATH.
 std::string which(const std::string &prog);
 // Preferred terminal emulator command (fl-term, then fallbacks)

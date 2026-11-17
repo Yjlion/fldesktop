@@ -1,0 +1,3 @@
+#%PAM-1.0
+# fl-lock, the fldesktop screen locker: checks the user's password
+@FLD_PAM_LINE@

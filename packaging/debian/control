@@ -27,6 +27,7 @@ Build-Depends: debhelper-compat (= 13),
                libflatpak-dev,
                libappstream-dev,
                libmpv-dev,
+               libpam0g-dev,
                libegl-dev,
                libgl-dev,
                shared-mime-info
@@ -54,6 +55,8 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-charmap (>= ${source:Version}),
          fldesktop-notifyd (>= ${source:Version}),
          xdg-desktop-portal-fl (>= ${source:Version}),
+         fldesktop-icon-theme (>= ${source:Version}),
+         fldesktop-lock (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
             fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
@@ -69,12 +72,35 @@ Description: lightweight Wayland desktop built with FLTK (metapackage)
 Package: fldesktop-wm
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: fldesktop-shell, xdg-utils
-Suggests: grim, slurp, wl-clipboard, swaylock
+Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils
+Suggests: grim, slurp, wl-clipboard
 Description: fldesktop Wayland compositor
  fl-wm is a stacking Wayland compositor based on wlroots with server side
  decorations, keyboard shortcuts, window snapping and the protocols used by
- the fldesktop panel (wlr-foreign-toplevel-management, layer-shell).
+ the fldesktop panel (wlr-foreign-toplevel-management, layer-shell). It locks
+ the session with fl-lock (or any ext-session-lock client such as swaylock),
+ also after a configurable idle time.
+
+Package: fldesktop-lock
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libpam-runtime
+Recommends: fldesktop-wm
+Description: fldesktop screen locker
+ fl-lock locks the fldesktop session: a lock screen with a clock, the user's
+ picture, password entry through PAM and an on-screen keyboard. fl-wm starts
+ it and keeps the screen covered until it reports a successful
+ authentication, even if it crashes. Its daemon locks the screen before the
+ system suspends and when logind asks (loginctl lock-session).
+
+Package: fldesktop-icon-theme
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Recommends: hicolor-icon-theme
+Description: fldesktop icon and cursor themes
+ The fldesktop icon theme in full color (with folder colors for eight accent
+ colors) and in monochrome versions for light and dark backgrounds, with
+ symbolic icons, and the fldesktop cursor themes (dark and light).
 
 Package: fldesktop-shell
 Architecture: any
@@ -92,10 +118,12 @@ Description: fldesktop panel, launcher and desktop
 Package: fldesktop-greeter
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, greetd, cage
+Recommends: fldesktop-icon-theme
 Description: FLTK greeter for greetd
  fl-greet is a graphical login screen for the greetd login manager. It runs
  inside the cage kiosk compositor and offers user and session selection,
- power buttons and a built-in on-screen keyboard.
+ power buttons and a built-in on-screen keyboard. Its look and the listed
+ users are set in /etc/fldesktop/greeter.ini (Settings > Login Screen).
 
 Package: fldesktop-term
 Architecture: any
@@ -157,15 +185,15 @@ Description: fldesktop text editor
 Package: fldesktop-settings
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: fldesktop-wm, xkb-data, fldesktop-polkit-agent
+Recommends: fldesktop-wm, xkb-data, fldesktop-polkit-agent, pkexec, fldesktop-icon-theme
 Suggests: fldesktop-mixer, fldesktop-network, fldesktop-printers, fldesktop-bluetooth,
           fldesktop-packages, fldesktop-firewall, fldesktop-notifyd
 Description: fldesktop settings center
  fl-settings collects the desktop settings in one window: appearance,
  panel and desktop, notifications, language and region, default
  applications, keyboard layouts, shortcuts, mouse and touchpad, displays,
- sound, printers, Bluetooth, network, firewall, date and time, software
- updates and system information. Settings tools of other programs are
+ sound, printers, Bluetooth, network, proxy, firewall, screen lock, login
+ screen, date and time, software updates and system information. Settings tools of other programs are
  listed as well.
 
 Package: fldesktop-osk

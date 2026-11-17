@@ -44,6 +44,7 @@ static std::vector<User> g_users;
 static std::vector<Session> g_sessions;
 static std::unique_ptr<GreetdClient> g_greetd;
 static bool g_demo = false;
+static bool g_clock24 = true, g_remember = true;
 
 static Fl_Double_Window *g_win;
 static Fl_Choice *g_user_choice;
@@ -254,7 +255,7 @@ public:
     struct tm tm;
     localtime_r(&now, &tm);
     char t[32], d[64];
-    strftime(t, sizeof t, "%H:%M", &tm);
+    strftime(t, sizeof t, g_clock24 ? "%H:%M" : "%l:%M %p", &tm);
     strftime(d, sizeof d, "%A, %d %B", &tm);
     fl_font(FL_HELVETICA, 72);
     fl_color(FL_WHITE);
@@ -331,9 +332,15 @@ int main(int argc, char **argv) {
       return 0;
     }
   }
+  // greeter.ini also holds the login screen's appearance ([Appearance],
+  // [General] IconTheme) in the same form as a user's desktop.ini
+  const char *ini_path = "/etc/fldesktop/greeter.ini";
+  if (fld::file_exists(ini_path)) fld::set_desktop_config_path(ini_path);
   fld::init_app("fl-greet", 0, nullptr);
   fld::Ini cfg;
-  cfg.load("/etc/fldesktop/greeter.ini");
+  cfg.load(ini_path);
+  g_clock24 = cfg.get_bool("Greeter", "Clock24", true);
+  g_remember = cfg.get_bool("Greeter", "RememberUser", true);
   std::vector<std::string> hidden;
   for (auto &h : fld::split(cfg.get("Greeter", "HideUsers", ""), ',')) hidden.push_back(fld::trim(h));
   load_users(cfg.get_int("Greeter", "MinUid", 1000), hidden);
@@ -387,10 +394,13 @@ int main(int argc, char **argv) {
   g_message->labelsize(13);
   card->end();
 
-  Fl_Button *reboot = new Fl_Button(W - 240, H - 50, 110, 34, "Restart");
-  reboot->callback([](Fl_Widget *, void *) { power("reboot"); });
-  Fl_Button *off = new Fl_Button(W - 124, H - 50, 110, 34, "Shut Down");
-  off->callback([](Fl_Widget *, void *) { power("poweroff"); });
+  bool power_buttons = cfg.get_bool("Greeter", "ShowPowerButtons", true);
+  if (power_buttons) {
+    Fl_Button *reboot = new Fl_Button(W - 240, H - 50, 110, 34, "Restart");
+    reboot->callback([](Fl_Widget *, void *) { power("reboot"); });
+    Fl_Button *off = new Fl_Button(W - 124, H - 50, 110, 34, "Shut Down");
+    off->callback([](Fl_Widget *, void *) { power("poweroff"); });
+  }
   // on-screen keyboard: Keyboard=button (default) | always | never
   std::string kb_mode = fld::lower(cfg.get("Greeter", "Keyboard", "button"));
   if (kb_mode != "never") {
@@ -400,7 +410,7 @@ int main(int argc, char **argv) {
     g_osk->layout(cfg.get("Greeter", "KeyboardLayout", "us"));
     g_osk->on_hide = [](fld::OskWidget *, void *) { show_keyboard(false); };
     g_osk->hide();
-    Fl_Button *kb = new Fl_Button(W - 356, H - 50, 110, 34, "Keyboard");
+    Fl_Button *kb = new Fl_Button(power_buttons ? W - 356 : W - 124, H - 50, 110, 34, "Keyboard");
     kb->tooltip("Show or hide the on-screen keyboard");
     kb->callback([](Fl_Widget *, void *) { show_keyboard(!g_osk->visible()); });
     kb->clear_visible_focus();
@@ -415,7 +425,7 @@ int main(int argc, char **argv) {
 
   // restore the last user and session
   fld::Ini st;
-  if (st.load(state_file())) {
+  if (g_remember && st.load(state_file())) {
     std::string last = st.get("State", "User");
     for (size_t i = 0; i < g_users.size(); i++)
       if (g_users[i].name == last) g_user_choice->value((int)i);

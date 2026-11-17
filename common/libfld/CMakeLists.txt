@@ -1,5 +1,6 @@
 add_library(fld STATIC
   util.cpp
+  accents.cpp
   ini.cpp
   desktop_entry.cpp
   icons.cpp
@@ -9,6 +10,7 @@ add_library(fld STATIC
   json.cpp
   trash.cpp
   widgets.cpp
+  pickers.cpp
   config_watch.cpp
   osk.cpp
   file_dialog.cpp

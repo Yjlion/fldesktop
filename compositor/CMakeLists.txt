@@ -23,8 +23,9 @@ if(EXISTS ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml)
   fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml server)
 endif()
 fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml server)
+fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml server)
 
-add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c)
+add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c)
 # wlroots headers include "<name>-protocol.h" for some protocols
 file(GLOB _hdrs ${FLD_PROTO_OUT}/*-server-protocol.h)
 foreach(h ${_hdrs})

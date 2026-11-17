@@ -20,6 +20,7 @@ struct App {
   std::string installation;    // "system" / "user" when installed
   std::vector<std::string> categories;
   bool installed = false, update = false, in_catalog = false;
+  bool runtime = false;        // an installed runtime or extension, not an app
   uint64_t installed_size = 0;
 };
 
@@ -58,7 +59,20 @@ void launch(const App &app, Done done);
 std::string metadata(const App &app);
 std::string overrides_path(const std::string &app_id); // the user's override file
 
+// files, dependencies and dependents of an installed app or runtime
+struct RefInfo {
+  std::vector<std::string> files;  // relative to the deploy directory's files/
+  bool files_truncated = false;
+  std::vector<std::string> depends, used_by;  // refs; " (not installed)" appended when missing
+  std::string error;
+};
+void ref_info(const App &app, std::function<void(const RefInfo &)> done);
+
 // helpers (unit tested)
+// metadata keyfile -> "runtime/<name>/<arch>/<branch>" of an app ("" if none)
+std::string metadata_runtime(const std::string &keyfile);
+// metadata keyfile -> the ref an extension belongs to ([ExtensionOf] ref)
+std::string metadata_extension_of(const std::string &keyfile);
 std::string ref_id(const std::string &ref); // app/org.foo/x86_64/stable -> org.foo
 std::string strip_markup(const std::string &appstream_description);
 std::string category_label(const std::string &category);

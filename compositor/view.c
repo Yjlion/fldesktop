@@ -82,6 +82,7 @@ static const struct {
 	{"fldesktop.osk", "fl-osk", FLWM_ROLE_OSK},
 	{"fldesktop.panel-popup", "fl-panel", FLWM_ROLE_POPUP},
 	{"fldesktop.notification", "fl-notifyd", FLWM_ROLE_NOTIFY},
+	{"fldesktop.lock", "fl-lock", FLWM_ROLE_LOCK},
 };
 
 static bool client_exe_is(struct flwm_server *server, struct wl_client *client, const char *exe) {
@@ -117,6 +118,11 @@ static void detect_role(struct flwm_view *view) {
 			wlr_log(WLR_INFO, "%s claimed by a foreign program; treating as normal", want);
 			return;
 		}
+		/* the lock role only for the locker fl-wm started itself */
+		if (shell_roles[i].role == FLWM_ROLE_LOCK && !lock_client_is_locker(view->server, client)) {
+			wlr_log(WLR_INFO, "%s from a process fl-wm did not start; treating as normal", want);
+			return;
+		}
 		view->role = shell_roles[i].role;
 		struct wlr_scene_tree *layer = view->server->layer_views;
 		switch (view->role) {
@@ -127,6 +133,7 @@ static void detect_role(struct flwm_view *view) {
 		case FLWM_ROLE_OSK:
 		case FLWM_ROLE_NOTIFY:
 		case FLWM_ROLE_POPUP: layer = view->server->layer_overlay; break;
+		case FLWM_ROLE_LOCK: layer = view->server->layer_lock; break;
 		default: break;
 		}
 		wlr_scene_node_reparent(&view->tree->node, layer);
@@ -220,7 +227,9 @@ void view_raise(struct flwm_view *view) {
 void view_focus(struct flwm_view *view) {
 	if (!view || !view->mapped) return;
 	struct flwm_server *server = view->server;
-	if (server->focused_layer) return; /* an exclusive layer surface owns the keyboard */
+	/* while locked only the locker gets the keyboard */
+	if (server->locked && view->role != FLWM_ROLE_LOCK) return;
+	if (server->focused_layer && view->role != FLWM_ROLE_LOCK) return; /* an exclusive layer surface owns the keyboard */
 	struct wlr_seat *seat = server->seat;
 	struct flwm_view *prev = view_focused(server);
 	if (view->minimized) view_set_minimized(view, false);
@@ -495,6 +504,13 @@ void view_reposition_shell(struct flwm_view *view) {
 		}
 		break;
 	}
+	case FLWM_ROLE_LOCK:
+		/* the whole primary output (the others show the cover) */
+		o = output_primary(server);
+		if (!o) return;
+		request_size(view, o->full_area.width, o->full_area.height);
+		view_set_position(view, o->full_area.x, o->full_area.y);
+		break;
 	case FLWM_ROLE_NOTIFY:
 		/* top right corner of the usable area (below a top panel) */
 		o = output_primary(server);
@@ -590,6 +606,10 @@ static void view_map(struct wl_listener *listener, void *data) {
 		if (view->role == FLWM_ROLE_PANEL || view->role == FLWM_ROLE_OSK) arrange_all(server);
 		if (view->role == FLWM_ROLE_LAUNCHER || view->role == FLWM_ROLE_POPUP) view_focus(view);
 		if (view->role == FLWM_ROLE_DESKTOP && !view_focused(server)) view_focus(view);
+		if (view->role == FLWM_ROLE_LOCK) {
+			view_focus(view);
+			lock_view_mapped(server, view);
+		}
 		return;
 	}
 	if (!view->placed) place_new_view(view);

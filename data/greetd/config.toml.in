@@ -1,8 +1,9 @@
 # /etc/greetd/config.toml for fldesktop's greeter.
-# fl-greet runs inside the `cage` kiosk compositor.
+# fl-greet runs inside the `cage` kiosk compositor; fl-greet-session starts
+# it with the cursor theme of /etc/fldesktop/greeter.ini.
 [terminal]
 vt = @FLD_GREETD_VT@
 
 [default_session]
-command = "cage -s -d -- fl-greet"
+command = "fl-greet-session"
 user = "@FLD_GREETD_USER@"

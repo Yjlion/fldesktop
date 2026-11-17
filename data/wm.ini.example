@@ -33,8 +33,21 @@ natural_scroll=false
 accel=0
 
 [cursor]
-theme=Adwaita
+theme=fldesktop-cursors
 size=24
+
+[lock]
+# lock the screen after this many idle minutes (0 = never)
+idle_minutes=0
+# the lock screen fl-wm starts (it must exit 0 to unlock)
+#command=fl-lock --locker
+# shown while the lock screen starts
+#color=#1e1f22
+
+#[environment]
+# variables for the programs started from now on (applied on reload);
+# "NAME=" unsets, "NAME=@inherit" restores the value the session started with
+#http_proxy=http://proxy.example.com:3128
 
 [output]
 # default scale for all outputs
@@ -53,11 +66,12 @@ scale=1
 # "defaults=false" first to start from an empty list instead.
 # Modifiers: Super, Alt, Ctrl, Shift. Keys are xkb keysym names.
 # Actions: exec CMD, close, maximize, minimize, fullscreen, cycle, cycle-back,
-#          snap-left, snap-right, launcher, show-desktop, reload, quit
+#          snap-left, snap-right, launcher, show-desktop, lock, reload, quit
 Super+Return=exec fl-term
 Super+t=exec fl-term
 Super+e=exec fl-files
 Super+space=launcher
+Super+l=lock
 Super+d=show-desktop
 Super+q=close
 Alt+F4=close

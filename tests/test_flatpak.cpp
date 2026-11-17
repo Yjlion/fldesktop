@@ -56,6 +56,11 @@ int main() {
   CHECK_EQ(fp::strip_markup("<p>A calculator.</p><ul><li>Fast</li><li>Small &amp; nice</li></ul>"),
            std::string("A calculator.\n\n  • Fast\n  • Small & nice"));
   CHECK_EQ(fp::category_label("Game"), std::string("Games"));
+  CHECK_EQ(fp::metadata_runtime(meta), std::string("runtime/org.freedesktop.Platform/x86_64/24.08"));
+  CHECK_EQ(fp::metadata_runtime("[Runtime]\nname=org.freedesktop.Platform\n"), std::string(""));
+  CHECK_EQ(fp::metadata_extension_of("[Runtime]\nname=org.freedesktop.Platform.GL.default\n\n[ExtensionOf]\n"
+                                     "ref=runtime/org.freedesktop.Platform/x86_64/24.08\n"),
+           std::string("runtime/org.freedesktop.Platform/x86_64/24.08"));
 #endif
   return test_result("flatpak");
 }

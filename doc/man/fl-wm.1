@@ -8,6 +8,19 @@ fl-wm \- Wayland compositor of the fldesktop desktop
 window decorations, handles key bindings, Alt+Tab switching and window snapping, and
 pins the fldesktop shell clients (fl-panel, fl-desktop, fl-launcher) to their places.
 It runs on a VT (DRM/KMS) or nested inside another Wayland or X11 session.
+.SH SCREEN LOCKING
+SIGUSR1, the \fBlock\fR key binding (Super+L) and the idle timeout
+([lock] idle_minutes) lock the session: fl-wm covers all outputs, gives the
+keyboard only to the locker and starts \fBfl-lock \-\-locker\fR (see
+\fBfl-lock\fR(1)). It unlocks when that process exits with status 0 and
+restarts it if it dies otherwise. Clients of the ext-session-lock-v1
+protocol, such as swaylock, can lock the session as well.
+.SH ENVIRONMENT
+The [environment] section of \fIwm.ini\fR sets variables for the programs
+started from then on (it is applied at startup and on every reload):
+\fBNAME=value\fR sets, \fBNAME=\fR unsets and \fBNAME=@inherit\fR
+restores the value fl-wm started with. Settings > Proxy writes the proxy
+variables here.
 .SH OPTIONS
 .TP
 \fB\-c, \-\-config FILE\fR
@@ -27,6 +40,6 @@ Print the version.
 .SH FILES
 \fI~/.config/fldesktop/wm.ini\fR, falling back to \fI/etc/xdg/fldesktop/wm.ini\fR.
 An annotated example is installed as \fI/usr/share/fldesktop/wm.ini.example\fR.
-SIGHUP or Super+Shift+R reloads the configuration.
+SIGHUP or Super+Shift+R reloads the configuration; SIGUSR1 locks the session.
 .SH SEE ALSO
-\fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)
+\fBfl-session\fR(1), \fBfl-panel\fR(1), \fBfl-lock\fR(1)

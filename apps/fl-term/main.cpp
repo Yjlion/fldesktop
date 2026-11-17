@@ -1,10 +1,23 @@
 // fl-term: terminal emulator for fldesktop
 #include <FL/Fl.H>
+#include <FL/Fl_Button.H>
+#include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
-#include <FL/Fl_Menu_Button.H>
+#include <FL/Fl_Group.H>
+#include <FL/Fl_Hor_Value_Slider.H>
+#include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Menu_Item.H>
+#include <FL/Fl_Return_Button.H>
+#include <FL/Fl_Spinner.H>
 #include <FL/fl_ask.H>
+#include <FL/platform.H>
+#if defined(FLTK_USE_WAYLAND)
+#include <wayland-client.h>
+#endif
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -16,6 +29,8 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "ssh_ui.h"
+#include "tab_bar.h"
+#include "term_settings.h"
 #include "term_widget.h"
 
 static const char *kUsage =
@@ -28,6 +43,8 @@ static const char *kUsage =
     "      --ssh PROFILE       connect to a saved SSH connection, an ~/.ssh/config host\n"
     "                          or user@host[:port]\n"
     "      --scheme NAME       color scheme: dark, light, red, green, blue\n"
+    "  -v, --version           show the version\n"
+    "Tabs: Ctrl+Shift+T new tab, Ctrl+Shift+W close tab, Ctrl+PgUp/PgDn switch tabs.\n"
     "  -h, --help              show this help\n";
 
 struct Scheme {
@@ -69,58 +86,389 @@ static const TermColors *find_scheme(const std::string &name) {
   return nullptr;
 }
 
+// ---- windows, tabs and settings ------------------------------------------------
+
+struct Tab {
+  TermWidget *term;
+  bool own_scheme; // keeps its colour scheme (SSH profiles, --scheme)
+};
+
 struct App {
   Fl_Double_Window *win = nullptr;
-  TermWidget *term = nullptr;
+  Fl_Menu_Bar *menubar = nullptr;
+  TabBar *tabbar = nullptr;
+  Fl_Group *area = nullptr; // holds the terminals; only the current one is visible
+  std::vector<Tab> tabs;
+  int current = 0;
   std::string fixed_title;
-  std::vector<std::string> self_argv0;
+  term::Settings set;
+  bool hold = false, hold_on_error = false;
 };
 
 static App g;
 
-static void on_title(TermWidget *, const char *t, void *) {
-  if (!g.fixed_title.empty()) return;
-  g.win->copy_label(*t ? t : "Terminal");
+// FLTK declares its rectangular windows opaque to the compositor; a
+// translucent background needs that undone (and redone at full opacity, which
+// lets the compositor skip what is behind the window).
+static void update_opaque_region() {
+#if defined(FLTK_USE_WAYLAND)
+  if (!g.win || !g.win->shown() || !fl_wl_display()) return;
+  struct wl_surface *surf = fl_wl_surface(fl_wl_xid(g.win));
+  if (!surf) return;
+  if (g.set.opacity < 0.999) {
+    wl_surface_set_opaque_region(surf, nullptr);
+  } else {
+    struct wl_region *r = wl_compositor_create_region(fl_wl_compositor());
+    wl_region_add(r, 0, 0, 1000000, 1000000);
+    wl_surface_set_opaque_region(surf, r);
+    wl_region_destroy(r);
+  }
+  g.win->redraw(); // the region applies with the next commit
+#endif
 }
 
-static void on_exit(TermWidget *, int, void *) {
-  g.win->hide();
+static TermWidget *cur() {
+  if (g.tabs.empty()) return nullptr;
+  return g.tabs[(size_t)std::max(0, std::min(g.current, (int)g.tabs.size() - 1))].term;
+}
+
+static int index_of(TermWidget *t) {
+  for (size_t i = 0; i < g.tabs.size(); i++)
+    if (g.tabs[i].term == t) return (int)i;
+  return -1;
+}
+
+static const TermColors *scheme_colors(const std::string &name) {
+  const TermColors *c = find_scheme(name);
+  return c ? c : &kSchemes[0].c;
+}
+
+static void update_title() {
+  TermWidget *t = cur();
+  if (!g.fixed_title.empty()) {
+    g.win->copy_label(g.fixed_title.c_str());
+  } else {
+    std::string tt = t ? t->title() : "";
+    g.win->copy_label(tt.empty() ? "Terminal" : tt.c_str());
+  }
+  if (g.tabbar) {
+    std::vector<std::string> labels;
+    for (auto &tb : g.tabs) labels.push_back(tb.term->title().empty() ? "Terminal" : tb.term->title());
+    g.tabbar->set_tabs(labels, g.current);
+  }
+}
+
+// Places the menu bar, tab bar and terminals for the current settings. The
+// window keeps its size; the terminal area shrinks or grows.
+static void relayout() {
+  int W = g.win->w(), H = g.win->h();
+  int y = 0;
+  if (g.set.show_menubar) {
+    int mh = std::max(24, fld::ui_font_size() + 12);
+    g.menubar->resize(0, 0, W, mh);
+    g.menubar->show();
+    y += mh;
+  } else {
+    g.menubar->hide();
+  }
+  if (term::tabs_visible(g.set.tabs, (int)g.tabs.size())) {
+    int th = TabBar::preferred_height();
+    g.tabbar->resize(0, y, W, th);
+    g.tabbar->show();
+    y += th;
+  } else {
+    g.tabbar->hide();
+  }
+  g.area->resize(0, y, W, std::max(1, H - y));
+  for (auto &tb : g.tabs) tb.term->resize(0, y, W, std::max(1, H - y));
+  TermWidget *t = cur();
+  if (t) {
+    g.win->size_range(t->cell_w() * 10, t->cell_h() * 3 + y, 0, 0, t->cell_w(), t->cell_h());
+  }
+  g.win->redraw();
+}
+
+class MainWindow : public Fl_Double_Window {
+public:
+  using Fl_Double_Window::Fl_Double_Window;
+  void resize(int x, int y, int w, int h) override {
+    // children are placed by relayout(), not by FLTK's proportional resizing
+    Fl_Widget::resize(x, y, w, h);
+    if (g.area) relayout();
+  }
+  // On Wayland FLTK already draws into a back buffer that it copies as is to
+  // the compositor; Fl_Double_Window's extra offscreen would be blended onto
+  // it and lose the translucent background.
+  void flush() override {
+#if defined(FLTK_USE_WAYLAND)
+    if (fl_wl_display()) {
+      Fl_Window::flush();
+      return;
+    }
+#endif
+    Fl_Double_Window::flush();
+  }
+};
+
+static void select_tab(int i) {
+  if (g.tabs.empty()) return;
+  i = (i % (int)g.tabs.size() + (int)g.tabs.size()) % (int)g.tabs.size();
+  g.current = i;
+  for (size_t k = 0; k < g.tabs.size(); k++) {
+    if ((int)k == i) g.tabs[k].term->show();
+    else g.tabs[k].term->hide();
+  }
+  update_title();
+  cur()->take_focus();
+  g.win->redraw();
+}
+
+static void close_tab(int i) {
+  if (i < 0 || i >= (int)g.tabs.size()) return;
+  if (g.tabs.size() == 1) {
+    g.win->hide();
+    return;
+  }
+  TermWidget *t = g.tabs[(size_t)i].term;
+  g.tabs.erase(g.tabs.begin() + i);
+  g.area->remove(t);
+  Fl::delete_widget(t); // the destructor ends the child process
+  if (g.current >= (int)g.tabs.size() || g.current > i) g.current = std::max(0, g.current - 1);
+  if (g.current == i && i < (int)g.tabs.size()) g.current = i;
+  relayout();
+  select_tab(g.current);
+}
+
+static void move_tab(int delta) {
+  int n = (int)g.tabs.size(), i = g.current, j = i + delta;
+  if (n < 2 || j < 0 || j >= n) return;
+  std::swap(g.tabs[(size_t)i], g.tabs[(size_t)j]);
+  g.current = j;
+  update_title();
+}
+
+static void on_title(TermWidget *t, const char *, void *) {
+  (void)t;
+  update_title();
+}
+
+static void on_exit(TermWidget *t, int, void *) {
+  // closing from inside the terminal's own callback: defer
+  Fl::add_timeout(0, [](void *v) { close_tab(index_of((TermWidget *)v)); }, t);
+}
+
+static void show_menu(TermWidget *, void *);
+
+struct TabSpec {
+  std::vector<std::string> cmd;
+  std::string cwd, title, scheme;
+  bool hold = false, hold_on_error = false;
+};
+
+static TermWidget *add_tab(const TabSpec &spec) {
+  g.area->begin();
+  TermWidget *t = new TermWidget(g.area->x(), g.area->y(), g.area->w(), g.area->h());
+  g.area->end();
+  if (g.set.font_size > 0) t->set_font_size(g.set.font_size);
+  t->set_colors(*scheme_colors(spec.scheme.empty() ? g.set.scheme : spec.scheme));
+  t->set_opacity(g.set.opacity);
+  t->set_scrollback_limit((size_t)g.set.scrollback);
+  t->set_hold(spec.hold);
+  t->set_hold_on_error(spec.hold_on_error);
+  t->on_title = on_title;
+  t->on_exit = on_exit;
+  t->on_menu = show_menu;
+  if (!spec.title.empty()) t->set_title(spec.title);
+  g.tabs.push_back({t, !spec.scheme.empty()});
+  g.current = (int)g.tabs.size() - 1;
+  relayout();
+  if (!t->start(spec.cmd, spec.cwd)) {
+    fl_alert("Could not start the terminal process.");
+    close_tab(index_of(t));
+    return nullptr;
+  }
+  select_tab(g.current);
+  return t;
+}
+
+static void new_tab() {
+  TabSpec s;
+  if (TermWidget *t = cur()) s.cwd = t->current_dir();
+  add_tab(s);
 }
 
 static void new_window() {
-  std::string dir = g.term->current_dir();
+  TermWidget *t = cur();
+  std::string dir = t ? t->current_dir() : "";
   std::vector<std::string> argv{"fl-term"};
   if (!dir.empty()) { argv.push_back("--workdir"); argv.push_back(dir); }
   fld::spawn(argv);
 }
 
-static void menu_cb(Fl_Widget *, void *v) {
-  long id = (long)v;
+// SSH connections and helper commands open in a new tab of this window
+static void open_ssh_tab(const std::vector<std::string> &cmd, const std::string &title,
+                         const std::string &scheme, bool hold, bool hold_on_error) {
+  TabSpec s;
+  s.cmd = cmd;
+  s.title = title;
+  s.scheme = scheme;
+  s.hold = hold;
+  s.hold_on_error = hold_on_error;
+  add_tab(s);
+}
+
+static void apply_settings() {
+  for (auto &tb : g.tabs) {
+    if (!tb.own_scheme) tb.term->set_colors(*scheme_colors(g.set.scheme));
+    tb.term->set_font_size(g.set.font_size > 0 ? g.set.font_size : fld::mono_size());
+    tb.term->set_scrollback_limit((size_t)g.set.scrollback);
+    tb.term->set_opacity(g.set.opacity);
+  }
+  update_opaque_region();
+  relayout();
+}
+
+static void save_settings() {
+  if (!term::save_file(g.set)) fl_alert("Could not save %s", term::config_path().c_str());
+}
+
+static void toggle_menubar() {
+  g.set.show_menubar = !g.set.show_menubar;
+  relayout();
+  save_settings();
+}
+
+static void set_tabs_mode(term::TabsMode m) {
+  g.set.tabs = m;
+  relayout();
+  save_settings();
+}
+
+// ---- preferences ----------------------------------------------------------------
+
+static void preferences_dialog() {
+  static const char *schemes[] = {"dark", "light", "red", "green", "blue"};
+  static const char *scheme_labels[] = {"Dark", "Light", "Dark red", "Dark green", "Dark blue"};
+  Fl_Double_Window *d = new Fl_Double_Window(420, 300, "Terminal Preferences");
+  int lx = 160, y = 16;
+  Fl_Choice *sch = new Fl_Choice(lx, y, 240, 28, "Color scheme:");
+  for (int i = 0; i < 5; i++) {
+    sch->add(scheme_labels[i]);
+    if (g.set.scheme == schemes[i]) sch->value(i);
+  }
+  if (sch->value() < 0) sch->value(0);
+  y += 38;
+  Fl_Spinner *font = new Fl_Spinner(lx, y, 80, 28, "Font size:");
+  font->range(6, 48);
+  font->value(g.set.font_size > 0 ? g.set.font_size : (cur() ? cur()->font_size() : fld::mono_size()));
+  y += 38;
+  Fl_Spinner *sb = new Fl_Spinner(lx, y, 110, 28, "Scrollback lines:");
+  sb->range(0, 1000000);
+  sb->step(1000);
+  sb->value(g.set.scrollback);
+  y += 38;
+  Fl_Hor_Value_Slider *op = new Fl_Hor_Value_Slider(lx, y, 240, 28, "Background opacity:");
+  op->align(FL_ALIGN_LEFT);
+  op->range(20, 100);
+  op->step(5);
+  op->value((int)lround(g.set.opacity * 100));
+  op->tooltip("Below 100% the desktop shows through the terminal background (in percent)");
+  y += 38;
+  Fl_Check_Button *mb = new Fl_Check_Button(lx, y, 240, 28, "Show the menu bar");
+  mb->value(g.set.show_menubar);
+  y += 34;
+  Fl_Choice *tabs = new Fl_Choice(lx, y, 240, 28, "Tab bar:");
+  tabs->add("Show with two or more tabs");
+  tabs->add("Always show");
+  tabs->add("Never show");
+  tabs->value((int)g.set.tabs);
+  y += 52;
+  Fl_Button *cancel = new Fl_Button(420 - 220, y, 100, 30, "Cancel");
+  Fl_Return_Button *ok = new Fl_Return_Button(420 - 112, y, 100, 30, "OK");
+  d->end();
+  d->set_modal();
+  fld::set_window_icon(d, "utilities-terminal");
+  // live preview of the opacity
+  op->callback([](Fl_Widget *w, void *) {
+    double o = ((Fl_Valuator *)w)->value() / 100.0;
+    for (auto &tb : g.tabs) tb.term->set_opacity(o);
+    double saved = g.set.opacity;
+    g.set.opacity = o;
+    update_opaque_region();
+    g.set.opacity = saved;
+  });
+  int result = 0;
+  cancel->callback([](Fl_Widget *w, void *r) { *(int *)r = 1; w->window()->hide(); }, &result);
+  ok->callback([](Fl_Widget *w, void *r) { *(int *)r = 2; w->window()->hide(); }, &result);
+  d->callback([](Fl_Widget *w, void *r) { *(int *)r = 1; w->hide(); }, &result);
+  d->show();
+  while (d->shown()) Fl::wait();
+  if (result == 2) {
+    g.set.scheme = schemes[std::max(0, sch->value())];
+    g.set.font_size = (int)font->value();
+    g.set.scrollback = (int)sb->value();
+    g.set.opacity = term::clamp_opacity(op->value() / 100.0);
+    g.set.show_menubar = mb->value();
+    g.set.tabs = (term::TabsMode)std::max(0, tabs->value());
+    save_settings();
+  }
+  apply_settings(); // also undoes the opacity preview on cancel
+  Fl::delete_widget(d);
+}
+
+// ---- menus ----------------------------------------------------------------------
+
+enum MenuId {
+  M_COPY = 1, M_PASTE, M_NEW_WINDOW, M_ZOOM_IN, M_ZOOM_OUT, M_ZOOM_RESET, M_OPEN_FOLDER, M_ABOUT,
+  M_CLOSE_WINDOW, M_NEW_TAB, M_CLOSE_TAB, M_NEXT_TAB, M_PREV_TAB, M_MOVE_LEFT, M_MOVE_RIGHT,
+  M_TOGGLE_MENUBAR, M_TABS_AUTO, M_TABS_ALWAYS, M_TABS_NEVER, M_PREFS,
+  M_SSH_CONNECT = 40, M_SSH_MANAGE, M_SSH_COPY_KEY, M_SSH_GEN_KEY, M_SSH_BROWSE,
+};
+
+static void menu_action(long id) {
+  TermWidget *t = cur();
   switch (id) {
-    case 1: g.term->copy_selection(1); break;
-    case 2: g.term->paste(1); break;
-    case 3: new_window(); break;
-    case 4: g.term->set_font_size(g.term->font_size() + 1); break;
-    case 5: g.term->set_font_size(g.term->font_size() - 1); break;
-    case 6: g.term->set_font_size(fld::mono_size()); break;
-    case 7: {
-      std::string d = g.term->current_dir();
+    case M_COPY: if (t) t->copy_selection(1); break;
+    case M_PASTE: if (t) t->paste(1); break;
+    case M_NEW_WINDOW: new_window(); break;
+    case M_NEW_TAB: new_tab(); break;
+    case M_CLOSE_TAB: close_tab(g.current); break;
+    case M_NEXT_TAB: select_tab(g.current + 1); break;
+    case M_PREV_TAB: select_tab(g.current - 1); break;
+    case M_MOVE_LEFT: move_tab(-1); break;
+    case M_MOVE_RIGHT: move_tab(1); break;
+    case M_ZOOM_IN: if (t) t->set_font_size(t->font_size() + 1); break;
+    case M_ZOOM_OUT: if (t) t->set_font_size(t->font_size() - 1); break;
+    case M_ZOOM_RESET: if (t) t->set_font_size(g.set.font_size > 0 ? g.set.font_size : fld::mono_size()); break;
+    case M_OPEN_FOLDER: {
+      std::string d = t ? t->current_dir() : "";
       fld::spawn({"fl-files", d.empty() ? fld::home_dir() : d});
       break;
     }
-    case 8: fld::about_dialog("Terminal", "utilities-terminal",
-                              "A terminal emulator built with FLTK and libvterm."); break;
-    case 9: g.win->hide(); break;
-    case 20: ssh_ui::connect_dialog(); break;
-    case 21: ssh_ui::manage_dialog(); break;
-    case 22: ssh_ui::copy_key_dialog(); break;
-    case 23: ssh_ui::generate_key(); break;
-    case 24: ssh_ui::browse_files_dialog(); break;
+    case M_ABOUT: fld::about_dialog("Terminal", "utilities-terminal",
+                                    "A terminal emulator built with FLTK and libvterm."); break;
+    case M_CLOSE_WINDOW: g.win->hide(); break;
+    case M_TOGGLE_MENUBAR: toggle_menubar(); break;
+    case M_TABS_AUTO: set_tabs_mode(term::TABS_AUTO); break;
+    case M_TABS_ALWAYS: set_tabs_mode(term::TABS_ALWAYS); break;
+    case M_TABS_NEVER: set_tabs_mode(term::TABS_NEVER); break;
+    case M_PREFS: preferences_dialog(); break;
+    case M_SSH_CONNECT: ssh_ui::connect_dialog(); break;
+    case M_SSH_MANAGE: ssh_ui::manage_dialog(); break;
+    case M_SSH_COPY_KEY: ssh_ui::copy_key_dialog(); break;
+    case M_SSH_GEN_KEY: ssh_ui::generate_key(); break;
+    case M_SSH_BROWSE: ssh_ui::browse_files_dialog(); break;
   }
+}
+
+static void menu_cb(Fl_Widget *, void *v) {
+  // run after the menu has closed: some actions open dialogs or delete tabs
+  Fl::add_timeout(0, [](void *id) { menu_action((long)id); }, v);
 }
 
 static std::vector<ssh::Profile> g_menu_profiles;
 static std::vector<std::string> g_menu_mounts;
+static std::vector<std::string> g_menu_labels; // must outlive the menus
 
 static void ssh_profile_cb(Fl_Widget *, void *v) {
   long i = (long)v;
@@ -132,74 +480,182 @@ static void unmount_cb(Fl_Widget *, void *v) {
   if (i >= 0 && i < (long)g_menu_mounts.size()) ssh_ui::unmount(g_menu_mounts[(size_t)i]);
 }
 
-static void show_menu(TermWidget *, void *) {
-  // labels must outlive the popup
-  static std::vector<std::string> labels;
-  labels.clear();
+static std::string menu_escape(const std::string &t) {
+  std::string e;
+  for (char c : t) {
+    if (c == '/' || c == '\\' || c == '&' || c == '_' || c == '@') e += '\\';
+    e += c;
+  }
+  return e;
+}
+
+typedef std::vector<Fl_Menu_Item> Items;
+static void item(Items &m, const char *label, int shortcut, long id, int flags = 0) {
+  m.push_back({label, shortcut, menu_cb, (void *)id, flags});
+}
+static void end_menu(Items &m) { m.push_back({nullptr}); }
+
+// the SSH submenu, the same in the menu bar and the context menu
+static void ssh_items(Items &m) {
   g_menu_profiles = ssh_ui::profiles();
   g_menu_mounts = ssh_ui::sshfs_mounts();
-  auto esc = [](const std::string &t) {
-    std::string e;
-    for (char c : t) {
-      if (c == '/' || c == '\\' || c == '&' || c == '_' || c == '@') e += '\\';
-      e += c;
-    }
-    return e;
-  };
-  labels.reserve(g_menu_profiles.size() + g_menu_mounts.size());
-  std::vector<Fl_Menu_Item> m = {
-      {"Copy", FL_CTRL + FL_SHIFT + 'c', menu_cb, (void *)1},
-      {"Paste", FL_CTRL + FL_SHIFT + 'v', menu_cb, (void *)2, FL_MENU_DIVIDER},
-      {"New Window", FL_CTRL + FL_SHIFT + 'n', menu_cb, (void *)3},
-      {"Open Folder", 0, menu_cb, (void *)7, FL_MENU_DIVIDER},
-      {"SSH", 0, nullptr, nullptr, FL_SUBMENU},
-      {"Connect…", FL_CTRL + FL_SHIFT + 's', menu_cb, (void *)20, FL_MENU_DIVIDER},
-  };
+  item(m, "Connect…", FL_CTRL + FL_SHIFT + 's', M_SSH_CONNECT, FL_MENU_DIVIDER);
   for (size_t i = 0; i < g_menu_profiles.size() && i < 30; i++) {
-    labels.push_back(esc(g_menu_profiles[i].name));
-    m.push_back({labels.back().c_str(), 0, ssh_profile_cb, (void *)(long)i});
+    g_menu_labels.push_back(menu_escape(g_menu_profiles[i].name));
+    m.push_back({g_menu_labels.back().c_str(), 0, ssh_profile_cb, (void *)(long)i});
   }
   if (!g_menu_profiles.empty()) m.back().flags |= FL_MENU_DIVIDER;
-  m.push_back({"Manage Connections…", 0, menu_cb, (void *)21});
-  m.push_back({"Copy Public Key to Host…", 0, menu_cb, (void *)22});
-  m.push_back({"Create SSH Key…", 0, menu_cb, (void *)23});
+  item(m, "Manage Connections…", 0, M_SSH_MANAGE);
+  item(m, "Copy Public Key to Host…", 0, M_SSH_COPY_KEY);
+  item(m, "Create SSH Key…", 0, M_SSH_GEN_KEY);
   if (ssh_ui::have_sshfs()) {
     m.back().flags |= FL_MENU_DIVIDER;
-    m.push_back({"Browse Files (sshfs)…", 0, menu_cb, (void *)24});
+    item(m, "Browse Files (sshfs)…", 0, M_SSH_BROWSE);
     if (!g_menu_mounts.empty()) {
       m.push_back({"Unmount", 0, nullptr, nullptr, FL_SUBMENU});
       for (size_t i = 0; i < g_menu_mounts.size(); i++) {
-        labels.push_back(esc(fld::basename(g_menu_mounts[i])));
-        m.push_back({labels.back().c_str(), 0, unmount_cb, (void *)(long)i});
+        g_menu_labels.push_back(menu_escape(fld::basename(g_menu_mounts[i])));
+        m.push_back({g_menu_labels.back().c_str(), 0, unmount_cb, (void *)(long)i});
       }
-      m.push_back({nullptr});
+      end_menu(m);
     }
   }
-  m.push_back({nullptr}); // end of the SSH submenu
-  std::vector<Fl_Menu_Item> rest = {
-      {"Zoom In", FL_CTRL + '=', menu_cb, (void *)4},
-      {"Zoom Out", FL_CTRL + '-', menu_cb, (void *)5},
-      {"Normal Size", FL_CTRL + '0', menu_cb, (void *)6, FL_MENU_DIVIDER},
-      {"About", 0, menu_cb, (void *)8},
-      {"Close", FL_CTRL + FL_SHIFT + 'w', menu_cb, (void *)9},
-      {nullptr}};
-  m.insert(m.end(), rest.begin(), rest.end());
-  // a divider after the SSH submenu
-  for (auto &it : m)
-    if (it.label() && std::string(it.label()) == "SSH") it.flags |= FL_MENU_DIVIDER;
+}
+
+static void view_items(Items &m) {
+  item(m, "Show Menu Bar", FL_CTRL + FL_SHIFT + 'm', M_TOGGLE_MENUBAR,
+       FL_MENU_TOGGLE | (g.set.show_menubar ? FL_MENU_VALUE : 0));
+  m.push_back({"Show Tabs", 0, nullptr, nullptr, FL_SUBMENU | FL_MENU_DIVIDER});
+  item(m, "With Two or More Tabs", 0, M_TABS_AUTO, FL_MENU_RADIO | (g.set.tabs == term::TABS_AUTO ? FL_MENU_VALUE : 0));
+  item(m, "Always", 0, M_TABS_ALWAYS, FL_MENU_RADIO | (g.set.tabs == term::TABS_ALWAYS ? FL_MENU_VALUE : 0));
+  item(m, "Never", 0, M_TABS_NEVER, FL_MENU_RADIO | (g.set.tabs == term::TABS_NEVER ? FL_MENU_VALUE : 0));
+  end_menu(m);
+  item(m, "Zoom In", FL_CTRL + '=', M_ZOOM_IN);
+  item(m, "Zoom Out", FL_CTRL + '-', M_ZOOM_OUT);
+  item(m, "Normal Size", FL_CTRL + '0', M_ZOOM_RESET);
+}
+
+static void tab_items(Items &m) {
+  bool many = g.tabs.size() > 1;
+  item(m, "Next Tab", FL_CTRL + FL_Page_Down, M_NEXT_TAB, many ? 0 : FL_MENU_INACTIVE);
+  item(m, "Previous Tab", FL_CTRL + FL_Page_Up, M_PREV_TAB, (many ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER);
+  item(m, "Move Tab Left", FL_CTRL + FL_SHIFT + FL_Page_Up, M_MOVE_LEFT, g.current > 0 ? 0 : FL_MENU_INACTIVE);
+  item(m, "Move Tab Right", FL_CTRL + FL_SHIFT + FL_Page_Down, M_MOVE_RIGHT,
+       g.current + 1 < (int)g.tabs.size() ? 0 : FL_MENU_INACTIVE);
+}
+
+static Items build_menubar_items() {
+  g_menu_labels.clear();
+  g_menu_labels.reserve(128);
+  Items m;
+  m.push_back({"&File", 0, nullptr, nullptr, FL_SUBMENU});
+  item(m, "New Tab", FL_CTRL + FL_SHIFT + 't', M_NEW_TAB);
+  item(m, "New Window", FL_CTRL + FL_SHIFT + 'n', M_NEW_WINDOW, FL_MENU_DIVIDER);
+  item(m, "Open Folder", 0, M_OPEN_FOLDER, FL_MENU_DIVIDER);
+  item(m, "Close Tab", FL_CTRL + FL_SHIFT + 'w', M_CLOSE_TAB);
+  item(m, "Close Window", FL_CTRL + FL_SHIFT + 'q', M_CLOSE_WINDOW);
+  end_menu(m);
+  m.push_back({"&Edit", 0, nullptr, nullptr, FL_SUBMENU});
+  item(m, "Copy", FL_CTRL + FL_SHIFT + 'c', M_COPY);
+  item(m, "Paste", FL_CTRL + FL_SHIFT + 'v', M_PASTE, FL_MENU_DIVIDER);
+  item(m, "Preferences…", FL_CTRL + FL_SHIFT + 'p', M_PREFS);
+  end_menu(m);
+  m.push_back({"&View", 0, nullptr, nullptr, FL_SUBMENU});
+  view_items(m);
+  end_menu(m);
+  m.push_back({"&Tabs", 0, nullptr, nullptr, FL_SUBMENU});
+  tab_items(m);
+  end_menu(m);
+  m.push_back({"&SSH", 0, nullptr, nullptr, FL_SUBMENU});
+  ssh_items(m);
+  end_menu(m);
+  m.push_back({"&Help", 0, nullptr, nullptr, FL_SUBMENU});
+  item(m, "About", 0, M_ABOUT);
+  end_menu(m);
+  end_menu(m);
+  return m;
+}
+
+// The menu bar rebuilds its menus when opened (SSH profiles and mounts change).
+class TermMenuBar : public Fl_Menu_Bar {
+public:
+  using Fl_Menu_Bar::Fl_Menu_Bar;
+  void rebuild() {
+    items_ = build_menubar_items();
+    menu(items_.data());
+  }
+  int handle(int e) override {
+    if (e == FL_PUSH) rebuild();
+    // shortcuts are handled by global_shortcuts()
+    if (e == FL_SHORTCUT) return 0;
+    return Fl_Menu_Bar::handle(e);
+  }
+
+private:
+  Items items_;
+};
+
+static void show_menu(TermWidget *t, void *) {
+  // a right click in a background tab is not possible; still make sure the
+  // clicked terminal is the current one
+  int i = index_of(t);
+  if (i >= 0 && i != g.current) select_tab(i);
+  g_menu_labels.clear();
+  g_menu_labels.reserve(128);
+  Items m;
+  item(m, "Copy", FL_CTRL + FL_SHIFT + 'c', M_COPY);
+  item(m, "Paste", FL_CTRL + FL_SHIFT + 'v', M_PASTE, FL_MENU_DIVIDER);
+  item(m, "New Tab", FL_CTRL + FL_SHIFT + 't', M_NEW_TAB);
+  item(m, "New Window", FL_CTRL + FL_SHIFT + 'n', M_NEW_WINDOW);
+  item(m, "Open Folder", 0, M_OPEN_FOLDER, FL_MENU_DIVIDER);
+  m.push_back({"SSH", 0, nullptr, nullptr, FL_SUBMENU | FL_MENU_DIVIDER});
+  ssh_items(m);
+  end_menu(m);
+  if (g.tabs.size() > 1) {
+    m.push_back({"Tabs", 0, nullptr, nullptr, FL_SUBMENU});
+    tab_items(m);
+    end_menu(m);
+  }
+  m.push_back({"View", 0, nullptr, nullptr, FL_SUBMENU | FL_MENU_DIVIDER});
+  view_items(m);
+  end_menu(m);
+  item(m, "Preferences…", FL_CTRL + FL_SHIFT + 'p', M_PREFS);
+  item(m, "About", 0, M_ABOUT, FL_MENU_DIVIDER);
+  if (g.tabs.size() > 1) item(m, "Close Tab", FL_CTRL + FL_SHIFT + 'w', M_CLOSE_TAB);
+  item(m, "Close Window", FL_CTRL + FL_SHIFT + 'q', M_CLOSE_WINDOW);
+  end_menu(m);
   const Fl_Menu_Item *r = m[0].popup(Fl::event_x(), Fl::event_y());
   if (r && r->callback()) r->do_callback(g.win);
 }
 
 static int global_shortcuts(int e) {
   if (e != FL_SHORTCUT && e != FL_KEYBOARD) return 0;
+  // only for the terminal window (not for dialogs)
+  if (Fl::first_window() != g.win) return 0;
   int st = Fl::event_state();
-  if ((st & (FL_CTRL | FL_SHIFT)) == (FL_CTRL | FL_SHIFT)) {
-    switch (Fl::event_key()) {
+  int key = Fl::event_key();
+  bool ctrl = st & FL_CTRL, shift = st & FL_SHIFT, alt = st & FL_ALT;
+  if (ctrl && shift && !alt) {
+    switch (key) {
       case 'n': new_window(); return 1;
-      case 'w': g.win->hide(); return 1;
+      case 't': new_tab(); return 1;
+      case 'w': close_tab(g.current); return 1;
+      case 'q': g.win->hide(); return 1;
       case 's': ssh_ui::connect_dialog(); return 1;
+      case 'm': toggle_menubar(); return 1;
+      case 'p': preferences_dialog(); return 1;
+      case FL_Page_Up: move_tab(-1); return 1;
+      case FL_Page_Down: move_tab(1); return 1;
     }
+  }
+  if (ctrl && !shift && !alt) {
+    if (key == FL_Page_Up) { select_tab(g.current - 1); return 1; }
+    if (key == FL_Page_Down) { select_tab(g.current + 1); return 1; }
+  }
+  // Alt+1..9 picks a tab when there are several
+  if (alt && !ctrl && !shift && key >= '1' && key <= '9' && g.tabs.size() > 1) {
+    int i = key - '1';
+    if (i < (int)g.tabs.size()) { select_tab(i); return 1; }
   }
   return 0;
 }
@@ -249,9 +705,8 @@ int main(int argc, char **argv) {
     }
   }
 
-  fld::Ini cfg;
-  cfg.load(fld::fld_config_dir() + "/term.ini");
-  std::string scheme = cfg.get("Terminal", "ColorScheme", "dark");
+  g.set = term::load_file();
+  std::string scheme_override;
   if (!ssh_arg.empty()) {
     ssh::Profile p = ssh_ui::resolve(ssh_arg);
     if (p.host.empty()) {
@@ -263,40 +718,65 @@ int main(int argc, char **argv) {
     if (!p.scheme.empty() && scheme_arg.empty()) scheme_arg = p.scheme;
     hold_on_error = true; // show why a connection failed
   }
-  if (!scheme_arg.empty()) scheme = scheme_arg;
-  const TermColors *colors = find_scheme(scheme);
-  if (!colors) colors = &kSchemes[0].c;
+  if (!scheme_arg.empty()) scheme_override = scheme_arg;
 
-  const int SBW = 0;
-  g.win = new Fl_Double_Window(800, 500, title.empty() ? "Terminal" : title.c_str());
+  g.win = new MainWindow(800, 500, title.empty() ? "Terminal" : title.c_str());
   g.fixed_title = title;
-  g.term = new TermWidget(0, 0, 800 - SBW, 500);
-  int fs = cfg.get_int("Terminal", "FontSize", 0);
-  if (fs > 0) g.term->set_font_size(fs);
-  g.term->set_colors(*colors);
-  g.term->set_scrollback_limit((size_t)cfg.get_int("Terminal", "Scrollback", 10000));
-  g.term->set_hold(hold);
-  g.term->set_hold_on_error(hold_on_error);
-  g.term->on_title = on_title;
-  g.term->on_exit = on_exit;
-  g.term->on_menu = show_menu;
-  g.win->resizable(g.term);
+  g.win->box(FL_NO_BOX); // the bars and terminals cover it; keeps the background translucent
+  g.menubar = new TermMenuBar(0, 0, 800, 26);
+  static_cast<TermMenuBar *>(g.menubar)->rebuild();
+  g.menubar->box(FL_FLAT_BOX);
+  g.tabbar = new TabBar(0, 0, 800, TabBar::preferred_height());
+  g.tabbar->on_select = [](int i, void *) { select_tab(i); };
+  g.tabbar->on_close = [](int i, void *) { close_tab(i); };
+  g.tabbar->on_new = [](void *) { new_tab(); };
+  g.area = new Fl_Group(0, 0, 800, 500);
+  g.area->box(FL_NO_BOX);
+  g.area->end();
+  g.win->resizable(g.area);
   g.win->callback(close_cb);
   g.win->end();
+  ssh_ui::open_in_tab = open_ssh_tab;
+
+  TabSpec first;
+  first.cmd = cmd;
+  first.cwd = workdir.empty() ? "" : fld::expand_tilde(workdir);
+  first.scheme = scheme_override;
+  first.hold = hold;
+  first.hold_on_error = hold_on_error;
+  g.area->begin();
+  // the first terminal is created before the window is shown so the window
+  // gets the size for cols x rows
+  TermWidget *t = new TermWidget(0, 0, 800, 500);
+  g.area->end();
+  if (g.set.font_size > 0) t->set_font_size(g.set.font_size);
+  t->set_colors(*scheme_colors(scheme_override.empty() ? g.set.scheme : scheme_override));
+  t->set_opacity(g.set.opacity);
+  t->set_scrollback_limit((size_t)g.set.scrollback);
+  t->set_hold(hold);
+  t->set_hold_on_error(hold_on_error);
+  t->on_title = on_title;
+  t->on_exit = on_exit;
+  t->on_menu = show_menu;
+  g.tabs.push_back({t, !scheme_override.empty()});
+  g.current = 0;
 
   int ww, wh;
-  g.term->size_for(cols, rows, ww, wh);
-  g.win->size(ww + SBW, wh);
-  g.win->size_range(g.term->cell_w() * 10 + SBW, g.term->cell_h() * 3, 0, 0, g.term->cell_w(),
-                    g.term->cell_h());
+  t->size_for(cols, rows, ww, wh);
+  int extra = (g.set.show_menubar ? std::max(24, fld::ui_font_size() + 12) : 0) +
+              (term::tabs_visible(g.set.tabs, 1) ? TabBar::preferred_height() : 0);
+  g.win->size(ww, wh + extra);
+  relayout();
+  update_title();
   fld::set_window_icon(g.win, "utilities-terminal");
   Fl::add_handler(global_shortcuts);
 
   g.win->show();
-  if (!g.term->start(cmd, workdir.empty() ? "" : fld::expand_tilde(workdir))) {
+  update_opaque_region();
+  if (!t->start(first.cmd, first.cwd)) {
     fl_alert("Could not start the terminal process.");
     return 1;
   }
-  g.term->take_focus();
+  t->take_focus();
   return Fl::run();
 }

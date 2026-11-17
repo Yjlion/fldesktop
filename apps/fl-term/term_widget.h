@@ -29,6 +29,13 @@ public:
   int font_size() const { return font_size_; }
   void set_colors(const TermColors &c);
   void set_scrollback_limit(size_t n) { sb_limit_ = n; }
+  // Opacity of the default background (0.2 .. 1). Below 1 the window shows
+  // what is behind it; text and coloured cells stay opaque. Needs a Wayland
+  // compositor (FLTK draws with cairo into ARGB buffers there).
+  void set_opacity(double o);
+  double opacity() const { return opacity_; }
+  // A title until the program sets one (SSH tabs show the host).
+  void set_title(const std::string &t) { title_ = t; }
   void set_hold(bool h) { hold_ = h; }
   // keep the window open only when the command fails
   void set_hold_on_error(bool h) { hold_on_error_ = h; }
@@ -65,6 +72,8 @@ private:
   int cw_ = 8, ch_ = 16, ascent_ = 12;
   int font_size_ = 14;
   int pad_ = 4;
+  double opacity_ = 1.0;
+  void fill_background(int x, int y, int w, int h);
   bool hold_ = false, hold_on_error_ = false;
   std::string title_;
 

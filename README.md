@@ -11,7 +11,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder |
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard; its look and user list are set in Settings > Login Screen |
 | **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, network, proxy, firewall, date & time, software updates, login screen |
-| **fl-term** | Terminal emulator (libvterm): scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
+| **fl-term** | Terminal emulator (libvterm): tabs, optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
 | **fl-files** | File manager: icon, compact and details views with zoom and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, drag and drop, and a search for files and folders by name, text, date and size |
 | **fl-edit** | Tabbed text editor with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
@@ -248,7 +248,7 @@ dialogs.
 | `~/.config/fldesktop/environment` | `LANG`, `LC_*` and other variables for the session |
 | `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth`, `KeyPreview=true\|false` |
 | `~/.config/fldesktop/charmap.ini` | font, size, recently used characters |
-| `~/.config/fldesktop/term.ini` | `[Terminal] ColorScheme=dark\|light`, `FontSize`, `Scrollback` |
+| `~/.config/fldesktop/term.ini` | `[Terminal] ColorScheme=dark\|light`, `FontSize`, `Scrollback`, `Opacity=0.2..1`, `ShowMenuBar`, `ShowTabs=auto\|always\|never` (Edit > Preferences) |
 | `~/.config/fldesktop/notifications.ini` | `[Notifications] DoNotDisturb`, `Timeout`, `HistorySize`, `Muted` |
 | `~/.config/fldesktop/updates.ini` | `[Updates] Check=hourly\|daily\|weekly\|never`, `Notify` |
 | `/etc/fldesktop/greeter.ini` | `[Greeter] Background`, `MinUid`, `HideUsers`, `RememberUser`, `Clock24`, `ShowPowerButtons`, `Keyboard=button\|always\|never`, `KeyboardLayout`; `[Appearance] Theme`, `Accent`, `FontSize`; `[General] IconTheme`; `[Cursor] Theme`, `Size` |

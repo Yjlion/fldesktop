@@ -4,7 +4,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 
 | Component | What it is |
 |-----------|------------|
-| **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, Alt+Tab, window snapping, layer-shell and session locking (also ext-session-lock for swaylock) |
+| **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, an Alt+Tab window switcher, window snapping, layer-shell and session locking (also ext-session-lock for swaylock) |
 | **fl-lock** | Screen locker: clock, user picture, PAM password check, on-screen keyboard; locks on Super+L, after an idle time and before suspend |
 | **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, Bluetooth, printing, battery, calendar clock, notification history, power menu |
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space) |
@@ -92,11 +92,11 @@ one of them the parts that need it are left out.
 
 ```sh
 # Arch Linux
-sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango libinput \
+sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango librsvg libinput \
   glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream gstreamer gst-plugins-base libarchive
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
-  wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev libdrm-dev \
+  wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev librsvg2-dev libdrm-dev \
   libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
   libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libarchive-dev libgstreamer1.0-dev \
   libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev \
@@ -200,7 +200,7 @@ tools/run-dev.sh -s fl-term # only a terminal
 | Super+Up / Down | Maximize / minimize |
 | Super+Left / Right | Snap to the left / right half |
 | F11, Super+F | Fullscreen |
-| Alt+Tab, Alt+Shift+Tab | Switch windows |
+| Alt+Tab, Alt+Shift+Tab | Window switcher: hold Alt, Tab / arrows to choose, release to switch, Esc to cancel |
 | Super+drag, Super+right-drag | Move / resize any window |
 | Super+L | Lock the screen |
 | Print | Screenshot (needs grim) |

@@ -631,6 +631,7 @@ static void view_unmap(struct wl_listener *listener, void *data) {
 	wlr_log(WLR_DEBUG, "unmap: %s", view->xdg_toplevel->title ? view->xdg_toplevel->title : "?");
 	if (view == server->grabbed_view) input_reset_cursor_mode(server);
 	if (server->cycle_current == view) server->cycle_current = NULL;
+	switcher_view_gone(server, view);
 	if (server->hover_view == view) server->hover_view = NULL;
 	if (server->last_click_view == view) server->last_click_view = NULL;
 	bool was_focused = view_focused(server) == view;

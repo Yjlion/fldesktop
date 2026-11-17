@@ -4,6 +4,7 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Return_Button.H>
@@ -122,6 +123,17 @@ public:
     Fl_Group *g = page_group(X, Y, W, H, "Shortcuts", cy);
     resizable(g);
     int lw = std::min(W - 48, 700);
+    Fl_Check_Button *sw = new Fl_Check_Button(X + 24, cy, lw, 28,
+                                              "Window switching (Alt+Tab) shows a list of the windows");
+    sw->tooltip("Off: each Alt+Tab raises the next window directly");
+    sw->value(wm.ini.get_bool("behaviour", "switcher", true));
+    sw->callback([](Fl_Widget *w, void *d) {
+      ShortcutsPage *p = (ShortcutsPage *)d;
+      p->wm.ini.load(p->wm.path);
+      p->wm.ini.set_bool("behaviour", "switcher", ((Fl_Check_Button *)w)->value());
+      save_wm(p->wm);
+    }, this);
+    cy += 36;
     list = new Fl_Hold_Browser(X + 24, cy, lw, H - (cy - Y) - 64);
     list->textsize(13);
     static int widths[] = {220, 0};

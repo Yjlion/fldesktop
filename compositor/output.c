@@ -32,6 +32,7 @@ static void output_request_state(struct wl_listener *listener, void *data) {
 static void output_destroy(struct wl_listener *listener, void *data) {
 	struct flwm_output *output = wl_container_of(listener, output, destroy);
 	struct flwm_server *server = output->server;
+	switcher_output_gone(server, output);
 	for (int i = 0; i < 4; i++) {
 		struct flwm_layer_surface *ls, *tmp;
 		wl_list_for_each_safe(ls, tmp, &output->layers[i], link) {

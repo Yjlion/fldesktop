@@ -59,6 +59,11 @@ static void cycle(struct flwm_server *server, bool backwards) {
 	for (int i = 0; i < n; i++)
 		if (list[i] == from) cur = i;
 	int next = backwards ? (cur - 1 + n) % n : (cur + 1) % n;
+	if (server->config.switcher) {
+		/* the switcher panel: windows are raised only when Alt is released */
+		if (switcher_step(server, backwards ? -1 : 1)) server->cycling = true;
+		return;
+	}
 	server->cycling = true;
 	server->cycle_current = list[next];
 	view_focus(list[next]);
@@ -66,6 +71,10 @@ static void cycle(struct flwm_server *server, bool backwards) {
 
 static void finish_cycle(struct flwm_server *server) {
 	if (!server->cycling) return;
+	if (switcher_active(server)) {
+		switcher_finish(server, true);
+		return;
+	}
 	server->cycling = false;
 	struct flwm_view *v = server->cycle_current;
 	server->cycle_current = NULL;
@@ -198,6 +207,25 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 		}
 		/* bindings match on the unshifted keysym of the active layout */
 		uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
+		/* the switcher has the keyboard while it is open */
+		if (!handled && switcher_active(server)) {
+			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
+			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap, keycode, layout, 0, &syms);
+			xkb_keysym_t sym = nsyms > 0 ? syms[0] : XKB_KEY_NoSymbol;
+			bool shift = mods & WLR_MODIFIER_SHIFT;
+			switch (sym) {
+			case XKB_KEY_Escape: switcher_finish(server, false); break;
+			case XKB_KEY_Return: case XKB_KEY_KP_Enter: case XKB_KEY_space: switcher_finish(server, true); break;
+			case XKB_KEY_Tab: case XKB_KEY_ISO_Left_Tab: switcher_step(server, shift ? -1 : 1); break;
+			case XKB_KEY_Right: switcher_step(server, 1); break;
+			case XKB_KEY_Left: switcher_step(server, -1); break;
+			case XKB_KEY_Down: switcher_step_row(server, 1); break;
+			case XKB_KEY_Up: switcher_step_row(server, -1); break;
+			default: break;
+			}
+			/* swallow everything but modifiers (their release ends the switcher) */
+			if (!(sym >= XKB_KEY_Shift_L && sym <= XKB_KEY_Hyper_R) && sym != XKB_KEY_ISO_Level3_Shift) handled = true;
+		}
 		/* while locked no key binding works except the lock's own keys */
 		if (!handled && !server->focused_layer && !server->locked) {
 			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
@@ -611,6 +639,12 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, cursor_button);
 	struct wlr_pointer_button_event *event = data;
 	lock_activity(server);
+	/* a click picks a window in the switcher (or closes it) */
+	if (switcher_active(server)) {
+		if (event->state == WL_POINTER_BUTTON_STATE_PRESSED)
+			switcher_click(server, server->cursor->x, server->cursor->y);
+		return;
+	}
 
 	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
 		enum flwm_cursor_mode mode = server->cursor_mode;

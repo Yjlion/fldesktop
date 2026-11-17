@@ -8,6 +8,14 @@ fl-wm \- Wayland compositor of the fldesktop desktop
 window decorations, handles key bindings, Alt+Tab switching and window snapping, and
 pins the fldesktop shell clients (fl-panel, fl-desktop, fl-launcher) to their places.
 It runs on a VT (DRM/KMS) or nested inside another Wayland or X11 session.
+.SH WINDOW SWITCHER
+Alt+Tab (and Alt+Shift+Tab) opens a panel with the open windows, most recently used first, each
+with its application icon and title; minimized windows are shown faded. While Alt is held, Tab,
+Shift+Tab and the arrow keys move the selection; releasing Alt, Enter or a click switches to the
+window (restoring it when minimized), Escape or a click outside closes the panel. With
+\fBswitcher=false\fR in the \fB[behaviour]\fR section of \fIwm.ini\fR each Alt+Tab raises the next
+window directly instead. Application icons come from the windows' desktop files and the icon theme
+(SVG icons need librsvg).
 .SH SCREEN LOCKING
 SIGUSR1, the \fBlock\fR key binding (Super+L) and the idle timeout
 ([lock] idle_minutes) lock the session: fl-wm covers all outputs, gives the

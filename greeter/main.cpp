@@ -24,6 +24,7 @@
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/osk.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -52,6 +53,10 @@ static Fl_Choice *g_session_choice;
 static Fl_Box *g_message;
 static Fl_Button *g_login_btn;
 static int g_card_y = 300;
+static int g_card_y_normal = 300;
+static class Card *g_card;
+static fld::OskWidget *g_osk;
+static fld::FltkKeySink g_osk_sink;
 
 static std::string state_file() { return fld::cache_home() + "/fl-greet.state"; }
 
@@ -279,6 +284,26 @@ public:
   }
 };
 
+// Shows or hides the on-screen keyboard and moves the card out of its way.
+static void show_keyboard(bool on) {
+  if (!g_osk) return;
+  int H = g_win->h();
+  int target = g_card_y_normal;
+  if (on) {
+    g_osk->show();
+    int space_bottom = g_osk->y() - 10;
+    if (target + g_card->h() > space_bottom) target = std::max(10, space_bottom - g_card->h());
+  } else {
+    g_osk->hide();
+  }
+  (void)H;
+  g_card->position(g_card->x(), target);
+  g_card_y = target;
+  g_win->redraw();
+  if (g_user_input->visible() && !*g_user_input->value()) g_user_input->take_focus();
+  else g_pass->take_focus();
+}
+
 static void tick(void *) {
   g_win->redraw();
   Fl::repeat_timeout(30.0, tick);
@@ -326,8 +351,9 @@ int main(int argc, char **argv) {
   (void)back;
 
   const int CW = 380, CH = 330;
-  g_card_y = std::max(150, (H - CH) / 2 + 30);
+  g_card_y = g_card_y_normal = std::max(150, (H - CH) / 2 + 30);
   Card *card = new Card((W - CW) / 2, g_card_y, CW, CH);
+  g_card = card;
   int cx = card->x() + 30, cy = card->y() + 106, iw = CW - 60;
   g_user_choice = new Fl_Choice(cx, cy + 18, iw, 32, "User");
   style_input(g_user_choice);
@@ -365,6 +391,20 @@ int main(int argc, char **argv) {
   reboot->callback([](Fl_Widget *, void *) { power("reboot"); });
   Fl_Button *off = new Fl_Button(W - 124, H - 50, 110, 34, "Shut Down");
   off->callback([](Fl_Widget *, void *) { power("poweroff"); });
+  // on-screen keyboard: Keyboard=button (default) | always | never
+  std::string kb_mode = fld::lower(cfg.get("Greeter", "Keyboard", "button"));
+  if (kb_mode != "never") {
+    int ow = std::min(W - 20, 1000), oh = std::max(180, std::min(280, H * 32 / 100));
+    g_osk = new fld::OskWidget((W - ow) / 2, H - 60 - oh, ow, oh);
+    g_osk->sink(&g_osk_sink);
+    g_osk->layout(cfg.get("Greeter", "KeyboardLayout", "us"));
+    g_osk->on_hide = [](fld::OskWidget *, void *) { show_keyboard(false); };
+    g_osk->hide();
+    Fl_Button *kb = new Fl_Button(W - 356, H - 50, 110, 34, "Keyboard");
+    kb->tooltip("Show or hide the on-screen keyboard");
+    kb->callback([](Fl_Widget *, void *) { show_keyboard(!g_osk->visible()); });
+    kb->clear_visible_focus();
+  }
   if (g_demo) {
     Fl_Box *demo = new Fl_Box(14, H - 46, 400, 30, "Demo mode: any user, password \"demo\"");
     demo->labelcolor(FL_WHITE);
@@ -390,6 +430,7 @@ int main(int argc, char **argv) {
   g_win->show();
   if (g_user_input->visible()) g_user_input->take_focus();
   else g_pass->take_focus();
+  if (g_osk && kb_mode == "always") show_keyboard(true);
   Fl::add_timeout(30.0, tick);
   return Fl::run();
 }

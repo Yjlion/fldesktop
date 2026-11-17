@@ -450,12 +450,28 @@ static void inotify_cb(int fd, void *) {
   Fl::add_timeout(0.3, reload_later);
 }
 
+static int g_argc;
+static char **g_argv;
+static std::string appearance_signature() {
+  fld::Ini d;
+  d.load(fld::desktop_config_path());
+  std::string sig;
+  for (const char *k : {"Theme", "Accent", "Font", "FontSize", "Scheme"}) sig += "|" + d.get("Appearance", k);
+  return sig + "|" + d.get("General", "IconTheme");
+}
+static std::string g_appearance;
+
 static void config_poll(void *) {
   // pick up wallpaper changes made by other programs
   static time_t last = 0;
   struct stat st;
   if (stat(fld::desktop_config_path().c_str(), &st) == 0 && st.st_mtime != last) {
-    if (last != 0) { g_view->load_config(); g_view->reload(); }
+    if (last != 0) {
+      // a new theme, font or icon theme: start again with it
+      if (appearance_signature() != g_appearance) fld::restart_self(g_argc, g_argv);
+      g_view->load_config();
+      g_view->reload();
+    }
     last = st.st_mtime;
   }
   Fl::repeat_timeout(2.0, config_poll);
@@ -463,6 +479,13 @@ static void config_poll(void *) {
 
 int main(int argc, char **argv) {
   fld::init_app("fldesktop.desktop", argc, argv);
+  // The shell window is borderless and fl-wm knows it by its title; any other
+  // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give
+  // it the shell role too.
+  Fl_Window::default_xclass("fl-desktop");
+  g_argc = argc;
+  g_argv = argv;
+  g_appearance = appearance_signature();
   Fl_Double_Window *win = new Fl_Double_Window(1280, 720, "fldesktop.desktop");
   win->border(0);
   g_view = new DesktopView(0, 0, 1280, 720);
@@ -485,6 +508,6 @@ int main(int argc, char **argv) {
     if (e == FL_SCREEN_CONFIGURATION_CHANGED && g_view->window()) g_view->window()->size(Fl::w(), Fl::h());
     return 0;
   });
-  win->show(argc, argv);
+  win->show(); // not show(argc, argv): it resets the theme colors
   return Fl::run();
 }

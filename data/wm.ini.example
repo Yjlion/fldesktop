@@ -49,10 +49,13 @@ scale=1
 #enabled=true
 
 [keys]
+# These lines add to (or replace) the built-in bindings; put
+# "defaults=false" first to start from an empty list instead.
 # Modifiers: Super, Alt, Ctrl, Shift. Keys are xkb keysym names.
 # Actions: exec CMD, close, maximize, minimize, fullscreen, cycle, cycle-back,
 #          snap-left, snap-right, launcher, show-desktop, reload, quit
 Super+Return=exec fl-term
+Super+t=exec fl-term
 Super+e=exec fl-files
 Super+space=launcher
 Super+d=show-desktop
@@ -62,11 +65,13 @@ Super+Up=maximize
 Super+Down=minimize
 Super+Left=snap-left
 Super+Right=snap-right
+Super+f=fullscreen
 F11=fullscreen
 Alt+Tab=cycle
 Alt+Shift+Tab=cycle-back
 Print=exec fl-screenshot
 Shift+Print=exec fl-screenshot --area
+Super+Shift+r=reload
 Ctrl+Alt+BackSpace=quit
 
 # An [autostart] section replaces the default list

@@ -257,6 +257,7 @@ int main(int argc, char *argv[]) {
 	for (size_t i = 0; i < sizeof listeners / sizeof listeners[0]; i++)
 		wl_list_remove(&listeners[i]->link);
 	input_finish(&server);
+	output_finish(&server);
 
 	wlr_scene_node_destroy(&server.scene->tree.node);
 	wlr_xcursor_manager_destroy(server.cursor_mgr);

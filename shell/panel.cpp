@@ -5,10 +5,10 @@
 // task list comes from the wlr-foreign-toplevel-management protocol.
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Menu_Item.H>
-#include <FL/Fl_Menu_Window.H>
 #include <FL/Fl_Slider.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "fld/config_watch.h"
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -330,36 +331,36 @@ public:
 };
 
 // A popup window anchored to a panel widget (an xdg_popup on Wayland).
-class PanelPopup : public Fl_Menu_Window {
+// A popup above the panel (calendar, volume). It is a borderless toplevel
+// titled "fldesktop.panel-popup": fl-wm places it at the pointer next to the
+// panel, keeps it out of the task list and closes it when another window is
+// focused. (FLTK only creates xdg_popups for its own menus.)
+class PanelPopup : public Fl_Double_Window {
 public:
-  PanelPopup(int w, int h) : Fl_Menu_Window(w, h) {
+  PanelPopup(int w, int h) : Fl_Double_Window(w, h, "fldesktop.panel-popup") {
     box(FL_BORDER_BOX);
     color(fld::palette().bg2);
-    clear_border();
+    border(0);
+    callback([](Fl_Widget *w, void *) { w->hide(); });
   }
   int handle(int e) override {
-    if (e == FL_PUSH && !Fl::event_inside(0, 0, w(), h())) {
-      hide();
-      return 1;
-    }
     if (e == FL_KEYBOARD && Fl::event_key() == FL_Escape) {
       hide();
       return 1;
     }
-    return Fl_Menu_Window::handle(e);
+    return Fl_Double_Window::handle(e);
   }
-  // Shows above (bottom panel) or below (top panel) the anchor widget.
-  void popup_at(Fl_Widget *anchor, bool panel_top) {
-    Fl_Window *top = anchor->top_window();
-    int ax = anchor->x() + anchor->w() - w();
-    if (ax < 4) ax = 4;
-    if (ax + w() > top->w() - 4) ax = top->w() - 4 - w();
-    int ay = panel_top ? top->h() + 2 : -h() - 2;
-    position(top->x() + ax, top->y() + ay);
+  void popup_at(Fl_Widget *, bool) {
     show();
-    Fl::grab(this);
-    while (shown()) Fl::wait();
-    Fl::grab(nullptr);
+    // FLTK ignores xdg_toplevel.close for borderless windows, so the popup
+    // closes itself once the program has lost the keyboard focus (fl-wm moves
+    // it away when another window is clicked)
+    bool had_focus = false;
+    while (shown()) {
+      Fl::wait();
+      if (Fl::focus()) had_focus = true;
+      else if (had_focus) hide();
+    }
   }
 };
 
@@ -372,6 +373,8 @@ struct Panel {
   Fl_Group *quick = nullptr;
   Fl_Group *tasks = nullptr;
   fld::FlatButton *volume = nullptr;
+  fld::FlatButton *keyboard = nullptr;
+  fld::FlatButton *network = nullptr;
   fld::FlatButton *battery = nullptr;
   fld::FlatButton *clock = nullptr;
   fld::FlatButton *power = nullptr;
@@ -473,7 +476,29 @@ static void update_battery() {
 static bool have_wpctl() { static int v = -1; if (v < 0) v = !fld::which("wpctl").empty(); return v; }
 static bool have_pactl() { static int v = -1; if (v < 0) v = !fld::which("pactl").empty(); return v; }
 
+#ifdef FLD_HAVE_AUDIO
+#include "audiobackend.h"
+static AudioBackend *g_audio = nullptr;
+
+static void update_volume_widget();
+static void audio_changed() {
+  const Audio::Device *d = g_audio->defaultDevice(Audio::Sink);
+  bool was_visible = P.volume->visible();
+  if (d && g_audio->isConnected()) {
+    P.volume_pct = (int)lround(Audio::level(d->volumes) * 100);
+    P.muted = d->muted;
+  } else {
+    P.volume_pct = -1;
+  }
+  update_volume_widget();
+  if (was_visible != (bool)P.volume->visible()) relayout();
+}
+#endif
+
 static void query_volume() {
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio) return; // updates arrive from the PipeWire backend
+#endif
   std::string out;
   P.volume_pct = -1;
   if (have_wpctl() && fld::run_capture({"wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"}, out) == 0) {
@@ -512,6 +537,14 @@ static void update_volume_widget() {
 
 static void set_volume(int pct) {
   pct = std::max(0, std::min(150, pct));
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio) {
+    if (const Audio::Device *d = g_audio->defaultDevice(Audio::Sink)) g_audio->setDeviceLevel(d->id, pct / 100.0f);
+    P.volume_pct = pct;
+    update_volume_widget();
+    return;
+  }
+#endif
   char v[16];
   std::string out;
   if (have_wpctl()) {
@@ -526,6 +559,12 @@ static void set_volume(int pct) {
 }
 
 static void toggle_mute() {
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio) {
+    g_audio->toggleDefaultMute(Audio::Sink);
+    return;
+  }
+#endif
   std::string out;
   if (have_wpctl()) fld::run_capture({"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"}, out);
   else if (have_pactl()) fld::run_capture({"pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"}, out);
@@ -550,7 +589,7 @@ public:
 };
 
 static void volume_cb(Fl_Widget *w, void *) {
-  PanelPopup pop(260, 64);
+  PanelPopup pop(260, 96);
   Fl_Slider *s = new Fl_Slider(12, 14, 180, 22);
   s->type(FL_HOR_NICE_SLIDER);
   s->bounds(0, 100);
@@ -565,6 +604,18 @@ static void volume_cb(Fl_Widget *w, void *) {
   more->labelsize(11);
   more->labelcolor(fld::palette().fg_dim);
   more->label("Scroll on the icon to adjust, middle-click to mute");
+  Fl_Button *settings = new Fl_Button(12, 62, 116, 26, "Sound Settings");
+  settings->labelsize(12);
+  settings->callback([](Fl_Widget *b, void *) {
+    fld::spawn({"fl-settings", "sound"});
+    b->window()->hide();
+  });
+  Fl_Button *mixer = new Fl_Button(132, 62, 116, 26, "Volume Mixer");
+  mixer->labelsize(12);
+  mixer->callback([](Fl_Widget *b, void *) {
+    fld::spawn({"fl-mixer"});
+    b->window()->hide();
+  });
   pop.end();
   pop.popup_at(w, P.top);
 }
@@ -619,6 +670,61 @@ static void power_cb(Fl_Widget *, void *) {
   }
 }
 
+// True if a real keyboard is connected (a key device with auto repeat and the
+// kbd handler in /proc/bus/input/devices); virtual keyboards are not counted.
+static bool have_physical_keyboard() {
+  std::string data;
+  if (!fld::read_file("/proc/bus/input/devices", data)) return true;
+  bool kbd = false, virt = false;
+  unsigned long ev = 0;
+  for (auto &line : fld::split(data + "\n\n", '\n', true)) {
+    if (line.empty()) {
+      if (kbd && (ev & 0x100000) && !virt) return true;
+      kbd = virt = false;
+      ev = 0;
+    } else if (fld::starts_with(line, "H: Handlers=")) {
+      kbd = (" " + line.substr(12) + " ").find(" kbd ") != std::string::npos;
+    } else if (fld::starts_with(line, "B: EV=")) {
+      ev = strtoul(line.c_str() + 6, nullptr, 16);
+    } else if (fld::starts_with(line, "S: Sysfs=")) {
+      virt = line.find("/virtual/") != std::string::npos;
+    }
+  }
+  return false;
+}
+
+#ifdef FLD_HAVE_NM
+#include "network_ui.h"
+#include "nmclient.h"
+
+static std::string g_net_tip;
+
+static void network_changed() {
+  const nm::State &st = nm::Client::get().state();
+  if (!st.running) {
+    if (P.network->visible()) { P.network->hide(); relayout(); }
+    return;
+  }
+  const char *icon;
+  if (st.primary_type == "802-11-wireless") icon = nm::signal_icon(st.primary_strength);
+  else if (!st.primary_type.empty()) icon = "network-wired";
+  else if (!st.networking) icon = "network-offline";
+  else icon = "network-wired-disconnected";
+  bool connecting = false;
+  for (auto &d : st.devices) if (d.connecting) connecting = true;
+  if (connecting && st.primary_type.empty()) icon = "network-wired-acquiring";
+  P.network->icon_name(icon, 18);
+  if (!fld::icon(icon, 18)) P.network->icon_name("fl-network", 18);
+  g_net_tip = st.primary_id.empty() ? (st.networking ? "Not connected" : "Networking is off")
+                                    : "Connected to " + st.primary_id;
+  for (auto &d : st.devices)
+    if (d.connected && !d.ip4.empty()) { g_net_tip += "\n" + d.iface + ": " + d.ip4[0]; break; }
+  P.network->tooltip(g_net_tip.c_str());
+  if (!P.network->visible()) { P.network->show(); relayout(); }
+  P.network->redraw();
+}
+#endif
+
 static void relayout() {
   if (!P.win) return;
   int W = P.win->w(), H = P.win->h();
@@ -641,6 +747,14 @@ static void relayout() {
     int bw = (int)fl_width(P.battery->label() ? P.battery->label() : "100%") + 40;
     P.battery->resize(r - bw, 2, bw, H - 4);
     r -= bw + 2;
+  }
+  if (P.network && P.network->visible()) {
+    P.network->resize(r - 34, 2, 34, H - 4);
+    r -= 36;
+  }
+  if (P.keyboard && P.keyboard->visible()) {
+    P.keyboard->resize(r - 34, 2, 34, H - 4);
+    r -= 36;
   }
   if (P.volume->visible()) {
     P.volume->resize(r - 34, 2, 34, H - 4);
@@ -691,8 +805,32 @@ static fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Ca
   return b;
 }
 
+// Everything that the panel reads at start; when it changes the panel restarts.
+static std::string settings_signature() {
+  fld::Ini p, d, w;
+  p.load(fld::fld_config_dir() + "/panel.ini");
+  d.load(fld::desktop_config_path());
+  w.load(fld::fld_config_dir() + "/wm.ini");
+  std::string sig = p.to_string() + "|" + w.get("behaviour", "panel_position", "bottom");
+  for (const char *k : {"Theme", "Accent", "Font", "FontSize", "Scheme"}) sig += "|" + d.get("Appearance", k);
+  return sig + "|" + d.get("General", "IconTheme");
+}
+
 int main(int argc, char **argv) {
   fld::init_app("fldesktop.panel", argc, argv);
+  // The shell window is borderless and fl-wm knows it by its title; any other
+  // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give
+  // it the shell role too.
+  Fl_Window::default_xclass("fl-panel");
+  static int s_argc = argc;
+  static char **s_argv = argv;
+  static std::string s_sig = settings_signature();
+  auto check_restart = [] {
+    if (settings_signature() != s_sig) fld::restart_self(s_argc, s_argv);
+  };
+  static fld::ConfigWatcher w1(fld::fld_config_dir() + "/panel.ini", check_restart);
+  static fld::ConfigWatcher w2(fld::desktop_config_path(), check_restart);
+  static fld::ConfigWatcher w3(fld::fld_config_dir() + "/wm.ini", check_restart);
   fld::Ini cfg;
   cfg.load(fld::fld_config_dir() + "/panel.ini");
   std::string wm_pos;
@@ -742,6 +880,17 @@ int main(int argc, char **argv) {
   P.volume->hover_color(panel_hover());
   P.volume->callback(volume_cb);
   P.volume->hide();
+  // on-screen keyboard button: KeyboardButton=auto (no physical keyboard) | always | never
+  std::string kb_mode = fld::lower(cfg.get("Panel", "KeyboardButton", "auto"));
+  if (kb_mode == "always" || (kb_mode == "auto" && !have_physical_keyboard())) {
+    P.keyboard = make_btn(34, "input-keyboard", "On-screen keyboard",
+                          [](Fl_Widget *, void *) { fld::spawn({"fl-osk"}); });
+    if (!fld::icon("input-keyboard", 20)) P.keyboard->copy_label("⌨");
+  }
+#ifdef FLD_HAVE_NM
+  P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *, void *) { fld::spawn({"fl-network"}); });
+  P.network->hide();
+#endif
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);
@@ -751,6 +900,22 @@ int main(int argc, char **argv) {
   P.win->size_range(200, PANEL_H, 0, PANEL_H);
 
   update_clock();
+#ifdef FLD_HAVE_AUDIO
+  Fl::lock();
+  g_audio = AudioBackend::create();
+  if (g_audio) {
+    g_audio->on_changed = audio_changed;
+    g_audio->on_connection = [](bool) { audio_changed(); };
+  }
+#endif
+#ifdef FLD_HAVE_NM
+  Fl::lock();
+  nm::Client::get().on_changed = network_changed;
+  // the panel also answers NetworkManager's requests for Wi-Fi passwords
+  nm::Client::get().start_secret_agent([](const std::string &ssid, std::function<void(const std::string &)> reply) {
+    reply(nm::ask_wifi_password(ssid, true));
+  });
+#endif
   query_volume();
   update_volume_widget();
   update_battery();
@@ -763,7 +928,7 @@ int main(int argc, char **argv) {
     if (e == FL_SCREEN_CONFIGURATION_CHANGED) P.win->size(Fl::w(), PANEL_H);
     return 0;
   });
-  P.win->show(argc, argv);
+  P.win->show(); // not show(argc, argv): it resets the theme colors
   wl_display *dpy = fl_wl_display();
   if (dpy) {
     wl_registry *reg = wl_display_get_registry(dpy);

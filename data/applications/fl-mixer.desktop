@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Volume Mixer
+GenericName=Audio Mixer
+Comment=Change the volume of applications and sound devices
+Exec=fl-mixer
+Icon=fl-mixer
+Categories=AudioVideo;Audio;Mixer;Settings;
+Keywords=volume;sound;audio;pipewire;speaker;microphone;
+StartupWMClass=fl-mixer

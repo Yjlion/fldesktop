@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=Settings
+Comment=Change the appearance, keyboard, displays, sound, network and more
+Exec=fl-settings
+Icon=fl-settings
+Categories=Settings;System;
+Keywords=settings;preferences;configuration;control center;
+StartupWMClass=fl-settings

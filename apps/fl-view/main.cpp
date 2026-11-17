@@ -497,7 +497,7 @@ int main(int argc, char **argv) {
   Fl::add_handler(key_handler);
   if (!start.empty()) g_view->set_files_from(start);
   else g_view->update_title();
-  g_win->show(argc, argv);
+  g_win->show(); // not show(argc, argv): it resets the theme colors
   g_view->take_focus();
   return Fl::run();
 }

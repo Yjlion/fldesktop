@@ -1,0 +1,18 @@
+pkg_check_modules(PIPEWIRE IMPORTED_TARGET libpipewire-0.3)
+if(PIPEWIRE_FOUND)
+  find_package(Threads REQUIRED)
+  add_library(fld-audio STATIC audiobackend.cpp pwbackend.cpp pwspa.c)
+  target_include_directories(fld-audio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_compile_definitions(fld-audio PUBLIC HAVE_PIPEWIRE=1)
+  # PipeWire's SPA headers use C99/C11 idioms that trip C++ warnings
+  target_compile_options(fld-audio PRIVATE -Wno-missing-field-initializers -Wno-pedantic)
+  target_link_libraries(fld-audio PUBLIC PkgConfig::PIPEWIRE fltk::fltk Threads::Threads m)
+  message(STATUS "PipeWire ${PIPEWIRE_VERSION}: building fld-audio")
+else()
+  message(STATUS "libpipewire-0.3 not found: no mixer and no panel volume")
+endif()
+
+if(TARGET fld-audio)
+  add_library(fld-audio-ui STATIC mixer_ui.cpp)
+  target_link_libraries(fld-audio-ui PUBLIC fld-audio fld)
+endif()

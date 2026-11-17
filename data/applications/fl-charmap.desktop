@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Character Map
+GenericName=Character Map
+Comment=Find and insert special characters
+Exec=fl-charmap
+Icon=fl-charmap
+Categories=Utility;
+Keywords=unicode;characters;symbols;emoji;glyph;font;
+StartupWMClass=fl-charmap

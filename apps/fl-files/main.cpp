@@ -1521,7 +1521,7 @@ int main(int argc, char **argv) {
   fill_places();
   set_view(S.list_view);
   navigate(start, false);
-  g_win->show(argc, argv);
+  g_win->show(); // not show(argc, argv): it resets the theme colors
   g_view->take_focus();
   return Fl::run();
 }

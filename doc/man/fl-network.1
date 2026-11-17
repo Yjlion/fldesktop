@@ -1,0 +1,21 @@
+.TH FL-NETWORK 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-network \- NetworkManager settings
+.SH SYNOPSIS
+\fBfl-network\fR
+.SH DESCRIPTION
+Shows the network devices managed by NetworkManager with their state,
+addresses and speed. Wi-Fi devices list the networks in range with their
+signal and security; connect with a password, or to a hidden network.
+.PP
+\fBAll Connections\fR lists the saved connections: activate, deactivate,
+delete, or add a wired or Wi-Fi connection. The editor covers the general
+settings (name, connect automatically, available to all users), Wi-Fi
+(SSID, security, password) and IPv4/IPv6 (automatic, manual or disabled;
+addresses, gateway, DNS servers). Changes that need privileges are
+authorized through polkit, see \fBfl-polkit-agent\fR(1).
+.PP
+The network indicator of \fBfl-panel\fR(1) opens this program, and the panel
+asks for Wi-Fi passwords that NetworkManager needs (a secret agent).
+.SH SEE ALSO
+\fBnmcli\fR(1), \fBNetworkManager\fR(8), \fBfl-settings\fR(1)

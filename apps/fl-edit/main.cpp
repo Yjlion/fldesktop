@@ -148,8 +148,15 @@ public:
   static void modify_cb(int pos, int ins, int del, int, const char *deleted, void *data) {
     Doc *d = static_cast<Doc *>(data);
     if (d->loading || (ins == 0 && del == 0)) return;
-    // tab_distance() "replaces" the whole text without deleted text to force a redisplay
-    if (!deleted && del > 0 && ins == del) return;
+    // tab_distance() "replaces" the whole text with itself to force a redisplay
+    // (without the deleted text in some FLTK versions, with it in others)
+    if (del > 0 && ins == del) {
+      if (!deleted) return;
+      char *now = d->buf->text_range(pos, pos + ins);
+      bool same = memcmp(now, deleted, (size_t)del) == 0;
+      free(now);
+      if (same) return;
+    }
     // keep the style buffer the same length right away, re-lex shortly after
     if (d->style->length() != d->buf->length() && S.highlight && d->lang != syntax::NONE) {
       if (del) d->style->remove(pos, std::min(pos + del, d->style->length()));
@@ -740,7 +747,7 @@ int main(int argc, char **argv) {
     opened++;
   }
   if (g_docs.empty()) new_doc();
-  g_win->show(argc, argv);
+  g_win->show(); // not show(argc, argv): it resets the theme colors
   current()->ed->take_focus();
   update_status();
   return Fl::run();

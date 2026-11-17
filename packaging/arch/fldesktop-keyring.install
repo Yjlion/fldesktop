@@ -1,0 +1,9 @@
+post_install() {
+  if [ -x usr/bin/pacman-key ]; then
+    pacman-key --populate fldesktop
+  fi
+}
+
+post_upgrade() {
+  post_install
+}

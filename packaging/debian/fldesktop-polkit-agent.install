@@ -1,0 +1,3 @@
+usr/bin/fl-polkit-agent
+etc/xdg/autostart/fl-polkit-agent.desktop
+usr/share/man/man1/fl-polkit-agent.1

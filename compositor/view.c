@@ -79,6 +79,8 @@ static const struct {
 	{"fldesktop.desktop", "fl-desktop", FLWM_ROLE_DESKTOP},
 	{"fldesktop.launcher", "fl-launcher", FLWM_ROLE_LAUNCHER},
 	{"fldesktop.osd", "fl-panel", FLWM_ROLE_OSD},
+	{"fldesktop.osk", "fl-osk", FLWM_ROLE_OSK},
+	{"fldesktop.panel-popup", "fl-panel", FLWM_ROLE_POPUP},
 };
 
 static bool client_exe_is(struct flwm_server *server, struct wl_client *client, const char *exe) {
@@ -120,7 +122,9 @@ static void detect_role(struct flwm_view *view) {
 		case FLWM_ROLE_DESKTOP: layer = view->server->layer_background; break;
 		case FLWM_ROLE_PANEL: layer = view->server->layer_top; break;
 		case FLWM_ROLE_LAUNCHER:
-		case FLWM_ROLE_OSD: layer = view->server->layer_overlay; break;
+		case FLWM_ROLE_OSD:
+		case FLWM_ROLE_OSK:
+		case FLWM_ROLE_POPUP: layer = view->server->layer_overlay; break;
 		default: break;
 		}
 		wlr_scene_node_reparent(&view->tree->node, layer);
@@ -218,12 +222,17 @@ void view_focus(struct flwm_view *view) {
 	struct wlr_seat *seat = server->seat;
 	struct flwm_view *prev = view_focused(server);
 	if (view->minimized) view_set_minimized(view, false);
-	if (view->role == FLWM_ROLE_NORMAL || view->role == FLWM_ROLE_LAUNCHER) view_raise(view);
+	if (view->role == FLWM_ROLE_NORMAL || view->role == FLWM_ROLE_LAUNCHER ||
+			view->role == FLWM_ROLE_POPUP)
+		view_raise(view);
 	if (prev == view) return;
 
 	/* the launcher closes itself when another window gets focus (not the panel,
 	 * whose launcher button toggles it) */
 	if (prev && prev->role == FLWM_ROLE_LAUNCHER && view->role != FLWM_ROLE_PANEL)
+		wlr_xdg_toplevel_send_close(prev->xdg_toplevel);
+	/* panel popups close as soon as anything else gets the focus */
+	if (prev && prev->role == FLWM_ROLE_POPUP)
 		wlr_xdg_toplevel_send_close(prev->xdg_toplevel);
 
 	if (prev) {
@@ -467,6 +476,38 @@ void view_reposition_shell(struct flwm_view *view) {
 		view_set_position(view, o->usable_area.x + (o->usable_area.width - geo.width) / 2,
 			o->usable_area.y + o->usable_area.height - geo.height - 48);
 		break;
+	case FLWM_ROLE_POPUP: {
+		/* next to the panel, horizontally centred on the pointer */
+		o = output_at(server, server->cursor->x, server->cursor->y);
+		if (!o) return;
+		struct wlr_box ua = o->usable_area;
+		int x = (int)server->cursor->x - geo.width / 2;
+		if (x + geo.width > ua.x + ua.width - 4) x = ua.x + ua.width - 4 - geo.width;
+		if (x < ua.x + 4) x = ua.x + 4;
+		int y = server->config.panel_top ? ua.y + 4 : ua.y + ua.height - geo.height - 4;
+		if (!view->placed) {
+			view_set_position(view, x, y);
+			view->placed = true;
+		} else {
+			view_set_position(view, view->x, y);
+		}
+		break;
+	}
+	case FLWM_ROLE_OSK: {
+		/* docked at the bottom, above a bottom panel */
+		o = output_primary(server);
+		if (!o) return;
+		int panel_h = 0;
+		struct flwm_view *panel = view_find_role(server, FLWM_ROLE_PANEL);
+		if (panel && !server->config.panel_top) {
+			struct wlr_box pg;
+			flwm_xdg_geometry(panel->xdg_toplevel->base, &pg);
+			panel_h = pg.height;
+		}
+		view_set_position(view, o->full_area.x + (o->full_area.width - geo.width) / 2,
+			o->full_area.y + o->full_area.height - panel_h - geo.height);
+		break;
+	}
 	default:
 		break;
 	}
@@ -537,8 +578,8 @@ static void view_map(struct wl_listener *listener, void *data) {
 	wlr_scene_node_set_enabled(&view->tree->node, true);
 	if (view->role != FLWM_ROLE_NORMAL) {
 		view_reposition_shell(view);
-		if (view->role == FLWM_ROLE_PANEL) arrange_all(server);
-		if (view->role == FLWM_ROLE_LAUNCHER) view_focus(view);
+		if (view->role == FLWM_ROLE_PANEL || view->role == FLWM_ROLE_OSK) arrange_all(server);
+		if (view->role == FLWM_ROLE_LAUNCHER || view->role == FLWM_ROLE_POPUP) view_focus(view);
 		if (view->role == FLWM_ROLE_DESKTOP && !view_focused(server)) view_focus(view);
 		return;
 	}
@@ -564,7 +605,7 @@ static void view_unmap(struct wl_listener *listener, void *data) {
 		wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
 		view->ftl = NULL;
 	}
-	if (view->role == FLWM_ROLE_PANEL) arrange_all(server);
+	if (view->role == FLWM_ROLE_PANEL || view->role == FLWM_ROLE_OSK) arrange_all(server);
 	if (was_focused) {
 		wlr_seat_keyboard_notify_clear_focus(server->seat);
 		wl_list_remove(&view->link);
@@ -608,12 +649,15 @@ static void view_commit(struct wl_listener *listener, void *data) {
 	if (view->role != FLWM_ROLE_NORMAL) {
 		struct wlr_box geo;
 		flwm_xdg_geometry(base, &geo);
-		if (view->role == FLWM_ROLE_PANEL) {
-			/* panel height may have changed: re-arrange usable areas */
-			struct flwm_output *o = output_primary(view->server);
-			int expect = o ? o->full_area.height - o->usable_area.height : 0;
-			view_reposition_shell(view);
-			if (o && expect != geo.height) arrange_all(view->server);
+		if (view->role == FLWM_ROLE_PANEL || view->role == FLWM_ROLE_OSK) {
+			/* size may have changed: re-arrange usable areas */
+			if (geo.width != view->committed_w || geo.height != view->committed_h) {
+				view->committed_w = geo.width;
+				view->committed_h = geo.height;
+				arrange_all(view->server);
+			} else {
+				view_reposition_shell(view);
+			}
 		} else {
 			view_reposition_shell(view);
 		}

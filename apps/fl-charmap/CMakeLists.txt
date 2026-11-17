@@ -1,0 +1,6 @@
+pkg_check_modules(CHARMAP_FC REQUIRED IMPORTED_TARGET fontconfig)
+add_library(fl-charmap-data STATIC charmap_data.cpp)
+target_include_directories(fl-charmap-data PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(fl-charmap main.cpp)
+target_link_libraries(fl-charmap PRIVATE fl-charmap-data fld PkgConfig::CHARMAP_FC)
+install(TARGETS fl-charmap RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

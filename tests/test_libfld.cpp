@@ -43,6 +43,21 @@ static void test_ini() {
   again.parse(ini.to_string());
   CHECK_EQ(again.get("C", "k"), std::string("v"));
   CHECK_EQ(again.keys("A").size(), 2u);
+
+  // comments and blank lines survive a load / modify / save cycle
+  fld::Ini c;
+  c.parse("# top comment\n\n[keys]\n# bindings\nSuper+Return=exec fl-term\n\n[pointer]\n; tap\ntap_to_click=true\n");
+  c.set("keys", "Super+e", "exec fl-files");
+  c.set("pointer", "accel", "0.5");
+  std::string out = c.to_string();
+  CHECK(out.find("# top comment") == 0);
+  CHECK(out.find("# bindings\nSuper+Return=exec fl-term\nSuper+e=exec fl-files\n") != std::string::npos);
+  CHECK(out.find("; tap\ntap_to_click=true\naccel=0.5") != std::string::npos);
+  CHECK_EQ(c.keys("keys").size(), 2u);
+  CHECK_EQ(c.groups().size(), 2u);
+  CHECK_EQ(c.get("keys", ""), std::string(""));
+  c.remove_group("keys");
+  CHECK(c.to_string().find("[keys]") == std::string::npos);
 }
 
 static void test_desktop_entry() {

@@ -21,6 +21,12 @@ option(FLD_BUILD_CALC     "Build the fl-calc calculator"                   ON)
 option(FLD_BUILD_VIEW     "Build the fl-view image viewer"                 ON)
 option(FLD_BUILD_FILES    "Build the fl-files file manager"                ON)
 option(FLD_BUILD_EDIT     "Build the fl-edit text editor"                  ON)
+option(FLD_BUILD_OSK      "Build the fl-osk on-screen keyboard"            ON)
+option(FLD_BUILD_CHARMAP  "Build the fl-charmap character map"             ON)
+option(FLD_BUILD_MIXER    "Build the fl-mixer PipeWire mixer"              ON)
+option(FLD_BUILD_POLKIT   "Build the fl-polkit-agent authentication agent" ON)
+option(FLD_BUILD_NETWORK  "Build fl-network (NetworkManager)"              ON)
+option(FLD_BUILD_SETTINGS "Build the fl-settings settings center"          ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -32,7 +38,7 @@ add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT)
+foreach(opt SHELL GREETER TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -63,6 +69,12 @@ if(FLD_NEED_FLTK)
   endif()
   pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
   add_subdirectory(common/libfld)
+  if(FLD_BUILD_MIXER OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/audio)
+  endif()
+  if(FLD_BUILD_NETWORK OR FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/nm)
+  endif()
 endif()
 
 # ---- Wayland protocol code generation --------------------------------------
@@ -96,12 +108,16 @@ endif()
 if(FLD_BUILD_GREETER)
   add_subdirectory(greeter)
 endif()
-foreach(app TERM CALC VIEW FILES EDIT)
+foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     add_subdirectory(apps/fl-${lc})
   endif()
 endforeach()
+
+if(FLD_BUILD_POLKIT)
+  add_subdirectory(apps/fl-polkit-agent)
+endif()
 
 add_subdirectory(data)
 

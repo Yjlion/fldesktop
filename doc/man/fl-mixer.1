@@ -1,0 +1,20 @@
+.TH FL-MIXER 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-mixer \- PipeWire volume mixer
+.SH SYNOPSIS
+\fBfl-mixer\fR [\fB\-\-tab\fR \fIplayback\fR|\fIrecording\fR|\fIoutputs\fR|\fIinputs\fR|\fIconfiguration\fR]
+.SH DESCRIPTION
+A volume mixer for PipeWire. \fBPlayback\fR and \fBRecording\fR list the
+application streams with their volume, mute and device; \fBOutput Devices\fR
+and \fBInput Devices\fR set the volume, balance, port and the default device;
+\fBConfiguration\fR selects the profile of each sound card. Level meters show
+the signal of every stream and device.
+.PP
+The volume button of \fBfl-panel\fR(1) and the Sound page of
+\fBfl-settings\fR(1) use the same PipeWire connection code.
+.SH OPTIONS
+.TP
+\fB\-\-tab\fR \fIname\fR
+Open this tab.
+.SH SEE ALSO
+\fBwpctl\fR(1), \fBfl-panel\fR(1), \fBfl-settings\fR(1)

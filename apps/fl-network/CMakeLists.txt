@@ -1,0 +1,5 @@
+if(TARGET fld-nm-ui)
+  add_executable(fl-network main.cpp)
+  target_link_libraries(fl-network PRIVATE fld-nm-ui)
+  install(TARGETS fl-network RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()

@@ -125,12 +125,11 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	case FLWM_ACTION_CYCLE_BACK:
 		cycle(server, true);
 		return true;
-	case FLWM_ACTION_LAUNCHER: {
-		struct flwm_view *l = view_find_role(server, FLWM_ROLE_LAUNCHER);
-		if (l) view_close(l);
-		else flwm_spawn(server, server->config.launcher_cmd ? server->config.launcher_cmd : "fl-launcher");
+	case FLWM_ACTION_LAUNCHER:
+		/* fl-launcher toggles: a second instance closes the running one (FLTK
+		 * ignores xdg_toplevel.close for borderless windows) */
+		flwm_spawn(server, server->config.launcher_cmd ? server->config.launcher_cmd : "fl-launcher");
 		return true;
-	}
 	case FLWM_ACTION_QUIT:
 		wl_display_terminate(server->wl_display);
 		return true;
@@ -308,6 +307,21 @@ static void pointer_apply_config(struct flwm_server *server, struct wlr_input_de
 		libinput_device_config_scroll_set_natural_scroll_enabled(li, c->natural_scroll);
 	if (libinput_device_config_accel_is_available(li))
 		libinput_device_config_accel_set_speed(li, c->pointer_accel);
+	if (libinput_device_config_left_handed_is_available(li))
+		libinput_device_config_left_handed_set(li, c->left_handed);
+	if (libinput_device_config_dwt_is_available(li))
+		libinput_device_config_dwt_set_enabled(li, c->disable_while_typing
+			? LIBINPUT_CONFIG_DWT_ENABLED : LIBINPUT_CONFIG_DWT_DISABLED);
+	if (libinput_device_config_middle_emulation_is_available(li))
+		libinput_device_config_middle_emulation_set_enabled(li, c->middle_emulation
+			? LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED : LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED);
+	if (c->scroll_method) {
+		enum libinput_config_scroll_method m = LIBINPUT_CONFIG_SCROLL_NO_SCROLL;
+		if (!strcmp(c->scroll_method, "two-finger")) m = LIBINPUT_CONFIG_SCROLL_2FG;
+		else if (!strcmp(c->scroll_method, "edge")) m = LIBINPUT_CONFIG_SCROLL_EDGE;
+		if (libinput_device_config_scroll_get_methods(li) & m || m == LIBINPUT_CONFIG_SCROLL_NO_SCROLL)
+			libinput_device_config_scroll_set_method(li, m);
+	}
 }
 
 static void pointer_destroy(struct wl_listener *listener, void *data) {
@@ -631,7 +645,8 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 		server->focused_layer = NULL;
 
 	struct flwm_view *view = desc ? desc->ptr : NULL;
-	if (view) view_focus(view);
+	/* the on-screen keyboard gets pointer events but never the keyboard focus */
+	if (view && view->role != FLWM_ROLE_OSK) view_focus(view);
 
 	/* Super + drag moves / resizes any normal window */
 	if (view && view->role == FLWM_ROLE_NORMAL && (mods & WLR_MODIFIER_LOGO)) {

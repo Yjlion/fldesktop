@@ -8,6 +8,11 @@ A login screen for greetd(1). Run it inside the cage kiosk compositor, e.g. in
 \fI/etc/greetd/config.toml\fR: command = "cage \-s \-d \-\- fl-greet".
 Sessions are read from /usr/share/wayland-sessions. \fI/etc/fldesktop/greeter.ini\fR
 [Greeter] accepts Background, MinUid and HideUsers (comma separated).
+.PP
+An on-screen keyboard is built in. \fBKeyboard=button\fR (the default) adds a
+Keyboard button that shows it, \fBalways\fR shows it from the start (for
+touch-only devices) and \fBnever\fR removes the button.
+\fBKeyboardLayout\fR selects its layout: \fBus\fR, \fBde\fR or \fBfr\fR.
 .SH OPTIONS
 .TP
 \fB\-\-demo\fR

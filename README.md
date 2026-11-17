@@ -21,7 +21,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
-| **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor |
+| **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
 | **fl-polkit-agent** | Password dialog for polkit (administrator actions) |
 | **fl-osk** | On-screen keyboard (Wayland virtual-keyboard protocol) |
 | **fl-charmap** | Unicode character map with search by name |
@@ -97,7 +97,7 @@ sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango lib
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev librsvg2-dev libdrm-dev \
-  libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libfontconfig-dev \
+  libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libssl-dev libfontconfig-dev \
   libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libjxl-dev libarchive-dev libgstreamer1.0-dev \
   libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev \
   libpam0g-dev

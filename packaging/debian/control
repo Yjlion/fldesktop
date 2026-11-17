@@ -22,6 +22,7 @@ Build-Depends: debhelper-compat (= 13),
                libpipewire-0.3-dev,
                libpolkit-agent-1-dev,
                libnm-dev,
+               libssl-dev,
                libfontconfig-dev,
                libcups2-dev,
                libpackagekit-glib2-dev,
@@ -250,10 +251,12 @@ Package: fldesktop-network
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: network-manager, fldesktop-polkit-agent
+Suggests: network-manager-openvpn, network-manager-openconnect, network-manager-vpnc
 Description: fldesktop network settings for NetworkManager
  fl-network shows wired and Wi-Fi devices, connects to wireless networks
  and edits saved NetworkManager connections (IPv4/IPv6, DNS, Wi-Fi
- security).
+ security). It sets up WireGuard VPNs (keys, peers, wg-quick import) and
+ imports and edits the VPNs of NetworkManager's VPN plugins.
 
 Package: fldesktop-archive-keyring
 Architecture: all

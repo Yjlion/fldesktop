@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "vpn_util.h"
+
 namespace nm {
 
 struct AccessPoint {
@@ -66,7 +68,22 @@ struct Settings {
   std::string ip4_addresses, ip4_gateway, ip4_dns;      // addresses: "a.b.c.d/prefix" separated by spaces/newlines
   std::string ip6_addresses, ip6_gateway, ip6_dns;
   bool ip4_ignore_auto_dns = false, ip6_ignore_auto_dns = false;
+  // WireGuard (type "wireguard")
+  std::string wg_private_key; // the stored key when it could be read; "" = keep the stored one
+  bool wg_has_private_key = false;
+  int wg_listen_port = 0, wg_mtu = 0;
+  std::vector<WgPeer> wg_peers;
+  // VPN plugins (type "vpn"): OpenVPN, OpenConnect, ...
+  std::string vpn_service, vpn_user;
+  std::string vpn_password; // "" = keep the stored one
+  std::vector<std::pair<std::string, std::string>> vpn_data;
 };
+
+// An installed NetworkManager VPN plugin.
+struct VpnPlugin {
+  std::string service, name;
+};
+std::vector<VpnPlugin> vpn_plugins();
 
 using Done = std::function<void(const std::string &error)>; // "" = success
 
@@ -91,11 +108,15 @@ public:
   void get_settings(const std::string &uuid, std::function<void(const Settings &, const std::string &err)> cb);
   // Saves (uuid set) or adds (uuid empty) a connection.
   void save_settings(const Settings &s, Done done = nullptr);
+  // Imports a VPN configuration file: a WireGuard wg-quick file, or whatever
+  // an installed VPN plugin understands (.ovpn, ...). done(err, uuid).
+  void import_vpn(const std::string &path, std::function<void(const std::string &err, const std::string &uuid)> done);
   // true if a saved Wi-Fi connection exists for the SSID
   bool has_saved_wifi(const std::string &ssid) const;
 
-  // Hosts a secret agent that asks for Wi-Fi passwords. `ask` runs in the
-  // FLTK thread and must call reply(password) or reply("") to cancel.
+  // Hosts a secret agent that asks for Wi-Fi and VPN passwords. `ask` runs in
+  // the FLTK thread with the network's name (VPNs: "VPN <name>") and must
+  // call reply(password) or reply("") to cancel.
   void start_secret_agent(std::function<void(const std::string &ssid, std::function<void(const std::string &)> reply)> ask);
 
   State state_; // internal: written in the FLTK thread only

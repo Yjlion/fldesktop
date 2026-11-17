@@ -33,7 +33,7 @@ private:
   Fl_Button *wifi_connect_, *wifi_hidden_, *wifi_scan_;
   // connections page
   Fl_Hold_Browser *conns_;
-  Fl_Button *c_add_wired_, *c_add_wifi_, *c_edit_, *c_delete_, *c_toggle_;
+  Fl_Button *c_add_, *c_edit_, *c_delete_, *c_toggle_;
   std::string page_;          // device path, or "*" for all connections
   bool user_chose_ = false;   // the user picked a page (otherwise follow the first device)
   std::string title_s_, state_s_, info_s_, summary_s_;
@@ -54,11 +54,16 @@ private:
   static void conn_edit_cb(Fl_Widget *, void *);
   static void conn_delete_cb(Fl_Widget *, void *);
   static void conn_toggle_cb(Fl_Widget *, void *);
+  static void conn_add_vpn_cb(Fl_Widget *, void *);
 };
 
 // Shows the connection editor for uuid (or a new connection of `type` when uuid
-// is empty: "802-3-ethernet" or "802-11-wireless").
+// is empty: "802-3-ethernet", "802-11-wireless", "wireguard", or "vpn:<service>"
+// for a VPN plugin).
 void edit_connection(const std::string &uuid, const std::string &type = "");
+// Asks for a VPN configuration file and imports it (WireGuard, or what the
+// installed VPN plugins read); opens the new connection in the editor.
+void import_vpn_dialog();
 // Asks for a Wi-Fi password; returns "" when cancelled.
 std::string ask_wifi_password(const std::string &ssid, bool retry = false);
 

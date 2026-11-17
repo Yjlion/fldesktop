@@ -215,8 +215,9 @@ package_fldesktop-polkit-agent() {
 }
 package_fldesktop-network() {
   pkgdesc="fldesktop network settings for NetworkManager"
-  depends=(fltk glib2 libnm)
-  optdepends=('networkmanager: the network service' 'fldesktop-polkit-agent: password prompts')
+  depends=(fltk glib2 libnm openssl)
+  optdepends=('networkmanager: the network service' 'fldesktop-polkit-agent: password prompts'
+              'networkmanager-openvpn: OpenVPN connections' 'networkmanager-openconnect: OpenConnect VPNs')
   _app network
 }
 package_fldesktop-notifyd() {

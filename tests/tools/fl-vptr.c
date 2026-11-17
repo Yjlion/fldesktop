@@ -52,7 +52,7 @@ static void button(int b, int pressed) {
 }
 
 static int usage(void) {
-	fprintf(stderr, "usage: fl-vptr [-s WxH] click X Y [left|right|middle] | move X Y | drag X1 Y1 X2 Y2 | scroll DY\n");
+	fprintf(stderr, "usage: fl-vptr [-s WxH] click X Y [left|right|middle] | hold X Y MS | move X Y | drag X1 Y1 X2 Y2 | scroll DY\n");
 	return 2;
 }
 
@@ -80,6 +80,13 @@ int main(int argc, char **argv) {
 		button(b, 1);
 		usleep(30000);
 		button(b, 0);
+	} else if (!strcmp(cmd, "hold") && i + 2 < argc) {
+		/* press, keep the button down for MS milliseconds, release */
+		move_to(atoi(argv[i]), atoi(argv[i + 1]));
+		usleep(30000);
+		button(BTN_LEFT, 1);
+		usleep(atoi(argv[i + 2]) * 1000);
+		button(BTN_LEFT, 0);
 	} else if (!strcmp(cmd, "move") && i + 1 < argc) {
 		move_to(atoi(argv[i]), atoi(argv[i + 1]));
 	} else if (!strcmp(cmd, "drag") && i + 3 < argc) {

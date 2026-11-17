@@ -166,6 +166,7 @@ int main(int argc, char **argv) {
   win->border(0);
   fld::OskWidget *osk = new fld::OskWidget(0, 0, W, height);
   osk->layout(layout);
+  osk->key_preview(cfg.get_bool("Keyboard", "KeyPreview", true));
   osk->on_hide = [](fld::OskWidget *, void *) { on_term(0); };
   osk->on_layout_changed = [](fld::OskWidget *o, void *) {
     fld::Ini c;

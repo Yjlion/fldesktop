@@ -26,6 +26,9 @@ Build-Depends: debhelper-compat (= 13),
                libpackagekit-glib2-dev,
                libflatpak-dev,
                libappstream-dev,
+               libmpv-dev,
+               libegl-dev,
+               libgl-dev,
                shared-mime-info
 Standards-Version: 4.7.0
 Homepage: https://github.com/Yjlion/fldesktop
@@ -52,7 +55,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-notifyd (>= ${source:Version}),
          xdg-desktop-portal-fl (>= ${source:Version}),
          ${misc:Depends}
-Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core,
+Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
             fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall
 Description: lightweight Wayland desktop built with FLTK (metapackage)
@@ -119,6 +122,15 @@ Description: fldesktop task manager
  fl-taskmgr lists running processes with their CPU and memory use and can
  end, kill, stop, continue and re-prioritise them. Its performance view
  graphs CPU, memory, network and disk use.
+
+Package: fldesktop-video
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Suggests: yt-dlp
+Description: fldesktop video player
+ fl-video plays video and audio files, playlists and network streams with
+ libmpv: subtitles, audio and subtitle track selection, playback speed,
+ screenshots, full screen and resuming where playback stopped.
 
 Package: fldesktop-view
 Architecture: any

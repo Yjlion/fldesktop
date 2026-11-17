@@ -6,7 +6,12 @@ install(FILES ${_apps} DESTINATION ${FLD_SHARE}/applications)
 install(DIRECTORY icons/hicolor DESTINATION ${FLD_SHARE}/icons)
 install(FILES backgrounds/default.svg DESTINATION ${FLD_SHARE}/fldesktop/backgrounds)
 install(FILES charmap/Blocks.txt charmap/LICENSE.unicode DESTINATION ${FLD_SHARE}/fldesktop/charmap)
-install(FILES wm.ini.example greetd/config.toml DESTINATION ${FLD_SHARE}/fldesktop)
+# greetd's example config: the greeter user and VT differ between distributions
+# (Arch: greeter, VT 1; Debian: _greetd, VT 7, the VT its greetd.service takes).
+set(FLD_GREETD_USER "greeter" CACHE STRING "User greetd runs the greeter as")
+set(FLD_GREETD_VT "1" CACHE STRING "VT greetd runs on")
+configure_file(greetd/config.toml.in ${CMAKE_CURRENT_BINARY_DIR}/greetd/config.toml @ONLY)
+install(FILES wm.ini.example ${CMAKE_CURRENT_BINARY_DIR}/greetd/config.toml DESTINATION ${FLD_SHARE}/fldesktop)
 install(FILES autostart/fl-polkit-agent.desktop DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
 
 # Mirror the data into the build tree so programs can run uninstalled:

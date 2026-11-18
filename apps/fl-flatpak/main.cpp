@@ -61,7 +61,7 @@ void icons_changed_cb(void *) {
   if (g_icons_changed) g_icons_changed();
 }
 
-void download_icon(const std::string &url) {
+void fetch_remote_image(const std::string &url) {
   if (url.compare(0, 8, "https://") != 0 || g_downloading.count(url) || fld::which("curl").empty()) return;
   g_downloading.insert(url);
   std::string dest = icon_cache_file(url);
@@ -91,7 +91,7 @@ Fl_Image *app_icon(const fp::App &a, int size) {
     std::string cached = icon_cache_file(a.icon_url);
     if (fld::file_exists(cached)) file = cached;
     else if (fld::icon_path(a.icon_stock.empty() ? a.id : a.icon_stock, size).empty()) {
-      download_icon(a.icon_url);
+      fetch_remote_image(a.icon_url);
       pending = g_downloading.count(a.icon_url) > 0;
     }
   }

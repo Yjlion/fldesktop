@@ -1,0 +1,57 @@
+// fl-web logic without WebKit (unit tested): what the address bar means,
+// bookmarks and history files.
+#pragma once
+#include <ctime>
+#include <string>
+#include <vector>
+
+namespace web {
+
+// Search engines: name and URL template (%s is the query).
+struct SearchEngine {
+  const char *name, *url;
+};
+const std::vector<SearchEngine> &search_engines();
+// The template for a name (or a template itself); DuckDuckGo when unknown.
+std::string search_template(const std::string &name_or_template);
+
+// What to load for text typed into the address bar: URLs and file paths as
+// they are (adding https:// to host names), anything else is a search.
+std::string url_from_input(const std::string &text, const std::string &search_tmpl);
+// Percent-encodes a search query (spaces become +).
+std::string encode_query(const std::string &q);
+// The host part of a URL ("" when none).
+std::string url_host(const std::string &url);
+// A title for a page without one: the host, or the file name.
+std::string fallback_title(const std::string &url);
+
+struct Bookmark {
+  std::string url, title;
+};
+// url<TAB>title lines
+std::vector<Bookmark> load_bookmarks(const std::string &path);
+bool save_bookmarks(const std::string &path, const std::vector<Bookmark> &b);
+
+struct HistoryEntry {
+  time_t time = 0;
+  std::string url, title;
+};
+// time<TAB>url<TAB>title lines, oldest first
+std::vector<HistoryEntry> load_history(const std::string &path);
+// Appends a visit; the file is rewritten (deduplicated, at most `keep`
+// entries) when it has grown to twice that.
+bool add_history(const std::string &path, const HistoryEntry &e, size_t keep = 5000);
+// Newest first, one entry per URL, matching `filter` (in URL or title,
+// case-insensitive) when not empty.
+std::vector<HistoryEntry> history_view(const std::vector<HistoryEntry> &all, const std::string &filter,
+                                       size_t max = 500);
+
+// Completions for the address bar: bookmarks, then the most visited history
+// entries whose URL or title contains the text.
+std::vector<Bookmark> suggestions(const std::string &text, const std::vector<Bookmark> &bookmarks,
+                                  const std::vector<HistoryEntry> &history, size_t max = 8);
+
+// Strips tabs and newlines (for the files above).
+std::string one_line(const std::string &s);
+
+} // namespace web

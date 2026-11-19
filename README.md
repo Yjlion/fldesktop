@@ -6,16 +6,17 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 |-----------|------------|
 | **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, an Alt+Tab window switcher, window snapping, layer-shell and session locking (also ext-session-lock for swaylock) |
 | **fl-lock** | Screen locker: clock, user picture, PAM password check, on-screen keyboard; locks on Super+L, after an idle time and before suspend |
-| **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, Bluetooth, printing, battery, calendar clock, notification history, power menu |
+| **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, Bluetooth, printing, battery (UPower: time left, power modes, low battery warnings), calendar clock, notification history, power menu; mounts drives as they are plugged in (UDisks2) |
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space) |
-| **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder |
+| **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder, with drag and drop and icon zoom |
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard; its look and user list are set in Settings > Login Screen |
-| **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, network, proxy, firewall, date & time, software updates, login screen |
+| **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, power, removable drives, network, proxy, firewall, date & time, software updates, login screen |
 | **fl-term** | Terminal emulator (libvterm): tabs, optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
-| **fl-files** | File manager: icon, compact and details views with zoom and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, drag and drop, and a search for files and folders by name, text, date and size |
+| **fl-files** | File manager: icon, compact and details views with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, drag and drop (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), and a search for files and folders by name, text, date and size |
 | **fl-edit** | Tabbed text editor with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
+| **fl-web** | Web browser on WPE WebKit: tabs, an address bar that searches and completes from bookmarks and history, downloads, find in page, zoom, bookmarks and history, the pages' password, file, permission and notification requests |
 | **fl-video** | Video and audio player on GStreamer: playlists, subtitles, track selection, speed, screenshots, resume |
 | **fl-archive** | Archive manager (libarchive): browse, extract, create and change zip, 7z and tar archives, encrypted zip, Extract Here / Compress in fl-files |
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
@@ -86,21 +87,24 @@ tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
 polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
 page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
 packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak),
-GStreamer with its base plugins (fl-video, fl-webcam), libarchive (fl-archive), PAM (fl-lock);
+GStreamer with its base plugins (fl-video, fl-webcam), libarchive (fl-archive), PAM (fl-lock),
+WPE WebKit (fl-web: with the WPE Platform API, or libwpe and WPEBackend-fdo);
+UPower, power-profiles-daemon and UDisks2 are used at run time when present;
 gio is used for notifications, the portal, Bluetooth and the firewall. Without
 one of them the parts that need it are left out.
 
 ```sh
 # Arch Linux
 sudo pacman -S cmake ninja fltk wlroots0.20 libvterm wayland-protocols pango librsvg libinput \
-  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive
+  glib2 libpipewire polkit libnm fontconfig libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive \
+  wpewebkit
 # Debian 13 (trixie)
 sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev libvterm-dev \
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev librsvg2-dev libdrm-dev \
   libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libssl-dev libfontconfig-dev \
   libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libjxl-dev libarchive-dev libgstreamer1.0-dev \
   libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev \
-  libpam0g-dev
+  libpam0g-dev libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev
 
 cmake -B build -G Ninja
 cmake --build build

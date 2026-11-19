@@ -38,6 +38,12 @@ if(TARGET fld-power)
   set_tests_properties(upower-mock PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
 endif()
 
+if(TARGET fl-web-util)
+  add_executable(test_web test_web.cpp)
+  target_link_libraries(test_web PRIVATE fl-web-util)
+  add_test(NAME web COMMAND test_web)
+endif()
+
 if(TARGET fld-udisks)
   add_executable(test_udisks test_udisks.cpp)
   target_link_libraries(test_udisks PRIVATE fld-udisks)

@@ -39,6 +39,7 @@ option(FLD_BUILD_VIDEO    "Build the fl-video video player (needs GStreamer)" ON
 option(FLD_BUILD_WEBCAM   "Build the fl-webcam camera app (needs GStreamer)" ON)
 option(FLD_BUILD_ARCHIVE  "Build the fl-archive archive manager (needs libarchive)" ON)
 option(FLD_BUILD_LOCK     "Build the fl-lock screen locker (needs PAM)"    ON)
+option(FLD_BUILD_WEB      "Build the fl-web browser (needs WPE WebKit)"   ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -68,7 +69,7 @@ add_compile_definitions(FLD_VERSION="${FLD_VERSION_STRING}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO WEBCAM ARCHIVE)
+foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO WEBCAM ARCHIVE WEB)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -173,6 +174,21 @@ foreach(app VIDEO WEBCAM)
     endif()
   endif()
 endforeach()
+if(FLD_BUILD_WEB)
+  # WPE WebKit with the WPE Platform API, else with libwpe + WPEBackend-fdo
+  pkg_check_modules(WPE_WEBKIT QUIET IMPORTED_TARGET wpe-webkit-2.0)
+  pkg_check_modules(WPE_PLATFORM QUIET IMPORTED_TARGET wpe-platform-2.0)
+  pkg_check_modules(WPE_FDO QUIET IMPORTED_TARGET wpe-1.0 wpebackend-fdo-1.0 wayland-server)
+  if(WPE_WEBKIT_FOUND AND WPE_PLATFORM_FOUND AND TARGET fld-glib)
+    set(FLD_WEB_PLATFORM ON)
+    add_subdirectory(apps/fl-web)
+  elseif(WPE_WEBKIT_FOUND AND WPE_FDO_FOUND AND TARGET fld-glib)
+    set(FLD_WEB_PLATFORM OFF)
+    add_subdirectory(apps/fl-web)
+  else()
+    message(WARNING "WPE WebKit not found: fl-web is not built (install libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev / wpewebkit, or -DFLD_BUILD_WEB=OFF)")
+  endif()
+endif()
 if(FLD_BUILD_ARCHIVE)
   pkg_check_modules(LIBARCHIVE_PROBE QUIET libarchive)
   if(LIBARCHIVE_PROBE_FOUND)

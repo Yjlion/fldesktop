@@ -35,6 +35,9 @@ Build-Depends: debhelper-compat (= 13),
                libpam0g-dev,
                libegl-dev,
                libgl-dev,
+               libwpewebkit-2.0-dev,
+               libwpe-1.0-dev,
+               libwpebackend-fdo-1.0-dev,
                shared-mime-info
 Standards-Version: 4.7.0
 Homepage: https://github.com/Yjlion/fldesktop
@@ -65,7 +68,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
             fldesktop-webcam, fldesktop-archive, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
-            fldesktop-flatpak, fldesktop-firewall
+            fldesktop-flatpak, fldesktop-firewall, fldesktop-web
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
  toolkit: its own wlroots compositor, a taskbar panel, an application
@@ -157,6 +160,16 @@ Description: fldesktop task manager
  fl-taskmgr lists running processes with their CPU and memory use and can
  end, kill, stop, continue and re-prioritise them. Its performance view
  graphs CPU, memory, network and disk use.
+
+Package: fldesktop-web
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils
+Description: fldesktop web browser
+ fl-web is a web browser built with FLTK and WPE WebKit: tabs, an address
+ bar that searches and completes from bookmarks and history, downloads,
+ find in page, zoom, and the pages' password, file, permission and
+ notification requests.
 
 Package: fldesktop-video
 Architecture: any

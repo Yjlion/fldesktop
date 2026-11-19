@@ -1,0 +1,5 @@
+if(TARGET fld-glib)
+  add_library(fld-power STATIC upclient.cpp)
+  target_include_directories(fld-power PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-power PUBLIC fld-glib)
+endif()

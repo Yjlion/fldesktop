@@ -117,6 +117,12 @@ if(FLD_NEED_FLTK)
   if(FLD_BUILD_VIDEO OR FLD_BUILD_WEBCAM)
     add_subdirectory(common/gst)
   endif()
+  if(FLD_BUILD_FILES OR FLD_BUILD_SHELL)
+    add_subdirectory(common/udisks)
+  endif()
+  if(FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/power)
+  endif()
 endif()
 
 # ---- Wayland protocol code generation --------------------------------------

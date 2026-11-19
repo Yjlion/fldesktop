@@ -100,6 +100,9 @@ package_fldesktop-shell() {
               'pipewire-pulse: sound for PulseAudio applications'
               'pipewire-alsa: sound for ALSA applications'
               'networkmanager: network indicator and Wi-Fi passwords'
+              'upower: battery indicator and low battery warnings'
+              'power-profiles-daemon: power modes'
+              'udisks2: mounting drives as they are plugged in'
               'fldesktop-polkit-agent: administrator password prompts'
               'fldesktop-notifyd: notifications and their history'
               'xdg-desktop-portal-fl: file dialogs and settings for Flatpak apps'
@@ -169,7 +172,12 @@ package_fldesktop-video() {
 }
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
-package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shared-mime-info); _app files; }
+package_fldesktop-files() {
+  pkgdesc="fldesktop file manager"
+  depends=(fltk glib2 shared-mime-info)
+  optdepends=('udisks2: list, mount and eject drives')
+  _app files
+}
 package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _app edit; }
 package_fldesktop-settings() {
   pkgdesc="fldesktop settings center"

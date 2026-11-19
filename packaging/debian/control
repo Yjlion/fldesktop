@@ -112,7 +112,8 @@ Architecture: any
 Depends: fldesktop-wm (= ${binary:Version}), xdg-user-dirs, ${shlibs:Depends}, ${misc:Depends}
 Recommends: dbus-user-session, pipewire-audio | pipewire, wireplumber, network-manager,
             fldesktop-polkit-agent, fldesktop-notifyd, xdg-desktop-portal-fl,
-            bluez, cups
+            bluez, cups, upower, udisks2
+Suggests: power-profiles-daemon
 Description: fldesktop panel, launcher and desktop
  The fldesktop session: fl-panel (taskbar, clock, network, volume, battery,
  Bluetooth, printing, notifications, on-screen keyboard button and power
@@ -187,10 +188,11 @@ Description: fldesktop image viewer
 Package: fldesktop-files
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, shared-mime-info
-Recommends: xdg-utils
+Recommends: xdg-utils, udisks2
 Description: fldesktop file manager
  fl-files is a file manager with icon and list views, thumbnails, the XDG
- trash, background copy and move, drag and drop and "open with".
+ trash, background copy and move, drag and drop and "open with". With
+ udisks2 it lists drives and mounts, unmounts and ejects them.
 
 Package: fldesktop-edit
 Architecture: any

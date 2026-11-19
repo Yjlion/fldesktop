@@ -19,6 +19,7 @@
 
 #include "cam_util.h"
 #include "camera.h"
+#include "fld/menus.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/mime.h"
@@ -390,7 +391,37 @@ public:
   }
 };
 
+static void toggle_fullscreen() {
+  if (g_win->fullscreen_active()) g_win->fullscreen_off();
+  else g_win->fullscreen();
+}
+
+// right-click on the picture
+static void view_menu() {
+  bool rec = g_cam && g_cam->recording();
+  fld::Menu m;
+  m.item(rec ? "Stop Recording" : S.video ? "Start Recording" : "Take Photo", [] { shutter(); },
+         g_cam && g_cam->running() ? 0 : FL_MENU_INACTIVE, ' ');
+  m.item("Open Last Capture", [] { fld::open_path(g_last_capture); }, g_last_capture.empty() ? FL_MENU_INACTIVE : 0)
+      .divider();
+  m.toggle("Mirror", S.mirror, [] {
+    S.mirror = !S.mirror;
+    g_view->osd().mirror = S.mirror;
+    g_view->widget()->redraw();
+    save_settings();
+  });
+  m.toggle("Full Screen", g_win->fullscreen_active(), [] { toggle_fullscreen(); }).divider();
+  m.item("Refresh Cameras", [] { refresh_cameras(); });
+  m.item("Open Photos Folder", [] { fld::open_path(photo_dir()); });
+  m.item("Open Videos Folder", [] { fld::open_path(video_dir()); });
+  m.popup();
+}
+
 static int view_event(int e) {
+  if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE) {
+    view_menu();
+    return 1;
+  }
   if (e == FL_PUSH && Fl::event_clicks()) {
     // double click: full screen
     if (g_win->fullscreen_active()) g_win->fullscreen_off();

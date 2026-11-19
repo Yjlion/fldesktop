@@ -1,4 +1,5 @@
 #include "fld/pickers.h"
+#include "fld/menus.h"
 #include "fld/accents.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
@@ -207,8 +208,23 @@ public:
     switch (e) {
       case FL_ENTER: hover = true; redraw(); return 1;
       case FL_LEAVE: hover = false; redraw(); return 1;
-      case FL_PUSH: return 1;
+      case FL_PUSH:
+        if (Fl::event_button() == FL_RIGHT_MOUSE) {
+          WallpaperGallery *g = gal;
+          std::string p = path;
+          Menu m;
+          m.item("Set as Wallpaper", [g, p] {
+            g->value(p);
+            g->do_callback();
+          });
+          m.item("Open in Image Viewer", [p] { spawn({"fl-view", p}); });
+          m.item("Show in Files", [p] { spawn({"fl-files", dirname(p)}); });
+          m.item("Copy Path", [p] { Fl::copy(p.c_str(), (int)p.size(), 1); });
+          m.popup();
+        }
+        return 1;
       case FL_RELEASE:
+        if (Fl::event_button() != FL_LEFT_MOUSE) return 1;
         if (Fl::event_inside(this)) {
           gal->value(path);
           gal->do_callback();

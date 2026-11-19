@@ -8,6 +8,7 @@
 
 #include <algorithm>
 
+#include "fld/menus.h"
 #include "fld/notify.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -84,6 +85,7 @@ public:
     Fl_Button *add = new Fl_Button(wx + ww - 100, wy, 100, 28, "Add…");
     add->callback([](Fl_Widget *, void *d) { ((NotificationsPage *)d)->add_app(); }, this);
     Fl_Button *rm = new Fl_Button(wx + ww - 100, wy + 34, 100, 28, "Remove");
+    fld::set_context_menu(muted, [add, rm](fld::Menu &m) { m.button(add).button(rm); });
     rm->callback([](Fl_Widget *, void *d) {
       NotificationsPage *p = (NotificationsPage *)d;
       int i = p->muted->value() - 1;

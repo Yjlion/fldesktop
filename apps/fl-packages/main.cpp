@@ -33,6 +33,7 @@
 #include <string>
 #include <vector>
 
+#include "fld/menus.h"
 #include "fld/icons.h"
 #ifdef HAVE_APPSTREAM
 #include "app_icons.h"
@@ -450,6 +451,7 @@ public:
     // --- history
     hist_tab = new Fl_Group(8, 38, W - 16, H - 70, "History");
     hist_list = new Fl_Browser(20, 48, W - 40, H - 84);
+    hist_list->type(FL_HOLD_BROWSER);
     hist_list->format_char(0);
     hist_list->textsize(13);
     hist_tab->resizable(hist_list);
@@ -463,6 +465,66 @@ public:
     resizable(tabs);
     size_range(760, 480);
     fld::set_window_icon(this, "fl-packages");
+    make_context_menus();
+  }
+
+  // right-click menus for the lists
+  void make_context_menus() {
+    auto copy = [](const std::string &t) { Fl::copy(t.c_str(), (int)t.size(), 1); };
+    // updates: a check list (a click would toggle the check)
+    fld::set_context_menu(upd_list, [this](fld::Menu &m) {
+      m.button(upd_install).button(upd_check).divider();
+      m.item("Select All", [this] {
+        upd_list->check_all();
+        update_selected();
+      }, upd_list->nitems() ? 0 : FL_MENU_INACTIVE);
+      m.item("Select None", [this] {
+        upd_list->check_none();
+        update_selected();
+      }, upd_list->nitems() ? 0 : FL_MENU_INACTIVE);
+    }, false);
+    fld::set_context_menu(sw_list, [this, copy](fld::Menu &m) {
+      bool sel = sw_list->value() > 0 && sw_action->active();
+      m.button(sw_action).divider();
+      auto show = [this](Fl_Group *tab) {
+        return [this, tab] {
+          info_tabs->value(tab);
+          info_tab_changed();
+        };
+      };
+      m.item("Details", show(tab_details), sel ? 0 : FL_MENU_INACTIVE);
+      m.item("Files", show(tab_files), sel ? 0 : FL_MENU_INACTIVE);
+      m.item("Depends On", show(tab_deps), sel ? 0 : FL_MENU_INACTIVE);
+      m.item("Required By", show(tab_rdeps), sel ? 0 : FL_MENU_INACTIVE).divider();
+      std::string name = sw_name->label() ? sw_name->label() : "";
+      m.item("Copy Name", [copy, name] { copy(name); }, sel && !name.empty() ? 0 : FL_MENU_INACTIVE);
+    });
+    fld::set_context_menu(files_list, [this, copy](fld::Menu &m) {
+      int i = files_list->value();
+      std::string f = i > 0 ? files_list->text(i) : "";
+      bool ok = !f.empty() && f[0] == '/';
+      m.item("Open Folder", [f] { fld::spawn({"xdg-open", fld::is_dir(f) ? f : fld::dirname(f)}); },
+             ok ? 0 : FL_MENU_INACTIVE);
+      m.item("Copy Path", [copy, f] { copy(f); }, ok ? 0 : FL_MENU_INACTIVE);
+    });
+    for (Fl_Hold_Browser *list : {deps_list, rdeps_list})
+      fld::set_context_menu(list, [this, list, copy](fld::Menu &m) {
+        auto &v = list == deps_list ? deps : rdeps;
+        int i = list->value() - 1;
+        bool ok = i >= 0 && i < (int)v.size();
+        std::string name = ok ? v[(size_t)i].name : "";
+        m.item("Show Package", [this, list] {
+          Fl::e_clicks = 1; // as a double click
+          dep_clicked(list);
+          Fl::e_clicks = 0;
+        }, ok ? 0 : FL_MENU_INACTIVE);
+        m.item("Copy Name", [copy, name] { copy(name); }, ok ? 0 : FL_MENU_INACTIVE);
+      });
+    fld::set_context_menu(hist_list, [this, copy](fld::Menu &m) {
+      int i = hist_list->value();
+      std::string t = i > 0 ? fld::trim(hist_list->text(i)) : "";
+      m.item("Copy Line", [copy, t] { copy(t); }, t.empty() ? FL_MENU_INACTIVE : 0);
+    });
   }
 
   void set_status(const std::string &s) {

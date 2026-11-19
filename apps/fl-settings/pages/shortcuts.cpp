@@ -11,6 +11,7 @@
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 
+#include "fld/menus.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -155,6 +156,9 @@ public:
       p->save();
     }, this);
     Fl_Button *reset = new Fl_Button(X + 24 + lw - 140, by, 140, 30, "Reset to Defaults");
+    fld::set_context_menu(list, [add, ed, rm, reset](fld::Menu &m) {
+      m.button(add).button(ed).button(rm).divider().button(reset);
+    });
     reset->callback([](Fl_Widget *, void *d) {
       if (fl_choice("Replace all shortcuts with the defaults?", "Cancel", "Reset", nullptr) != 1) return;
       ShortcutsPage *p = (ShortcutsPage *)d;

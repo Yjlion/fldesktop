@@ -165,7 +165,9 @@ void TabBar::draw_tab(int i, int tx, int tw, Fl_Color bar, bool lifted) {
     lx += 14;
   }
   fl_font(act ? FL_HELVETICA_BOLD : FL_HELVETICA, fs);
-  fl_color(act ? p.fg : p.fg_dim);
+  // on a tinted strip the other tabs' labels need a light color
+  Fl_Color dim = tint ? fl_color_average(FL_WHITE, tint, 0.75f) : p.fg_dim;
+  fl_color(act || lifted ? p.fg : (i == hover_ ? p.fg : dim));
   std::string lab = fit(t.label.empty() ? empty_label : t.label, cx - lx - 4);
   // '@' would start a symbol
   std::string esc;
@@ -232,7 +234,7 @@ void TabBar::draw() {
     fl_color(fl_color_average(p.bg, bar, 0.5f));
     fl_rounded_rectf(px + 3, y() + 3, pw - 6, h() - 6, 4);
   }
-  fl_color(p.fg_dim);
+  fl_color(tint ? fl_color_average(FL_WHITE, tint, 0.75f) : p.fg_dim);
   fl_line_style(FL_SOLID, 2);
   int cxp = px + pw / 2, cyp = y() + h() / 2, r = std::min(6, h() / 4);
   fl_line(cxp - r, cyp, cxp + r, cyp);

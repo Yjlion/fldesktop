@@ -2,7 +2,7 @@
 .SH NAME
 fl-web \- web browser
 .SH SYNOPSIS
-\fBfl-web\fR [\fIURL\fR|\fIFILE\fR...]
+\fBfl-web\fR [\fB\-\-private\fR] [\fB\-\-new\-window\fR] [\fIURL\fR|\fIFILE\fR...]
 .SH DESCRIPTION
 A web browser built with FLTK and \fBWPE WebKit\fR. Each URL or file given opens in a tab; text
 that is not an address is searched for.
@@ -13,6 +13,19 @@ or Ctrl) open in new tabs. Downloads go to the Downloads folder; a notification 
 has finished. Pages that ask for a password, a file, your location or to show notifications ask
 you first.
 .PP
+Tabs can be dragged to a new place, or out of the tab strip into a window of their own; a
+right click on a tab has New Tab, Reload, Duplicate, Bookmark, Copy Address, Move to New
+Window, Close, Close Other Tabs, Close Tabs to the Right and Reopen Closed Tab. A right click
+in the page has the link, image, editing and page commands (Save Page As, View Page Source,
+Full Screen, Inspect).
+.PP
+A private window (\fB\-\-private\fR, Ctrl+Shift+N) keeps its cookies and site data in memory
+only, and records no history and no session. Its tab strip is purple.
+.PP
+The developer tools (F12) are WebKit's Web Inspector: fl-web serves it on a loopback port
+chosen at start, and F12 opens it in a window that lists the pages to inspect. They can be
+turned off in Settings.
+.PP
 fl-web draws pages with the CPU: WebKit renders into shared memory and fl-web copies the
 picture into its window.
 .SH KEYS
@@ -20,8 +33,11 @@ picture into its window.
 \fBCtrl+L\fR, \fBF6\fR, \fBAlt+D\fR
 Edit the address.
 .TP
-\fBCtrl+T\fR, \fBCtrl+W\fR, \fBCtrl+N\fR
-New tab, close the tab, new window.
+\fBCtrl+T\fR, \fBCtrl+W\fR, \fBCtrl+N\fR, \fBCtrl+Shift+N\fR
+New tab, close the tab, new window, new private window.
+.TP
+\fBCtrl+Shift+T\fR
+Reopen the last closed tab.
 .TP
 \fBCtrl+Tab\fR, \fBCtrl+Shift+Tab\fR, \fBCtrl+1\fR..\fBCtrl+9\fR
 Next, previous, n-th tab (9: the last one).
@@ -43,10 +59,18 @@ Bookmark the page, bookmarks, history, downloads.
 .TP
 \fBF11\fR
 Full screen.
+.TP
+\fBF12\fR, \fBCtrl+U\fR, \fBCtrl+S\fR
+Developer tools, view the page source (in the text editor), save the page (MHTML).
+.TP
+\fBCtrl+Shift+M\fR
+Show or hide the menu bar.
 .SH FILES
 .TP
 \fI~/.config/fldesktop/web.ini\fR
-Settings: home page, search engine, JavaScript, reopening the last session's tabs.
+Settings: home page, search engine, JavaScript, reopening the last session's tabs, natural
+scrolling (\fBNaturalScrolling\fR), the menu bar (\fBShowMenuBar\fR, off by default) and the
+developer tools (\fBDeveloperTools\fR).
 .TP
 \fI~/.local/share/fl-web/\fR
 Bookmarks (\fIbookmarks.tsv\fR), history (\fIhistory.tsv\fR), cookies and site data.

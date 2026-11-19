@@ -142,6 +142,19 @@ void WebView::send_key(bool down) {
   glib_loop_poke();
 }
 
+bool WebView::natural_scroll = false;
+
+void WebView::paste_clipboard() {
+  if (backend_->shares_clipboard()) {
+    paste_key_ = 'v';
+    Fl::paste(*this, 1);
+    return;
+  }
+  backend_->key(true, 'v', 0, MOD_CTRL, now_ms());
+  backend_->key(false, 'v', 0, MOD_CTRL, now_ms());
+  glib_loop_poke();
+}
+
 int WebView::handle(int e) {
   double ex = Fl::event_x() - x(), ey = Fl::event_y() - y();
   switch (e) {
@@ -170,11 +183,16 @@ int WebView::handle(int e) {
       if (b < 1 || b > 3) return 1;
       backend_->pointer_button(e == FL_PUSH, (unsigned)b, ex, ey, mods(), (unsigned)Fl::event_clicks() + 1, now_ms());
       glib_loop_poke();
+      if (e == FL_RELEASE && b == 3 && on_right_click) on_right_click(Fl::event_x(), Fl::event_y());
       return 1;
     }
     case FL_MOUSEWHEEL: {
       // FLTK gives steps (or pixels from touchpads on some platforms): 3 lines
       double dx = Fl::event_dx() * 48.0, dy = Fl::event_dy() * 48.0;
+      if (natural_scroll) {
+        dx = -dx;
+        dy = -dy;
+      }
       backend_->scroll(dx, dy, ex, ey, mods(), now_ms());
       glib_loop_poke();
       return 1;

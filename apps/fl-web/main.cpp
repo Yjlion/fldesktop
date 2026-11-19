@@ -11,6 +11,7 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Return_Button.H>
@@ -20,6 +21,11 @@
 
 #include <algorithm>
 #include <cstring>
+#include <ctime>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <map>
 #include <memory>
 #include <string>
@@ -28,8 +34,10 @@
 #include "browser_util.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/menus.h"
 #include "fld/mime.h"
 #include "fld/notify.h"
+#include "fld/tab_bar.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -46,6 +54,9 @@ struct Config {
   std::string search = "DuckDuckGo";
   bool javascript = true;
   bool restore = false; // reopen the last session's tabs
+  bool natural_scroll = false; // the page follows the fingers (wheel down scrolls up)
+  bool devtools = true;        // developer tools (F12) through WebKit's inspector server
+  bool menubar = false;        // a menu bar above the tabs
   void load() {
     fld::Ini c;
     c.load(path());
@@ -53,6 +64,9 @@ struct Config {
     search = c.get("Web", "SearchEngine", search);
     javascript = c.get_bool("Web", "JavaScript", javascript);
     restore = c.get_bool("Web", "RestoreTabs", restore);
+    natural_scroll = c.get_bool("Web", "NaturalScrolling", natural_scroll);
+    devtools = c.get_bool("Web", "DeveloperTools", devtools);
+    menubar = c.get_bool("Web", "ShowMenuBar", menubar);
   }
   void save() const {
     fld::Ini c;
@@ -61,6 +75,9 @@ struct Config {
     c.set("Web", "SearchEngine", search);
     c.set_bool("Web", "JavaScript", javascript);
     c.set_bool("Web", "RestoreTabs", restore);
+    c.set_bool("Web", "NaturalScrolling", natural_scroll);
+    c.set_bool("Web", "DeveloperTools", devtools);
+    c.set_bool("Web", "ShowMenuBar", menubar);
     c.save(path());
   }
   static std::string path() { return fld::fld_config_dir() + "/web.ini"; }
@@ -72,6 +89,9 @@ static std::string history_path() { return data_dir() + "/history.tsv"; }
 static std::string session_path() { return data_dir() + "/session.txt"; }
 
 static WebKitNetworkSession *g_session;
+static WebKitNetworkSession *g_private_session; // private windows: nothing is stored
+static int g_inspector_port = 0;                // WebKit's inspector HTTP server (F12)
+static WebKitNetworkSession *private_session();
 static WebKitSettings *g_settings;
 static WebKitUserContentManager *g_ucm;
 static std::vector<Bookmark> g_bookmarks;
@@ -90,7 +110,7 @@ static bool is_bookmarked(const std::string &url) {
 
 class Browser;
 static std::vector<Browser *> g_windows;
-static Browser *new_window(const std::vector<std::string> &urls = {});
+static Browser *new_window(const std::vector<std::string> &urls = {}, bool priv = false);
 static void show_downloads();
 static void show_history(Browser *b);
 static void show_bookmarks(Browser *b);
@@ -107,91 +127,10 @@ struct Tab {
   bool loading = false;
   std::string hover;
   std::string typed; // address bar text being edited while the tab was in the background
-};
-
-// The tab strip: tabs share the width, each with a close button; "+" at the end
-class TabBar : public Fl_Widget {
-public:
-  std::vector<Tab *> *tabs = nullptr;
-  int current = 0;
-  std::function<void(int)> on_select, on_close;
-  std::function<void()> on_new;
-  TabBar(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {}
-
-  int tab_w() const {
-    int n = tabs ? (int)tabs->size() : 1;
-    return std::max(60, std::min(240, (w() - 40) / std::max(1, n)));
-  }
-  int plus_x() const { return x() + (tabs ? (int)tabs->size() : 0) * tab_w() + 4; }
-  int hit(int ex, bool &close) const {
-    close = false;
-    if (!tabs) return -1;
-    int i = (ex - x()) / tab_w();
-    if (ex < x() || i >= (int)tabs->size()) return -1;
-    int tx = x() + i * tab_w();
-    close = ex >= tx + tab_w() - 24;
-    return i;
-  }
-  void draw() override {
-    const fld::Palette &p = fld::palette();
-    fl_color(p.bg);
-    fl_rectf(x(), y(), w(), h());
-    if (!tabs) return;
-    fl_font(FL_HELVETICA, 12);
-    for (int i = 0; i < (int)tabs->size(); i++) {
-      Tab *t = (*tabs)[(size_t)i];
-      int tx = x() + i * tab_w(), tw = tab_w();
-      bool cur = i == current;
-      fl_color(cur ? p.bg2 : p.bg);
-      fl_rectf(tx + 1, y() + 3, tw - 2, h() - 3);
-      if (cur) {
-        fl_color(p.accent);
-        fl_rectf(tx + 1, y() + 3, tw - 2, 2);
-      } else {
-        fl_color(p.border);
-        fl_yxline(tx + tw - 1, y() + 8, y() + h() - 6);
-      }
-      if (t->loading) {
-        fl_color(p.accent);
-        fl_arc(tx + 8, y() + h() / 2 - 6, 12, 12, 0, 300);
-      }
-      std::string label = t->title.empty() ? (t->uri.empty() ? "New Tab" : fallback_title(t->uri)) : t->title;
-      fl_color(cur ? p.fg : p.fg_dim);
-      int lx = tx + (t->loading ? 26 : 10);
-      fl_push_clip(lx, y(), tw - (lx - tx) - 26, h());
-      fl_draw(fld::escape_at(label).c_str(), lx, y() + 3, 10000, h() - 3, FL_ALIGN_LEFT);
-      fl_pop_clip();
-      fl_color(p.fg_dim);
-      int cx = tx + tw - 18, cy = y() + 3 + (h() - 3) / 2;
-      fl_line(cx - 4, cy - 4, cx + 4, cy + 4);
-      fl_line(cx - 4, cy + 4, cx + 4, cy - 4);
-    }
-    fl_color(p.fg_dim);
-    int px = plus_x() + 14, py = y() + 3 + (h() - 3) / 2;
-    fl_xyline(px - 6, py, px + 6);
-    fl_yxline(px, py - 6, py + 6);
-  }
-  int handle(int e) override {
-    if (e == FL_PUSH) {
-      bool close;
-      int i = hit(Fl::event_x(), close);
-      if (i < 0) {
-        if (Fl::event_x() >= plus_x() && Fl::event_x() < plus_x() + 28 && on_new) on_new();
-        else if (Fl::event_clicks() && on_new) on_new(); // double-click on the empty strip
-        return 1;
-      }
-      if ((close && Fl::event_button() == FL_LEFT_MOUSE) || Fl::event_button() == FL_MIDDLE_MOUSE) {
-        if (on_close) on_close(i);
-      } else if (on_select) on_select(i);
-      return 1;
-    }
-    if (e == FL_MOUSEWHEEL && tabs && !tabs->empty()) {
-      int n = (int)tabs->size();
-      if (on_select) on_select(((current + (Fl::event_dy() > 0 ? 1 : -1)) % n + n) % n);
-      return 1;
-    }
-    return Fl_Widget::handle(e);
-  }
+  // the last hit test under the pointer, for the context menu
+  std::string hit_link, hit_image;
+  bool hit_editable = false, hit_selection = false;
+  double menu_shown = 0; // when WebKit last asked for a context menu
 };
 
 // The address bar: completes from bookmarks and history as you type
@@ -258,7 +197,8 @@ public:
   fld::Toolbar *bar;
   fld::FlatButton *back, *fwd, *reload, *home, *star, *menu;
   UrlBar *url;
-  TabBar *tabbar;
+  fld::TabBar *tabbar;
+  Fl_Menu_Bar *menubar;
   Fl_Box *progress;
   Fl_Group *content;
   Fl_Group *findbar;
@@ -268,19 +208,34 @@ public:
   std::vector<Tab *> tabs;
   int cur = -1;
   bool fullscreen = false;
+  bool priv = false;                     // a private window
+  WebKitNetworkSession *session;         // g_session, or the private one
+  std::vector<std::string> closed;       // addresses of closed tabs (Reopen Closed Tab)
+  int chrome_y = 0;                      // top of the tab bar (below the menu bar)
   static const int TAB_H = 32, TB = 42, FIND_H = 38;
+  static int menu_h() { return std::max(24, fld::ui_font_size() + 12); }
 
-  Browser() {
+  explicit Browser(bool private_window = false) : priv(private_window) {
+    session = priv ? private_session() : g_session;
     const fld::Palette &p = fld::palette();
     int sx, sy, sw, sh;
     Fl::screen_work_area(sx, sy, sw, sh);
     int W = std::min(1100, sw - 40), H = std::min(760, sh - 40);
     win = new BrowserWindow(W, H, this);
-    tabbar = new TabBar(0, 0, W, TAB_H);
-    tabbar->tabs = &tabs;
+    menubar = make_menubar(W);
+    tabbar = new fld::TabBar(0, 0, W, TAB_H);
+    tabbar->empty_label = "New Tab";
+    if (priv) tabbar->tint = fl_rgb_color(0x3b, 0x2a, 0x55);
     tabbar->on_select = [this](int i) { select(i); };
-    tabbar->on_close = [this](int i) { close_tab(i); };
+    tabbar->on_close = [this](int i) { later_close(i); };
     tabbar->on_new = [this] { new_tab("", true); };
+    tabbar->on_move = [this](int from, int to) {
+      fld::move_element(tabs, from, to);
+      cur = fld::moved_index(cur, from, to);
+      refresh_tabs();
+    };
+    tabbar->on_menu = [this](int i) { tab_menu(i); };
+    tabbar->on_detach = [this](int i) { later_detach(i); };
     bar = new fld::Toolbar(0, TAB_H, W, TB);
     bar->color(p.bg2);
     back = bar->add_button("go-previous", "Back (Alt+Left)", [](Fl_Widget *, void *d) { ((Browser *)d)->go(-1); }, this);
@@ -355,14 +310,34 @@ public:
     win->size_range(400, 300);
     fld::set_window_icon(win, "fl-web");
     g_windows.push_back(this);
+    place_chrome();
   }
 
   Tab *tab() const { return cur >= 0 && cur < (int)tabs.size() ? tabs[(size_t)cur] : nullptr; }
   WebKitWebView *view() const { return tab() ? tab()->wv->view() : nullptr; }
 
+  // the menu bar, tab bar, toolbar and progress line, from the top
+  void place_chrome() {
+    int W = win->w();
+    int y = 0;
+    if (g_cfg.menubar && !fullscreen) {
+      menubar->resize(0, 0, W, menu_h());
+      menubar->show();
+      y = menu_h();
+    } else {
+      menubar->hide();
+    }
+    chrome_y = y;
+    tabbar->resize(0, y, W, TAB_H);
+    bar->resize(0, y + TAB_H, W, TB);
+    progress->resize(0, y + TAB_H + TB, progress->w(), 2);
+  }
+  int chrome_h() const { return fullscreen ? 0 : chrome_y + TAB_H + TB + 2; }
+
   void layout() {
+    place_chrome();
     int W = win->w(), H = win->h();
-    int top = fullscreen ? 0 : TAB_H + TB + 2;
+    int top = chrome_h();
     int bottom = findbar->visible() ? FIND_H : 0;
     content->resize(0, top, W, H - top - bottom);
     for (auto *t : tabs) t->wv->resize(0, top, W, H - top - bottom);
@@ -375,10 +350,10 @@ public:
     Tab *t = new Tab;
     t->win = this;
     content->begin();
-    t->wv = new WebView(content->x(), content->y(), content->w(), content->h(), related, g_settings, g_session, g_ucm);
+    t->wv = new WebView(content->x(), content->y(), content->w(), content->h(), related, g_settings, session, g_ucm);
     content->end();
     t->wv->hide();
-    t->wv->key_filter = [this](int k, int s) { return shortcut(k, s); };
+    attach(t);
     connect(t);
     if (at < 0 || at > (int)tabs.size()) tabs.push_back(t);
     else tabs.insert(tabs.begin() + at, t);
@@ -392,11 +367,103 @@ public:
       url->value("");
       url->take_focus();
     }
-    tabbar->current = cur;
-    tabbar->redraw();
+    refresh_tabs();
     glib_loop_poke();
     return t;
   }
+
+  // hooks a tab's web view up to this window (new tabs, and tabs moved here)
+  void attach(Tab *t) {
+    t->win = this;
+    t->wv->key_filter = [this](int k, int s) { return shortcut(k, s); };
+    t->wv->on_right_click = [this, t](int x, int y) { right_clicked(t, x, y); };
+  }
+
+  void refresh_tabs() {
+    std::vector<fld::TabInfo> v;
+    for (auto *t : tabs) {
+      fld::TabInfo i;
+      i.label = t->title.empty() ? (t->uri.empty() ? std::string("New Tab") : fallback_title(t->uri)) : t->title;
+      i.tooltip = t->uri.empty() ? i.label : i.label + "\n" + t->uri;
+      i.busy = t->loading;
+      v.push_back(i);
+    }
+    tabbar->set_tabs(v, std::max(0, cur));
+  }
+
+  int index_of(Tab *t) const {
+    auto it = std::find(tabs.begin(), tabs.end(), t);
+    return it == tabs.end() ? -1 : (int)(it - tabs.begin());
+  }
+
+  // closing from the tab bar's own event handler: later
+  void later_close(int i) {
+    if (i < 0 || i >= (int)tabs.size()) return;
+    Tab *t = tabs[(size_t)i];
+    Fl::add_timeout(0, [](void *d) {
+      Tab *t = (Tab *)d;
+      for (auto *w : g_windows) {
+        int k = w->index_of(t);
+        if (k >= 0) { w->close_tab(k); break; }
+      }
+    }, t);
+  }
+  void later_detach(int i) {
+    if (i < 0 || i >= (int)tabs.size()) return;
+    Tab *t = tabs[(size_t)i];
+    Fl::add_timeout(0, [](void *d) {
+      Tab *t = (Tab *)d;
+      for (auto *w : std::vector<Browser *>(g_windows))
+        if (w->index_of(t) >= 0) { w->tab_to_new_window(t); break; }
+    }, t);
+  }
+
+  // moves a tab (its page stays loaded) into a new window
+  void tab_to_new_window(Tab *t) {
+    int i = index_of(t);
+    if (i < 0 || tabs.size() < 2) return;
+    detach(i);
+    Browser *b = new Browser(priv);
+    b->adopt(t);
+    b->win->show();
+    b->layout();
+    b->select(0);
+  }
+  // takes the tab out of this window without destroying it
+  void detach(int i) {
+    Tab *t = tabs[(size_t)i];
+    t->wv->activate_view(false);
+    t->wv->hide();
+    content->remove(t->wv);
+    tabs.erase(tabs.begin() + i);
+    if (cur > i || cur >= (int)tabs.size()) cur--;
+    int c = std::max(0, cur);
+    cur = -1;
+    select(c);
+  }
+  void adopt(Tab *t) {
+    content->add(t->wv);
+    t->wv->resize(content->x(), content->y(), content->w(), content->h());
+    attach(t);
+    tabs.push_back(t);
+    refresh_tabs();
+  }
+
+  void reopen_closed() {
+    if (closed.empty()) return;
+    std::string u = closed.back();
+    closed.pop_back();
+    new_tab(u, true, nullptr, cur + 1);
+  }
+
+  void right_clicked(Tab *t, int x, int y);
+  void tab_menu(int i);
+  Fl_Menu_Bar *make_menubar(int W);
+  void command(long id);
+  void build_menu(fld::Menu &m, bool for_bar);
+  void save_page();
+  void view_source();
+  void open_devtools();
 
   void select(int i) {
     if (i < 0 || i >= (int)tabs.size()) return;
@@ -412,8 +479,7 @@ public:
     t->wv->resize(content->x(), content->y(), content->w(), content->h());
     t->wv->show();
     t->wv->activate_view(true);
-    tabbar->current = i;
-    tabbar->redraw();
+    refresh_tabs();
     update_chrome();
     url->value(!t->typed.empty() ? t->typed.c_str() : t->uri.c_str());
     t->typed.clear();
@@ -426,6 +492,10 @@ public:
   void close_tab(int i) {
     if (i < 0 || i >= (int)tabs.size()) return;
     Tab *t = tabs[(size_t)i];
+    if (!t->uri.empty()) {
+      closed.push_back(t->uri);
+      if (closed.size() > 20) closed.erase(closed.begin());
+    }
     g_signal_handlers_disconnect_by_data(t->wv->view(), t);
     tabs.erase(tabs.begin() + i);
     content->remove(t->wv);
@@ -494,13 +564,14 @@ public:
     reload->tooltip(t->loading ? "Stop (Esc)" : "Reload (F5)");
     star->icon_name(is_bookmarked(t->uri) ? "starred" : "non-starred", 20);
     int pw = t->loading ? (int)(win->w() * std::max(0.05, t->progress)) : 0;
-    progress->resize(0, TAB_H + TB, pw, 2);
+    progress->resize(0, chrome_y + TAB_H + TB, pw, 2);
     progress->parent()->redraw();
-    std::string title = (t->title.empty() ? (t->uri.empty() ? std::string("New Tab") : fallback_title(t->uri)) : t->title) + " — Web";
+    std::string title = (t->title.empty() ? (t->uri.empty() ? std::string("New Tab") : fallback_title(t->uri)) : t->title) +
+                        (priv ? " — Private — Web" : " — Web");
     win->copy_label(title.c_str());
     if (Fl::focus() != url) url->value(t->uri.c_str());
     bar->redraw();
-    tabbar->redraw();
+    refresh_tabs();
   }
   std::string status_text;
   void set_status(const std::string &s, double secs = 0) {
@@ -571,62 +642,9 @@ public:
 
   // ---- menus
   void main_menu() {
-    std::vector<Fl_Menu_Item> m;
-    auto item = [&](const char *l, int sc, long id, int flags = 0) { m.push_back({l, sc, nullptr, (void *)id, flags}); };
-    item("New Tab", FL_CTRL + 't', 1);
-    item("New Window", FL_CTRL + 'n', 2);
-    item("Open File…", FL_CTRL + 'o', 3, FL_MENU_DIVIDER);
-    item("Find in Page…", FL_CTRL + 'f', 4);
-    item("Zoom In", FL_CTRL + '=', 5);
-    item("Zoom Out", FL_CTRL + '-', 6);
-    item("Actual Size", FL_CTRL + '0', 7, FL_MENU_DIVIDER);
-    // bookmarks submenu
-    m.push_back({"Bookmarks", 0, nullptr, nullptr, FL_SUBMENU});
-    bool marked = tab() && is_bookmarked(tab()->uri);
-    item(marked ? "Remove Bookmark" : "Bookmark This Page", FL_CTRL + 'd', 8);
-    item("Manage Bookmarks…", FL_CTRL + FL_SHIFT + 'o', 9, g_bookmarks.empty() ? 0 : FL_MENU_DIVIDER);
-    static std::vector<std::string> labels;
-    labels.clear();
-    labels.reserve(g_bookmarks.size());
-    for (size_t i = 0; i < g_bookmarks.size() && i < 30; i++) {
-      std::string l = g_bookmarks[i].title.empty() ? g_bookmarks[i].url : g_bookmarks[i].title;
-      if (l.size() > 60) l = l.substr(0, 57) + "…";
-      // '/' and '&' are special in menu labels
-      std::string esc;
-      for (char c : l) { if (c == '/' || c == '\\' || c == '&' || c == '_') esc += '\\'; esc += c; }
-      labels.push_back(fld::escape_at(esc));
-      item(labels.back().c_str(), 0, 1000 + (long)i);
-    }
-    m.push_back({nullptr});
-    item("History…", FL_CTRL + 'h', 10);
-    item("Downloads…", FL_CTRL + 'j', 11, FL_MENU_DIVIDER);
-    item("Settings…", 0, 12);
-    item("About Web", 0, 13, FL_MENU_DIVIDER);
-    item("Close Window", FL_CTRL + FL_SHIFT + 'w', 14);
-    item("Quit", FL_CTRL + 'q', 15);
-    m.push_back({nullptr});
-    const Fl_Menu_Item *r = m[0].popup(menu->x(), menu->y() + menu->h());
-    if (!r || !r->user_data()) return;
-    long id = (long)r->user_data();
-    switch (id) {
-      case 1: new_tab("", true); break;
-      case 2: new_window(); break;
-      case 3: open_file(); break;
-      case 4: find_open(); break;
-      case 5: zoom(1); break;
-      case 6: zoom(-1); break;
-      case 7: zoom(0); break;
-      case 8: toggle_bookmark(); break;
-      case 9: show_bookmarks(this); break;
-      case 10: show_history(this); break;
-      case 11: show_downloads(); break;
-      case 12: show_settings(); break;
-      case 13: fld::about_dialog("Web", "fl-web", "A web browser built with FLTK and WPE WebKit."); break;
-      case 14: win->hide(); break;
-      case 15: for (auto *w : std::vector<Browser *>(g_windows)) w->win->hide(); break;
-      default:
-        if (id >= 1000 && id - 1000 < (long)g_bookmarks.size()) load(g_bookmarks[(size_t)(id - 1000)].url);
-    }
+    fld::Menu m;
+    build_menu(m, false);
+    m.popup(menu->x(), menu->y() + menu->h());
   }
 
   void open_file() {
@@ -642,8 +660,11 @@ public:
     bool ctrl = s & FL_CTRL, shift = s & FL_SHIFT, alt = s & FL_ALT;
     if (ctrl && !alt) {
       switch (k) {
-        case 't': new_tab("", true); return true;
-        case 'n': new_window(); return true;
+        case 't': if (shift) reopen_closed(); else new_tab("", true); return true;
+        case 'n': new_window({}, shift || priv); return true;
+        case 'm': if (shift) { command(19); return true; } return false;
+        case 'u': view_source(); return true;
+        case 's': save_page(); return true;
         case 'w': if (shift) win->hide(); else close_tab(cur); return true;
         case 'q': for (auto *w : std::vector<Browser *>(g_windows)) w->win->hide(); return true;
         case 'l': url->take_focus(); return true;
@@ -681,6 +702,7 @@ public:
       case FL_F + 6: url->take_focus(); return true;
       case FL_F + 3: find_next(!shift); return true;
       case FL_F + 11: set_fullscreen(!fullscreen); return true;
+      case FL_F + 12: open_devtools(); return true;
       case FL_Escape:
         if (findbar->visible()) { find_close(); return true; }
         if (tab() && tab()->loading) { reload_or_stop(); return true; }
@@ -704,11 +726,13 @@ public:
       win->fullscreen_off();
     }
     layout();
+    if (on) set_status("Press F11 to leave full screen", 2.5);
   }
 
   // ---- WebKit signals
   void connect(Tab *t);
-  void context_menu(Tab *t, const std::string &link, const std::string &image, bool editable, bool selection);
+  void context_menu(Tab *t, const std::string &link, const std::string &image, bool editable, bool selection, int x,
+                    int y);
 };
 
 int BrowserWindow::handle(int e) {
@@ -721,7 +745,8 @@ int BrowserWindow::handle(int e) {
 static void save_session();
 
 void BrowserWindow::hide() {
-  if (g_windows.size() == 1) save_session();
+  if (std::count_if(g_windows.begin(), g_windows.end(), [](Browser *w) { return !w->priv; }) == 1 && !b->priv)
+    save_session();
   Fl_Double_Window::hide();
   // the window goes once its tabs are closed (later: we may be inside one of their callbacks)
   Fl::add_timeout(0, [](void *d) {
@@ -744,6 +769,12 @@ void BrowserWindow::hide() {
 // WebKit signal handlers
 
 static std::string str(const char *s) { return s ? s : ""; }
+
+static double now_s() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
 
 // a signal handler from a lambda without captures (G_CALLBACK is a macro:
 // commas in the lambda would split its argument)
@@ -776,7 +807,7 @@ void Browser::connect(Tab *t) {
     t->progress = webkit_web_view_get_estimated_load_progress(v);
     t->loading = webkit_web_view_is_loading(v);
     if (t->win->tab() == t) t->win->update_chrome();
-    else t->win->tabbar->redraw();
+    else t->win->refresh_tabs();
   };
   for (const char *p : {"notify::title", "notify::uri", "notify::estimated-load-progress", "notify::is-loading"})
     g_signal_connect(v, p, G_CALLBACK(chrome), t);
@@ -784,7 +815,7 @@ void Browser::connect(Tab *t) {
   g_signal_connect(v, "load-changed", CB([](WebKitWebView *v, WebKitLoadEvent ev, gpointer d) {
     Tab *t = (Tab *)d;
     if (t->win->tab() == t) t->win->update_chrome();
-    if (ev == WEBKIT_LOAD_FINISHED) {
+    if (ev == WEBKIT_LOAD_FINISHED && !t->win->priv) { // private windows keep no history
       std::string uri = str(webkit_web_view_get_uri(v));
       if (fld::starts_with(uri, "http://") || fld::starts_with(uri, "https://") || fld::starts_with(uri, "file://")) {
         HistoryEntry e{time(nullptr), uri, str(webkit_web_view_get_title(v))};
@@ -806,6 +837,12 @@ void Browser::connect(Tab *t) {
     std::string link = webkit_hit_test_result_context_is_link(hit) ? str(webkit_hit_test_result_get_link_uri(hit)) : "";
     if (link != t->hover && t->win->tab() == t) t->win->set_status(link);
     t->hover = link;
+    t->hit_link = link;
+    t->hit_image = webkit_hit_test_result_context_is_image(hit) ? str(webkit_hit_test_result_get_image_uri(hit)) : "";
+    if (t->hit_image.empty() && webkit_hit_test_result_context_is_media(hit))
+      t->hit_image = str(webkit_hit_test_result_get_media_uri(hit));
+    t->hit_editable = webkit_hit_test_result_context_is_editable(hit);
+    t->hit_selection = webkit_hit_test_result_context_is_selection(hit);
   }), t);
 
   // window.open and target=_blank: a new tab next to this one
@@ -961,7 +998,7 @@ void Browser::connect(Tab *t) {
                         "Someone may be trying to read or change what you send and receive.",
                         "Go Back", "Continue Anyway", nullptr, fld::escape_at(host).c_str());
       if (c == 1 && tab_alive(t)) {
-        webkit_network_session_allow_tls_certificate_for_host(g_session, cert, host.c_str());
+        webkit_network_session_allow_tls_certificate_for_host(t->win->session, cert, host.c_str());
         webkit_web_view_load_uri(t->wv->view(), u.c_str());
       } else if (tab_alive(t) && webkit_web_view_can_go_back(t->wv->view())) {
         webkit_web_view_go_back(t->wv->view());
@@ -1020,8 +1057,9 @@ void Browser::connect(Tab *t) {
     if (image.empty() && webkit_hit_test_result_context_is_media(hit)) image = str(webkit_hit_test_result_get_media_uri(hit));
     bool editable = webkit_hit_test_result_context_is_editable(hit);
     bool selection = webkit_hit_test_result_context_is_selection(hit);
+    t->menu_shown = now_s();
     later([t, link, image, editable, selection] {
-      if (tab_alive(t)) t->win->context_menu(t, link, image, editable, selection);
+      if (tab_alive(t)) t->win->context_menu(t, link, image, editable, selection, Fl::event_x(), Fl::event_y());
     });
     return TRUE;
   }), t);
@@ -1065,57 +1103,401 @@ void Browser::connect(Tab *t) {
   }), t);
 }
 
-void Browser::context_menu(Tab *t, const std::string &link, const std::string &image, bool editable, bool selection) {
+// A right button release in the page: WebKit asks for a menu with the
+// context-menu signal; when it does not (some backends never do), the menu is
+// built from the last hit test under the pointer.
+void Browser::right_clicked(Tab *t, int x, int y) {
+  double at = now_s();
+  struct Pending {
+    Tab *t;
+    double at;
+    int x, y;
+  };
+  Fl::add_timeout(0.25, [](void *d) {
+    std::unique_ptr<Pending> p((Pending *)d);
+    if (!tab_alive(p->t) || p->t->menu_shown >= p->at - 0.5) return;
+    Tab *t = p->t;
+    t->win->context_menu(t, t->hit_link, t->hit_image, t->hit_editable, t->hit_selection, p->x, p->y);
+  }, new Pending{t, at, x, y});
+}
+
+void Browser::context_menu(Tab *t, const std::string &link, const std::string &image, bool editable, bool selection,
+                           int x, int y) {
   WebKitWebView *v = t->wv->view();
-  std::vector<Fl_Menu_Item> m;
-  auto item = [&](const char *l, long id, int flags = 0) { m.push_back({l, 0, nullptr, (void *)id, flags}); };
+  auto edit = [v](const char *cmd) {
+    return [v, cmd] {
+      webkit_web_view_execute_editing_command(v, cmd);
+      glib_loop_poke();
+    };
+  };
+  fld::Menu m;
   if (!link.empty()) {
-    item("Open Link in New Tab", 1);
-    item("Open Link in New Window", 2);
-    item("Copy Link Address", 3);
-    item("Download Link", 4, FL_MENU_DIVIDER);
+    m.item("Open Link in New Tab", [this, link] { new_tab(link, false, nullptr, cur + 1); });
+    m.item("Open Link in New Window", [link, this] { new_window({link}, priv); });
+    m.item("Open Link in Private Window", [link] { new_window({link}, true); });
+    m.item("Copy Link Address", [link] { Fl::copy(link.c_str(), (int)link.size(), 1); });
+    m.item("Download Link", [v, link] { webkit_web_view_download_uri(v, link.c_str()); }).divider();
   }
   if (!image.empty()) {
-    item("Open Image in New Tab", 5);
-    item("Copy Image Address", 6);
-    item("Save Image", 7, FL_MENU_DIVIDER);
+    m.item("Open Image in New Tab", [this, image] { new_tab(image, false, nullptr, cur + 1); });
+    m.item("Copy Image Address", [image] { Fl::copy(image.c_str(), (int)image.size(), 1); });
+    m.item("Save Image", [v, image] { webkit_web_view_download_uri(v, image.c_str()); }).divider();
   }
   if (editable) {
-    item("Cut", 10);
-    item("Copy", 11);
-    item("Paste", 12);
-    item("Select All", 13, FL_MENU_DIVIDER);
+    m.item("Undo", edit(WEBKIT_EDITING_COMMAND_UNDO), 0, FL_CTRL + 'z');
+    m.item("Redo", edit(WEBKIT_EDITING_COMMAND_REDO), 0, FL_CTRL + FL_SHIFT + 'z').divider();
+    m.item("Cut", edit(WEBKIT_EDITING_COMMAND_CUT), 0, FL_CTRL + 'x');
+    m.item("Copy", edit(WEBKIT_EDITING_COMMAND_COPY), 0, FL_CTRL + 'c');
+    m.item("Paste", [t] {
+      // the system clipboard reaches the page through a Ctrl+V
+      t->wv->take_focus();
+      t->wv->paste_clipboard();
+    }, 0, FL_CTRL + 'v');
+    m.item("Select All", edit(WEBKIT_EDITING_COMMAND_SELECT_ALL), 0, FL_CTRL + 'a').divider();
   } else if (selection) {
-    item("Copy", 11, FL_MENU_DIVIDER);
+    m.item("Copy", edit(WEBKIT_EDITING_COMMAND_COPY), 0, FL_CTRL + 'c');
+    m.divider();
   }
   if (link.empty() && image.empty() && !editable) {
-    item("Back", 20, webkit_web_view_can_go_back(v) ? 0 : FL_MENU_INACTIVE);
-    item("Forward", 21, webkit_web_view_can_go_forward(v) ? 0 : FL_MENU_INACTIVE);
-    item("Reload", 22, FL_MENU_DIVIDER);
-    item("Select All", 13);
-    item(is_bookmarked(t->uri) ? "Remove Bookmark" : "Bookmark This Page", 23);
+    m.item("Back", [this] { go(-1); }, webkit_web_view_can_go_back(v) ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Left);
+    m.item("Forward", [this] { go(1); }, webkit_web_view_can_go_forward(v) ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Right);
+    m.item("Reload", [this] { reload_or_stop(); }, 0, FL_F + 5).divider();
+    m.item("Select All", edit(WEBKIT_EDITING_COMMAND_SELECT_ALL), 0, FL_CTRL + 'a');
+    m.item(is_bookmarked(t->uri) ? "Remove Bookmark" : "Bookmark This Page", [this] { toggle_bookmark(); }, 0,
+           FL_CTRL + 'd');
+    m.item("Copy Page Address", [t] { Fl::copy(t->uri.c_str(), (int)t->uri.size(), 1); });
+    m.item("Save Page As…", [this] { save_page(); }, t->uri.empty() ? FL_MENU_INACTIVE : 0, FL_CTRL + 's');
+    m.item("View Page Source", [this] { view_source(); }, t->uri.empty() ? FL_MENU_INACTIVE : 0, FL_CTRL + 'u');
+    m.divider();
+    m.toggle("Full Screen", fullscreen, [this] { set_fullscreen(!fullscreen); }, 0);
   }
-  m.push_back({nullptr});
-  const Fl_Menu_Item *r = m[0].popup(Fl::event_x(), Fl::event_y());
-  if (!r) return;
-  switch ((long)r->user_data()) {
-    case 1: new_tab(link, false, nullptr, cur + 1); break;
-    case 2: new_window({link}); break;
-    case 3: Fl::copy(link.c_str(), (int)link.size(), 1); break;
-    case 4: webkit_web_view_download_uri(v, link.c_str()); break;
-    case 5: new_tab(image, false, nullptr, cur + 1); break;
-    case 6: Fl::copy(image.c_str(), (int)image.size(), 1); break;
-    case 7: webkit_web_view_download_uri(v, image.c_str()); break;
-    case 10: webkit_web_view_execute_editing_command(v, WEBKIT_EDITING_COMMAND_CUT); break;
-    case 11: webkit_web_view_execute_editing_command(v, WEBKIT_EDITING_COMMAND_COPY); break;
-    case 12: webkit_web_view_execute_editing_command(v, WEBKIT_EDITING_COMMAND_PASTE); break;
-    case 13: webkit_web_view_execute_editing_command(v, WEBKIT_EDITING_COMMAND_SELECT_ALL); break;
-    case 20: go(-1); break;
-    case 21: go(1); break;
-    case 22: reload_or_stop(); break;
-    case 23: toggle_bookmark(); break;
+  if (g_inspector_port) m.divider().item("Inspect (Developer Tools)", [this] { open_devtools(); }, 0, FL_F + 12);
+  m.popup(x, y);
+  glib_loop_poke();
+}
+
+void Browser::tab_menu(int i) {
+  fld::Menu m;
+  if (i < 0 || i >= (int)tabs.size()) {
+    m.item("New Tab", [this] { new_tab("", true); }, 0, FL_CTRL + 't');
+    m.item("Reopen Closed Tab", [this] { reopen_closed(); }, closed.empty() ? FL_MENU_INACTIVE : 0,
+           FL_CTRL + FL_SHIFT + 't');
+    m.popup();
+    return;
+  }
+  Tab *t = tabs[(size_t)i];
+  int n = (int)tabs.size();
+  m.item("New Tab", [this] { new_tab("", true); }, 0, FL_CTRL + 't').divider();
+  m.item("Reload", [t] {
+    webkit_web_view_reload(t->wv->view());
+    glib_loop_poke();
+  });
+  m.item("Duplicate", [this, t] {
+    int k = index_of(t);
+    if (k >= 0 && !t->uri.empty()) new_tab(t->uri, true, nullptr, k + 1);
+  }, t->uri.empty() ? FL_MENU_INACTIVE : 0);
+  m.item(is_bookmarked(t->uri) ? "Remove Bookmark" : "Bookmark", [this, t] {
+    int k = index_of(t);
+    if (k < 0) return;
+    if (k != cur) select(k);
+    toggle_bookmark();
+  }, t->uri.empty() ? FL_MENU_INACTIVE : 0);
+  m.item("Copy Address", [t] { Fl::copy(t->uri.c_str(), (int)t->uri.size(), 1); }, t->uri.empty() ? FL_MENU_INACTIVE : 0)
+      .divider();
+  m.item("Move Tab Left", [this, i] {
+    fld::move_element(tabs, i, i - 1);
+    cur = fld::moved_index(cur, i, i - 1);
+    refresh_tabs();
+  }, i > 0 ? 0 : FL_MENU_INACTIVE);
+  m.item("Move Tab Right", [this, i] {
+    fld::move_element(tabs, i, i + 1);
+    cur = fld::moved_index(cur, i, i + 1);
+    refresh_tabs();
+  }, i + 1 < n ? 0 : FL_MENU_INACTIVE);
+  m.item("Move to New Window", [this, i] { later_detach(i); }, n > 1 ? 0 : FL_MENU_INACTIVE).divider();
+  m.item("Close Tab", [this, i] { later_close(i); }, 0, FL_CTRL + 'w');
+  m.item("Close Other Tabs", [this, t] {
+    for (int k = (int)tabs.size() - 1; k >= 0; k--)
+      if (tabs[(size_t)k] != t) later_close(k);
+  }, n > 1 ? 0 : FL_MENU_INACTIVE);
+  m.item("Close Tabs to the Right", [this, i] {
+    for (int k = (int)tabs.size() - 1; k > i; k--) later_close(k);
+  }, i + 1 < n ? 0 : FL_MENU_INACTIVE);
+  m.item("Reopen Closed Tab", [this] { reopen_closed(); }, closed.empty() ? FL_MENU_INACTIVE : 0,
+         FL_CTRL + FL_SHIFT + 't');
+  m.popup();
+}
+
+// The main menu and the menu bar share the commands (ids) and labels.
+enum Cmd {
+  C_NEW_TAB = 1, C_NEW_WINDOW, C_OPEN_FILE, C_FIND, C_ZOOM_IN, C_ZOOM_OUT, C_ZOOM_RESET, C_BOOKMARK, C_BOOKMARKS,
+  C_HISTORY, C_DOWNLOADS, C_SETTINGS, C_ABOUT, C_CLOSE_WINDOW, C_QUIT, C_PRIVATE, C_FULLSCREEN, C_DEVTOOLS,
+  C_MENUBAR, C_SAVE_PAGE, C_SOURCE, C_REOPEN, C_CLOSE_TAB, C_RELOAD, C_BACK, C_FORWARD, C_HOME, C_UNDO, C_REDO,
+  C_CUT, C_COPY, C_PASTE, C_SELECT_ALL, C_BOOKMARK_BASE = 1000,
+};
+
+void Browser::command(long id) {
+  WebKitWebView *v = view();
+  auto edit = [v](const char *c) {
+    if (v) webkit_web_view_execute_editing_command(v, c);
+  };
+  switch (id) {
+    case C_NEW_TAB: new_tab("", true); break;
+    case C_NEW_WINDOW: new_window({}, priv); break;
+    case C_PRIVATE: new_window({}, true); break;
+    case C_OPEN_FILE: open_file(); break;
+    case C_FIND: find_open(); break;
+    case C_ZOOM_IN: zoom(1); break;
+    case C_ZOOM_OUT: zoom(-1); break;
+    case C_ZOOM_RESET: zoom(0); break;
+    case C_BOOKMARK: toggle_bookmark(); break;
+    case C_BOOKMARKS: show_bookmarks(this); break;
+    case C_HISTORY: show_history(this); break;
+    case C_DOWNLOADS: show_downloads(); break;
+    case C_SETTINGS: show_settings(); break;
+    case C_ABOUT: fld::about_dialog("Web", "fl-web", "A web browser built with FLTK and WPE WebKit."); break;
+    case C_CLOSE_WINDOW: win->hide(); break;
+    case C_QUIT: for (auto *w : std::vector<Browser *>(g_windows)) w->win->hide(); break;
+    case C_FULLSCREEN: set_fullscreen(!fullscreen); break;
+    case C_DEVTOOLS: open_devtools(); break;
+    case C_MENUBAR:
+      g_cfg.menubar = !g_cfg.menubar;
+      g_cfg.save();
+      for (auto *w : g_windows) w->layout();
+      break;
+    case C_SAVE_PAGE: save_page(); break;
+    case C_SOURCE: view_source(); break;
+    case C_REOPEN: reopen_closed(); break;
+    case C_CLOSE_TAB: later_close(cur); break;
+    case C_RELOAD: reload_or_stop(); break;
+    case C_BACK: go(-1); break;
+    case C_FORWARD: go(1); break;
+    case C_HOME: load(g_cfg.home); break;
+    case C_UNDO: edit(WEBKIT_EDITING_COMMAND_UNDO); break;
+    case C_REDO: edit(WEBKIT_EDITING_COMMAND_REDO); break;
+    case C_CUT: edit(WEBKIT_EDITING_COMMAND_CUT); break;
+    case C_COPY: edit(WEBKIT_EDITING_COMMAND_COPY); break;
+    case C_PASTE:
+      if (tab()) tab()->wv->paste_clipboard();
+      break;
+    case C_SELECT_ALL: edit(WEBKIT_EDITING_COMMAND_SELECT_ALL); break;
+    default:
+      if (id >= C_BOOKMARK_BASE && id - C_BOOKMARK_BASE < (long)g_bookmarks.size())
+        load(g_bookmarks[(size_t)(id - C_BOOKMARK_BASE)].url);
   }
   glib_loop_poke();
+}
+
+// for_bar: the menu bar's layout (File, Edit, View, ...); otherwise the
+// toolbar's menu button
+void Browser::build_menu(fld::Menu &m, bool for_bar) {
+  auto cmd = [this](long id) { return [this, id] { command(id); }; };
+  auto bookmarks = [&]() {
+    bool marked = tab() && is_bookmarked(tab()->uri);
+    m.item(marked ? "Remove Bookmark" : "Bookmark This Page", cmd(C_BOOKMARK), 0, FL_CTRL + 'd');
+    m.item("Manage Bookmarks…", cmd(C_BOOKMARKS), 0, FL_CTRL + FL_SHIFT + 'o');
+    if (!g_bookmarks.empty()) m.divider();
+    for (size_t i = 0; i < g_bookmarks.size() && i < 30; i++) {
+      std::string l = g_bookmarks[i].title.empty() ? g_bookmarks[i].url : g_bookmarks[i].title;
+      if (l.size() > 60) l = l.substr(0, 57) + "…";
+      m.item(fld::Menu::text(l), cmd(C_BOOKMARK_BASE + (long)i));
+    }
+  };
+  if (!for_bar) {
+    m.item("New Tab", cmd(C_NEW_TAB), 0, FL_CTRL + 't');
+    m.item("New Window", cmd(C_NEW_WINDOW), 0, FL_CTRL + 'n');
+    m.item("New Private Window", cmd(C_PRIVATE), 0, FL_CTRL + FL_SHIFT + 'n');
+    m.item("Open File…", cmd(C_OPEN_FILE), 0, FL_CTRL + 'o');
+    m.item("Save Page As…", cmd(C_SAVE_PAGE), tab() && !tab()->uri.empty() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 's');
+    m.divider();
+    m.item("Find in Page…", cmd(C_FIND), 0, FL_CTRL + 'f');
+    m.item("Zoom In", cmd(C_ZOOM_IN), 0, FL_CTRL + '=');
+    m.item("Zoom Out", cmd(C_ZOOM_OUT), 0, FL_CTRL + '-');
+    m.item("Actual Size", cmd(C_ZOOM_RESET), 0, FL_CTRL + '0');
+    m.toggle("Full Screen", fullscreen, cmd(C_FULLSCREEN));
+    m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR)).divider();
+    m.submenu("Bookmarks");
+    bookmarks();
+    m.end_submenu();
+    m.item("History…", cmd(C_HISTORY), 0, FL_CTRL + 'h');
+    m.item("Downloads…", cmd(C_DOWNLOADS), 0, FL_CTRL + 'j').divider();
+    m.item("Developer Tools", cmd(C_DEVTOOLS), g_inspector_port ? 0 : FL_MENU_INACTIVE, FL_F + 12);
+    m.item("View Page Source", cmd(C_SOURCE), tab() && !tab()->uri.empty() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'u');
+    m.item("Settings…", cmd(C_SETTINGS));
+    m.item("About Web", cmd(C_ABOUT)).divider();
+    m.item("Close Window", cmd(C_CLOSE_WINDOW), 0, FL_CTRL + FL_SHIFT + 'w');
+    m.item("Quit", cmd(C_QUIT), 0, FL_CTRL + 'q');
+    return;
+  }
+  m.submenu("&File");
+  m.item("New Tab", cmd(C_NEW_TAB), 0, FL_CTRL + 't');
+  m.item("New Window", cmd(C_NEW_WINDOW), 0, FL_CTRL + 'n');
+  m.item("New Private Window", cmd(C_PRIVATE), 0, FL_CTRL + FL_SHIFT + 'n').divider();
+  m.item("Open File…", cmd(C_OPEN_FILE), 0, FL_CTRL + 'o');
+  m.item("Save Page As…", cmd(C_SAVE_PAGE), 0, FL_CTRL + 's').divider();
+  m.item("Reopen Closed Tab", cmd(C_REOPEN), closed.empty() ? FL_MENU_INACTIVE : 0, FL_CTRL + FL_SHIFT + 't');
+  m.item("Close Tab", cmd(C_CLOSE_TAB), 0, FL_CTRL + 'w');
+  m.item("Close Window", cmd(C_CLOSE_WINDOW), 0, FL_CTRL + FL_SHIFT + 'w');
+  m.item("Quit", cmd(C_QUIT), 0, FL_CTRL + 'q');
+  m.end_submenu();
+  m.submenu("&Edit");
+  m.item("Undo", cmd(C_UNDO), 0, FL_CTRL + 'z');
+  m.item("Redo", cmd(C_REDO), 0, FL_CTRL + FL_SHIFT + 'z').divider();
+  m.item("Cut", cmd(C_CUT), 0, FL_CTRL + 'x');
+  m.item("Copy", cmd(C_COPY), 0, FL_CTRL + 'c');
+  m.item("Paste", cmd(C_PASTE), 0, FL_CTRL + 'v');
+  m.item("Select All", cmd(C_SELECT_ALL), 0, FL_CTRL + 'a').divider();
+  m.item("Find in Page…", cmd(C_FIND), 0, FL_CTRL + 'f').divider();
+  m.item("Settings…", cmd(C_SETTINGS));
+  m.end_submenu();
+  m.submenu("&View");
+  m.item("Reload", cmd(C_RELOAD), 0, FL_F + 5).divider();
+  m.item("Zoom In", cmd(C_ZOOM_IN), 0, FL_CTRL + '=');
+  m.item("Zoom Out", cmd(C_ZOOM_OUT), 0, FL_CTRL + '-');
+  m.item("Actual Size", cmd(C_ZOOM_RESET), 0, FL_CTRL + '0').divider();
+  m.toggle("Full Screen", fullscreen, cmd(C_FULLSCREEN));
+  m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR)).divider();
+  m.item("View Page Source", cmd(C_SOURCE), 0, FL_CTRL + 'u');
+  m.item("Developer Tools", cmd(C_DEVTOOLS), g_inspector_port ? 0 : FL_MENU_INACTIVE, FL_F + 12);
+  m.end_submenu();
+  m.submenu("&History");
+  m.item("Back", cmd(C_BACK), 0, FL_ALT + FL_Left);
+  m.item("Forward", cmd(C_FORWARD), 0, FL_ALT + FL_Right);
+  m.item("Home", cmd(C_HOME), 0, FL_ALT + FL_Home).divider();
+  m.item("Show History…", cmd(C_HISTORY), 0, FL_CTRL + 'h');
+  m.item("Downloads…", cmd(C_DOWNLOADS), 0, FL_CTRL + 'j');
+  m.end_submenu();
+  m.submenu("&Bookmarks");
+  bookmarks();
+  m.end_submenu();
+  m.submenu("He&lp");
+  m.item("About Web", cmd(C_ABOUT));
+  m.end_submenu();
+}
+
+// The menu bar is built again each time it opens (bookmarks, toggles)
+class WebMenuBar : public Fl_Menu_Bar {
+public:
+  Browser *b;
+  fld::Menu menu;
+  WebMenuBar(int x, int y, int w, int h, Browser *br) : Fl_Menu_Bar(x, y, w, h), b(br) { rebuild(); }
+  void rebuild() {
+    menu = fld::Menu();
+    b->build_menu(menu, true);
+    const Fl_Menu_Item *mi = menu.items();
+    menu_items_.assign(mi, mi + count_items(mi));
+    // the actions run through the callback; the ids are the actions' ids
+    for (auto &it : menu_items_)
+      if (it.text && !(it.flags & FL_SUBMENU)) it.callback_ = cb;
+    Fl_Menu_Bar::menu(menu_items_.data());
+  }
+  int handle(int e) override {
+    if (e == FL_PUSH) rebuild();
+    // shortcuts are the browser's own (they also work with the bar hidden)
+    if (e == FL_SHORTCUT) return 0;
+    return Fl_Menu_Bar::handle(e);
+  }
+
+private:
+  std::vector<Fl_Menu_Item> menu_items_;
+  static int count_items(const Fl_Menu_Item *m) {
+    int n = 0, depth = 0;
+    for (;; n++) {
+      if (!m[n].text) {
+        if (depth == 0) break;
+        depth--;
+        continue;
+      }
+      if (m[n].flags & FL_SUBMENU) depth++;
+    }
+    return n + 1;
+  }
+  static void cb(Fl_Widget *w, void *d) {
+    WebMenuBar *bar = (WebMenuBar *)w;
+    bar->menu.run((long)d);
+  }
+};
+
+Fl_Menu_Bar *Browser::make_menubar(int W) {
+  Fl_Menu_Bar *m = new WebMenuBar(0, 0, W, menu_h(), this);
+  m->box(FL_FLAT_BOX);
+  m->hide();
+  return m;
+}
+
+// Save Page As: the page as WebKit has it, into a file the user chooses
+void Browser::save_page() {
+  Tab *t = tab();
+  if (!t || t->uri.empty()) return;
+  Fl_Native_File_Chooser fc;
+  fc.title("Save Page As");
+  fc.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+  fc.options(Fl_Native_File_Chooser::SAVEAS_CONFIRM);
+  std::string name = fallback_title(t->uri);
+  for (char &c : name)
+    if (c == '/' || c == ':') c = '_';
+  fc.preset_file((t->title.empty() ? name : t->title).c_str());
+  fc.directory(fld::user_dir("DOWNLOAD").c_str());
+  fc.filter("Web archive (MHTML)\t*.mhtml\nAll files\t*");
+  if (fc.show() != 0 || !fc.filename()) return;
+  std::string path = fc.filename();
+  if (fld::extension(path).empty()) path += ".mhtml";
+  GFile *f = g_file_new_for_path(path.c_str());
+  webkit_web_view_save_to_file(t->wv->view(), f, WEBKIT_SAVE_MODE_MHTML, nullptr,
+                               [](GObject *o, GAsyncResult *r, gpointer d) {
+                                 GError *e = nullptr;
+                                 webkit_web_view_save_to_file_finish(WEBKIT_WEB_VIEW(o), r, &e);
+                                 std::string *p = (std::string *)d;
+                                 if (e) {
+                                   std::string msg = e->message;
+                                   g_error_free(e);
+                                   later([msg] { fl_alert("Could not save the page: %s", fld::escape_at(msg).c_str()); });
+                                 }
+                                 delete p;
+                               },
+                               new std::string(path));
+  g_object_unref(f);
+  glib_loop_poke();
+}
+
+// View Page Source: the main resource's data, opened in the text editor
+void Browser::view_source() {
+  Tab *t = tab();
+  if (!t || t->uri.empty()) return;
+  WebKitWebResource *res = webkit_web_view_get_main_resource(t->wv->view());
+  if (!res) return;
+  std::string name = fallback_title(t->uri);
+  for (char &c : name)
+    if (!isalnum((unsigned char)c) && c != '.' && c != '-') c = '_';
+  webkit_web_resource_get_data(res, nullptr, [](GObject *o, GAsyncResult *r, gpointer d) {
+    std::unique_ptr<std::string> name((std::string *)d);
+    gsize len = 0;
+    GError *e = nullptr;
+    guchar *data = webkit_web_resource_get_data_finish(WEBKIT_WEB_RESOURCE(o), r, &len, &e);
+    if (!data) {
+      if (e) g_error_free(e);
+      return;
+    }
+    std::string dir = fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-web-source";
+    fld::mkdir_p(dir, 0700);
+    std::string path = dir + "/" + *name + ".html";
+    fld::write_file(path, std::string((const char *)data, len));
+    g_free(data);
+    later([path] {
+      if (!fld::spawn({"fl-edit", path})) fld::spawn({"xdg-open", path});
+    });
+  }, new std::string(name));
+  glib_loop_poke();
+}
+
+// F12: WebKit's inspector frontend, served on loopback, in a window of its own
+void Browser::open_devtools() {
+  if (!g_inspector_port) {
+    fl_message("The developer tools are turned off in Settings.");
+    return;
+  }
+  Browser *b = new_window({"http://127.0.0.1:" + std::to_string(g_inspector_port) + "/"}, false);
+  b->win->copy_label("Developer Tools — Web");
 }
 
 // ---------------------------------------------------------------------------
@@ -1351,10 +1733,13 @@ static void list_dialog(const char *title, Browser *b, bool history) {
 static void show_history(Browser *b) { list_dialog("History", b, true); }
 static void show_bookmarks(Browser *b) { list_dialog("Bookmarks", b, false); }
 
-static void apply_settings() { webkit_settings_set_enable_javascript(g_settings, g_cfg.javascript); }
+static void apply_settings() {
+  webkit_settings_set_enable_javascript(g_settings, g_cfg.javascript);
+  WebView::natural_scroll = g_cfg.natural_scroll;
+}
 
 static void show_settings() {
-  Fl_Double_Window dlg(480, 290, "Web Settings");
+  Fl_Double_Window dlg(480, 400, "Web Settings");
   Fl_Input home(140, 14, 326, 28, "Home page:");
   home.value(g_cfg.home.c_str());
   Fl_Choice search(140, 50, 200, 28, "Search with:");
@@ -1369,9 +1754,15 @@ static void show_settings() {
   js.value(g_cfg.javascript);
   Fl_Check_Button restore(140, 114, 300, 26, "Reopen the tabs of the last session");
   restore.value(g_cfg.restore);
-  Fl_Box privacy(14, 150, 120, 28, "Privacy:");
+  Fl_Check_Button natural(140, 142, 330, 26, "Natural scrolling (the page follows the fingers)");
+  natural.value(g_cfg.natural_scroll);
+  Fl_Check_Button menubar(140, 170, 330, 26, "Show the menu bar");
+  menubar.value(g_cfg.menubar);
+  Fl_Check_Button devtools(140, 198, 330, 26, "Developer tools (F12; after a restart)");
+  devtools.value(g_cfg.devtools);
+  Fl_Box privacy(14, 260, 120, 28, "Privacy:");
   privacy.align(FL_ALIGN_RIGHT | FL_ALIGN_INSIDE);
-  Fl_Button clear(140, 150, 230, 28, "Clear Cookies and Site Data…");
+  Fl_Button clear(140, 260, 230, 28, "Clear Cookies and Site Data…");
   clear.callback([](Fl_Widget *, void *) {
     if (fl_choice("Remove all cookies, caches and data that web sites stored? You will be signed out of sites.",
                   "Cancel", "Clear", nullptr) != 1)
@@ -1380,13 +1771,13 @@ static void show_settings() {
                                       WEBKIT_WEBSITE_DATA_ALL, 0, nullptr, nullptr, nullptr);
     glib_loop_poke();
   });
-  Fl_Button defb(140, 186, 230, 28, "Make Web the Default Browser");
+  Fl_Button defb(140, 296, 230, 28, "Make Web the Default Browser");
   defb.callback([](Fl_Widget *, void *) {
     bool ok = fld::spawn({"xdg-settings", "set", "default-web-browser", "fl-web.desktop"});
     fl_message(ok ? "Web is now the default browser." : "Could not run xdg-settings.");
   });
-  Fl_Button cancel(268, 248, 96, 30, "Cancel");
-  Fl_Return_Button ok(370, 248, 96, 30, "Save");
+  Fl_Button cancel(268, 358, 96, 30, "Cancel");
+  Fl_Return_Button ok(370, 358, 96, 30, "Save");
   int result = -1;
   cancel.callback([](Fl_Widget *, void *r) { *(int *)r = 0; }, &result);
   ok.callback([](Fl_Widget *, void *r) { *(int *)r = 1; }, &result);
@@ -1400,16 +1791,28 @@ static void show_settings() {
   g_cfg.search = search_engines()[(size_t)std::max(0, search.value())].name;
   g_cfg.javascript = js.value();
   g_cfg.restore = restore.value();
+  g_cfg.natural_scroll = natural.value();
+  g_cfg.menubar = menubar.value();
+  g_cfg.devtools = devtools.value();
   g_cfg.save();
   apply_settings();
+  for (auto *w : g_windows) w->layout();
 }
 
 // ---------------------------------------------------------------------------
 // Windows and sessions
 
-static Browser *new_window(const std::vector<std::string> &urls) {
-  Browser *b = new Browser;
-  if (urls.empty()) b->new_tab(g_cfg.home, true);
+static WebKitNetworkSession *private_session() {
+  if (!g_private_session) {
+    g_private_session = webkit_network_session_new_ephemeral();
+    g_signal_connect(g_private_session, "download-started", G_CALLBACK(download_started), nullptr);
+  }
+  return g_private_session;
+}
+
+static Browser *new_window(const std::vector<std::string> &urls, bool priv) {
+  Browser *b = new Browser(priv);
+  if (urls.empty()) b->new_tab(priv ? "" : g_cfg.home, true);
   for (auto &u : urls) b->new_tab(u, b->tabs.empty());
   b->win->show();
   b->layout();
@@ -1418,18 +1821,36 @@ static Browser *new_window(const std::vector<std::string> &urls) {
 
 static void save_session() {
   std::string data;
-  for (auto *w : g_windows)
+  for (auto *w : g_windows) {
+    if (w->priv) continue; // private windows leave no trace
     for (auto *t : w->tabs)
-      if (!t->uri.empty()) data += one_line(t->uri) + "\n";
+      if (!t->uri.empty() && !fld::starts_with(t->uri, "http://127.0.0.1:" + std::to_string(g_inspector_port) + "/"))
+        data += one_line(t->uri) + "\n";
+  }
   fld::mkdir_p(data_dir());
   fld::write_file(session_path(), data);
+}
+
+// a free TCP port on 127.0.0.1 (0 when there is none)
+static int free_loopback_port() {
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (fd < 0) return 0;
+  sockaddr_in a{};
+  a.sin_family = AF_INET;
+  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  a.sin_port = 0;
+  socklen_t len = sizeof a;
+  int port = 0;
+  if (bind(fd, (sockaddr *)&a, sizeof a) == 0 && getsockname(fd, (sockaddr *)&a, &len) == 0) port = ntohs(a.sin_port);
+  close(fd);
+  return port;
 }
 
 int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-web [URL or file...]\n");
+      printf("Usage: fl-web [--private] [--new-window] [URL or file...]\n");
       return 0;
     }
     if (a == "-v" || a == "--version") {
@@ -1441,17 +1862,25 @@ int main(int argc, char **argv) {
   fld::init_app("fl-web", argc, argv);
   Fl::lock(); // notifications report back with Fl::awake
   std::vector<std::string> urls;
+  bool priv = false;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
+    if (a == "--private" || a == "--incognito") { priv = true; continue; }
     if (a == "--new-window" || a.empty()) continue;
     if (fld::file_exists(a) && a.find("://") == std::string::npos) a = "file://" + fld::uri_encode_path(fld::abs_path(a));
     urls.push_back(url_from_input(a, ""));
   }
   g_cfg.load();
+  // the developer tools: WebKit serves its inspector on a loopback port; the
+  // variable must be set before WebKit starts
+  if (g_cfg.devtools && !getenv("WEBKIT_INSPECTOR_HTTP_SERVER")) {
+    g_inspector_port = free_loopback_port();
+    if (g_inspector_port) setenv("WEBKIT_INSPECTOR_HTTP_SERVER", ("127.0.0.1:" + std::to_string(g_inspector_port)).c_str(), 1);
+  }
   fld::mkdir_p(data_dir());
   g_bookmarks = load_bookmarks(bookmarks_path());
   g_history = load_history(history_path());
-  if (urls.empty() && g_cfg.restore) {
+  if (urls.empty() && g_cfg.restore && !priv) {
     std::string s;
     if (fld::read_file(session_path(), s))
       for (auto &l : fld::split(s, '\n'))
@@ -1466,13 +1895,13 @@ int main(int argc, char **argv) {
   g_signal_connect(g_session, "download-started", G_CALLBACK(download_started), nullptr);
   g_settings = webkit_settings_new();
   webkit_settings_set_user_agent_with_application_details(g_settings, "fl-web", FLD_VERSION);
-  webkit_settings_set_enable_developer_extras(g_settings, FALSE);
+  webkit_settings_set_enable_developer_extras(g_settings, g_inspector_port != 0);
   apply_settings();
   g_ucm = webkit_user_content_manager_new();
   Backend::on_copy = [](const std::string &text) { Fl::copy(text.c_str(), (int)text.size(), 1); };
 
   glib_loop_start();
-  new_window(urls);
+  new_window(urls, priv);
   int r = Fl::run();
   save_session();
   return r;

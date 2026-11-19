@@ -84,15 +84,18 @@ const Fl_Menu_Item *Menu::items() {
   return built_.data();
 }
 
+void Menu::run(long id) {
+  if (id >= 0) return;
+  size_t a = (size_t)(-1 - id);
+  if (a < actions_.size() && actions_[a]) actions_[a]();
+}
+
 long Menu::popup(int x, int y, const char *title) {
   if (items_.empty()) return 0;
   const Fl_Menu_Item *r = items()->popup(x, y, title);
   if (!r) return 0;
   long id = (long)r->user_data();
-  if (id < 0) {
-    size_t a = (size_t)(-1 - id);
-    if (a < actions_.size() && actions_[a]) actions_[a]();
-  }
+  run(id);
   return id;
 }
 

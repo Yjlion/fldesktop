@@ -31,6 +31,7 @@ public:
   long popup(int x, int y, const char *title = nullptr); // at x, y in the current window
   long popup();                                          // at the pointer
   const Fl_Menu_Item *items();                           // the terminated list
+  void run(long id);                                     // runs the action of the item with this id
 
   static std::string text(const std::string &s); // escapes '&' and '@'
 

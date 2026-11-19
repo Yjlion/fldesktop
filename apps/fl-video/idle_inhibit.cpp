@@ -28,10 +28,19 @@ void inhibit(Fl_Window *win, bool on) {
   if (!dpy || !win || !win->shown()) return;
   if (!g_tried) {
     g_tried = true;
-    wl_registry *reg = wl_display_get_registry(dpy);
+    // A queue of our own: a roundtrip on the default queue would dispatch
+    // FLTK's Wayland events from inside whatever FLTK callback called us.
+    wl_event_queue *q = wl_display_create_queue(dpy);
+    wl_display *wrapped = (wl_display *)wl_proxy_create_wrapper(dpy);
+    wl_proxy_set_queue((wl_proxy *)wrapped, q);
+    wl_registry *reg = wl_display_get_registry(wrapped);
     wl_registry_add_listener(reg, &kReg, nullptr);
-    wl_display_roundtrip(dpy);
+    wl_display_roundtrip_queue(dpy, q);
     wl_registry_destroy(reg);
+    wl_proxy_wrapper_destroy(wrapped);
+    // the manager was bound on our queue: its (eventless) objects move back
+    if (g_mgr) wl_proxy_set_queue((wl_proxy *)g_mgr, nullptr);
+    wl_event_queue_destroy(q);
   }
   if (!g_mgr) return;
   if (on && !g_inhibitor) {

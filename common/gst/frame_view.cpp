@@ -185,6 +185,10 @@ void FrameView::fit(int fw, int fh, double par, int W, int H, int &x, int &y, in
   y = (H - h) / 2;
 }
 
+// The timer data is the FrameView subobject (not the widget: the two differ
+// in GlView), so it is removed here, where `this` is the same pointer.
+FrameView::~FrameView() { Fl::remove_timeout(osd_timeout, this); }
+
 void FrameView::osd_timeout(void *d) { static_cast<FrameView *>(d)->widget()->redraw(); }
 
 void FrameView::show_message(const std::string &text, double secs) {
@@ -298,7 +302,10 @@ private:
 class GlView : public Fl_Gl_Window, public FrameView {
 public:
   GlView(int x, int y, int w, int h) : Fl_Gl_Window(x, y, w, h) { mode(FL_RGB8 | FL_DOUBLE); }
-  ~GlView() override { Fl::remove_timeout(osd_timeout, this); }
+  ~GlView() override {
+    Fl::remove_timeout(check_cb, this);
+    Fl::remove_timeout(fail_cb, this);
+  }
   Fl_Widget *widget() override { return this; }
   const char *kind() const override { return "OpenGL"; }
   bool software() const override { return false; }

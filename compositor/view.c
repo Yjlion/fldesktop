@@ -636,6 +636,8 @@ static void view_unmap(struct wl_listener *listener, void *data) {
 	if (server->last_click_view == view) server->last_click_view = NULL;
 	bool was_focused = view_focused(server) == view;
 	view->mapped = false;
+	/* the decorations are ours, not the surface's: hide them with it */
+	wlr_scene_node_set_enabled(&view->tree->node, false);
 	if (view->ftl) {
 		wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
 		view->ftl = NULL;
@@ -716,6 +718,16 @@ static void view_commit(struct wl_listener *listener, void *data) {
 
 static void view_destroy(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = wl_container_of(listener, view, destroy);
+	struct flwm_server *server = view->server;
+	/* a client that dies (or crashes) may not unmap first */
+	if (view == server->grabbed_view) {
+		server->grabbed_view = NULL; /* its toplevel is going: no configure */
+		input_reset_cursor_mode(server);
+	}
+	if (server->cycle_current == view) server->cycle_current = NULL;
+	switcher_view_gone(server, view);
+	if (server->hover_view == view) server->hover_view = NULL;
+	if (server->last_click_view == view) server->last_click_view = NULL;
 	if (view->ftl) wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
 	wl_list_remove(&view->map.link);
 	wl_list_remove(&view->unmap.link);
@@ -733,6 +745,10 @@ static void view_destroy(struct wl_listener *listener, void *data) {
 		wl_list_remove(&view->decoration_request_mode.link);
 		wl_list_remove(&view->decoration_destroy.link);
 	}
+	/* wlroots destroys the surface's scene nodes, but view->tree and the
+	 * decorations in it are ours; their node data points at this view */
+	wlr_scene_node_destroy(&view->tree->node);
+	view->decor.tree = NULL;
 	free(view->decor.title_text);
 	free(view);
 }

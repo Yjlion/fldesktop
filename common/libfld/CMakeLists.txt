@@ -14,9 +14,12 @@ add_library(fld STATIC
   config_watch.cpp
   osk.cpp
   file_dialog.cpp
+  fileops.cpp
+  fileops_ui.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(fld PUBLIC fltk::images fltk::fltk)
+find_package(Threads REQUIRED)
+target_link_libraries(fld PUBLIC fltk::images fltk::fltk Threads::Threads)
 
 # GLib main loop bridge (only for programs using GObject libraries)
 pkg_check_modules(FLD_GLIB IMPORTED_TARGET glib-2.0 gio-2.0)

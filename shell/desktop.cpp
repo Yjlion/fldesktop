@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "fld/desktop_entry.h"
+#include "fld/fileops.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/mime.h"
@@ -38,7 +39,16 @@ struct Item {
   int x = 0, y = 0;
 };
 
-static const int CELL_W = 100, CELL_H = 96, ICON = 48;
+// icon sizes for zooming (Ctrl+wheel, Ctrl +/-/0, the Icon Size menu)
+static const int kIconSizes[] = {32, 48, 64, 80, 96, 128};
+static const int kIconSizeCount = (int)(sizeof kIconSizes / sizeof kIconSizes[0]);
+static const int kDefaultIcon = 48;
+static int ICON = kDefaultIcon, CELL_W = 100, CELL_H = 96;
+static void set_icon_size(int px) {
+  ICON = px;
+  CELL_W = std::max(100, px + 52);
+  CELL_H = px + 48;
+}
 
 class DesktopView : public Fl_Widget {
 public:
@@ -53,8 +63,35 @@ public:
   // rubber band
   bool banding = false;
   int bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;
+  // drag and drop
+  int press_item = -1, press_x = 0, press_y = 0;
+  bool dragging = false, dropping = false;
+  int drop_item = -1; // folder, Home or Trash under a drag
+
 
   DesktopView(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {}
+
+  void zoom(int delta) {
+    int i = 0;
+    while (i < kIconSizeCount - 1 && kIconSizes[i] < ICON) i++;
+    apply_icon_size(delta == 0 ? kDefaultIcon : kIconSizes[std::max(0, std::min(kIconSizeCount - 1, i + delta))]);
+  }
+
+  void apply_icon_size(int px) {
+    if (px == ICON) return;
+    fld::Ini cfg;
+    cfg.load(fld::desktop_config_path());
+    cfg.set_int("Desktop", "IconSize", px);
+    cfg.save(fld::desktop_config_path());
+    set_icon_size(px);
+    reload();
+  }
+
+  bool drop_target(int i) const {
+    if (i < 0) return false;
+    const Item &it = items[i];
+    return it.path == "trash:///" || it.is_dir;
+  }
 
   void load_config() {
     fld::Ini cfg;
@@ -69,6 +106,10 @@ public:
       bg_color = fl_rgb_color((v >> 16) & 255, (v >> 8) & 255, v & 255);
     }
     show_icons = cfg.get_bool("Desktop", "ShowIcons", true);
+    int size = cfg.get_int("Desktop", "IconSize", kDefaultIcon);
+    int best = kDefaultIcon;
+    for (int s : kIconSizes) if (std::abs(s - size) < std::abs(best - size)) best = s;
+    set_icon_size(best);
     wp_src.reset(fld::load_image(wallpaper));
     wp_scaled.reset();
     wp_w = wp_h = 0;
@@ -197,7 +238,7 @@ public:
     fl_font(FL_HELVETICA, 12);
     for (int i = 0; i < (int)items.size(); i++) {
       Item &it = items[i];
-      bool sel = selected.count(i) > 0;
+      bool sel = selected.count(i) > 0 || i == drop_item;
       if (sel) {
         Fl_Color c = fld::palette().accent;
         fl_color(fl_color_average(c, FL_BLACK, 0.7f));
@@ -343,6 +384,12 @@ public:
           {"Center", 0, nullptr, (void *)13, FL_MENU_RADIO | (mode == "center" ? FL_MENU_VALUE : 0)},
           {"Tile", 0, nullptr, (void *)14, FL_MENU_RADIO | (mode == "tile" ? FL_MENU_VALUE : 0)},
           {nullptr},
+        {"Icon Size", 0, nullptr, nullptr, FL_SUBMENU},
+          {"Small", 0, nullptr, (void *)20, FL_MENU_RADIO | (ICON == 32 ? FL_MENU_VALUE : 0)},
+          {"Normal", 0, nullptr, (void *)21, FL_MENU_RADIO | (ICON == 48 ? FL_MENU_VALUE : 0)},
+          {"Large", 0, nullptr, (void *)22, FL_MENU_RADIO | (ICON == 64 || ICON == 80 ? FL_MENU_VALUE : 0)},
+          {"Extra Large", 0, nullptr, (void *)23, FL_MENU_RADIO | (ICON >= 96 ? FL_MENU_VALUE : 0)},
+          {nullptr},
         {"Show Desktop Icons", 0, nullptr, (void *)6, FL_MENU_TOGGLE | (show_icons ? FL_MENU_VALUE : 0),
          0, 0, 0, 0},
         {"Refresh", 0, nullptr, (void *)7},
@@ -370,6 +417,11 @@ public:
       case 12: set_mode("stretch"); break;
       case 13: set_mode("center"); break;
       case 14: set_mode("tile"); break;
+      case 20: case 21: case 22: case 23: {
+        static const int px[] = {32, 48, 64, 96};
+        apply_icon_size(px[(long)r->user_data() - 20]);
+        break;
+      }
     }
   }
 
@@ -387,6 +439,10 @@ public:
           } else background_menu();
           return 1;
         }
+        press_item = i;
+        press_x = Fl::event_x();
+        press_y = Fl::event_y();
+        dragging = false;
         if (i >= 0) {
           if (ctrl) { if (selected.count(i)) selected.erase(i); else selected.insert(i); }
           else if (!selected.count(i)) { selected.clear(); selected.insert(i); }
@@ -401,6 +457,17 @@ public:
         return 1;
       }
       case FL_DRAG:
+        if (!banding && press_item >= 0 && !dragging &&
+            (std::abs(Fl::event_x() - press_x) > 6 || std::abs(Fl::event_y() - press_y) > 6)) {
+          auto paths = selected_paths();
+          if (!paths.empty()) {
+            dragging = true;
+            std::string text = fld::make_uri_list(paths);
+            Fl::copy(text.c_str(), (int)text.size(), 0);
+            Fl::dnd();
+          }
+          return 1;
+        }
         if (banding) {
           bx1 = Fl::event_x();
           by1 = Fl::event_y();
@@ -415,8 +482,39 @@ public:
         return 1;
       case FL_RELEASE:
         banding = false;
+        press_item = -1;
         redraw();
         return 1;
+      case FL_MOUSEWHEEL:
+        if ((Fl::event_state() & FL_CTRL) && Fl::event_dy()) { zoom(Fl::event_dy() < 0 ? 1 : -1); return 1; }
+        return 0;
+      case FL_DND_ENTER: case FL_DND_DRAG: {
+        int i = item_at(Fl::event_x(), Fl::event_y());
+        if (!drop_target(i) || (dragging && selected.count(i))) i = -1;
+        if (i != drop_item) { drop_item = i; redraw(); }
+        return 1;
+      }
+      case FL_DND_LEAVE:
+        if (drop_item != -1) { drop_item = -1; redraw(); }
+        return 1;
+      case FL_DND_RELEASE:
+        dropping = true;
+        return 1;
+      case FL_PASTE: {
+        // files dropped on the desktop go into the desktop folder, or into the
+        // folder (Home, Trash) they were dropped on
+        if (!dropping) return 1;
+        dropping = false;
+        int i = drop_item;
+        drop_item = -1;
+        dragging = false;
+        redraw();
+        auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
+        std::string dest = i >= 0 ? items[i].path : dir;
+        fld::run_drop(fld::drop_action(paths, dest, Fl::event_state()), paths, dest,
+                      [](FileOp *) {});
+        return 1;
+      }
       case FL_KEYBOARD: {
         int k = Fl::event_key();
         if (k == FL_Delete) { trash_selected(); return 1; }
@@ -426,6 +524,11 @@ public:
           return 1;
         }
         if (k == FL_F + 5) { reload(); return 1; }
+        if (Fl::event_state() & FL_CTRL) {
+          if (k == '=' || k == '+' || k == FL_KP + '+') { zoom(1); return 1; }
+          if (k == '-' || k == FL_KP + '-') { zoom(-1); return 1; }
+          if (k == '0' || k == FL_KP + '0') { zoom(0); return 1; }
+        }
         if ((Fl::event_state() & FL_CTRL) && k == 'a') {
           for (int i = 0; i < (int)items.size(); i++) selected.insert(i);
           redraw();
@@ -479,6 +582,7 @@ static void config_poll(void *) {
 
 int main(int argc, char **argv) {
   fld::init_app("fldesktop.desktop", argc, argv);
+  Fl::lock(); // file operations report back with Fl::awake
   // The shell window is borderless and fl-wm knows it by its title; any other
   // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give
   // it the shell role too.

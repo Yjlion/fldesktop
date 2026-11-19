@@ -6,6 +6,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Menu_Button.H>
 #include <FL/Fl_Spinner.H>
+#include <FL/Fl_Slider.H>
 #include <FL/Fl_Tree.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
@@ -37,8 +38,11 @@
 #include <unistd.h>
 #include <vector>
 
-#include "fileops.h"
+#include "fld/fileops.h"
 #include "search.h"
+#ifdef FLD_HAVE_UDISKS
+#include "udclient.h"
+#endif
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -80,12 +84,31 @@ static const char *kColNames[NUM_COLS] = {"Size", "Type", "Modified", "Permissio
 static const SortKey kColSort[NUM_COLS] = {SORT_SIZE, SORT_TYPE, SORT_DATE, SORT_PERMS, SORT_OWNER, SORT_LOCATION};
 static const char *kDateFormats[] = {"%Y-%m-%d %H:%M", "%d/%m/%Y %H:%M", "%m/%d/%Y %I:%M %p", "%b %e %Y %H:%M", "%c", nullptr};
 
+// Icon sizes (zoom steps); the zoom level is an index into these
+static const int kZoomPx[] = {16, 24, 32, 48, 64, 80, 96, 128, 160, 192, 256};
+static const int kZoomSmall[] = {16, 16, 16, 20, 24, 24, 24, 32, 32, 32, 48};
+static const int kZoomMax = (int)(sizeof kZoomPx / sizeof kZoomPx[0]) - 1;
+static const int kZoomDefault = 3; // 48 px
+static int zoom_for_px(int px) {
+  int best = kZoomDefault;
+  for (int i = 0; i <= kZoomMax; i++)
+    if (std::abs(kZoomPx[i] - px) < std::abs(kZoomPx[best] - px)) best = i;
+  return best;
+}
+// IconSize= (pixels); Zoom= (0-6 for 24-128 px) is the setting of older versions
+static int read_zoom(const fld::Ini &c, const std::string &group, int def) {
+  static const int old_px[] = {24, 32, 48, 64, 80, 96, 128};
+  if (c.has(group, "IconSize")) return zoom_for_px(c.get_int(group, "IconSize", kZoomPx[def]));
+  if (c.has(group, "Zoom")) return zoom_for_px(old_px[std::max(0, std::min(6, c.get_int(group, "Zoom", 2)))]);
+  return def;
+}
+
 // How a folder is shown: per folder when remembered, else the defaults
 struct ViewState {
   ViewMode view = VIEW_ICONS;
   SortKey sort = SORT_NAME;
   bool desc = false;
-  int zoom = 2;
+  int zoom = kZoomDefault;
 } V;
 
 struct Settings {
@@ -113,7 +136,8 @@ static void save_settings() {
   c.set_bool("Files", "ShowHidden", S.show_hidden);
   c.set_int("Files", "View", S.def.view);
   c.remove("Files", "ListView");
-  c.set_int("Files", "Zoom", S.def.zoom);
+  c.remove("Files", "Zoom");
+  c.set_int("Files", "IconSize", kZoomPx[S.def.zoom]);
   c.set_bool("Files", "Thumbnails", S.thumbnails);
   c.set_int("Files", "Sort", S.def.sort);
   c.set_bool("Files", "SortDescending", S.def.desc);
@@ -141,7 +165,7 @@ static void load_settings() {
   // ListView= is the setting of older versions
   int view = c.get_int("Files", "View", c.get_bool("Files", "ListView", false) ? VIEW_DETAILS : VIEW_ICONS);
   S.def.view = (ViewMode)std::max(0, std::min(2, view));
-  S.def.zoom = std::max(0, std::min(6, c.get_int("Files", "Zoom", 2)));
+  S.def.zoom = read_zoom(c, "Files", kZoomDefault);
   S.thumbnails = c.get_bool("Files", "Thumbnails", true);
   S.def.sort = (SortKey)std::max(0, std::min(SORT_COUNT - 1, c.get_int("Files", "Sort", 0)));
   S.def.desc = c.get_bool("Files", "SortDescending", false);
@@ -171,7 +195,7 @@ static ViewState folder_view(const std::string &dir) {
   v.view = (ViewMode)std::max(0, std::min(2, c.get_int(dir, "View", v.view)));
   v.sort = (SortKey)std::max(0, std::min(SORT_COUNT - 1, c.get_int(dir, "Sort", v.sort)));
   v.desc = c.get_bool(dir, "SortDescending", v.desc);
-  v.zoom = std::max(0, std::min(6, c.get_int(dir, "Zoom", v.zoom)));
+  v.zoom = read_zoom(c, dir, v.zoom);
   return v;
 }
 
@@ -194,7 +218,7 @@ static void remember_view(const std::string &dir) {
   c.set_int(dir, "View", V.view);
   c.set_int(dir, "Sort", V.sort);
   c.set_bool(dir, "SortDescending", V.desc);
-  c.set_int(dir, "Zoom", V.zoom);
+  c.set_int(dir, "IconSize", kZoomPx[V.zoom]);
   c.save(folder_settings_path());
 }
 
@@ -239,6 +263,7 @@ static FileView *g_view;
 static Fl_Input *g_path;
 static Fl_Input *g_filter;
 static Fl_Box *g_status;
+static Fl_Slider *g_zoom_slider;
 class PlacesBrowser;
 static Fl_Hold_Browser *g_places;
 class Fl_Tree;
@@ -263,6 +288,7 @@ static void fill_places();
 static void select_place_for(const std::string &path);
 static void refresh();
 static void update_status();
+static void update_zoom_slider();
 static void open_entry(Entry &e);
 static void run_op(FileOp::Kind k, const std::vector<std::string> &src, const std::string &dest);
 
@@ -285,6 +311,8 @@ public:
   int bx0, by0, bx1, by1;
   int press_item = -1;
   bool dragging_files = false;
+  int drop_item = -1;         // folder highlighted as the drop target
+  bool dropping = false;      // the next FL_PASTE is a drop
   int press_x = 0, press_y = 0;
   int resizing_col = -1, resize_x0 = 0, resize_w0 = 0;
   std::string type_ahead;
@@ -314,8 +342,8 @@ public:
   }
 
   // ---- geometry
-  static int big() { static const int s[] = {24, 32, 48, 64, 80, 96, 128}; return s[V.zoom]; }
-  static int small() { static const int s[] = {16, 16, 20, 24, 24, 32, 32}; return s[V.zoom]; }
+  static int big() { return kZoomPx[V.zoom]; }
+  static int small() { return kZoomSmall[V.zoom]; }
   static bool details() { return V.view == VIEW_DETAILS; }
   static int row_h() { return small() + 6; }
   static int cell_w() { return V.view == VIEW_ICONS ? std::max(96, big() + 60) : COMPACT_W; }
@@ -705,7 +733,7 @@ public:
       item_rect(i, ix, iy, iw, ih);
       if (iy > y() + h()) break;
       Entry &e = entry(i);
-      bool s = sel.count(i) > 0;
+      bool s = sel.count(i) > 0 || i == drop_item;
       bool cut = g_clip.cut && std::find(g_clip.paths.begin(), g_clip.paths.end(), e.path) != g_clip.paths.end();
       if (V.view == VIEW_DETAILS) {
         if (s) {
@@ -819,81 +847,9 @@ public:
 // ---------------------------------------------------------------------------
 // Operations
 
-static void show_errors(FileOp *op) {
-  if (op->errors.empty()) return;
-  std::string m;
-  for (size_t i = 0; i < op->errors.size() && i < 8; i++) m += op->errors[i] + "\n";
-  if (op->errors.size() > 8) m += "…and " + std::to_string(op->errors.size() - 8) + " more";
-  fl_alert("%s", m.c_str());
-}
-
-struct ProgressWin {
-  Fl_Double_Window *win;
-  Fl_Progress *bar;
-  Fl_Box *label;
-  FileOp *op;
-};
-
-static void progress_tick(void *d) {
-  ProgressWin *p = (ProgressWin *)d;
-  if (p->op->finished) return;
-  double frac = p->op->total_bytes ? (double)p->op->done_bytes / p->op->total_bytes
-                                   : (double)p->op->done_items / std::max<size_t>(1, p->op->sources.size());
-  p->bar->value((float)(frac * 100));
-  {
-    std::lock_guard<std::mutex> l(p->op->mtx);
-    std::string t = p->op->current;
-    if (p->op->total_bytes)
-      t += "   " + fld::human_size(p->op->done_bytes) + " of " + fld::human_size(p->op->total_bytes);
-    p->label->copy_label(fld::escape_at(t).c_str());
-  }
-  if (!p->win->shown() && p->op->total_bytes > (8u << 20)) p->win->show();
-  Fl::repeat_timeout(0.2, progress_tick, d);
-}
-
 static void run_op(FileOp::Kind k, const std::vector<std::string> &src, const std::string &dest) {
-  if (src.empty()) return;
-  FileOp *op = new FileOp;
-  op->kind = k;
-  op->sources = src;
-  op->dest_dir = dest;
-  if (k == FileOp::COPY || k == FileOp::MOVE) {
-    int conflicts = 0;
-    for (auto &s : src) {
-      std::string d = fld::path_join(dest, fld::basename(s));
-      if (fld::file_exists(d) && fld::abs_path(d) != fld::abs_path(s)) conflicts++;
-    }
-    if (conflicts) {
-      int c = fl_choice("%d item%s already exist%s in the destination.", "Cancel", "Keep Both", "Replace",
-                        conflicts, conflicts == 1 ? "" : "s", conflicts == 1 ? "s" : "");
-      if (c == 0) { delete op; return; }
-      op->conflict = c == 1 ? FileOp::KEEP_BOTH : FileOp::REPLACE;
-    }
-  }
-  ProgressWin *pw = new ProgressWin;
-  pw->op = op;
-  const char *title = k == FileOp::COPY ? "Copying" : k == FileOp::MOVE ? "Moving" : k == FileOp::TRASH ? "Moving to Trash" : "Deleting";
-  pw->win = new Fl_Double_Window(420, 110, title);
-  pw->label = new Fl_Box(12, 10, 396, 24);
-  pw->label->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP);
-  pw->bar = new Fl_Progress(12, 40, 396, 20);
-  pw->bar->minimum(0);
-  pw->bar->maximum(100);
-  pw->bar->selection_color(fld::palette().accent);
-  Fl_Button *cancel = new Fl_Button(308, 70, 100, 30, "Cancel");
-  cancel->callback([](Fl_Widget *, void *d) { ((FileOp *)d)->cancel = true; }, op);
-  pw->win->end();
-  pw->win->set_non_modal();
-  Fl::add_timeout(0.3, progress_tick, pw);
-  op->start([pw](FileOp *o) {
-    Fl::remove_timeout(progress_tick, pw);
-    pw->win->hide();
-    Fl::delete_widget(pw->win);
-    show_errors(o);
+  fld::run_file_op(k, src, dest, [](FileOp *o) {
     if (g_clip.cut && o->kind == FileOp::MOVE) { g_clip.paths.clear(); g_clip.cut = false; }
-    delete pw;
-    // the FileOp deletes itself after its worker has been joined
-    Fl::add_timeout(0, [](void *d) { delete (FileOp *)d; }, o);
     refresh();
   });
 }
@@ -1251,7 +1207,7 @@ void FileView::background_menu() {
         {"Icons", FL_CTRL + '1', nullptr, (void *)20, FL_MENU_RADIO | (V.view == VIEW_ICONS ? FL_MENU_VALUE : 0)},
         {"Compact", FL_CTRL + '2', nullptr, (void *)21, FL_MENU_RADIO | (V.view == VIEW_COMPACT ? FL_MENU_VALUE : 0)},
         {"Details", FL_CTRL + '3', nullptr, (void *)22, FL_MENU_RADIO | (V.view == VIEW_DETAILS ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER},
-        {"Zoom In", FL_CTRL + '=', nullptr, (void *)23, V.zoom >= 6 ? FL_MENU_INACTIVE : 0},
+        {"Zoom In", FL_CTRL + '=', nullptr, (void *)23, V.zoom >= kZoomMax ? FL_MENU_INACTIVE : 0},
         {"Zoom Out", FL_CTRL + '-', nullptr, (void *)24, V.zoom <= 0 ? FL_MENU_INACTIVE : 0},
         {"Normal Size", FL_CTRL + '0', nullptr, (void *)25, FL_MENU_DIVIDER},
         {"Columns…", 0, nullptr, (void *)26},
@@ -1394,10 +1350,11 @@ int FileView::handle(int e) {
           (std::abs(ex - press_x) > 6 || std::abs(ey - press_y) > 6)) {
         // start a drag with file URIs
         dragging_files = true;
-        std::string text;
-        for (auto &p : selected_paths()) text += "file://" + fld::uri_encode_path(p) + "\r\n";
+        std::string text = fld::make_uri_list(selected_paths());
         Fl::copy(text.c_str(), (int)text.size(), 0);
         Fl::dnd();
+        drop_item = -1;
+        redraw();
       }
       return 1;
     }
@@ -1430,30 +1387,40 @@ int FileView::handle(int e) {
     case FL_LEAVE:
       if (window()) window()->cursor(FL_CURSOR_DEFAULT);
       return 1;
-    case FL_DND_ENTER: case FL_DND_DRAG: case FL_DND_RELEASE: return in_trash() ? 0 : 1;
-    case FL_DND_LEAVE: return 1;
-    case FL_PASTE: {
-      // dropped / pasted file URIs: copy (Shift: move) them here or into the folder under the pointer
-      if (in_trash()) return 1;
-      if (in_search() && item_at(Fl::event_x(), Fl::event_y()) < 0) return 1;
-      std::vector<std::string> paths;
-      for (auto &line : fld::split(std::string(Fl::event_text(), Fl::event_length()), '\n')) {
-        std::string l = fld::trim(line);
-        if (fld::starts_with(l, "file://")) l = fld::uri_decode(l.substr(7));
-        if (!l.empty() && l[0] == '/' && fld::file_exists(l)) paths.push_back(l);
-      }
-      if (paths.empty()) return 1;
-      std::string dest = g_cwd;
+    case FL_DND_ENTER: case FL_DND_DRAG: {
+      if (in_trash()) return 0;
+      // highlight the folder the files would go into
       int i = item_at(Fl::event_x(), Fl::event_y());
-      if (Fl::event() == FL_DND_RELEASE || dragging_files) {
-        if (i >= 0 && entry(i).is_dir) dest = entry(i).path;
-      }
-      bool same_dir = true;
-      for (auto &p : paths) if (fld::dirname(p) != dest) same_dir = false;
-      if (same_dir) return 1;
-      bool move = dragging_files || (Fl::event_state() & FL_SHIFT);
-      run_op(move ? FileOp::MOVE : FileOp::COPY, paths, dest);
+      if (i >= 0 && !entry(i).is_dir) i = -1;
+      if (i >= 0 && dragging_files && sel.count(i)) i = -1; // not onto itself
+      if (i != drop_item) { drop_item = i; redraw(); }
+      return 1;
+    }
+    case FL_DND_RELEASE:
+      if (in_trash()) return 0;
+      dropping = true;
+      return 1;
+    case FL_DND_LEAVE:
+      if (drop_item != -1) { drop_item = -1; redraw(); }
+      return 1;
+    case FL_PASTE: {
+      // dropped or pasted file URIs: into the folder under the pointer (drops)
+      // or here; moved within a file system, else copied (Ctrl copies, Shift moves)
+      bool drop = dropping || dragging_files;
+      dropping = false;
+      int target = drop_item;
+      if (drop_item != -1) { drop_item = -1; redraw(); }
+      if (in_trash()) return 1;
+      auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
+      if (paths.empty()) { dragging_files = false; return 1; }
+      std::string dest = g_cwd;
+      if (drop && target >= 0 && target < (int)items.size() && entry(target).is_dir) dest = entry(target).path;
+      else if (in_search()) { dragging_files = false; return 1; }
+      fld::DropAction a = drop ? fld::drop_action(paths, dest, Fl::event_state())
+                               : fld::drop_action(paths, dest, FL_CTRL); // a paste copies
       dragging_files = false;
+      if (!drop && a == fld::DROP_NONE) return 1;
+      fld::run_drop(a, paths, dest, [](FileOp *) { refresh(); });
       return 1;
     }
     case FL_KEYBOARD: {
@@ -1505,6 +1472,8 @@ int FileView::handle(int e) {
 struct Place {
   std::string label, path, icon;
   bool bookmark = false;
+  std::string volume;      // UDisks2 volume ("" for other places); path is "" while unmounted
+  bool can_eject = false;  // shows the eject button
 };
 static std::vector<Place> g_place_list;
 
@@ -1534,21 +1503,34 @@ static void fill_places() {
     }
   }
   add("File System", "/", "drive-harddisk");
-  // mounted removable / extra file systems
-  std::string mounts;
-  if (fld::read_file("/proc/mounts", mounts)) {
-    for (auto &line : fld::split(mounts, '\n')) {
-      auto f = fld::split(line, ' ');
-      if (f.size() < 2) continue;
-      std::string mp = fld::uri_decode(f[1]); // \040 escapes are octal, handled below
-      std::string decoded;
-      for (size_t i = 0; i < f[1].size(); i++) {
-        if (f[1][i] == '\\' && i + 3 < f[1].size()) { decoded += (char)strtol(f[1].substr(i + 1, 3).c_str(), nullptr, 8); i += 3; }
-        else decoded += f[1][i];
+  // drives: from UDisks2 (also unmounted ones), else the mounted file systems
+  bool have_volumes = false;
+#ifdef FLD_HAVE_UDISKS
+  const ud::State &us = ud::Client::get().state();
+  if (us.running) {
+    have_volumes = true;
+    for (auto &v : us.volumes) {
+      Place p{v.label, v.mount_point, v.icon};
+      p.volume = v.path;
+      p.can_eject = v.can_eject || v.mounted();
+      g_place_list.push_back(p);
+    }
+  }
+#endif
+  if (!have_volumes) {
+    std::string mounts;
+    if (fld::read_file("/proc/mounts", mounts)) {
+      for (auto &line : fld::split(mounts, '\n')) {
+        auto f = fld::split(line, ' ');
+        if (f.size() < 2) continue;
+        std::string mp; // \040 escapes are octal
+        for (size_t i = 0; i < f[1].size(); i++) {
+          if (f[1][i] == '\\' && i + 3 < f[1].size()) { mp += (char)strtol(f[1].substr(i + 1, 3).c_str(), nullptr, 8); i += 3; }
+          else mp += f[1][i];
+        }
+        if (fld::starts_with(mp, "/media/") || fld::starts_with(mp, "/run/media/") || fld::starts_with(mp, "/mnt/"))
+          add(fld::basename(mp), mp, "drive-removable-media");
       }
-      mp = decoded;
-      if (fld::starts_with(mp, "/media/") || fld::starts_with(mp, "/run/media/") || fld::starts_with(mp, "/mnt/"))
-        add(fld::basename(mp), mp, "drive-removable-media");
     }
   }
   g_places->clear();
@@ -1598,6 +1580,64 @@ static void rename_bookmark(const std::string &path, const std::string &old_labe
   select_place_for(g_cwd);
 }
 
+// ---- drives (UDisks2)
+
+// Opens a place: drives are mounted (and unlocked) first
+static void open_place(const Place &p, bool new_window = false) {
+  auto go = [new_window](const std::string &path) {
+    if (new_window) fld::spawn({"fl-files", path});
+    else navigate(path);
+  };
+  if (!p.path.empty() || p.volume.empty()) { go(p.path); return; }
+#ifdef FLD_HAVE_UDISKS
+  ud::Client &c = ud::Client::get();
+  const ud::Volume *v = c.state().volume(p.volume);
+  if (!v) return;
+  std::string vol = v->path;
+  auto mount = [go](const std::string &vol) {
+    g_status->copy_label("Mounting…");
+    ud::Client::get().mount(vol, [go](const std::string &err, const std::string &mp) {
+      update_status();
+      if (!err.empty()) { fl_alert("Could not mount the volume:\n%s", fld::escape_at(err).c_str()); return; }
+      go(mp);
+    });
+  };
+  if (v->encrypted && v->cleartext.empty()) {
+    std::string q = "Passphrase for " + v->label + ":";
+    const char *pw = fl_password("%s", "", fld::escape_at(q).c_str());
+    if (!pw) return;
+    ud::Client::get().unlock(vol, pw, [mount](const std::string &err, const std::string &clear) {
+      if (!err.empty()) { fl_alert("Could not unlock the volume:\n%s", fld::escape_at(err).c_str()); return; }
+      mount(clear);
+    });
+    return;
+  }
+  mount(vol);
+#else
+  (void)go;
+#endif
+}
+
+static void unmount_place(const Place &p, bool eject) {
+#ifdef FLD_HAVE_UDISKS
+  if (p.volume.empty()) return;
+  // leave the drive first, or it is busy
+  if (!p.path.empty() && (g_cwd == p.path || fld::starts_with(g_cwd, p.path + "/"))) navigate(fld::home_dir());
+  std::string label = p.label;
+  auto done = [label, eject](const std::string &err) {
+    update_status();
+    if (!err.empty())
+      fl_alert("Could not %s \"%s\":\n%s", eject ? "eject" : "unmount", fld::escape_at(label).c_str(),
+               fld::escape_at(err).c_str());
+    else if (eject)
+      g_status->copy_label(fld::escape_at("\"" + label + "\" can be removed safely.").c_str());
+  };
+  g_status->copy_label(eject ? "Ejecting…" : "Unmounting…");
+  if (eject) ud::Client::get().eject(p.volume, done);
+  else ud::Client::get().unmount(p.volume, done);
+#endif
+}
+
 // Places list with a context menu
 class PlacesBrowser : public Fl_Hold_Browser {
 public:
@@ -1608,22 +1648,102 @@ public:
       int line = it ? lineno(it) : 0;
       if (line <= 0 || line > (int)g_place_list.size()) return 1;
       Place p = g_place_list[(size_t)line - 1];
-      Fl_Menu_Item m[] = {{"Open", 0, nullptr, (void *)1},
-                          {"Open in New Window", 0, nullptr, (void *)2, FL_MENU_DIVIDER},
-                          {"Rename Bookmark…", 0, nullptr, (void *)3, p.bookmark ? 0 : FL_MENU_INACTIVE},
-                          {"Remove Bookmark", 0, nullptr, (void *)4, p.bookmark ? 0 : FL_MENU_INACTIVE},
-                          {nullptr}};
-      const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
+      bool vol = !p.volume.empty(), mounted = !p.path.empty();
+      std::vector<Fl_Menu_Item> m = {{"Open", 0, nullptr, (void *)1},
+                                     {"Open in New Window", 0, nullptr, (void *)2, FL_MENU_DIVIDER}};
+      if (vol) {
+        if (!mounted) m.push_back({"Mount", 0, nullptr, (void *)5});
+        else m.push_back({"Unmount", 0, nullptr, (void *)6});
+        m.push_back({"Eject", 0, nullptr, (void *)7, (p.can_eject ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER});
+      } else {
+        m.push_back({"Rename Bookmark…", 0, nullptr, (void *)3, p.bookmark ? 0 : FL_MENU_INACTIVE});
+        m.push_back({"Remove Bookmark", 0, nullptr, (void *)4, p.bookmark ? 0 : FL_MENU_INACTIVE});
+      }
+      m.push_back({nullptr});
+      const Fl_Menu_Item *r = m[0].popup(Fl::event_x(), Fl::event_y());
       if (!r) return 1;
       switch ((long)r->user_data()) {
-        case 1: navigate(p.path); break;
-        case 2: fld::spawn({"fl-files", p.path}); break;
+        case 1: case 5: open_place(p); break;
+        case 2: open_place(p, true); break;
         case 3: rename_bookmark(p.path, p.label); break;
         case 4: remove_bookmark(p.path); break;
+        case 6: unmount_place(p, false); break;
+        case 7: unmount_place(p, true); break;
       }
       return 1;
     }
+    // the eject button at the right of a drive
+    if (e == FL_PUSH && Fl::event_button() == FL_LEFT_MOUSE && Fl::event_x() >= x() + w() - EJECT_W - 4) {
+      int line = line_at(Fl::event_y());
+      if (line > 0 && g_place_list[(size_t)line - 1].can_eject) {
+        unmount_place(g_place_list[(size_t)line - 1], true);
+        return 1;
+      }
+    }
+    switch (e) {
+      // drops: onto a place (folder or Trash), or a folder below the list to bookmark it
+      case FL_DND_ENTER:
+        saved_line = value();
+        drop_line = -1;
+        [[fallthrough]];
+      case FL_DND_DRAG: {
+        int line = line_at(Fl::event_y());
+        if (line > 0 && !drop_target(line)) line = 0;
+        if (line != drop_line) {
+          drop_line = line;
+          value(line > 0 ? line : saved_line);
+        }
+        return 1;
+      }
+      case FL_DND_LEAVE:
+        value(saved_line);
+        return 1;
+      case FL_DND_RELEASE:
+        dropping = true;
+        return 1;
+      case FL_PASTE: {
+        if (!dropping) return 1;
+        dropping = false;
+        int line = line_at(Fl::event_y());
+        value(saved_line);
+        g_view->dragging_files = false;
+        auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
+        if (paths.empty()) return 1;
+        if (line <= 0) {
+          for (auto &p : paths) if (fld::is_dir(p)) add_bookmark(p);
+          return 1;
+        }
+        if (!drop_target(line)) return 1;
+        const std::string dest = g_place_list[(size_t)line - 1].path;
+        fld::run_drop(fld::drop_action(paths, dest, Fl::event_state()), paths, dest,
+                      [](FileOp *) { refresh(); });
+        return 1;
+      }
+    }
     return Fl_Hold_Browser::handle(e);
+  }
+
+protected:
+  static const int EJECT_W = 20;
+  void item_draw(void *item, int X, int Y, int W, int H) const override {
+    int line = lineno(item);
+    bool ej = line > 0 && line <= (int)g_place_list.size() && g_place_list[(size_t)line - 1].can_eject;
+    Fl_Hold_Browser::item_draw(item, X, Y, ej ? W - EJECT_W : W, H);
+    if (ej)
+      if (Fl_Image *ic = fld::icon("media-eject", 16)) ic->draw(X + W - EJECT_W + (EJECT_W - 16) / 2, Y + (H - 16) / 2);
+  }
+
+private:
+  int saved_line = 0, drop_line = -1;
+  bool dropping = false;
+  int line_at(int y) {
+    void *it = find_item(y);
+    int line = it ? lineno(it) : 0;
+    return line > 0 && line <= (int)g_place_list.size() ? line : 0;
+  }
+  static bool drop_target(int line) {
+    const std::string &p = g_place_list[(size_t)line - 1].path;
+    return p == TRASH_URI || (!p.empty() && fld::is_dir(p) && access(p.c_str(), W_OK) == 0);
   }
 };
 
@@ -1654,6 +1774,54 @@ static Fl_Tree_Item *tree_add(Fl_Tree_Item *parent, const std::string &label, co
   it->close();
   return it;
 }
+
+// The folder tree accepts drops onto its folders
+class DropTree : public Fl_Tree {
+public:
+  using Fl_Tree::Fl_Tree;
+  int handle(int e) override {
+    switch (e) {
+      case FL_DND_ENTER: case FL_DND_DRAG: {
+        Fl_Tree_Item *it = item_at();
+        if (it != hover) {
+          if (hover && hover != first_selected_item()) hover->select(0);
+          if (it && !it->is_selected()) it->select(1); else if (it) it = nullptr;
+          hover = it;
+          redraw();
+        }
+        return 1;
+      }
+      case FL_DND_LEAVE: clear_hover(); return 1;
+      case FL_DND_RELEASE: dropping = true; return 1;
+      case FL_PASTE: {
+        if (!dropping) return 1;
+        dropping = false;
+        clear_hover();
+        Fl_Tree_Item *it = item_at();
+        g_view->dragging_files = false;
+        auto f = it ? g_tree_paths.find(it) : g_tree_paths.end();
+        if (f == g_tree_paths.end()) return 1;
+        auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
+        const std::string dest = f->second;
+        fld::run_drop(fld::drop_action(paths, dest, Fl::event_state()), paths, dest,
+                      [](FileOp *) { refresh(); });
+        return 1;
+      }
+    }
+    return Fl_Tree::handle(e);
+  }
+
+private:
+  Fl_Tree_Item *hover = nullptr; // selected only to show the drop target
+  bool dropping = false;
+  Fl_Tree_Item *item_at() {
+    const Fl_Tree_Item *it = find_clicked(1);
+    return const_cast<Fl_Tree_Item *>(it);
+  }
+  void clear_hover() {
+    if (hover) { hover->select(0); hover = nullptr; redraw(); }
+  }
+};
 
 // fills an item with its subfolders (on first open)
 static void tree_populate(Fl_Tree_Item *it) {
@@ -1793,6 +1961,7 @@ static void navigate(const std::string &path_in, bool record) {
   if (nv.zoom != V.zoom) g_view->clear_images();
   V = nv;
   update_view_button();
+  update_zoom_slider();
   // when going up, select the folder we came from
   std::string select;
   if (!prev.empty() && prev != TRASH_URI && fld::dirname(prev) == path) select = fld::basename(prev);
@@ -2118,8 +2287,9 @@ static void set_sort(SortKey k, bool desc) {
 }
 
 // delta: +1 / -1, or 0 for the default size
-static void zoom(int delta) {
-  int z = delta == 0 ? 2 : std::max(0, std::min(6, V.zoom + delta));
+static void update_zoom_slider();
+static void set_zoom(int z) {
+  z = std::max(0, std::min(kZoomMax, z));
   if (z == V.zoom) return;
   V.zoom = z;
   remember_view(in_search() ? "" : g_cwd);
@@ -2128,6 +2298,16 @@ static void zoom(int delta) {
   g_view->update_scrollbar();
   g_view->ensure_visible(f);
   g_view->redraw();
+  update_zoom_slider();
+}
+static void zoom(int delta) { set_zoom(delta == 0 ? kZoomDefault : V.zoom + delta); }
+
+static void update_zoom_slider() {
+  if (!g_zoom_slider) return;
+  g_zoom_slider->value(V.zoom);
+  static char tip[32];
+  snprintf(tip, sizeof tip, "Icon size: %d px", kZoomPx[V.zoom]);
+  g_zoom_slider->tooltip(tip);
 }
 
 static void columns_menu(int x, int y) {
@@ -2411,7 +2591,7 @@ int main(int argc, char **argv) {
   build_search_bar(W, TB);
   Fl_Tile *tile = g_tile = new Fl_Tile(0, TB, W, H - TB - ST);
   Fl_Group *side = new Fl_Group(0, TB, S.sidebar_w, H - TB - ST);
-  g_tree = new Fl_Tree(0, TB, S.sidebar_w, H - TB - ST - 40);
+  g_tree = new DropTree(0, TB, S.sidebar_w, H - TB - ST - 40);
   g_tree->showroot(0);
   g_tree->box(FL_FLAT_BOX);
   g_tree->color(p.bg);
@@ -2431,7 +2611,7 @@ int main(int argc, char **argv) {
   g_places->selection_color(p.accent);
   g_places->callback([](Fl_Widget *w, void *) {
     int line = ((Fl_Hold_Browser *)w)->value();
-    if (line > 0 && line <= (int)g_place_list.size()) navigate(g_place_list[line - 1].path);
+    if (line > 0 && line <= (int)g_place_list.size()) open_place(g_place_list[line - 1]);
   });
   g_places->clear_visible_focus();
   g_empty_trash = new fld::FlatButton(6, H - ST - 38, S.sidebar_w - 12, 32, "Empty Trash");
@@ -2455,11 +2635,34 @@ int main(int argc, char **argv) {
   tile->end();
   tile->resizable(g_view);
   tile->size_range(side, 120, 120, 400, 10000);
-  g_status = new Fl_Box(0, H - ST, W, ST);
+  // status bar: text, then the zoom slider
+  const int ZW = 170;
+  Fl_Group *status_bar = new Fl_Group(0, H - ST, W, ST);
+  g_status = new Fl_Box(0, H - ST, W - ZW, ST);
   g_status->box(FL_FLAT_BOX);
   g_status->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP);
   g_status->labelsize(12);
   g_status->labelcolor(p.fg_dim);
+  Fl_Box *zbg = new Fl_Box(W - ZW, H - ST, ZW, ST);
+  zbg->box(FL_FLAT_BOX);
+  fld::FlatButton *zout = new fld::FlatButton(W - ZW + 4, H - ST + 1, 22, ST - 2, "\u2212");
+  zout->tooltip("Zoom Out (Ctrl+-)");
+  zout->callback([](Fl_Widget *, void *) { zoom(-1); });
+  g_zoom_slider = new Fl_Slider(W - ZW + 30, H - ST + 6, ZW - 60, ST - 12);
+  g_zoom_slider->type(FL_HOR_NICE_SLIDER);
+  g_zoom_slider->box(FL_FLAT_BOX);
+  g_zoom_slider->color(fl_color_average(p.border, p.bg, 0.5f));
+  g_zoom_slider->selection_color(p.accent);
+  g_zoom_slider->bounds(0, kZoomMax);
+  g_zoom_slider->step(1);
+  g_zoom_slider->clear_visible_focus();
+  g_zoom_slider->callback([](Fl_Widget *w, void *) { set_zoom((int)((Fl_Slider *)w)->value()); });
+  fld::FlatButton *zin = new fld::FlatButton(W - 26, H - ST + 1, 22, ST - 2, "+");
+  zin->tooltip("Zoom In (Ctrl+=)");
+  zin->callback([](Fl_Widget *, void *) { zoom(1); });
+  status_bar->resizable(g_status);
+  status_bar->end();
+  update_zoom_slider();
   g_win->resizable(tile);
   g_win->end();
   g_win->size_range(500, 320);
@@ -2469,6 +2672,13 @@ int main(int argc, char **argv) {
   g_inotify = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
   if (g_inotify >= 0) Fl::add_fd(g_inotify, FL_READ, inotify_cb);
 
+#ifdef FLD_HAVE_UDISKS
+  ud::Client::get().on_changed = [] {
+    fill_places();
+    select_place_for(g_cwd);
+  };
+  ud::Client::get().start();
+#endif
   fill_places();
   update_view_button();
   if (S.show_tree) show_tree(true);

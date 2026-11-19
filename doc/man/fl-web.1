@@ -1,0 +1,57 @@
+.TH FL-WEB 1 "November 2026" "fldesktop" "fldesktop"
+.SH NAME
+fl-web \- web browser
+.SH SYNOPSIS
+\fBfl-web\fR [\fIURL\fR|\fIFILE\fR...]
+.SH DESCRIPTION
+A web browser built with FLTK and \fBWPE WebKit\fR. Each URL or file given opens in a tab; text
+that is not an address is searched for.
+.PP
+The address bar takes addresses, file paths and searches, and completes what you type from
+your bookmarks and history. Pages opened by a page (and links clicked with the middle button
+or Ctrl) open in new tabs. Downloads go to the Downloads folder; a notification says when one
+has finished. Pages that ask for a password, a file, your location or to show notifications ask
+you first.
+.PP
+fl-web draws pages with the CPU: WebKit renders into shared memory and fl-web copies the
+picture into its window.
+.SH KEYS
+.TP
+\fBCtrl+L\fR, \fBF6\fR, \fBAlt+D\fR
+Edit the address.
+.TP
+\fBCtrl+T\fR, \fBCtrl+W\fR, \fBCtrl+N\fR
+New tab, close the tab, new window.
+.TP
+\fBCtrl+Tab\fR, \fBCtrl+Shift+Tab\fR, \fBCtrl+1\fR..\fBCtrl+9\fR
+Next, previous, n-th tab (9: the last one).
+.TP
+\fBAlt+Left\fR, \fBAlt+Right\fR, \fBAlt+Home\fR
+Back, forward, home page.
+.TP
+\fBF5\fR, \fBCtrl+R\fR, \fBCtrl+Shift+R\fR, \fBEsc\fR
+Reload, reload without the cache, stop.
+.TP
+\fBCtrl+F\fR, \fBF3\fR, \fBShift+F3\fR
+Find in the page, next and previous match.
+.TP
+\fBCtrl++\fR, \fBCtrl+\-\fR, \fBCtrl+0\fR
+Zoom in, out, actual size.
+.TP
+\fBCtrl+D\fR, \fBCtrl+Shift+O\fR, \fBCtrl+H\fR, \fBCtrl+J\fR
+Bookmark the page, bookmarks, history, downloads.
+.TP
+\fBF11\fR
+Full screen.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/web.ini\fR
+Settings: home page, search engine, JavaScript, reopening the last session's tabs.
+.TP
+\fI~/.local/share/fl-web/\fR
+Bookmarks (\fIbookmarks.tsv\fR), history (\fIhistory.tsv\fR), cookies and site data.
+.TP
+\fI~/.cache/fl-web/\fR
+The web cache.
+.SH SEE ALSO
+\fBfl-files\fR(1)

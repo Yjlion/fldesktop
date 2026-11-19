@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -27,23 +27,11 @@ _srcdir() {
 }
 
 pkgver() {
-  cd "$(_srcdir)"
-  local v
-  v=$(sed -n 's/^project(fldesktop VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
-  local n h
-  # a build of a release tag (v<version> or v<version>-<pkgrel>) gets the
-  # plain version; the release workflow sets pkgrel from the tag
-  local t
-  for t in $(git tag --points-at HEAD 2>/dev/null); do
-    if [[ "$t" == "v$v" || "$t" =~ ^v${v//./\\.}-[0-9]+$ ]]; then
-      echo "$v"
-      return
-    fi
-  done
-  if n=$(git rev-list --count HEAD 2>/dev/null) && h=$(git rev-parse --short HEAD 2>/dev/null); then
-    printf "%s.r%s.g%s" "$v" "$n" "$h"
+  # release tags set the version (see packaging/version.sh); CI passes it in
+  if [[ -n "$FLD_PKGVER" ]]; then
+    echo "$FLD_PKGVER"
   else
-    echo "$v"
+    bash "$(_srcdir)/packaging/version.sh" | sed -n 's/^FLD_PKGVER=//p'
   fi
 }
 
@@ -52,7 +40,8 @@ build() {
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_INSTALL_LIBEXECDIR=lib \
     -DFLD_PAM_STACK=system-auth \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DFLD_VERSION="$pkgver"
   cmake --build build
 }
 
@@ -90,7 +79,8 @@ package_fldesktop() {
               'fldesktop-firewall: firewall settings'
               'fldesktop-video: video player'
               'fldesktop-webcam: camera app'
-              'fldesktop-archive: archive manager')
+              'fldesktop-archive: archive manager'
+              'fldesktop-web: web browser')
   arch=(any)
 }
 
@@ -111,6 +101,9 @@ package_fldesktop-shell() {
               'pipewire-pulse: sound for PulseAudio applications'
               'pipewire-alsa: sound for ALSA applications'
               'networkmanager: network indicator and Wi-Fi passwords'
+              'upower: battery indicator and low battery warnings'
+              'power-profiles-daemon: power modes'
+              'udisks2: mounting drives as they are plugged in'
               'fldesktop-polkit-agent: administrator password prompts'
               'fldesktop-notifyd: notifications and their history'
               'xdg-desktop-portal-fl: file dialogs and settings for Flatpak apps'
@@ -171,6 +164,13 @@ package_fldesktop-webcam() {
   _app webcam
 }
 
+package_fldesktop-web() {
+  pkgdesc="fldesktop web browser (WPE WebKit)"
+  depends=(fltk glib2 wpewebkit)
+  optdepends=("xdg-utils: open other kinds of links" "gst-plugins-good: audio and video in pages")
+  _app web
+}
+
 package_fldesktop-video() {
   pkgdesc="fldesktop video player"
   depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
@@ -180,7 +180,12 @@ package_fldesktop-video() {
 }
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
-package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shared-mime-info); _app files; }
+package_fldesktop-files() {
+  pkgdesc="fldesktop file manager"
+  depends=(fltk glib2 shared-mime-info)
+  optdepends=('udisks2: list, mount and eject drives')
+  _app files
+}
 package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _app edit; }
 package_fldesktop-settings() {
   pkgdesc="fldesktop settings center"

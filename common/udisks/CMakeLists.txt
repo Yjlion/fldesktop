@@ -1,0 +1,5 @@
+if(TARGET fld-glib)
+  add_library(fld-udisks STATIC udclient.cpp)
+  target_include_directories(fld-udisks PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-udisks PUBLIC fld-glib)
+endif()

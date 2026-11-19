@@ -57,3 +57,10 @@ public:
 fld::FlatButton *notify_indicator_create();     // panel_notify.cpp
 fld::FlatButton *printer_indicator_create();    // panel_printers.cpp
 fld::FlatButton *bluetooth_indicator_create();  // panel_bluetooth.cpp
+
+// panel_power.cpp: drives the battery button from UPower (also power modes and
+// low battery warnings). While UPower is not running the panel reads /sys.
+void power_indicator_start(fld::FlatButton *battery);
+bool power_indicator_active();
+// panel_drives.cpp: mounts removable drives as they are plugged in.
+void drives_start();

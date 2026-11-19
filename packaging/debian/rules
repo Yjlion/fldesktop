@@ -1,12 +1,14 @@
 #!/usr/bin/make -f
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 include /usr/share/dpkg/architecture.mk
+include /usr/share/dpkg/pkg-info.mk
 
 %:
 	dh $@ --buildsystem=cmake+ninja
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DCMAKE_BUILD_TYPE=RelWithDebInfo -DFLD_GREETD_USER=_greetd -DFLD_GREETD_VT=7 -DFLD_PAM_STACK=common-auth
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=RelWithDebInfo -DFLD_GREETD_USER=_greetd -DFLD_GREETD_VT=7 -DFLD_PAM_STACK=common-auth \
+		-DFLD_VERSION=$(DEB_VERSION_UPSTREAM)
 
 # The compositor smoke test needs a writable XDG_RUNTIME_DIR; CI runs it.
 override_dh_auto_test:

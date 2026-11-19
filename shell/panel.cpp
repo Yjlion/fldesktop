@@ -813,7 +813,11 @@ static void tick(void *) {
     query_volume();
     update_volume_widget();
   }
+#ifdef FLD_HAVE_POWER
+  if (volume_ticks % 30 == 1 && !power_indicator_active()) update_battery();
+#else
   if (volume_ticks % 30 == 1) update_battery();
+#endif
   Fl::repeat_timeout(1.0, tick);
 }
 
@@ -927,6 +931,14 @@ int main(int argc, char **argv) {
 #endif
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
+#ifdef FLD_HAVE_POWER
+  Fl::lock();
+  power_indicator_start(P.battery);
+#endif
+#ifdef FLD_HAVE_UDISKS
+  Fl::lock();
+  drives_start();
+#endif
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);
 #ifdef FLD_HAVE_NOTIFY
   Fl::lock();

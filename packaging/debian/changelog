@@ -10,5 +10,10 @@ fldesktop (0.1.0) unstable; urgency=medium
   * fl-archive (libarchive) and fl-webcam (GStreamer); fl-video plays with
     GStreamer; fl-wm Alt+Tab window switcher; WireGuard and plugin VPNs in
     the network settings; tabs, menu bar and transparency in fl-term.
+  * fl-web, a web browser on WPE WebKit. Drives in fl-files through UDisks2,
+    automounting in the panel; battery, power modes and low battery
+    warnings through UPower; Power and Removable Drives settings. Drag and
+    drop onto the fl-files sidebar and the desktop; icon zoom.
+  * Release tags set the version (packaging/version.sh).
 
  -- Yjlion <yjlion@users.noreply.github.com>  Sun, 15 Nov 2026 22:00:00 +0000

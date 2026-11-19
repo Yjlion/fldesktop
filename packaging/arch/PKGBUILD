@@ -27,23 +27,11 @@ _srcdir() {
 }
 
 pkgver() {
-  cd "$(_srcdir)"
-  local v
-  v=$(sed -n 's/^project(fldesktop VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
-  local n h
-  # a build of a release tag (v<version> or v<version>-<pkgrel>) gets the
-  # plain version; the release workflow sets pkgrel from the tag
-  local t
-  for t in $(git tag --points-at HEAD 2>/dev/null); do
-    if [[ "$t" == "v$v" || "$t" =~ ^v${v//./\\.}-[0-9]+$ ]]; then
-      echo "$v"
-      return
-    fi
-  done
-  if n=$(git rev-list --count HEAD 2>/dev/null) && h=$(git rev-parse --short HEAD 2>/dev/null); then
-    printf "%s.r%s.g%s" "$v" "$n" "$h"
+  # release tags set the version (see packaging/version.sh); CI passes it in
+  if [[ -n "$FLD_PKGVER" ]]; then
+    echo "$FLD_PKGVER"
   else
-    echo "$v"
+    bash "$(_srcdir)/packaging/version.sh" | sed -n 's/^FLD_PKGVER=//p'
   fi
 }
 
@@ -52,7 +40,8 @@ build() {
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_INSTALL_LIBEXECDIR=lib \
     -DFLD_PAM_STACK=system-auth \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DFLD_VERSION="$pkgver"
   cmake --build build
 }
 

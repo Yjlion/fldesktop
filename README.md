@@ -124,10 +124,18 @@ CI (`.github/workflows/ci.yml`) builds and tests on Arch (wlroots 0.20) and
 Debian trixie (wlroots 0.18). `.github/workflows/repo.yml` builds the packages
 (Debian amd64 + arm64, Arch x86_64) and publishes them to the package
 repositories below: every push to `main` goes to the *devel* channel, every
-`v*` tag to the *stable* channel and to the GitHub release. A release tag
-is `v<version>` (the version in `CMakeLists.txt` and `debian/changelog`) or
-`v<version>-<n>` for a rebuild of the same version (Debian `<version>+r<n>`,
-Arch `pkgrel=<n>`).
+`v*` tag to the *stable* channel and to the GitHub release.
+
+The tag sets the version; nothing in the tree needs editing before a release:
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0     # release 0.2.0
+git tag v0.2.0-2 && git push origin v0.2.0-2 # rebuild of 0.2.0 (Debian 0.2.0+r2, Arch pkgrel=2)
+```
+
+Versions are any dotted numbers (`v1.0`, `v0.2.0`, `v1.2.3.4`). Builds of `main`
+are `<latest release>+git<count>.g<hash>`. `packaging/version.sh` works the
+versions out; run it to see what a build of the checkout would be called.
 
 ### Package repositories
 

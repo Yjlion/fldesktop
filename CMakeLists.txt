@@ -43,7 +43,25 @@ option(FLD_BUILD_LOCK     "Build the fl-lock screen locker (needs PAM)"    ON)
 find_package(PkgConfig REQUIRED)
 
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
-add_compile_definitions(FLD_VERSION="${PROJECT_VERSION}"
+# The version shown by the programs. Packages pass it in (-DFLD_VERSION=...);
+# otherwise it comes from the git release tags (packaging/version.sh), and
+# without git from project() above.
+set(FLD_VERSION "" CACHE STRING "Version string (default: from git release tags)")
+if(FLD_VERSION)
+  set(FLD_VERSION_STRING "${FLD_VERSION}")
+else()
+  set(FLD_VERSION_STRING "${PROJECT_VERSION}")
+  if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(COMMAND bash "${CMAKE_SOURCE_DIR}/packaging/version.sh"
+                    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                    OUTPUT_VARIABLE _fld_ver ERROR_QUIET RESULT_VARIABLE _fld_rc)
+    if(_fld_rc EQUAL 0 AND _fld_ver MATCHES "FLD_VERSION=([^\n]+)")
+      set(FLD_VERSION_STRING "${CMAKE_MATCH_1}")
+    endif()
+  endif()
+endif()
+message(STATUS "fldesktop version ${FLD_VERSION_STRING}")
+add_compile_definitions(FLD_VERSION="${FLD_VERSION_STRING}"
                         FLD_PREFIX="${CMAKE_INSTALL_PREFIX}"
                         FLD_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/fldesktop"
                         FLD_BINDIR="${CMAKE_INSTALL_FULL_BINDIR}")

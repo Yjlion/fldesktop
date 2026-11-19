@@ -353,7 +353,7 @@ static void sw_render(struct flwm_server *server) {
 			set_argb(cr, accent, 0.85);
 			cairo_fill(cr);
 		}
-		const char *path = icon_for(v->xdg_toplevel->app_id);
+		const char *path = icon_for(view_app_id(v));
 		double ix = cx + (CELL_W - ICON) / 2.0, iy = cy + 12;
 		if (v->minimized) cairo_push_group(cr);
 		bool drawn = path && draw_icon_file(cr, path, ix, iy, ICON);
@@ -362,7 +362,7 @@ static void sw_render(struct flwm_server *server) {
 			rounded_rect(cr, ix + 4, iy + 4, ICON - 8, ICON - 8, 12);
 			set_argb(cr, accent, 1);
 			cairo_fill(cr);
-			const char *t = v->xdg_toplevel->title && *v->xdg_toplevel->title ? v->xdg_toplevel->title : "?";
+			const char *t = view_title(v) && *view_title(v) ? view_title(v) : "?";
 			char letter[8] = {0};
 			int len = 1;
 			while (t[len] && ((unsigned char)t[len] & 0xc0) == 0x80 && len < 4) len++;
@@ -374,16 +374,16 @@ static void sw_render(struct flwm_server *server) {
 			cairo_pop_group_to_source(cr);
 			cairo_paint_with_alpha(cr, 0.45);
 		}
-		const char *title = v->xdg_toplevel->title ? v->xdg_toplevel->title : "";
-		if (!*title && v->xdg_toplevel->app_id) title = v->xdg_toplevel->app_id;
+		const char *title = view_title(v) ? view_title(v) : "";
+		if (!*title && view_app_id(v)) title = view_app_id(v);
 		cairo_set_source_rgba(cr, 1, 1, 1, v->minimized && i != s->sel ? 0.55 : 0.95);
 		draw_text(cr, small_font, title, cx + 8, iy + ICON + 8, CELL_W - 16, 2, true);
 	}
 	/* the selected window's whole title */
 	if (s->sel >= 0 && s->sel < s->n) {
 		struct flwm_view *v = s->views[s->sel];
-		const char *title = v->xdg_toplevel->title && *v->xdg_toplevel->title ? v->xdg_toplevel->title
-			: v->xdg_toplevel->app_id ? v->xdg_toplevel->app_id : "";
+		const char *title = view_title(v) && *view_title(v) ? view_title(v)
+			: view_app_id(v) ? view_app_id(v) : "";
 		char line[600];
 		snprintf(line, sizeof line, "%s%s", title, v->minimized ? "  (minimized)" : "");
 		cairo_set_source_rgba(cr, 1, 1, 1, 1);
@@ -416,7 +416,7 @@ bool switcher_step(struct flwm_server *server, int dir) {
 		s->n = 0;
 		struct flwm_view *v;
 		wl_list_for_each(v, &server->views, link)
-			if (v->mapped && v->role == FLWM_ROLE_NORMAL && s->n < FLWM_SWITCHER_MAX) s->views[s->n++] = v;
+			if (v->mapped && v->role == FLWM_ROLE_NORMAL && !v->no_taskbar && s->n < FLWM_SWITCHER_MAX) s->views[s->n++] = v;
 		if (s->n < 2) return false;
 		s->output = output_at(server, server->cursor->x, server->cursor->y);
 		if (!s->output) s->output = output_primary(server);

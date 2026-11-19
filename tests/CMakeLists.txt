@@ -167,6 +167,19 @@ if(VPTR_WL_FOUND)
   set_target_properties(fl-vptr PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endif()
 
+# test helper: an X11 client for the Xwayland tests (installed nowhere)
+pkg_check_modules(XCLIENT_XCB IMPORTED_TARGET xcb)
+if(XCLIENT_XCB_FOUND)
+  add_executable(fl-xclient tools/fl-xclient.c)
+  target_link_libraries(fl-xclient PRIVATE PkgConfig::XCLIENT_XCB)
+  set_target_properties(fl-xclient PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  if(FLD_BUILD_WM)
+    add_test(NAME xwayland-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/xwayland-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-xclient>)
+    set_tests_properties(xwayland-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+  endif()
+endif()
+
 # test helper: plays a sine wave through PipeWire
 pkg_check_modules(TONE_PW IMPORTED_TARGET libpipewire-0.3)
 if(TONE_PW_FOUND)

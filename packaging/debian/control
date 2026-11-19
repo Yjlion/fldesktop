@@ -8,6 +8,8 @@ Build-Depends: debhelper-compat (= 13),
                pkgconf,
                libfltk1.4-dev,
                libwlroots-0.18-dev | libwlroots-0.19-dev,
+               libxcb1-dev,
+               libxcb-icccm4-dev,
                libwayland-dev,
                wayland-protocols,
                libxkbcommon-dev,
@@ -80,7 +82,7 @@ Description: lightweight Wayland desktop built with FLTK (metapackage)
 Package: fldesktop-wm
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils
+Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils, xwayland
 Suggests: grim, wl-clipboard
 Description: fldesktop Wayland compositor
  fl-wm is a stacking Wayland compositor based on wlroots with server side

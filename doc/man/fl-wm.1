@@ -16,6 +16,16 @@ window (restoring it when minimized), Escape or a click outside closes the panel
 \fBswitcher=false\fR in the \fB[behaviour]\fR section of \fIwm.ini\fR each Alt+Tab raises the next
 window directly instead. Application icons come from the windows' desktop files and the icon theme
 (SVG icons need librsvg).
+.SH X11 PROGRAMS
+X11 programs (Steam, games, Wine, older Electron and Java programs) run through
+\fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is
+set for the programs fl-wm starts. Their windows get the same decorations,
+taskbar entries, Alt+Tab, snapping and maximizing as Wayland windows; windows
+that ask for no decorations (Motif hints) get none, and windows with a position
+hint keep their position. Menus and tooltips (override-redirect windows) are
+shown above the windows as the program places them. \fBxwayland=false\fR in the
+\fB[behaviour]\fR section of \fIwm.ini\fR turns it off (read at startup only).
+It needs wlroots built with Xwayland support and the \fBXwayland\fR program.
 .SH SCREEN LOCKING
 SIGUSR1, the \fBlock\fR key binding (Super+L) and the idle timeout
 ([lock] idle_minutes) lock the session: fl-wm covers all outputs, gives the

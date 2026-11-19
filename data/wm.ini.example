@@ -19,6 +19,8 @@ focus_follows_mouse=false
 launcher=fl-launcher
 # Alt+Tab shows a window switcher; false: each Alt+Tab raises the next window
 switcher=true
+# run X11 programs through Xwayland (started with the first one); read at startup
+xwayland=true
 
 [keyboard]
 # xkb names, e.g. layout=us,de  options=grp:alt_shift_toggle

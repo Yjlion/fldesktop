@@ -95,7 +95,7 @@ static void set_locked(struct flwm_server *server, bool locked) {
 static void focus_lock_client(struct flwm_server *server) {
 	struct wlr_surface *s = NULL;
 	struct flwm_view *v = view_find_role(server, FLWM_ROLE_LOCK);
-	if (v) s = v->xdg_toplevel->base->surface;
+	if (v) s = view_surface(v);
 	else if (!wl_list_empty(&server->lock_surfaces)) {
 		struct flwm_lock_surface *ls = wl_container_of(server->lock_surfaces.next, ls, link);
 		if (ls->lock_surface->surface->mapped) s = ls->lock_surface->surface;

@@ -176,7 +176,7 @@ static void render_title(struct flwm_view *view) {
 	draw_button(cr, FLWM_PART_MINIMIZE, bx, B, T, fg, d->hover_button == FLWM_PART_MINIMIZE, view->maximized);
 
 	/* title text, centered when there is room, ellipsized otherwise */
-	const char *title = view->xdg_toplevel->title ? view->xdg_toplevel->title : "";
+	const char *title = view_title(view) ? view_title(view) : "";
 	PangoLayout *layout = pango_cairo_create_layout(cr);
 	PangoFontDescription *fd = pango_font_description_from_string(c->font ? c->font : "Sans Bold 10");
 	pango_layout_set_font_description(layout, fd);
@@ -257,12 +257,12 @@ void decor_update(struct flwm_view *view) {
 	wlr_scene_node_set_enabled(&d->tree->node, true);
 
 	struct wlr_box geo;
-	flwm_xdg_geometry(view->xdg_toplevel->base, &geo);
+	view_get_geometry(view, &geo);
 	int w = geo.width, h = geo.height;
 	struct flwm_server *server = view->server;
 	int B = decor_border(server), T = decor_title_height(server);
 	bool active = view_focused(server) == view;
-	const char *title = view->xdg_toplevel->title ? view->xdg_toplevel->title : "";
+	const char *title = view_title(view) ? view_title(view) : "";
 	bool title_changed = !d->title_text || strcmp(d->title_text, title) != 0;
 	float scale = view_scale(view);
 

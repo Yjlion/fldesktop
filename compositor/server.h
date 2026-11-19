@@ -63,6 +63,15 @@ enum flwm_decor_part {
 	FLWM_PART_EDGE, /* resize handle; edges stored separately */
 };
 
+/* where a view comes from */
+enum flwm_view_type {
+	FLWM_VIEW_XDG,
+	FLWM_VIEW_XWAYLAND, /* a managed X11 window (xwayland.c) */
+};
+
+struct wlr_xwayland;
+struct wlr_xwayland_surface;
+
 struct flwm_node_desc {
 	enum flwm_node_kind kind;
 	void *ptr;
@@ -133,6 +142,7 @@ struct flwm_config {
 	int noutputs;
 	char *launcher_cmd;
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
+	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
 	char *lock_cmd;        /* default "fl-lock --locker" */
@@ -172,6 +182,7 @@ struct flwm_server {
 	struct wlr_scene_tree *layer_bottom;
 	struct wlr_scene_tree *layer_views;
 	struct wlr_scene_tree *layer_top;        /* layer-shell top + fl-panel */
+	struct wlr_scene_tree *layer_xunmanaged; /* X11 menus and tooltips (override-redirect) */
 	struct wlr_scene_tree *layer_overlay;    /* layer-shell overlay + launcher */
 	struct wlr_scene_tree *layer_popups;     /* popups of panel/launcher */
 
@@ -179,6 +190,11 @@ struct flwm_server {
 	struct wl_listener new_xdg_toplevel;
 	struct wl_listener new_xdg_popup;
 	struct wl_list views; /* flwm_view.link, most recently focused first */
+
+	/* X11 programs (xwayland.c); NULL when off or not built in */
+	struct wlr_xwayland *xwayland;
+	struct wl_listener xwayland_ready;
+	struct wl_listener new_xwayland_surface;
 
 	struct wlr_layer_shell_v1 *layer_shell;
 	struct wl_listener new_layer_surface;
@@ -300,7 +316,9 @@ struct flwm_decor {
 struct flwm_view {
 	struct wl_list link;
 	struct flwm_server *server;
-	struct wlr_xdg_toplevel *xdg_toplevel;
+	enum flwm_view_type type;
+	struct wlr_xdg_toplevel *xdg_toplevel;    /* FLWM_VIEW_XDG */
+	struct wlr_xwayland_surface *xsurface;    /* FLWM_VIEW_XWAYLAND */
 	struct wlr_scene_tree *tree;          /* positioned at content top-left */
 	struct wlr_scene_tree *surface_tree;
 	struct flwm_node_desc desc;
@@ -310,6 +328,7 @@ struct flwm_view {
 	bool minimized, maximized, fullscreen;
 	bool placed;       /* initial position chosen */
 	bool hidden_by_show_desktop;
+	bool no_taskbar;   /* not in the panel's window list (X11 menus, splash screens) */
 	int requested_w, requested_h; /* last size we asked a shell client for */
 	int committed_w, committed_h; /* last committed size of a shell client */
 	enum flwm_role role;
@@ -333,6 +352,15 @@ struct flwm_view {
 
 	struct wl_listener decoration_request_mode;
 	struct wl_listener decoration_destroy;
+
+	/* X11 windows only */
+	struct wl_listener x_associate;
+	struct wl_listener x_dissociate;
+	struct wl_listener x_request_configure;
+	struct wl_listener x_request_activate;
+	struct wl_listener x_set_decorations;
+	struct wl_listener x_set_override_redirect;
+	bool x_associated;
 
 	struct wl_listener ftl_request_activate;
 	struct wl_listener ftl_request_maximize;
@@ -416,6 +444,15 @@ int shell_reserved_bottom(struct flwm_server *server, struct flwm_output *output
 
 /* view.c */
 void view_init(struct flwm_server *server);
+/* the parts shared by xdg and X11 windows (xwayland.c uses them) */
+struct flwm_view *view_new(struct flwm_server *server, enum flwm_view_type type);
+void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bool focus);
+void view_handle_unmap(struct flwm_view *view);
+void view_handle_commit(struct flwm_view *view);
+void view_free(struct flwm_view *view); /* removes the common listeners */
+struct wlr_surface *view_surface(struct flwm_view *view);
+const char *view_title(struct flwm_view *view);  /* may be NULL */
+const char *view_app_id(struct flwm_view *view); /* may be NULL */
 void view_focus(struct flwm_view *view);
 void view_raise(struct flwm_view *view);
 void view_set_position(struct flwm_view *view, int x, int y);
@@ -444,6 +481,49 @@ void decor_set_hover(struct flwm_view *view, enum flwm_decor_part part);
 enum flwm_decor_part decor_part_at(struct flwm_view *view, double lx, double ly);
 int decor_title_height(struct flwm_server *server);
 int decor_border(struct flwm_server *server);
+
+/* xwayland.c (stubs below when built without Xwayland) */
+#ifdef FLWM_XWAYLAND
+void xwayland_init(struct flwm_server *server);
+void xwayland_finish(struct flwm_server *server);
+void xwayland_update_cursor(struct flwm_server *server);
+const char *xwayland_display(struct flwm_server *server); /* NULL when not running */
+struct wlr_surface *xwayland_view_surface(struct flwm_view *view);
+const char *xwayland_view_title(struct flwm_view *view);
+const char *xwayland_view_app_id(struct flwm_view *view);
+void xwayland_view_size(struct flwm_view *view, int *w, int *h);
+void xwayland_view_configure(struct flwm_view *view, int x, int y, int w, int h);
+void xwayland_view_move(struct flwm_view *view, int x, int y); /* keeps the size last asked for */
+void xwayland_view_activate(struct flwm_view *view, bool activated);
+void xwayland_view_raise(struct flwm_view *view);
+void xwayland_view_close(struct flwm_view *view);
+void xwayland_view_set_maximized(struct flwm_view *view, bool maximized);
+void xwayland_view_set_fullscreen(struct flwm_view *view, bool fullscreen);
+void xwayland_view_set_minimized(struct flwm_view *view, bool minimized);
+struct flwm_view *xwayland_view_parent(struct flwm_view *view);
+bool xwayland_view_wants_focus(struct flwm_view *view);
+bool xwayland_view_position_hint(struct flwm_view *view, int *x, int *y);
+#else
+static inline void xwayland_init(struct flwm_server *s) { (void)s; }
+static inline void xwayland_finish(struct flwm_server *s) { (void)s; }
+static inline void xwayland_update_cursor(struct flwm_server *s) { (void)s; }
+static inline const char *xwayland_display(struct flwm_server *s) { (void)s; return NULL; }
+static inline struct wlr_surface *xwayland_view_surface(struct flwm_view *v) { (void)v; return NULL; }
+static inline const char *xwayland_view_title(struct flwm_view *v) { (void)v; return NULL; }
+static inline const char *xwayland_view_app_id(struct flwm_view *v) { (void)v; return NULL; }
+static inline void xwayland_view_size(struct flwm_view *v, int *w, int *h) { (void)v; *w = *h = 0; }
+static inline void xwayland_view_configure(struct flwm_view *v, int x, int y, int w, int h) { (void)v; (void)x; (void)y; (void)w; (void)h; }
+static inline void xwayland_view_move(struct flwm_view *v, int x, int y) { (void)v; (void)x; (void)y; }
+static inline void xwayland_view_activate(struct flwm_view *v, bool a) { (void)v; (void)a; }
+static inline void xwayland_view_raise(struct flwm_view *v) { (void)v; }
+static inline void xwayland_view_close(struct flwm_view *v) { (void)v; }
+static inline void xwayland_view_set_maximized(struct flwm_view *v, bool m) { (void)v; (void)m; }
+static inline void xwayland_view_set_fullscreen(struct flwm_view *v, bool f) { (void)v; (void)f; }
+static inline void xwayland_view_set_minimized(struct flwm_view *v, bool m) { (void)v; (void)m; }
+static inline struct flwm_view *xwayland_view_parent(struct flwm_view *v) { (void)v; return NULL; }
+static inline bool xwayland_view_wants_focus(struct flwm_view *v) { (void)v; return true; }
+static inline bool xwayland_view_position_hint(struct flwm_view *v, int *x, int *y) { (void)v; (void)x; (void)y; return false; }
+#endif
 
 /* layer.c */
 void layer_init(struct flwm_server *server);

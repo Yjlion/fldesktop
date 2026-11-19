@@ -43,8 +43,18 @@ static std::string self_exe() {
   return n > 0 ? std::string(buf, (size_t)n) : "fl-term";
 }
 
+void (*open_in_tab)(const std::vector<std::string> &, const std::string &, const std::string &, bool,
+                    bool) = nullptr;
+
 void connect(const ssh::Profile &p) {
   if (p.host.empty()) return;
+  if (open_in_tab) {
+    auto all = profiles();
+    const ssh::Profile *saved = ssh::find(all, p.name);
+    const ssh::Profile &use = saved && saved->host == p.host && saved->user == p.user && saved->port == p.port ? *saved : p;
+    open_in_tab(ssh::build_argv(use), use.target(), use.scheme, false, true);
+    return;
+  }
   // saved profiles are looked up by name so per-profile settings apply
   auto all = profiles();
   const ssh::Profile *saved = ssh::find(all, p.name);
@@ -272,6 +282,10 @@ void manage_dialog() {
 // ---- keys ----------------------------------------------------------------------------
 
 static void run_in_terminal(const std::string &title, const std::vector<std::string> &cmd) {
+  if (open_in_tab) {
+    open_in_tab(cmd, title, "", true, false);
+    return;
+  }
   std::vector<std::string> argv{self_exe(), "--hold", "-T", title, "-e"};
   argv.insert(argv.end(), cmd.begin(), cmd.end());
   fld::spawn(argv);

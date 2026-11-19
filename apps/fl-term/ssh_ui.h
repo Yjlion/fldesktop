@@ -14,7 +14,12 @@ std::vector<ssh::Profile> profiles(); // saved + ~/.ssh/config hosts
 // Resolves a --ssh argument: a profile name, or user@host[:port].
 ssh::Profile resolve(const std::string &arg);
 
-// Opens a new terminal window connected to the profile.
+// Where connections and helper commands open: fl-term sets this to open a
+// tab; when unset they open in a new fl-term window.
+extern void (*open_in_tab)(const std::vector<std::string> &cmd, const std::string &title,
+                           const std::string &scheme, bool hold, bool hold_on_error);
+
+// Opens a terminal tab (or window) connected to the profile.
 void connect(const ssh::Profile &p);
 // The "Connect" dialog; `initial` pre-fills it (e.g. to edit a profile).
 void connect_dialog(const ssh::Profile *initial = nullptr);

@@ -7,12 +7,22 @@ fl-term \- terminal emulator
 \fBfl-term\fR \fB\-\-ssh\fR \fIPROFILE\fR|\fIUSER\fR@\fIHOST\fR[:\fIPORT\fR]
 .SH DESCRIPTION
 A terminal emulator using libvterm. Ctrl+Shift+C/V copy and paste, Shift+PageUp/Down
-scroll, Ctrl+plus/minus/0 change the font size, Ctrl+Shift+N opens a new window,
-Ctrl+Shift+W closes it. The context menu (right-click) has the same actions.
-Settings: \fI~/.config/fldesktop/term.ini\fR [Terminal] ColorScheme (dark, light, red, green, blue),
-FontSize, Scrollback.
+scroll, Ctrl+plus/minus/0 change the font size. The context menu (right-click) and the menu bar
+have the same actions.
+.SS Tabs
+A window holds several terminals in tabs. Ctrl+Shift+T opens a tab in the current directory,
+Ctrl+Shift+W closes the current tab (the last one closes the window), Ctrl+PageUp/PageDown and
+Alt+1...9 switch tabs and Ctrl+Shift+PageUp/PageDown move the current tab. In the tab bar a click
+on the cross or a middle click closes a tab, the \fB+\fR button or a double click opens one and the
+mouse wheel switches tabs. By default the tab bar shows when two or more tabs are open; View >
+Show Tabs shows it always or never. Ctrl+Shift+N opens a new window, Ctrl+Shift+Q closes it.
+.SS Menu bar and preferences
+View > Show Menu Bar (Ctrl+Shift+M) shows the File, Edit, View, Tabs, SSH and Help menus.
+Edit > Preferences (Ctrl+Shift+P) sets the color scheme, font size, scrollback length, background
+opacity, the menu bar and the tab bar. With an opacity below 100% the desktop shows through the
+terminal background (text and coloured cells stay opaque); this needs a Wayland session.
 .SS SSH
-The \fBSSH\fR submenu connects to remote hosts with \fBssh\fR(1) in a new window.
+The \fBSSH\fR submenu connects to remote hosts with \fBssh\fR(1) in a new tab.
 \fBConnect...\fR (Ctrl+Shift+S) asks for the host, user, port, identity file, jump host (\fB\-J\fR),
 port forwards (\fBL\fR \fIport:host:port\fR, \fBR\fR \fIport:host:port\fR, \fBD\fR \fIport\fR; separated by
 semicolons), extra ssh options, a remote command and a color scheme to tell the session apart;
@@ -49,6 +59,11 @@ Connect to a saved connection, an \fI~/.ssh/config\fR host, or \fIuser\fR@\fIhos
 \fB\-\-scheme NAME\fR
 Color scheme for this window.
 .SH FILES
+.TP
+\fI~/.config/fldesktop/term.ini\fR
+[Terminal] \fBColorScheme\fR (dark, light, red, green, blue), \fBFontSize\fR, \fBScrollback\fR,
+\fBOpacity\fR (0.2 to 1, background opacity), \fBShowMenuBar\fR (true/false) and \fBShowTabs\fR
+(auto, always, never). Written by the Preferences dialog and the View menu.
 .TP
 \fI~/.config/fldesktop/ssh.ini\fR
 Saved SSH connections, one [Profile \fIname\fR] section each.

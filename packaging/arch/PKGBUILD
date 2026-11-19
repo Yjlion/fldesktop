@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg libcups packagekit flatpak appstream mpv)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -88,13 +88,15 @@ package_fldesktop() {
               'fldesktop-packages: software updates through PackageKit'
               'fldesktop-flatpak: Flatpak app store'
               'fldesktop-firewall: firewall settings'
-              'fldesktop-video: video player')
+              'fldesktop-video: video player'
+              'fldesktop-webcam: camera app'
+              'fldesktop-archive: archive manager')
   arch=(any)
 }
 
 package_fldesktop-wm() {
   pkgdesc="fldesktop Wayland compositor (wlroots)"
-  depends=(wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman)
+  depends=(wlroots0.20 wayland libxkbcommon libinput pango cairo librsvg libdrm pixman)
   optdepends=('grim: screenshots' 'slurp: area screenshots' 'wl-clipboard: copy screenshots'
               'fldesktop-lock: screen locking' 'fldesktop-icon-theme: the default cursors')
   _stage
@@ -106,6 +108,8 @@ package_fldesktop-shell() {
   pkgdesc="fldesktop panel, launcher, desktop icons and session"
   depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm libcups xdg-user-dirs)
   optdepends=('pipewire: volume control' 'wireplumber: volume control'
+              'pipewire-pulse: sound for PulseAudio applications'
+              'pipewire-alsa: sound for ALSA applications'
               'networkmanager: network indicator and Wi-Fi passwords'
               'fldesktop-polkit-agent: administrator password prompts'
               'fldesktop-notifyd: notifications and their history'
@@ -158,7 +162,22 @@ _app() {
 
 package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); optdepends=("openssh: SSH connections" "sshfs: browse remote files"); _app term; }
 package_fldesktop-taskmgr() { pkgdesc="fldesktop task manager"; depends=(fltk); optdepends=("polkit: manage other users' processes"); _app taskmgr; }
-package_fldesktop-video() { pkgdesc="fldesktop video player"; depends=(fltk mpv libglvnd wayland); optdepends=("yt-dlp: play videos from web sites"); _app video; }
+package_fldesktop-archive() { pkgdesc="fldesktop archive manager"; depends=(fltk libarchive); _app archive; }
+
+package_fldesktop-webcam() {
+  pkgdesc="fldesktop camera app"
+  depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
+  optdepends=("gst-plugin-pipewire: cameras and microphones through PipeWire")
+  _app webcam
+}
+
+package_fldesktop-video() {
+  pkgdesc="fldesktop video player"
+  depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
+  optdepends=("gst-plugins-bad: more formats" "gst-libav: more codecs (FFmpeg)"
+              "gst-plugin-pipewire: sound through PipeWire" "yt-dlp: play videos from web sites")
+  _app video
+}
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
 package_fldesktop-files() { pkgdesc="fldesktop file manager"; depends=(fltk shared-mime-info); _app files; }
@@ -183,7 +202,8 @@ package_fldesktop-charmap() {
 package_fldesktop-mixer() {
   pkgdesc="fldesktop volume mixer for PipeWire"
   depends=(fltk libpipewire)
-  optdepends=('pipewire: sound server' 'wireplumber: session manager')
+  optdepends=('pipewire: sound server' 'wireplumber: session manager'
+              'pipewire-pulse: PulseAudio applications' 'pipewire-alsa: ALSA applications')
   _app mixer
 }
 package_fldesktop-polkit-agent() {
@@ -195,8 +215,9 @@ package_fldesktop-polkit-agent() {
 }
 package_fldesktop-network() {
   pkgdesc="fldesktop network settings for NetworkManager"
-  depends=(fltk glib2 libnm)
-  optdepends=('networkmanager: the network service' 'fldesktop-polkit-agent: password prompts')
+  depends=(fltk glib2 libnm openssl)
+  optdepends=('networkmanager: the network service' 'fldesktop-polkit-agent: password prompts'
+              'networkmanager-openvpn: OpenVPN connections' 'networkmanager-openconnect: OpenConnect VPNs')
   _app network
 }
 package_fldesktop-notifyd() {
@@ -232,13 +253,15 @@ package_fldesktop-bluetooth() {
 }
 package_fldesktop-packages() {
   pkgdesc="fldesktop software updates and package manager (PackageKit)"
-  depends=(fltk glib2 packagekit)
+  depends=(fltk glib2 packagekit appstream libjxl)
+  optdepends=('archlinux-appstream-data: application names and icons for packages')
   _app packages
   _install_files etc/xdg/autostart/fl-packages-updates.desktop
 }
 package_fldesktop-flatpak() {
   pkgdesc="fldesktop Flatpak app store"
   depends=(fltk glib2 flatpak appstream)
+  optdepends=('curl: icons of apps whose catalog has only a web address for them')
   _app flatpak
 }
 package_fldesktop-firewall() {

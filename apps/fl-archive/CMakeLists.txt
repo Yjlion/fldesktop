@@ -1,0 +1,8 @@
+pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+find_package(Threads REQUIRED)
+add_library(fl-archive-core STATIC archive_core.cpp)
+target_include_directories(fl-archive-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-archive-core PUBLIC PkgConfig::LIBARCHIVE)
+add_executable(fl-archive main.cpp)
+target_link_libraries(fl-archive PRIVATE fl-archive-core fld Threads::Threads)
+install(TARGETS fl-archive RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

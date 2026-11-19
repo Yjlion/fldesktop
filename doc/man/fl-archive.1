@@ -1,0 +1,48 @@
+.TH FL-ARCHIVE 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-archive \- archive manager
+.SH SYNOPSIS
+\fBfl-archive\fR [\fIARCHIVE\fR]
+.br
+\fBfl-archive\fR \fB\-\-extract\-here\fR|\fB\-\-extract\-ask\fR \fIARCHIVE\fR...
+.br
+\fBfl-archive\fR \fB\-\-extract\-to\fR \fIDIR\fR \fIARCHIVE\fR...
+.br
+\fBfl-archive\fR \fB\-\-compress\fR \fIFILE\fR...
+.SH DESCRIPTION
+Browses, extracts, creates and changes archives with \fBlibarchive\fR(3). It reads zip, 7z, tar
+(uncompressed or with gzip, xz, zstd, bzip2, lzip, lzma), rar, iso, cpio, cab, lha, deb, rpm, jar
+and single compressed files (\fIfile.txt.gz\fR); it creates and changes zip, 7z and tar archives.
+.PP
+The window lists the archive's folders and files with their size, type and date; double-click a
+folder to open it (Backspace goes up) and a file to open a copy with its program. \fBExtract\fR
+unpacks the selected items, or everything, into a folder you choose. \fBAdd Files\fR and \fBAdd
+Folder\fR put files into the current folder of the archive (files dropped on the window too) and
+\fBDelete\fR removes the selected items; the archive is rewritten in its format. With nothing open,
+\fBNew\fR or dropping files creates a new archive.
+.PP
+Zip archives can be encrypted with a password (AES-256); fl-archive asks for the password of
+encrypted archives. Entries with absolute paths or "../" are never extracted outside the target
+folder. When a file exists already, fl-archive asks whether to replace or skip it.
+.SH OPTIONS
+.TP
+\fB\-\-extract\-here\fR \fIARCHIVE\fR...
+Extract next to each archive: an archive with a single top-level folder (or a single file) is
+extracted as is, otherwise into a new folder named after the archive.
+.TP
+\fB\-\-extract\-to\fR \fIDIR\fR \fIARCHIVE\fR...
+Extract into \fIDIR\fR.
+.TP
+\fB\-\-extract\-ask\fR \fIARCHIVE\fR...
+Ask for the folder to extract into.
+.TP
+\fB\-\-compress\fR \fIFILE\fR...
+Ask for a name, format, folder and optional password and create an archive of the files.
+.PP
+The file manager \fBfl-files\fR(1) offers these as Extract Here, Extract To and Compress in its
+context menu.
+.SH KEYS
+Ctrl+N new archive, Ctrl+O open, Ctrl+E extract, Delete removes the selection, Enter opens the
+selected item, Backspace goes up a folder, Ctrl+Q quits.
+.SH SEE ALSO
+\fBbsdtar\fR(1), \fBfl-files\fR(1)

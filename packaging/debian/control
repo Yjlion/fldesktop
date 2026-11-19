@@ -14,6 +14,7 @@ Build-Depends: debhelper-compat (= 13),
                libinput-dev,
                libpango1.0-dev,
                libcairo2-dev,
+               librsvg2-dev,
                libdrm-dev,
                libpixman-1-dev,
                libvterm-dev,
@@ -21,12 +22,16 @@ Build-Depends: debhelper-compat (= 13),
                libpipewire-0.3-dev,
                libpolkit-agent-1-dev,
                libnm-dev,
+               libssl-dev,
                libfontconfig-dev,
                libcups2-dev,
                libpackagekit-glib2-dev,
                libflatpak-dev,
                libappstream-dev,
-               libmpv-dev,
+               libjxl-dev,
+               libarchive-dev,
+               libgstreamer1.0-dev,
+               libgstreamer-plugins-base1.0-dev,
                libpam0g-dev,
                libegl-dev,
                libgl-dev,
@@ -59,7 +64,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-lock (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
-            fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
+            fldesktop-webcam, fldesktop-archive, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
@@ -105,7 +110,7 @@ Description: fldesktop icon and cursor themes
 Package: fldesktop-shell
 Architecture: any
 Depends: fldesktop-wm (= ${binary:Version}), xdg-user-dirs, ${shlibs:Depends}, ${misc:Depends}
-Recommends: dbus-user-session, pipewire, wireplumber, network-manager,
+Recommends: dbus-user-session, pipewire-audio | pipewire, wireplumber, network-manager,
             fldesktop-polkit-agent, fldesktop-notifyd, xdg-desktop-portal-fl,
             bluez, cups
 Description: fldesktop panel, launcher and desktop
@@ -128,6 +133,7 @@ Description: FLTK greeter for greetd
 Package: fldesktop-term
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: x-terminal-emulator
 Recommends: openssh-client
 Suggests: sshfs
 Description: fldesktop terminal emulator
@@ -153,12 +159,23 @@ Description: fldesktop task manager
 
 Package: fldesktop-video
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, ${shlibs:Depends}, ${misc:Depends}
+Recommends: gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pipewire | gstreamer1.0-pulseaudio
 Suggests: yt-dlp
 Description: fldesktop video player
  fl-video plays video and audio files, playlists and network streams with
- libmpv: subtitles, audio and subtitle track selection, playback speed,
+ GStreamer: subtitles, audio and subtitle track selection, playback speed,
  screenshots, full screen and resuming where playback stopped.
+
+Package: fldesktop-webcam
+Architecture: any
+Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, ${shlibs:Depends}, ${misc:Depends}
+Recommends: gstreamer1.0-pipewire
+Description: fldesktop camera app
+ fl-webcam shows a live preview of a webcam and takes photos (JPEG or PNG)
+ or records videos with sound (WebM), with a self-timer, a choice of camera
+ and resolution, and a mirrored preview. Cameras are found through
+ Video4Linux and PipeWire.
 
 Package: fldesktop-view
 Architecture: any
@@ -216,7 +233,7 @@ Description: fldesktop character map
 Package: fldesktop-mixer
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: pipewire, wireplumber
+Recommends: pipewire-audio | pipewire, wireplumber
 Description: fldesktop volume mixer for PipeWire
  fl-mixer sets the volume of applications, output and input devices,
  chooses the default devices and ports and selects sound card profiles.
@@ -234,10 +251,12 @@ Package: fldesktop-network
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: network-manager, fldesktop-polkit-agent
+Suggests: network-manager-openvpn, network-manager-openconnect, network-manager-vpnc
 Description: fldesktop network settings for NetworkManager
  fl-network shows wired and Wi-Fi devices, connects to wireless networks
  and edits saved NetworkManager connections (IPv4/IPv6, DNS, Wi-Fi
- security).
+ security). It sets up WireGuard VPNs (keys, peers, wg-quick import) and
+ imports and edits the VPNs of NetworkManager's VPN plugins.
 
 Package: fldesktop-archive-keyring
 Architecture: all
@@ -277,6 +296,15 @@ Description: fldesktop printer settings
  changes their settings and defaults, prints test pages and shows and
  cancels print jobs.
 
+Package: fldesktop-archive
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop archive manager
+ fl-archive browses, extracts, creates and changes archives with
+ libarchive: zip (optionally encrypted), 7z and tar with gzip, xz, zstd or
+ bzip2; it also reads rar, iso, cpio, deb, rpm and single compressed files.
+ The file manager uses it for Extract Here, Extract To and Compress.
+
 Package: fldesktop-bluetooth
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -288,15 +316,19 @@ Description: fldesktop Bluetooth settings
 Package: fldesktop-packages
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, packagekit
+Recommends: appstream
 Description: fldesktop software updates and package manager
  fl-packages installs updates (with their changelogs and security
  advisories), searches, installs and removes packages, enables software
  sources and shows the history, through PackageKit. At login it checks for
- updates and announces them with a notification.
+ updates and announces them with a notification. Packages of desktop
+ applications show the application's name and icon from the AppStream
+ catalog.
 
 Package: fldesktop-flatpak
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, flatpak
+Recommends: curl
 Description: fldesktop Flatpak app store
  fl-flatpak finds, installs, updates and removes Flatpak apps from Flathub
  and other sources, installs .flatpakref files and edits the permissions

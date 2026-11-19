@@ -88,5 +88,26 @@ int main() {
   std::string bad = "nope";
   CHECK(demo.post_response(&bad, reply, err));
   CHECK_EQ(reply["type"].as_string(), std::string("error"));
+  CHECK_EQ(greetd_error_text(reply), std::string("Incorrect password. Please try again."));
+
+  // greetd passes PAM codes through: they become sentences
+  auto err_reply = [](const char *type, const char *desc) {
+    Json r = Json::object();
+    r.set("type", "error").set("error_type", type).set("description", desc);
+    return r;
+  };
+  CHECK_EQ(greetd_error_text(err_reply("auth_error", "pam_authenticate: AUTH_ERR")),
+           std::string("Incorrect password. Please try again."));
+  CHECK_EQ(greetd_error_text(err_reply("error", "pam_authenticate: MAXTRIES")),
+           std::string("Too many failed attempts. Wait a while and try again."));
+  CHECK_EQ(greetd_error_text(err_reply("error", "pam_acct_mgmt: NEW_AUTHTOK_REQD")),
+           std::string("Your password has expired. Ask an administrator to reset it."));
+  CHECK_EQ(greetd_error_text(err_reply("error", "pam_acct_mgmt: PERM_DENIED")),
+           std::string("This account is not allowed to log in here."));
+  CHECK_EQ(greetd_error_text(err_reply("error", "pam_open_session: SYSTEM_ERR")),
+           std::string("Login failed. Please try again."));
+  CHECK_EQ(greetd_error_text(err_reply("error", "session is already being created")),
+           std::string("Login failed: Session is already being created"));
+  CHECK_EQ(greetd_error_text(err_reply("error", "")), std::string("Login failed. Please try again."));
   return test_result("greetd");
 }

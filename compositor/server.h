@@ -131,6 +131,7 @@ struct flwm_config {
 	struct flwm_output_config outputs[FLWM_MAX_OUTPUT_CONFIGS];
 	int noutputs;
 	char *launcher_cmd;
+	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
 	char *lock_cmd;        /* default "fl-lock --locker" */
@@ -141,6 +142,17 @@ struct flwm_config {
 	char *autostart[FLWM_MAX_AUTOSTART];
 	int nautostart;
 	char *path; /* loaded file */
+};
+
+#define FLWM_SWITCHER_MAX 64
+
+/* the Alt+Tab switcher (switcher.c) */
+struct flwm_switcher {
+	struct wlr_scene_buffer *node; /* NULL when closed */
+	struct flwm_view *views[FLWM_SWITCHER_MAX];
+	int n, sel, cols;
+	struct flwm_output *output;
+	struct wlr_box box; /* layout coordinates */
 };
 
 struct flwm_server {
@@ -217,6 +229,7 @@ struct flwm_server {
 	bool cycling;
 	uint32_t cycle_modifier;
 	struct flwm_view *cycle_current;
+	struct flwm_switcher switcher;
 
 	struct flwm_layer_surface *focused_layer; /* exclusive keyboard focus */
 
@@ -379,6 +392,15 @@ char *config_default_path(void);
 /* output.c */
 void output_init(struct flwm_server *server);
 struct flwm_output *output_at(struct flwm_server *server, double lx, double ly);
+
+/* switcher.c */
+bool switcher_active(struct flwm_server *server);
+bool switcher_step(struct flwm_server *server, int dir);
+void switcher_step_row(struct flwm_server *server, int dir);
+void switcher_finish(struct flwm_server *server, bool commit);
+void switcher_click(struct flwm_server *server, double lx, double ly);
+void switcher_view_gone(struct flwm_server *server, struct flwm_view *view);
+void switcher_output_gone(struct flwm_server *server, struct flwm_output *o);
 struct flwm_output *output_primary(struct flwm_server *server);
 struct flwm_output *output_for_view(struct flwm_view *view);
 void output_arrange(struct flwm_output *output);

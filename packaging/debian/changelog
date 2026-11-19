@@ -7,5 +7,8 @@ fldesktop (0.1.0) unstable; urgency=medium
   * fl-notifyd, xdg-desktop-portal-fl, fl-printers (CUPS), fl-bluetooth
     (BlueZ), fl-packages (PackageKit), fl-flatpak and fl-firewall
     (firewalld); printer, Bluetooth and notification buttons in the panel.
+  * fl-archive (libarchive) and fl-webcam (GStreamer); fl-video plays with
+    GStreamer; fl-wm Alt+Tab window switcher; WireGuard and plugin VPNs in
+    the network settings; tabs, menu bar and transparency in fl-term.
 
  -- Yjlion <yjlion@users.noreply.github.com>  Sun, 15 Nov 2026 22:00:00 +0000

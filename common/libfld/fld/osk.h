@@ -56,9 +56,13 @@ const OskLayout *osk_layout(const std::string &id);
 class OskWidget : public Fl_Widget {
 public:
   OskWidget(int x, int y, int w, int h);
+  ~OskWidget() override;
   void sink(OskSink *s) { sink_ = s; }
   void layout(const std::string &id);
   const std::string &layout_id() const { return layout_; }
+  // show an enlarged copy of a held character key above it (default on)
+  void key_preview(bool on) { key_preview_ = on; }
+  bool key_preview() const { return key_preview_; }
   // called when the hide key is pressed / the layout key cycles layouts
   void (*on_hide)(OskWidget *, void *) = nullptr;
   void (*on_layout_changed)(OskWidget *, void *) = nullptr;
@@ -73,6 +77,13 @@ private:
   bool symbols_ = false, shift_ = false, caps_ = false, ctrl_ = false, alt_ = false;
   double last_shift_time_ = 0;
   int pressed_row_ = -1, pressed_col_ = -1;
+  // a tapped key stays lit for a moment after release: a quick touch tap
+  // delivers press and release together and would never show the press
+  int flash_row_ = -1, flash_col_ = -1;
+  bool key_preview_ = true;
+  static void flash_cb(void *data);
+  void press_feedback(int row, int col);
+  void draw_preview(int row, int col);
   const OskLayout &current() const;
   bool key_rect(int row, int col, int &x, int &y, int &w, int &h) const;
   bool key_at(int ex, int ey, int &row, int &col) const;

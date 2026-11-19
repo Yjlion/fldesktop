@@ -692,9 +692,49 @@ static void network_changed() {
                                     : "Connected to " + st.primary_id;
   for (auto &d : st.devices)
     if (d.connected && !d.ip4.empty()) { g_net_tip += "\n" + d.iface + ": " + d.ip4[0]; break; }
+  for (auto &c : st.connections)
+    if (c.active && (c.type == "vpn" || c.type == "wireguard")) g_net_tip += "\nVPN: " + c.id;
+  g_net_tip += "\nRight-click for VPN connections";
   P.network->tooltip(g_net_tip.c_str());
   if (!P.network->visible()) { P.network->show(); relayout(); }
   P.network->redraw();
+}
+
+// right-click on the network button: connect / disconnect VPNs
+static void network_menu() {
+  const nm::State &st = nm::Client::get().state();
+  static std::vector<std::string> labels, uuids;
+  labels.clear();
+  uuids.clear();
+  for (auto &c : st.connections) {
+    if (c.type != "vpn" && c.type != "wireguard") continue;
+    labels.push_back(fld::escape_at(c.id));
+    uuids.push_back(c.uuid);
+  }
+  std::vector<Fl_Menu_Item> m;
+  for (size_t i = 0; i < labels.size(); i++) {
+    const nm::Connection *c = st.connection(uuids[i]);
+    m.push_back({labels[i].c_str(), 0, nullptr, (void *)(long)(100 + i),
+                 FL_MENU_TOGGLE | (c && c->active ? FL_MENU_VALUE : 0)});
+  }
+  if (labels.empty()) m.push_back({"No VPN connections", 0, nullptr, nullptr, FL_MENU_INACTIVE});
+  m.back().flags |= FL_MENU_DIVIDER;
+  m.push_back({"Network Settings…", 0, nullptr, (void *)1});
+  m.push_back({nullptr});
+  const Fl_Menu_Item *r = m[0].popup(Fl::event_x(), Fl::event_y());
+  if (!r) return;
+  long id = (long)r->user_data();
+  if (id == 1) {
+    fld::spawn({"fl-network"});
+  } else if (id >= 100 && id - 100 < (long)uuids.size()) {
+    std::string uuid = uuids[(size_t)(id - 100)];
+    const nm::Connection *c = st.connection(uuid);
+    auto report = [](const std::string &err) {
+      if (!err.empty()) fl_alert("VPN: %s", fld::escape_at(err).c_str());
+    };
+    if (c && c->active) nm::Client::get().deactivate(uuid, report);
+    else nm::Client::get().activate(uuid, "", report);
+  }
 }
 #endif
 
@@ -872,7 +912,10 @@ int main(int argc, char **argv) {
     if (!fld::icon("input-keyboard", 20)) P.keyboard->copy_label("⌨");
   }
 #ifdef FLD_HAVE_NM
-  P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *, void *) { fld::spawn({"fl-network"}); });
+  P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *, void *) {
+    if (Fl::event_button() == FL_RIGHT_MOUSE) network_menu();
+    else fld::spawn({"fl-network"});
+  });
   P.network->hide();
 #endif
 #ifdef FLD_HAVE_BLUETOOTH

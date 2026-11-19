@@ -15,6 +15,8 @@ namespace fp {
 struct App {
   std::string id, name, summary, description, developer, license, version, homepage;
   std::string icon;            // a local icon file ("" = none)
+  std::string icon_stock;      // an icon theme name (AppStream stock icon)
+  std::string icon_url;        // a remote icon (Flathub media), downloaded on demand
   std::string ref;             // app/<id>/<arch>/<branch>
   std::string remote;          // remote it comes from (or is installed from)
   std::string installation;    // "system" / "user" when installed

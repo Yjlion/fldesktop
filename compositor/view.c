@@ -602,6 +602,11 @@ static void view_map(struct wl_listener *listener, void *data) {
 		view->xdg_toplevel->title ? view->xdg_toplevel->title : "(null)", view->role);
 	wlr_scene_node_set_enabled(&view->tree->node, true);
 	if (view->role != FLWM_ROLE_NORMAL) {
+		/* FLTK's borderless windows only redraw after a second configure
+		 * (Weston sends two). Shell windows that never get the focus (the
+		 * on-screen keyboard, notifications) would otherwise get just the
+		 * initial one and never show anything but their first frame. */
+		wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
 		view_reposition_shell(view);
 		if (view->role == FLWM_ROLE_PANEL || view->role == FLWM_ROLE_OSK) arrange_all(server);
 		if (view->role == FLWM_ROLE_LAUNCHER || view->role == FLWM_ROLE_POPUP) view_focus(view);
@@ -626,6 +631,7 @@ static void view_unmap(struct wl_listener *listener, void *data) {
 	wlr_log(WLR_DEBUG, "unmap: %s", view->xdg_toplevel->title ? view->xdg_toplevel->title : "?");
 	if (view == server->grabbed_view) input_reset_cursor_mode(server);
 	if (server->cycle_current == view) server->cycle_current = NULL;
+	switcher_view_gone(server, view);
 	if (server->hover_view == view) server->hover_view = NULL;
 	if (server->last_click_view == view) server->last_click_view = NULL;
 	bool was_focused = view_focused(server) == view;

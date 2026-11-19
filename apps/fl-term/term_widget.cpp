@@ -23,6 +23,13 @@
 
 #include "fld/theme.h"
 
+#if defined(FLTK_USE_WAYLAND)
+#include <FL/platform.H>
+#include <cairo.h>
+#endif
+
+static inline Fl_Color rgbc(const uint8_t c[3]) { return fl_rgb_color(c[0], c[1], c[2]); }
+
 // ---- construction ------------------------------------------------------------
 
 TermWidget::TermWidget(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
@@ -101,6 +108,35 @@ void TermWidget::set_colors(const TermColors &c) {
   }
   color(fl_rgb_color(c.bg[0], c.bg[1], c.bg[2]));
   redraw();
+}
+
+void TermWidget::set_opacity(double o) {
+  o = std::max(0.2, std::min(1.0, o));
+  if (o == opacity_) return;
+  opacity_ = o;
+  redraw();
+}
+
+// The default background: translucent when the opacity is below 1. FLTK
+// draws with cairo on Wayland; the window's buffer is ARGB, so painting with
+// the SOURCE operator leaves the alpha in the buffer for the compositor (the
+// window must not be an Fl_Double_Window there, see fl-term's main window).
+void TermWidget::fill_background(int X, int Y, int W, int H) {
+#if defined(FLTK_USE_WAYLAND)
+  cairo_t *cr = opacity_ < 0.999 && fl_wl_display() ? fl_wl_gc() : nullptr;
+  if (cr) {
+    cairo_save(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    // premultiplied by cairo: plain colour + alpha here
+    cairo_set_source_rgba(cr, colors_.bg[0] / 255.0, colors_.bg[1] / 255.0, colors_.bg[2] / 255.0, opacity_);
+    cairo_rectangle(cr, X, Y, W, H);
+    cairo_fill(cr);
+    cairo_restore(cr);
+    return;
+  }
+#endif
+  fl_color(rgbc(colors_.bg));
+  fl_rectf(X, Y, W, H);
 }
 
 void TermWidget::set_scrollbar(Fl_Scrollbar *sb) {
@@ -432,12 +468,10 @@ bool TermWidget::in_selection(long line, int col) const {
   return true;
 }
 
-static inline Fl_Color rgbc(const uint8_t c[3]) { return fl_rgb_color(c[0], c[1], c[2]); }
 
 void TermWidget::draw() {
   fl_push_clip(x(), y(), w(), h());
-  fl_color(rgbc(colors_.bg));
-  fl_rectf(x(), y(), w(), h());
+  fill_background(x(), y(), w(), h());
   const bool focused = Fl::focus() == this && window() && window()->visible();
   Fl_Font base = fld::mono_font();
 
@@ -638,9 +672,15 @@ int TermWidget::handle(int e) {
         switch (key) {
           case 'c': copy_selection(1); return 1;
           case 'v': paste(1); return 1;
-          case 'n': case 'w': case 's': return 0; // window shortcuts (new window, close, SSH)
+          // window shortcuts: new window / tab, close tab / window, SSH,
+          // menu bar, preferences, moving tabs
+          case 'n': case 't': case 'w': case 'q': case 's': case 'm': case 'p':
+          case FL_Page_Up: case FL_Page_Down:
+            return 0;
         }
       }
+      // Ctrl+PgUp / Ctrl+PgDn switch tabs
+      if (ctrl && !shift && !alt && (key == FL_Page_Up || key == FL_Page_Down)) return 0;
       if (shift && !ctrl && !alt) {
         if (key == FL_Page_Up) { scroll_to(scroll_ + rows_ - 1); return 1; }
         if (key == FL_Page_Down) { scroll_to(scroll_ - rows_ + 1); return 1; }

@@ -17,6 +17,8 @@ border_color=#7a7f87
 panel_position=bottom
 focus_follows_mouse=false
 launcher=fl-launcher
+# Alt+Tab shows a window switcher; false: each Alt+Tab raises the next window
+switcher=true
 
 [keyboard]
 # xkb names, e.g. layout=us,de  options=grp:alt_shift_toggle

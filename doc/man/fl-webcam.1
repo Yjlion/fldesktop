@@ -1,0 +1,34 @@
+.TH FL-WEBCAM 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-webcam \- take photos and record videos with a camera
+.SH SYNOPSIS
+\fBfl-webcam\fR [\fB\-\-software\fR] [\fB\-\-test\fR]
+.SH DESCRIPTION
+Shows a live preview of a camera and takes photos or records videos. Cameras are found with
+GStreamer's device monitor (Video4Linux and PipeWire cameras); the bar picks the camera and its
+resolution. \fBPhoto\fR and \fBVideo\fR switch the shutter button between taking a picture and
+starting / stopping a recording; the self-timer waits 3 or 10 seconds first (press the shutter
+again to cancel). Space or Enter press the shutter, F or F11 and a double click toggle full screen.
+.PP
+Photos are saved as JPEG (or PNG, from the menu) in \fI~/Pictures/Webcam\fR, videos as WebM
+(VP8 video, Opus sound from the default microphone) in \fI~/Videos/Webcam\fR. The microphone
+button turns the sound of recordings on or off. The preview is mirrored by default like a mirror;
+the saved photos and videos are not. The button with the thumbnail opens the last photo or video.
+.SH OPTIONS
+.TP
+\fB\-\-software\fR
+Draw the preview without OpenGL (also \fBFLD_VIDEO_SW=1\fR).
+.TP
+\fB\-\-test\fR
+Use a moving test pattern instead of a camera (also \fBFLD_WEBCAM_SOURCE=test\fR).
+.SH FILES
+.TP
+\fI~/.config/fldesktop/webcam.ini\fR
+[Webcam] Camera, Resolution, Mode (photo or video), Mirror, RecordSound, Timer (0, 3, 10) and
+PhotoFormat (jpg or png).
+.SH ENVIRONMENT
+.TP
+\fBFLD_WEBCAM_DEBUG\fR
+Print GStreamer error details.
+.SH SEE ALSO
+\fBfl-video\fR(1), \fBfl-view\fR(1)

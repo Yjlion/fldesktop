@@ -561,6 +561,34 @@ Settings read_settings(NMConnection *c) {
     std::string km = str(nm_setting_wireless_security_get_key_mgmt(sec));
     s.security = km == "sae" ? "sae" : km == "wpa-psk" ? "wpa-psk" : km.empty() || km == "none" ? "none" : km;
   }
+  if (NMSetting *ws = nm_connection_get_setting(c, NM_TYPE_SETTING_WIREGUARD)) {
+    NMSettingWireGuard *wg = NM_SETTING_WIREGUARD(ws);
+    s.wg_private_key = str(nm_setting_wireguard_get_private_key(wg));
+    s.wg_has_private_key = !s.wg_private_key.empty() ||
+                           nm_setting_wireguard_get_private_key_flags(wg) != NM_SETTING_SECRET_FLAG_NOT_REQUIRED;
+    s.wg_listen_port = nm_setting_wireguard_get_listen_port(wg);
+    s.wg_mtu = (int)nm_setting_wireguard_get_mtu(wg);
+    for (guint i = 0; i < nm_setting_wireguard_get_peers_len(wg); i++) {
+      NMWireGuardPeer *p = nm_setting_wireguard_get_peer(wg, i);
+      WgPeer peer;
+      peer.public_key = str(nm_wireguard_peer_get_public_key(p));
+      peer.preshared_key = str(nm_wireguard_peer_get_preshared_key(p));
+      peer.endpoint = str(nm_wireguard_peer_get_endpoint(p));
+      peer.keepalive = nm_wireguard_peer_get_persistent_keepalive(p);
+      for (guint k = 0; k < nm_wireguard_peer_get_allowed_ips_len(p); k++)
+        peer.allowed_ips += (k ? "," : "") + str(nm_wireguard_peer_get_allowed_ip(p, k, nullptr));
+      s.wg_peers.push_back(peer);
+    }
+  }
+  if (NMSettingVpn *vpn = nm_connection_get_setting_vpn(c)) {
+    s.vpn_service = str(nm_setting_vpn_get_service_type(vpn));
+    s.vpn_user = str(nm_setting_vpn_get_user_name(vpn));
+    guint n = 0;
+    const char **keys = nm_setting_vpn_get_data_keys(vpn, &n);
+    for (guint i = 0; keys && i < n; i++) s.vpn_data.push_back({keys[i], str(nm_setting_vpn_get_data_item(vpn, keys[i]))});
+    g_free(keys);
+    s.vpn_password = str(nm_setting_vpn_get_secret(vpn, "password"));
+  }
   if (NMSettingIPConfig *ip4 = nm_connection_get_setting_ip4_config(c)) {
     s.ip4_method = str(nm_setting_ip_config_get_method(ip4));
     s.ip4_addresses = ip_addresses(ip4);
@@ -671,6 +699,70 @@ std::string apply_settings(NMConnection *c, const Settings &s) {
     }
   } else if (s.type == NM_SETTING_WIRED_SETTING_NAME && !nm_connection_get_setting_wired(c)) {
     nm_connection_add_setting(c, nm_setting_wired_new());
+  } else if (s.type == NM_SETTING_WIREGUARD_SETTING_NAME) {
+    NMSetting *ws = nm_connection_get_setting(c, NM_TYPE_SETTING_WIREGUARD);
+    if (!ws) {
+      ws = nm_setting_wireguard_new();
+      nm_connection_add_setting(c, ws);
+    }
+    NMSettingWireGuard *wg = NM_SETTING_WIREGUARD(ws);
+    if (s.iface.empty()) return "A WireGuard connection needs an interface name (Device), e.g. wg0";
+    if (!s.wg_private_key.empty()) {
+      if (!valid_wg_key(s.wg_private_key)) return "The private key is not a WireGuard key";
+      g_object_set(wg, NM_SETTING_WIREGUARD_PRIVATE_KEY, s.wg_private_key.c_str(),
+                   NM_SETTING_WIREGUARD_PRIVATE_KEY_FLAGS, NM_SETTING_SECRET_FLAG_NONE, nullptr);
+    } else if (!s.wg_has_private_key) {
+      return "The WireGuard connection needs a private key";
+    }
+    g_object_set(wg, NM_SETTING_WIREGUARD_LISTEN_PORT, (guint)std::max(0, s.wg_listen_port), NM_SETTING_WIREGUARD_MTU,
+                 (guint)std::max(0, s.wg_mtu), nullptr);
+    nm_setting_wireguard_clear_peers(wg);
+    for (auto &p : s.wg_peers) {
+      if (!valid_wg_key(p.public_key)) return "A peer has no valid public key";
+      NMWireGuardPeer *peer = nm_wireguard_peer_new();
+      nm_wireguard_peer_set_public_key(peer, p.public_key.c_str(), TRUE);
+      if (!p.endpoint.empty()) nm_wireguard_peer_set_endpoint(peer, p.endpoint.c_str(), TRUE);
+      if (!p.preshared_key.empty()) {
+        if (!valid_wg_key(p.preshared_key)) {
+          nm_wireguard_peer_unref(peer);
+          return "A peer's pre-shared key is not valid";
+        }
+        nm_wireguard_peer_set_preshared_key(peer, p.preshared_key.c_str(), TRUE);
+        nm_wireguard_peer_set_preshared_key_flags(peer, NM_SETTING_SECRET_FLAG_NONE);
+      }
+      nm_wireguard_peer_set_persistent_keepalive(peer, (guint16)std::max(0, std::min(65535, p.keepalive)));
+      for (auto &a : split_list(p.allowed_ips)) nm_wireguard_peer_append_allowed_ip(peer, a.c_str(), TRUE);
+      GError *pe = nullptr;
+      if (!nm_wireguard_peer_is_valid(peer, TRUE, TRUE, &pe)) {
+        std::string m = std::string("Peer ") + p.public_key.substr(0, 8) + "…: " + (pe ? pe->message : "invalid");
+        if (pe) g_error_free(pe);
+        nm_wireguard_peer_unref(peer);
+        return m;
+      }
+      nm_setting_wireguard_append_peer(wg, peer);
+      nm_wireguard_peer_unref(peer);
+    }
+  } else if (s.type == NM_SETTING_VPN_SETTING_NAME) {
+    NMSettingVpn *vpn = nm_connection_get_setting_vpn(c);
+    if (!vpn) {
+      vpn = (NMSettingVpn *)nm_setting_vpn_new();
+      nm_connection_add_setting(c, NM_SETTING(vpn));
+    }
+    if (s.vpn_service.empty()) return "The VPN connection has no VPN type";
+    g_object_set(vpn, NM_SETTING_VPN_SERVICE_TYPE, s.vpn_service.c_str(), NM_SETTING_VPN_USER_NAME,
+                 s.vpn_user.empty() ? nullptr : s.vpn_user.c_str(), nullptr);
+    guint n = 0;
+    const char **keys = nm_setting_vpn_get_data_keys(vpn, &n);
+    std::vector<std::string> old;
+    for (guint i = 0; keys && i < n; i++) old.push_back(keys[i]);
+    g_free(keys);
+    for (auto &k : old) nm_setting_vpn_remove_data_item(vpn, k.c_str());
+    for (auto &kv : s.vpn_data) nm_setting_vpn_add_data_item(vpn, kv.first.c_str(), kv.second.c_str());
+    if (!s.vpn_password.empty()) {
+      // stored by NetworkManager for everyone who may use the connection
+      nm_setting_vpn_add_secret(vpn, "password", s.vpn_password.c_str());
+      nm_setting_vpn_add_data_item(vpn, "password-flags", "0");
+    }
   }
   std::string e = apply_ip(c, false, s.ip4_method, s.ip4_addresses, s.ip4_gateway, s.ip4_dns, s.ip4_ignore_auto_dns);
   if (!e.empty()) return e;
@@ -682,11 +774,186 @@ std::string apply_settings(NMConnection *c, const Settings &s) {
 void Client::get_settings(const std::string &uuid, std::function<void(const Settings &, const std::string &)> cb) {
   fld::glib_call([uuid, cb] {
     NMRemoteConnection *c = find_conn(uuid);
-    Settings s;
-    std::string err;
-    if (c) s = read_settings(NM_CONNECTION(c));
-    else err = "connection not found";
-    fld::ui_call([cb, s, err] { cb(s, err); });
+    if (!c) {
+      fld::ui_call([cb] { cb(Settings(), "connection not found"); });
+      return;
+    }
+    // WireGuard keys and VPN passwords are secrets: fetch them so the editor
+    // shows (and saves) them
+    const char *secret_setting = nullptr;
+    if (nm_connection_get_setting(NM_CONNECTION(c), NM_TYPE_SETTING_WIREGUARD)) secret_setting = NM_SETTING_WIREGUARD_SETTING_NAME;
+    else if (nm_connection_get_setting_vpn(NM_CONNECTION(c))) secret_setting = NM_SETTING_VPN_SETTING_NAME;
+    if (!secret_setting) {
+      Settings s = read_settings(NM_CONNECTION(c));
+      fld::ui_call([cb, s] { cb(s, ""); });
+      return;
+    }
+    struct Req {
+      std::function<void(const Settings &, const std::string &)> cb;
+      std::string setting;
+    };
+    nm_remote_connection_get_secrets_async(
+        c, secret_setting, nullptr,
+        [](GObject *src, GAsyncResult *res, gpointer data) {
+          Req *r = (Req *)data;
+          NMConnection *conn = NM_CONNECTION(src);
+          GError *e = nullptr;
+          GVariant *secrets = nm_remote_connection_get_secrets_finish(NM_REMOTE_CONNECTION(src), res, &e);
+          Settings s;
+          if (secrets) {
+            NMConnection *copy = nm_simple_connection_new_clone(conn);
+            nm_connection_update_secrets(copy, r->setting.c_str(), secrets, nullptr);
+            s = read_settings(copy);
+            g_object_unref(copy);
+            g_variant_unref(secrets);
+          } else {
+            // not allowed to read them: they stay as they are when saving
+            s = read_settings(conn);
+          }
+          g_clear_error(&e);
+          auto cb = r->cb;
+          delete r;
+          fld::ui_call([cb, s] { cb(s, ""); });
+        },
+        new Req{cb, secret_setting});
+  });
+}
+
+std::vector<VpnPlugin> vpn_plugins() {
+  std::vector<VpnPlugin> v;
+  GSList *list = nm_vpn_plugin_info_list_load();
+  for (GSList *l = list; l; l = l->next) {
+    NMVpnPluginInfo *info = NM_VPN_PLUGIN_INFO(l->data);
+    VpnPlugin p;
+    p.service = str(nm_vpn_plugin_info_get_service(info));
+    p.name = str(nm_vpn_plugin_info_get_name(info));
+    if (!p.service.empty()) v.push_back(p);
+  }
+  g_slist_free_full(list, g_object_unref);
+  return v;
+}
+
+namespace {
+
+// adds a connection (normalized), reports err / uuid in the FLTK thread
+void add_new_connection(NMConnection *c, std::function<void(const std::string &, const std::string &)> done) {
+  GError *ve = nullptr;
+  if (!nm_connection_normalize(c, nullptr, nullptr, &ve)) {
+    std::string err = ve ? ve->message : "invalid connection";
+    if (ve) g_error_free(ve);
+    g_object_unref(c);
+    fld::ui_call([done, err] { done(err, ""); });
+    return;
+  }
+  std::string uuid = str(nm_connection_get_uuid(c));
+  GVariant *dict = nm_connection_to_dbus(c, NM_CONNECTION_SERIALIZE_ALL);
+  g_object_unref(c);
+  struct Req {
+    std::function<void(const std::string &, const std::string &)> done;
+    std::string uuid;
+  };
+  nm_client_add_connection2(g_client, dict, NM_SETTINGS_ADD_CONNECTION2_FLAG_TO_DISK, nullptr, TRUE, nullptr,
+                            [](GObject *src, GAsyncResult *res, gpointer data) {
+                              Req *r = (Req *)data;
+                              GError *e = nullptr;
+                              NMRemoteConnection *rc = nm_client_add_connection2_finish(NM_CLIENT(src), res, nullptr, &e);
+                              if (rc) g_object_unref(rc);
+                              std::string err = e ? e->message : "";
+                              g_clear_error(&e);
+                              auto done = r->done;
+                              std::string uuid = r->uuid;
+                              delete r;
+                              fld::ui_call([done, err, uuid] { done(err, err.empty() ? uuid : ""); });
+                            },
+                            new Req{done, uuid});
+}
+
+std::string file_text(const std::string &path) {
+  gchar *data = nullptr;
+  gsize len = 0;
+  std::string s;
+  if (g_file_get_contents(path.c_str(), &data, &len, nullptr)) s.assign(data, len);
+  g_free(data);
+  return s;
+}
+
+} // namespace
+
+void Client::import_vpn(const std::string &path,
+                        std::function<void(const std::string &err, const std::string &uuid)> done) {
+  fld::glib_call([path, done] {
+    if (!g_client) {
+      fld::ui_call([done] { done("NetworkManager is not running", ""); });
+      return;
+    }
+    std::string text = file_text(path);
+    // WireGuard (wg-quick) files
+    if (text.find("[Interface]") != std::string::npos) {
+      WgConfig wc;
+      std::string err;
+      if (!parse_wg_quick(text, wc, err)) {
+        fld::ui_call([done, err] { done("Not a usable WireGuard file: " + err, ""); });
+        return;
+      }
+      Settings s;
+      s.type = NM_SETTING_WIREGUARD_SETTING_NAME;
+      s.iface = wg_iface_name(path);
+      s.id = s.iface;
+      s.wg_private_key = wc.private_key;
+      s.wg_listen_port = wc.listen_port;
+      s.wg_mtu = wc.mtu;
+      s.wg_peers = wc.peers;
+      for (auto &a : wc.addresses) {
+        std::string &dst = is_ipv6(a) ? s.ip6_addresses : s.ip4_addresses;
+        dst += (dst.empty() ? "" : "\n") + a;
+      }
+      for (auto &d : wc.dns) {
+        std::string &dst = is_ipv6(d) ? s.ip6_dns : s.ip4_dns;
+        dst += (dst.empty() ? "" : " ") + d;
+      }
+      s.ip4_method = s.ip4_addresses.empty() ? "disabled" : "manual";
+      s.ip6_method = s.ip6_addresses.empty() ? "disabled" : "manual";
+      // the VPN's DNS servers take over while it is up
+      s.ip4_ignore_auto_dns = !s.ip4_dns.empty();
+      s.ip6_ignore_auto_dns = !s.ip6_dns.empty();
+      s.autoconnect = false;
+      NMConnection *c = nm_simple_connection_new();
+      err = apply_settings(c, s);
+      if (!err.empty()) {
+        g_object_unref(c);
+        fld::ui_call([done, err] { done(err, ""); });
+        return;
+      }
+      add_new_connection(c, done);
+      return;
+    }
+    // the installed VPN plugins' importers (.ovpn, .pcf, ...)
+    std::string last_err = "No installed VPN plugin can read this file";
+    GSList *list = nm_vpn_plugin_info_list_load();
+    NMConnection *imported = nullptr;
+    for (GSList *l = list; l && !imported; l = l->next) {
+      GError *e = nullptr;
+      NMVpnEditorPlugin *ed = nm_vpn_plugin_info_load_editor_plugin(NM_VPN_PLUGIN_INFO(l->data), &e);
+      if (!ed) {
+        g_clear_error(&e);
+        continue;
+      }
+      imported = nm_vpn_editor_plugin_import(ed, path.c_str(), &e);
+      if (!imported && e) last_err = e->message;
+      g_clear_error(&e);
+    }
+    g_slist_free_full(list, g_object_unref);
+    if (!imported) {
+      fld::ui_call([done, last_err] { done(last_err, ""); });
+      return;
+    }
+    NMSettingConnection *sc = nm_connection_get_setting_connection(imported);
+    if (sc && !nm_setting_connection_get_id(sc)) {
+      gchar *base = g_path_get_basename(path.c_str());
+      g_object_set(sc, NM_SETTING_CONNECTION_ID, base, nullptr);
+      g_free(base);
+    }
+    add_new_connection(imported, done);
   });
 }
 
@@ -760,6 +1027,44 @@ void agent_get_secrets(NMSecretAgentOld *agent, NMConnection *connection, const 
   NMSettingWirelessSecurity *sec = nm_connection_get_setting_wireless_security(connection);
   std::string km = sec ? str(nm_setting_wireless_security_get_key_mgmt(sec)) : "";
   bool interactive = flags & NM_SECRET_AGENT_GET_SECRETS_FLAG_ALLOW_INTERACTION;
+  // VPN plugins: ask for the password (the secret named by the hints)
+  if (setting_name && !strcmp(setting_name, NM_SETTING_VPN_SETTING_NAME) && interactive && g_ask) {
+    std::string key = "password";
+    for (int i = 0; hints && hints[i]; i++)
+      if (strncmp(hints[i], "x-", 2)) {
+        key = hints[i];
+        break;
+      }
+    std::string name = "VPN " + str(nm_connection_get_id(connection));
+    g_object_ref(agent);
+    g_object_ref(connection);
+    AskFn ask = g_ask;
+    fld::ui_call([ask, name, key, agent, connection, callback, callback_data] {
+      ask(name, [key, agent, connection, callback, callback_data](const std::string &password) {
+        fld::glib_call([key, agent, connection, callback, callback_data, password] {
+          if (password.empty()) {
+            GError *e = g_error_new_literal(secret_agent_error(), NM_SECRET_AGENT_ERROR_USER_CANCELED, "cancelled");
+            callback(agent, connection, nullptr, e, callback_data);
+            g_error_free(e);
+          } else {
+            GVariantBuilder sec_b, inner, outer;
+            g_variant_builder_init(&sec_b, G_VARIANT_TYPE("a{ss}"));
+            g_variant_builder_add(&sec_b, "{ss}", key.c_str(), password.c_str());
+            g_variant_builder_init(&inner, G_VARIANT_TYPE("a{sv}"));
+            g_variant_builder_add(&inner, "{sv}", NM_SETTING_VPN_SECRETS, g_variant_builder_end(&sec_b));
+            g_variant_builder_init(&outer, G_VARIANT_TYPE("a{sa{sv}}"));
+            g_variant_builder_add(&outer, "{sa{sv}}", NM_SETTING_VPN_SETTING_NAME, &inner);
+            GVariant *secrets = g_variant_ref_sink(g_variant_builder_end(&outer));
+            callback(agent, connection, secrets, nullptr, callback_data);
+            g_variant_unref(secrets);
+          }
+          g_object_unref(connection);
+          g_object_unref(agent);
+        });
+      });
+    });
+    return;
+  }
   if (!wifi || !(km == "wpa-psk" || km == "sae") || !interactive || !g_ask) {
     GError *e = g_error_new_literal(secret_agent_error(), NM_SECRET_AGENT_ERROR_NO_SECRETS, "no secrets");
     callback(agent, connection, nullptr, e, callback_data);

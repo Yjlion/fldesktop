@@ -154,6 +154,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->cursor_size = 24;
 	c->default_scale = 1.0f;
 	c->launcher_cmd = strdup("fl-launcher");
+	c->switcher = true;
 	c->lock_color = 0xff1e1f22;
 
 	add_binding(c, "Super+Return", "exec fl-term");
@@ -234,6 +235,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 			if (!strcmp(k, "panel_position")) c->panel_top = !strcasecmp(v, "top");
 			else if (!strcmp(k, "focus_follows_mouse")) c->focus_follows_mouse = parse_bool(v);
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
+			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
 		} else if (!strcasecmp(section, "keyboard")) {
 			if (!strcmp(k, "layout")) set_str(&c->kb_layout, v);
 			else if (!strcmp(k, "variant")) set_str(&c->kb_variant, v);

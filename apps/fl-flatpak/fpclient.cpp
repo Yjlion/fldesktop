@@ -84,19 +84,36 @@ void parse_appstream(const std::string &remote, GFile *dir, std::map<std::string
       for (guint j = 0; j < cats->len; j++) a.categories.push_back((const char *)g_ptr_array_index(cats, j));
     if (AsReleaseList *rl = as_component_get_releases_plain(c))
       if (as_release_list_len(rl) > 0) a.version = g2s(as_release_get_version(as_release_list_index(rl, 0)));
-    // cached icons: icons/<size>x<size>/<name>, prefer 64 then 128
+    // cached icons: icons/<size>x<size>[@<scale>]/<name> (or icons/flatpak/...);
+    // the one closest to 128 px (sharp at 64 and on HiDPI), remote icons
+    // and theme names as fallbacks
     GPtrArray *icons = as_component_get_icons(c);
-    int best = 0;
+    int best = -1, best_remote = -1;
     for (guint j = 0; icons && j < icons->len; j++) {
       AsIcon *ic = AS_ICON(g_ptr_array_index(icons, j));
-      if (as_icon_get_kind(ic) != AS_ICON_KIND_CACHED) continue;
-      int w = (int)as_icon_get_width(ic);
-      int score = w == 64 ? 3 : w == 128 ? 2 : 1;
-      if (score <= best) continue;
-      std::string p = base + "/icons/" + std::to_string(w) + "x" + std::to_string(w) + "/" + g2s(as_icon_get_name(ic));
-      if (fld::file_exists(p)) {
-        a.icon = p;
-        best = score;
+      AsIconKind kind = as_icon_get_kind(ic);
+      int w = (int)as_icon_get_width(ic), scale = (int)std::max(1u, as_icon_get_scale(ic));
+      int px = w * scale;
+      int score = px >= 128 ? px - 128 : (128 - px) * 2;
+      if (kind == AS_ICON_KIND_STOCK) {
+        if (a.icon_stock.empty()) a.icon_stock = g2s(as_icon_get_name(ic));
+      } else if (kind == AS_ICON_KIND_REMOTE) {
+        if (best_remote < 0 || score < best_remote) {
+          best_remote = score;
+          a.icon_url = g2s(as_icon_get_url(ic));
+        }
+      } else if (kind == AS_ICON_KIND_CACHED || kind == AS_ICON_KIND_LOCAL) {
+        if (best >= 0 && score >= best) continue;
+        std::string name = g2s(as_icon_get_name(ic));
+        std::string file = g2s(as_icon_get_filename(ic));
+        std::string dir = std::to_string(w) + "x" + std::to_string(w) + (scale > 1 ? "@" + std::to_string(scale) : "");
+        for (const std::string &p : {file, base + "/icons/" + dir + "/" + name, base + "/icons/flatpak/" + dir + "/" + name}) {
+          if (!p.empty() && p[0] == '/' && fld::file_exists(p)) {
+            a.icon = p;
+            best = score;
+            break;
+          }
+        }
       }
     }
     if (a.name.empty()) a.name = a.id;
@@ -310,7 +327,7 @@ void load_catalog(bool refresh, std::function<void(const Catalog &)> done, Progr
         a.installed_size = flatpak_installed_ref_get_installed_size(r);
         // the exported icon of an installed app
         std::string dep = g2s(flatpak_installed_ref_get_deploy_dir(r));
-        for (const char *sz : {"64x64", "128x128", "scalable"}) {
+        for (const char *sz : {"128x128", "scalable", "256x256", "64x64", "512x512", "48x48"}) {
           std::string p = dep + "/export/share/icons/hicolor/" + sz + "/apps/" + a.id +
                           (std::string(sz) == "scalable" ? ".svg" : ".png");
           if (a.icon.empty() && fld::file_exists(p)) a.icon = p;
@@ -379,6 +396,8 @@ void load_catalog(bool refresh, std::function<void(const Catalog &)> done, Progr
       a.ref = kv.second.ref;
       a.installed_size = kv.second.installed_size;
       if (a.icon.empty()) a.icon = kv.second.icon;
+      if (a.icon_stock.empty()) a.icon_stock = kv.second.icon_stock;
+      if (a.icon_url.empty()) a.icon_url = kv.second.icon_url;
     }
     for (auto &kv : apps) cat.apps.push_back(kv.second);
     for (auto &r : runtimes) cat.apps.push_back(r);

@@ -9,13 +9,22 @@ addresses and speed. Wi-Fi devices list the networks in range with their
 signal and security; connect with a password, or to a hidden network.
 .PP
 \fBAll Connections\fR lists the saved connections: activate, deactivate,
-delete, or add a wired or Wi-Fi connection. The editor covers the general
+delete, or add a wired, Wi-Fi or VPN connection (\fBAdd\fR). The editor covers the general
 settings (name, connect automatically, available to all users), Wi-Fi
 (SSID, security, password) and IPv4/IPv6 (automatic, manual or disabled;
 addresses, gateway, DNS servers). Changes that need privileges are
 authorized through polkit, see \fBfl-polkit-agent\fR(1).
+.SS VPN
+\fBWireGuard\fR connections are built in: the editor's WireGuard tab has the private key (with
+\fBGenerate\fR for a new key pair and the public key to give to the other side), the listen port,
+the MTU and the peers (public key, endpoint, allowed IPs, pre-shared key, keepalive); the
+addresses and DNS servers are on the IPv4 and IPv6 tabs. \fBImport VPN from File\fR reads
+WireGuard \fIwg-quick\fR files (\fI*.conf\fR) and, through the installed NetworkManager VPN
+plugins (e.g. network-manager-openvpn), their formats such as \fI.ovpn\fR. For a plugin VPN the
+editor shows the user name, password and the plugin's settings as \fIkey = value\fR lines.
 .PP
-The network indicator of \fBfl-panel\fR(1) opens this program, and the panel
-asks for Wi-Fi passwords that NetworkManager needs (a secret agent).
+The network indicator of \fBfl-panel\fR(1) opens this program; right-clicking it connects and
+disconnects VPNs. The panel asks for the Wi-Fi and VPN passwords that NetworkManager needs (a
+secret agent).
 .SH SEE ALSO
 \fBnmcli\fR(1), \fBNetworkManager\fR(8), \fBfl-settings\fR(1)

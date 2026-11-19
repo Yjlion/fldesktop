@@ -8,6 +8,7 @@
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Browser.H>
+#include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
@@ -28,10 +29,14 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <thread>
 #include <string>
 #include <vector>
 
 #include "fld/icons.h"
+#ifdef HAVE_APPSTREAM
+#include "app_icons.h"
+#endif
 #include "fld/ini.h"
 #include "fld/notify.h"
 #include "fld/theme.h"
@@ -207,6 +212,79 @@ void apply(Action a, const std::vector<std::string> &ids, const std::string &tit
 
 // ---- main window -------------------------------------------------------------------------
 
+
+// ---- application icons (AppStream) ---------------------------------------------------
+
+#ifdef HAVE_APPSTREAM
+static std::map<std::string, appicons::AppInfo> g_apps; // pkgname -> app
+static bool g_apps_ready = false;
+#endif
+
+static const char *app_name(const std::string &pkg) {
+#ifdef HAVE_APPSTREAM
+  auto it = g_apps.find(pkg);
+  if (it != g_apps.end() && !it->second.name.empty()) return it->second.name.c_str();
+#endif
+  (void)pkg;
+  return nullptr;
+}
+
+// The package's application icon at `size`, or the generic package icon.
+static Fl_Image *package_icon(const std::string &pkg, int size) {
+  static std::map<std::string, Fl_Image *> cache;
+  std::string key = pkg + "@" + std::to_string(size);
+  auto c = cache.find(key);
+  if (c != cache.end()) return c->second;
+  Fl_Image *img = nullptr;
+#ifdef HAVE_APPSTREAM
+  auto it = g_apps.find(pkg);
+  if (it != g_apps.end()) {
+    const appicons::AppInfo &a = it->second;
+    if (!a.stock.empty()) img = fld::icon(a.stock, size);
+    if (!img && !a.icon_file.empty()) {
+      std::unique_ptr<Fl_Image> full;
+      if (fld::ends_with(a.icon_file, ".jxl")) {
+        int w = 0, h = 0;
+        std::vector<uint8_t> rgba;
+        if (appicons::decode_jxl(a.icon_file, w, h, rgba)) {
+          Fl_RGB_Image tmp(rgba.data(), w, h, 4);
+          full.reset(tmp.copy()); // owns its pixels
+        }
+      } else {
+        full.reset(fld::load_image(a.icon_file));
+      }
+      if (full && full->w() > 0 && full->h() > 0) img = full->copy(size, size);
+    }
+  }
+#endif
+  if (!img) {
+    // the generic icon; not remembered while the catalog is still loading
+    img = fld::icon_first({"package-x-generic", "application-x-executable"}, size);
+#ifdef HAVE_APPSTREAM
+    if (!g_apps_ready) return img;
+#endif
+  }
+  cache[key] = img;
+  return img;
+}
+
+// Fl_Check_Browser with the package icon in front of each line ("name ...")
+class IconCheckBrowser : public Fl_Check_Browser {
+public:
+  using Fl_Check_Browser::Fl_Check_Browser;
+protected:
+  int item_height(void *item) const override { return std::max(Fl_Check_Browser::item_height(item), 22); }
+  void item_draw(void *item, int X, int Y, int W, int H) const override {
+    std::string t = item_text(item);
+    std::string name = t.substr(0, t.find(' '));
+    Fl_Check_Browser::item_draw(item, X, Y, W, H);
+    // the check box is drawn first, at the left; the icon goes right after
+    // it, over the start of the text, which is indented with spaces
+    int cb = textsize() + 4;
+    if (Fl_Image *ic = package_icon(name, 18)) ic->draw(X + cb + 4, Y + (H - ic->h()) / 2);
+  }
+};
+
 class MainWindow : public Fl_Double_Window {
 public:
   Fl_Tabs *tabs;
@@ -226,6 +304,7 @@ public:
   Fl_Text_Display *sw_detail;
   Fl_Text_Buffer *sw_buf;
   Fl_Button *sw_action;
+  Fl_Box *sw_icon = nullptr, *sw_name = nullptr; // the selected package's application
   std::vector<pk::Package> results;
   // details tabs of the selected package
   Fl_Tabs *info_tabs;
@@ -262,7 +341,7 @@ public:
     upd_check->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->check_updates(true); }, this);
     upd_install = new Fl_Button(W - 146, 48, 126, 28, "Install Updates");
     upd_install->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->install_updates(); }, this);
-    upd_list = new Fl_Check_Browser(20, 84, W - 40, (H - 120) / 2);
+    upd_list = new IconCheckBrowser(20, 84, W - 40, (H - 120) / 2);
     upd_list->textsize(13);
     upd_list->when(FL_WHEN_CHANGED);
     upd_list->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->update_selected(); }, this);
@@ -348,6 +427,11 @@ public:
       info_tabs->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->info_tab_changed(); }, this);
       info_tabs->resizable(tab_details);
     }
+    sw_icon = new Fl_Box(W - 152, dy + 40, 132, 72);
+    sw_name = new Fl_Box(W - 152, dy + 114, 132, 40);
+    sw_name->align(FL_ALIGN_INSIDE | FL_ALIGN_TOP | FL_ALIGN_WRAP);
+    sw_name->labelfont(FL_HELVETICA_BOLD);
+    sw_name->labelsize(13);
     sw_action = new Fl_Button(W - 152, dy, 132, 30, "Install");
     sw_action->deactivate();
     sw_action->callback([](Fl_Widget *, void *d) { ((MainWindow *)d)->install_or_remove(); }, this);
@@ -422,9 +506,12 @@ public:
     for (auto &p : updates) {
       if (p.info == 9) security++;
       std::string kind = pk::info_text(p.info);
-      std::string line = p.name + "  " + p.version + (p.repo.empty() ? "" : "  (" + p.repo + ")") +
+      const char *an = app_name(p.name);
+      std::string line = p.name + "  " + p.version + (an ? std::string("  ") + an : "") +
+                         (p.repo.empty() ? "" : "  (" + p.repo + ")") +
                          (kind == "Update" || kind.empty() ? "" : "  — " + kind);
-      upd_list->add(line.c_str(), 1);
+      // room for the icon IconCheckBrowser draws after the check box
+      upd_list->add(("      " + line).c_str(), 1);
     }
     std::string s = updates.empty() ? "The system is up to date"
                                     : std::to_string(updates.size()) + (updates.size() == 1 ? " update" : " updates") +
@@ -483,10 +570,11 @@ public:
     std::sort(results.begin(), results.end(), [](const pk::Package &a, const pk::Package &b) { return a.name < b.name; });
     sw_list->clear();
     for (auto &p : results) {
-      std::string line = p.name + "\t" + p.version + "\t" + (p.installed() ? "installed" : p.repo) + "\t" + p.summary;
+      const char *an = app_name(p.name);
+      std::string line = p.name + "\t" + p.version + "\t" + (p.installed() ? "installed" : p.repo) + "\t" +
+                         (an ? std::string(an) + " – " : "") + p.summary;
       sw_list->add(line.c_str());
-      sw_list->icon(sw_list->size(),
-                    fld::icon_first({p.installed() ? "package-x-generic" : "package-x-generic", "application-x-executable"}, 16));
+      sw_list->icon(sw_list->size(), package_icon(p.name, 20));
     }
     set_status(e ? e.text : std::to_string(results.size()) + " packages");
     sw_buf->text("");
@@ -506,8 +594,32 @@ public:
 
   // ---- files and dependencies of the selected package ----
 
+  // the AppStream catalog arrived: icons for what is listed
+  void refresh_icons() {
+    for (size_t i = 0; i < results.size() && (int)i < sw_list->size(); i++) {
+      const pk::Package &p = results[i];
+      const char *an = app_name(p.name);
+      if (an) {
+        std::string line = p.name + "\t" + p.version + "\t" + (p.installed() ? "installed" : p.repo) + "\t" + an +
+                           " – " + p.summary;
+        sw_list->text((int)i + 1, line.c_str());
+      }
+      sw_list->icon((int)i + 1, package_icon(p.name, 20));
+    }
+    if (!info_pkg.name.empty()) {
+      sw_icon->image(package_icon(info_pkg.name, 64));
+      const char *an = app_name(info_pkg.name);
+      sw_name->copy_label(fld::escape_at(an ? an : info_pkg.name).c_str());
+    }
+    redraw();
+  }
+
   void clear_info() {
     info_job.cancel();
+    if (sw_icon) {
+      sw_icon->image(nullptr);
+      sw_name->label(nullptr);
+    }
     info_pkg = pk::Package();
     files.clear();
     deps.clear();
@@ -629,6 +741,10 @@ public:
     const pk::Package p = results[i];
     clear_info();
     info_pkg = p;
+    sw_icon->image(package_icon(p.name, 64));
+    const char *an = app_name(p.name);
+    sw_name->copy_label(fld::escape_at(an ? an : p.name).c_str());
+    sw_icon->parent()->redraw();
     info_tab_changed();  // a files / dependencies tab that is open loads now
     sw_action->label(p.installed() ? "Remove" : "Install");
     sw_action->activate();
@@ -840,6 +956,7 @@ int main(int argc, char **argv) {
     else files.push_back(fld::abs_path(a));
   }
   fld::init_app("fl-packages", argc, argv);
+  Fl_Image::RGB_scaling(FL_RGB_SCALING_BILINEAR); // smooth scaled app icons
   Fl::lock();
   if (check) return check_updates_daemon(now);
   if (!pk::available()) {
@@ -859,6 +976,20 @@ int main(int argc, char **argv) {
     return ok ? 0 : 1;
   }
   MainWindow *w = new MainWindow;
+#ifdef HAVE_APPSTREAM
+  // application names and icons: the catalog takes a moment to read
+  static MainWindow *s_win = w;
+  std::thread([] {
+    auto *apps = new std::map<std::string, appicons::AppInfo>(appicons::load_catalog());
+    Fl::awake([](void *d) {
+      auto *a = static_cast<std::map<std::string, appicons::AppInfo> *>(d);
+      g_apps.swap(*a);
+      delete a;
+      g_apps_ready = true;
+      s_win->refresh_icons();
+    }, apps);
+  }).detach();
+#endif
   w->show(); // not show(argc, argv): it resets the theme colors
   w->set_status(pk::backend_name());
   w->check_updates(false);

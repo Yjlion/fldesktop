@@ -160,6 +160,29 @@ OskWidget::OskWidget(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
   clear_visible_focus();
 }
 
+OskWidget::~OskWidget() {
+  Fl::remove_timeout(flash_cb, this);
+  Fl::remove_timeout(repeat_cb, this);
+}
+
+static const double FLASH_TIME = 0.12;
+
+void OskWidget::flash_cb(void *data) {
+  OskWidget *o = static_cast<OskWidget *>(data);
+  o->flash_row_ = o->flash_col_ = -1;
+  o->redraw();
+}
+
+// show the press right away: redraw and flush now instead of waiting for the
+// event loop, which may already hold the release of a quick tap
+void OskWidget::press_feedback(int row, int col) {
+  Fl::remove_timeout(flash_cb, this);
+  flash_row_ = row;
+  flash_col_ = col;
+  redraw();
+  Fl::flush();
+}
+
 const OskLayout &OskWidget::current() const {
   const OskLayout *l = osk_layout(symbols_ ? "symbols" : layout_);
   return l ? *l : osk_layouts()[0];
@@ -240,20 +263,22 @@ void OskWidget::draw() {
       const OskKey &k = l.rows[r][c];
       int kx, ky, kw, kh;
       key_rect(r, c, kx, ky, kw, kh);
-      bool pressed = r == pressed_row_ && c == pressed_col_;
+      bool pressed = (r == pressed_row_ && c == pressed_col_) || (r == flash_row_ && c == flash_col_);
       bool latched = (k.special == OSK_SHIFT && shift_) || (k.special == OSK_CAPS && caps_) ||
                      (k.special == OSK_CTRL && ctrl_) || (k.special == OSK_ALT && alt_);
       Fl_Color kb = k.special != OSK_NONE && k.special != OSK_SPACE ? special_bg : key_bg;
       if (latched) kb = p.accent;
-      if (pressed) kb = fl_color_average(p.accent, kb, 0.6f);
+      if (pressed) kb = latched ? fl_color_average(p.accent, FL_BLACK, 0.75f) : p.accent;
       fl_color(kb);
-      fl_rounded_rectf(kx, ky, kw, kh, 6);
+      // a pressed key sinks in a little
+      int in = pressed ? 2 : 0;
+      fl_rounded_rectf(kx + in, ky + in, kw - 2 * in, kh - 2 * in, 6);
       std::string lab = key_label(k);
       int fs = std::max(10, kh * 2 / 5);
       if (k.special != OSK_NONE && lab.size() > 3) fs = std::max(10, kh / 3);
       if (k.special == OSK_SPACE) fs = std::max(9, kh / 4);
       fl_font(FL_HELVETICA, fs);
-      fl_color(latched ? p.accent_fg : (k.special == OSK_SPACE ? p.fg_dim : fg));
+      fl_color(latched || pressed ? p.accent_fg : (k.special == OSK_SPACE ? p.fg_dim : fg));
       fl_draw(lab.c_str(), (int)lab.size(), kx + (kw - (int)fl_width(lab.c_str())) / 2, ky + (kh + fs) / 2 - 2);
       // the shifted symbol of number / punctuation keys in the corner
       if (k.special == OSK_NONE && k.shifted && k.shifted != (uint32_t)towupper((wint_t)k.normal) &&
@@ -261,11 +286,36 @@ void OskWidget::draw() {
         char buf[8];
         int n = fl_utf8encode(k.shifted, buf);
         fl_font(FL_HELVETICA, std::max(8, kh / 4));
-        fl_color(p.fg_dim);
+        fl_color(pressed ? p.accent_fg : p.fg_dim);
         fl_draw(buf, n, kx + kw - (int)fl_width(buf, n) - 5, ky + std::max(8, kh / 4) + 2);
       }
     }
   }
+  int pr = pressed_row_ >= 0 ? pressed_row_ : flash_row_;
+  int pc = pressed_row_ >= 0 ? pressed_col_ : flash_col_;
+  if (key_preview_ && pr >= 0) draw_preview(pr, pc);
+}
+
+// an enlarged copy of a character key above the finger, kept inside the widget
+void OskWidget::draw_preview(int row, int col) {
+  int kx, ky, kw, kh;
+  if (!key_rect(row, col, kx, ky, kw, kh)) return;
+  const OskKey &k = current().rows[row][col];
+  if (k.special != OSK_NONE) return;
+  const Palette &p = palette();
+  int bw = std::max(kw * 3 / 2, kh), bh = kh * 3 / 2;
+  int bx = kx + (kw - bw) / 2, by = ky - bh + kh / 3;
+  bx = std::max(x() + 2, std::min(bx, x() + w() - bw - 2));
+  by = std::max(y() + 2, by);
+  fl_color(fl_color_average(FL_BLACK, p.accent, 0.35f));
+  fl_rounded_rectf(bx - 1, by - 1, bw + 2, bh + 2, 8);
+  fl_color(p.accent);
+  fl_rounded_rectf(bx, by, bw, bh, 8);
+  std::string lab = key_label(k);
+  int fs = std::max(14, bh * 11 / 20);
+  fl_font(FL_HELVETICA_BOLD, fs);
+  fl_color(p.accent_fg);
+  fl_draw(lab.c_str(), (int)lab.size(), bx + (bw - (int)fl_width(lab.c_str())) / 2, by + (bh + fs) / 2 - 3);
 }
 
 void OskWidget::activate(const OskKey &k) {
@@ -337,7 +387,7 @@ int OskWidget::handle(int e) {
       pressed_row_ = r;
       pressed_col_ = c;
       const OskKey &k = current().rows[r][c];
-      redraw();
+      press_feedback(r, c);
       // keys that repeat while held
       if (k.special == OSK_BACKSPACE || k.special == OSK_LEFT || k.special == OSK_RIGHT ||
           k.special == OSK_UP || k.special == OSK_DOWN || k.special == OSK_DELETE) {
@@ -354,7 +404,7 @@ int OskWidget::handle(int e) {
         Fl::remove_timeout(repeat_cb, this);
         pressed_row_ = r;
         pressed_col_ = c;
-        redraw();
+        press_feedback(r, c);
       }
       return 1;
     }
@@ -366,7 +416,18 @@ int OskWidget::handle(int e) {
         const OskKey &k = current().rows[r][c];
         bool repeats = k.special == OSK_BACKSPACE || k.special == OSK_LEFT || k.special == OSK_RIGHT ||
                        k.special == OSK_UP || k.special == OSK_DOWN || k.special == OSK_DELETE;
+        const OskLayout *before = &current();
         if (!repeats) activate(k); // repeating keys already fired on press
+        // keep the released key lit briefly (not when the key switched the
+        // layout: the keys moved)
+        if (&current() == before) {
+          flash_row_ = r;
+          flash_col_ = c;
+          Fl::remove_timeout(flash_cb, this);
+          Fl::add_timeout(FLASH_TIME, flash_cb, this);
+        } else {
+          flash_row_ = flash_col_ = -1;
+        }
       }
       redraw();
       return 1;

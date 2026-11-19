@@ -31,3 +31,8 @@ private:
   std::string user_;
   int step_ = 0;
 };
+
+// A message for the user from a greetd "error" reply. greetd passes PAM's
+// error codes through ("pam_authenticate: AUTH_ERR"); those become plain
+// sentences, anything unknown becomes a generic "Login failed" text.
+std::string greetd_error_text(const fld::Json &reply);

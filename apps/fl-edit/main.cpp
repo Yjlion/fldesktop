@@ -8,7 +8,6 @@
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Return_Button.H>
-#include <FL/Fl_Tabs.H>
 #include <FL/Fl_Text_Buffer.H>
 #include <FL/Fl_Text_Editor.H>
 #include <FL/fl_ask.H>
@@ -16,12 +15,15 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
 
 #include "fld/ini.h"
+#include "fld/menus.h"
+#include "fld/tab_bar.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -29,7 +31,8 @@
 
 static Fl_Double_Window *g_win;
 static Fl_Menu_Bar *g_menu;
-static Fl_Tabs *g_tabs;
+static fld::TabBar *g_tabbar;
+static Fl_Group *g_area; // holds the documents; only the current one is shown
 static Fl_Box *g_status;
 
 struct Settings {
@@ -105,7 +108,7 @@ public:
     ed->scrollbar_size(12);
     resizable(ed);
     end();
-    when(FL_WHEN_CLOSED);
+    fld::no_edit_menu(ed); // the editor has its own menu
     buf->add_modify_callback(modify_cb, this);
     apply_settings();
   }
@@ -260,13 +263,32 @@ public:
   }
 };
 
-static Doc *current() { return g_tabs->value() ? (Doc *)g_tabs->value() : nullptr; }
+static Doc *g_current = nullptr;
+static Doc *current() { return g_current; }
+
+static int doc_index(Doc *d) {
+  auto it = std::find(g_docs.begin(), g_docs.end(), d);
+  return it == g_docs.end() ? -1 : (int)(it - g_docs.begin());
+}
+
+static void refresh_tabbar() {
+  std::vector<fld::TabInfo> tabs;
+  for (auto *d : g_docs) {
+    fld::TabInfo t;
+    t.label = d->display_name();
+    t.tooltip = d->path.empty() ? "Not saved yet" : d->path;
+    t.modified = d->modified;
+    tabs.push_back(t);
+  }
+  g_tabbar->set_tabs(tabs, std::max(0, doc_index(g_current)));
+}
+
+static void sync_menus();
+static void show_doc(Doc *d);
 
 static void update_tab_label(Doc *d) {
-  d->tab_label = (d->modified ? "● " : "") + fld::escape_at(d->display_name());
-  d->label(d->tab_label.c_str());
-  d->copy_tooltip(d->path.empty() ? "Not saved yet" : d->path.c_str());
-  g_tabs->redraw();
+  if (!d) return;
+  refresh_tabbar();
   if (d == current()) {
     std::string title = (d->modified ? "*" : "") + d->display_name() + " – Text Editor";
     g_win->copy_label(title.c_str());
@@ -286,7 +308,21 @@ static void update_status() {
   g_status->copy_label(buf);
 }
 
+static void editor_menu(Doc *d);
+
 int Editor::handle(int e) {
+  if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE) {
+    if (Fl::focus() != this) take_focus();
+    // a click outside the selection moves the cursor there first
+    int pos = xy_to_position(Fl::event_x(), Fl::event_y(), CURSOR_POS);
+    int a, b;
+    if (!buffer()->selection_position(&a, &b) || pos < a || pos > b) {
+      buffer()->unselect();
+      insert_position(pos);
+    }
+    editor_menu(doc);
+    return 1;
+  }
   if (e == FL_KEYBOARD) {
     int k = Fl::event_key();
     int st = Fl::event_state();
@@ -404,19 +440,27 @@ static void add_recent(const std::string &p) {
 
 static void close_doc(Doc *d);
 
-static Doc *new_doc() {
-  int x = g_tabs->x(), y = g_tabs->y() + 30, w = g_tabs->w(), h = g_tabs->h() - 30;
-  g_tabs->begin();
-  Doc *d = new Doc(x, y, w, h);
-  g_tabs->end();
-  g_docs.push_back(d);
-  // Fl_Tabs calls the child's callback when its close button is clicked
-  d->callback([](Fl_Widget *w, void *) {
-    if (Fl::callback_reason() == FL_REASON_CLOSED) Fl::add_timeout(0, [](void *p) { close_doc((Doc *)p); }, w);
-  });
+// shows d and hides the other documents
+static void show_doc(Doc *d) {
+  if (!d) return;
+  g_current = d;
+  for (auto *o : g_docs) {
+    if (o == d) o->show();
+    else o->hide();
+  }
   update_tab_label(d);
-  g_tabs->value(d);
   d->ed->take_focus();
+  sync_menus();
+  update_status();
+  g_area->redraw();
+}
+
+static Doc *new_doc() {
+  g_area->begin();
+  Doc *d = new Doc(g_area->x(), g_area->y(), g_area->w(), g_area->h());
+  g_area->end();
+  g_docs.push_back(d);
+  show_doc(d);
   update_status();
   return d;
 }
@@ -429,8 +473,7 @@ static Doc *find_doc(const std::string &p) {
 
 static void open_file(const std::string &p) {
   if (Doc *d = find_doc(p)) {
-    g_tabs->value(d);
-    update_tab_label(d);
+    show_doc(d);
     return;
   }
   Doc *cur = current();
@@ -445,9 +488,7 @@ static void open_file(const std::string &p) {
     return;
   }
   if (d->load(p)) add_recent(d->path);
-  g_tabs->value(d);
-  update_tab_label(d);
-  update_status();
+  show_doc(d);
 }
 
 static bool save_as(Doc *d) {
@@ -470,7 +511,7 @@ static bool save(Doc *d) {
 // Returns false if the user cancelled.
 static bool confirm_close(Doc *d) {
   if (!d->modified) return true;
-  g_tabs->value(d);
+  show_doc(d);
   int c = fl_choice("Save changes to \"%s\" before closing?", "Cancel", "Save", "Don't Save",
                     d->display_name().c_str());
   if (c == 0) return false;
@@ -480,15 +521,16 @@ static bool confirm_close(Doc *d) {
 
 static void close_doc(Doc *d) {
   if (!confirm_close(d)) return;
-  g_docs.erase(std::remove(g_docs.begin(), g_docs.end(), d), g_docs.end());
+  int i = doc_index(d);
+  if (i < 0) return;
+  g_docs.erase(g_docs.begin() + i);
   Fl::remove_timeout(Doc::highlight_later, d);
-  g_tabs->remove(d);
+  g_area->remove(d);
   Fl::delete_widget(d);
+  if (g_current == d) g_current = nullptr;
   if (g_docs.empty()) new_doc();
-  else g_tabs->value(g_docs.back());
-  update_tab_label(current());
-  update_status();
-  g_tabs->redraw();
+  else if (!g_current) show_doc(g_docs[(size_t)std::min(i, (int)g_docs.size() - 1)]);
+  else refresh_tabbar();
 }
 
 static void quit() {
@@ -743,13 +785,110 @@ static void rebuild_recent_menu() {
   }
 }
 
-static void tabs_cb(Fl_Widget *, void *) {
-  Doc *d = current();
-  if (d) {
-    update_tab_label(d);
-    d->ed->take_focus();
+// ---- tab and editor menus ---------------------------------------------------------------
+
+static void later(std::function<void()> f) {
+  auto *p = new std::function<void()>(std::move(f));
+  Fl::add_timeout(0, [](void *v) {
+    auto *fn = (std::function<void()> *)v;
+    (*fn)();
+    delete fn;
+  }, p);
+}
+
+static void close_others(Doc *keep) {
+  for (auto *d : std::vector<Doc *>(g_docs))
+    if (d != keep && !confirm_close(d)) return;
+  for (auto *d : std::vector<Doc *>(g_docs))
+    if (d != keep) {
+      d->modified = false; // confirmed above
+      close_doc(d);
+    }
+  show_doc(keep);
+}
+
+static void close_right(Doc *from) {
+  int i = doc_index(from);
+  if (i < 0) return;
+  std::vector<Doc *> right(g_docs.begin() + i + 1, g_docs.end());
+  for (auto *d : right)
+    if (!confirm_close(d)) return;
+  for (auto *d : right) {
+    d->modified = false;
+    close_doc(d);
   }
-  sync_menus();
+  show_doc(from);
+}
+
+// opens the file in a new fl-edit window and closes its tab here
+static void doc_to_window(Doc *d) {
+  if (doc_index(d) < 0) return;
+  if (d->path.empty() || d->modified) {
+    if (fl_choice("\"%s\" has to be saved before it can move to a new window.", "Cancel", "Save", nullptr,
+                  d->display_name().c_str()) != 1 || !save(d))
+      return;
+  }
+  if (fld::spawn({"fl-edit", d->path})) close_doc(d);
+}
+
+static void reload_doc(Doc *d) {
+  if (d && !d->path.empty() &&
+      (!d->modified || fl_choice("Discard your changes and reload?", "Cancel", "Reload", nullptr) == 1))
+    d->load(d->path);
+}
+
+static void tab_menu(int i) {
+  fld::Menu m;
+  if (i < 0 || i >= (int)g_docs.size()) {
+    m.item("New", [] { new_doc(); }, 0, FL_CTRL + 'n');
+    m.popup();
+    return;
+  }
+  Doc *d = g_docs[(size_t)i];
+  if (d != current()) show_doc(d);
+  int n = (int)g_docs.size();
+  bool saved = !d->path.empty();
+  m.item("New", [] { new_doc(); }, 0, FL_CTRL + 'n').divider();
+  m.item("Save", [d] { later([d] { if (doc_index(d) >= 0) save(d); }); }, 0, FL_CTRL + 's');
+  m.item("Save As…", [d] { later([d] { if (doc_index(d) >= 0) save_as(d); }); }, 0, FL_CTRL + FL_SHIFT + 's');
+  m.item("Reload", [d] { later([d] { if (doc_index(d) >= 0) reload_doc(d); }); }, saved ? 0 : FL_MENU_INACTIVE);
+  m.divider();
+  m.item("Copy Path", [d] { Fl::copy(d->path.c_str(), (int)d->path.size(), 1); }, saved ? 0 : FL_MENU_INACTIVE);
+  m.item("Open Containing Folder", [d] { fld::spawn({"fl-files", fld::dirname(d->path)}); }, saved ? 0 : FL_MENU_INACTIVE);
+  m.item("Open Terminal Here", [d] {
+    if (!d->path.empty()) fld::spawn({"fl-term", "--workdir", fld::dirname(d->path)});
+    else fld::spawn({"fl-term"});
+  });
+  m.divider();
+  m.item("Move Tab Left", [i] { fld::move_element(g_docs, i, i - 1); refresh_tabbar(); }, i > 0 ? 0 : FL_MENU_INACTIVE);
+  m.item("Move Tab Right", [i] { fld::move_element(g_docs, i, i + 1); refresh_tabbar(); },
+         i + 1 < n ? 0 : FL_MENU_INACTIVE);
+  m.item("Move to New Window", [d] { later([d] { doc_to_window(d); }); }, n > 1 ? 0 : FL_MENU_INACTIVE);
+  m.divider();
+  m.item("Close", [d] { later([d] { if (doc_index(d) >= 0) close_doc(d); }); }, 0, FL_CTRL + 'w');
+  m.item("Close Others", [d] { later([d] { if (doc_index(d) >= 0) close_others(d); }); }, n > 1 ? 0 : FL_MENU_INACTIVE);
+  m.item("Close Tabs to the Right", [d] { later([d] { if (doc_index(d) >= 0) close_right(d); }); },
+         i + 1 < n ? 0 : FL_MENU_INACTIVE);
+  m.popup();
+}
+
+// right click in the text
+static void editor_menu(Doc *d) {
+  Fl_Text_Buffer *b = d->buf;
+  bool sel = b->selected();
+  auto run = [](long id) { return [id] { menu_cb(nullptr, (void *)id); }; };
+  fld::Menu m;
+  m.item("Undo", run(10), b->can_undo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'z');
+  m.item("Redo", run(11), b->can_redo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + FL_SHIFT + 'z').divider();
+  m.item("Cut", run(12), sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
+  m.item("Copy", run(13), sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
+  m.item("Paste", run(14), 0, FL_CTRL + 'v');
+  m.item("Delete", [d] { Fl_Text_Editor::kf_delete(0, d->ed); }, sel ? 0 : FL_MENU_INACTIVE).divider();
+  m.item("Select All", run(15), 0, FL_CTRL + 'a').divider();
+  m.item("Find…", [run] { later(run(16)); }, 0, FL_CTRL + 'f');
+  m.item("Replace…", [run] { later(run(19)); }, 0, FL_CTRL + 'h');
+  m.item("Go to Line…", [run] { later(run(20)); }, 0, FL_CTRL + 'g');
+  m.popup();
   update_status();
 }
 
@@ -833,17 +972,32 @@ int main(int argc, char **argv) {
   g_menu->add("&Help/&About", 0, menu_cb, (void *)50);
   rebuild_recent_menu();
 
-  g_tabs = new Fl_Tabs(0, MH, W, H - MH - SH);
-  g_tabs->handle_overflow(Fl_Tabs::OVERFLOW_PULLDOWN);
-  g_tabs->callback(tabs_cb);
-  g_tabs->when(FL_WHEN_CHANGED);
-  g_tabs->end();
+  const int TH = fld::TabBar::preferred_height();
+  g_tabbar = new fld::TabBar(0, MH, W, TH);
+  g_tabbar->on_select = [](int i) {
+    if (i >= 0 && i < (int)g_docs.size()) show_doc(g_docs[(size_t)i]);
+  };
+  g_tabbar->on_close = [](int i) {
+    if (i >= 0 && i < (int)g_docs.size()) later([d = g_docs[(size_t)i]] { if (doc_index(d) >= 0) close_doc(d); });
+  };
+  g_tabbar->on_new = [] { new_doc(); };
+  g_tabbar->on_move = [](int from, int to) {
+    fld::move_element(g_docs, from, to);
+    refresh_tabbar();
+  };
+  g_tabbar->on_detach = [](int i) {
+    if (i >= 0 && i < (int)g_docs.size()) later([d = g_docs[(size_t)i]] { doc_to_window(d); });
+  };
+  g_tabbar->on_menu = [](int i) { tab_menu(i); };
+  g_area = new Fl_Group(0, MH + TH, W, H - MH - TH - SH);
+  g_area->box(FL_NO_BOX);
+  g_area->end();
   g_status = new Fl_Box(0, H - SH, W, SH);
   g_status->box(FL_FLAT_BOX);
   g_status->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
   g_status->labelsize(12);
   g_status->labelcolor(fld::palette().fg_dim);
-  g_win->resizable(g_tabs);
+  g_win->resizable(g_area);
   g_win->end();
   g_win->size_range(400, 300);
   g_win->callback([](Fl_Widget *, void *) {

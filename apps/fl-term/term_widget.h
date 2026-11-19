@@ -50,6 +50,7 @@ public:
   void scroll_to(int offset); // lines up from the live screen
   bool child_alive() const { return pid_ > 0; }
   std::string current_dir() const; // working directory of the foreground process
+  bool has_children() const;        // a program other than the shell runs in the foreground
   const std::string &title() const { return title_; }
 
   void (*on_title)(TermWidget *, const char *, void *) = nullptr;

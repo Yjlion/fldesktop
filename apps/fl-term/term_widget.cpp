@@ -189,6 +189,12 @@ bool TermWidget::start(const std::vector<std::string> &argv_in, const std::strin
   return true;
 }
 
+bool TermWidget::has_children() const {
+  if (fd_ < 0 || pid_ <= 0) return false;
+  pid_t fg = tcgetpgrp(fd_);
+  return fg > 0 && fg != pid_;
+}
+
 std::string TermWidget::current_dir() const {
   if (fd_ < 0 || pid_ <= 0) return "";
   pid_t fg = tcgetpgrp(fd_);

@@ -29,7 +29,8 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "ssh_ui.h"
-#include "tab_bar.h"
+#include "fld/menus.h"
+#include "fld/tab_bar.h"
 #include "term_settings.h"
 #include "term_widget.h"
 
@@ -88,15 +89,23 @@ static const TermColors *find_scheme(const std::string &name) {
 
 // ---- windows, tabs and settings ------------------------------------------------
 
+struct TabSpec {
+  std::vector<std::string> cmd;
+  std::string cwd, title, scheme;
+  bool hold = false, hold_on_error = false;
+};
+
 struct Tab {
   TermWidget *term;
   bool own_scheme; // keeps its colour scheme (SSH profiles, --scheme)
+  TabSpec spec;       // how it was started (Duplicate Tab)
+  std::string custom; // a name given with Rename Tab (wins over the title)
 };
 
 struct App {
   Fl_Double_Window *win = nullptr;
   Fl_Menu_Bar *menubar = nullptr;
-  TabBar *tabbar = nullptr;
+  fld::TabBar *tabbar = nullptr;
   Fl_Group *area = nullptr; // holds the terminals; only the current one is visible
   std::vector<Tab> tabs;
   int current = 0;
@@ -148,13 +157,19 @@ static void update_title() {
   if (!g.fixed_title.empty()) {
     g.win->copy_label(g.fixed_title.c_str());
   } else {
-    std::string tt = t ? t->title() : "";
+    std::string tt = t ? (!g.tabs[(size_t)g.current].custom.empty() ? g.tabs[(size_t)g.current].custom : t->title()) : "";
     g.win->copy_label(tt.empty() ? "Terminal" : tt.c_str());
   }
   if (g.tabbar) {
-    std::vector<std::string> labels;
-    for (auto &tb : g.tabs) labels.push_back(tb.term->title().empty() ? "Terminal" : tb.term->title());
-    g.tabbar->set_tabs(labels, g.current);
+    std::vector<fld::TabInfo> tabs;
+    for (auto &tb : g.tabs) {
+      fld::TabInfo ti;
+      ti.label = !tb.custom.empty() ? tb.custom : tb.term->title();
+      std::string dir = tb.term->current_dir();
+      ti.tooltip = dir.empty() ? ti.label : dir;
+      tabs.push_back(ti);
+    }
+    g.tabbar->set_tabs(tabs, g.current);
   }
 }
 
@@ -172,7 +187,7 @@ static void relayout() {
     g.menubar->hide();
   }
   if (term::tabs_visible(g.set.tabs, (int)g.tabs.size())) {
-    int th = TabBar::preferred_height();
+    int th = fld::TabBar::preferred_height();
     g.tabbar->resize(0, y, W, th);
     g.tabbar->show();
     y += th;
@@ -239,13 +254,16 @@ static void close_tab(int i) {
   select_tab(g.current);
 }
 
-static void move_tab(int delta) {
-  int n = (int)g.tabs.size(), i = g.current, j = i + delta;
-  if (n < 2 || j < 0 || j >= n) return;
-  std::swap(g.tabs[(size_t)i], g.tabs[(size_t)j]);
-  g.current = j;
+// moves tab from to index to (dragged, or Move Tab Left/Right)
+static void reorder_tab(int from, int to) {
+  int n = (int)g.tabs.size();
+  if (from < 0 || from >= n || to < 0 || to >= n || from == to) return;
+  fld::move_element(g.tabs, from, to);
+  g.current = fld::moved_index(g.current, from, to);
   update_title();
 }
+
+static void move_tab(int delta) { reorder_tab(g.current, g.current + delta); }
 
 static void on_title(TermWidget *t, const char *, void *) {
   (void)t;
@@ -259,11 +277,6 @@ static void on_exit(TermWidget *t, int, void *) {
 
 static void show_menu(TermWidget *, void *);
 
-struct TabSpec {
-  std::vector<std::string> cmd;
-  std::string cwd, title, scheme;
-  bool hold = false, hold_on_error = false;
-};
 
 static TermWidget *add_tab(const TabSpec &spec) {
   g.area->begin();
@@ -279,7 +292,7 @@ static TermWidget *add_tab(const TabSpec &spec) {
   t->on_exit = on_exit;
   t->on_menu = show_menu;
   if (!spec.title.empty()) t->set_title(spec.title);
-  g.tabs.push_back({t, !spec.scheme.empty()});
+  g.tabs.push_back({t, !spec.scheme.empty(), spec, ""});
   g.current = (int)g.tabs.size() - 1;
   relayout();
   if (!t->start(spec.cmd, spec.cwd)) {
@@ -628,6 +641,100 @@ static void show_menu(TermWidget *t, void *) {
   if (r && r->callback()) r->do_callback(g.win);
 }
 
+// ---- the tab bar's menu -------------------------------------------------------------
+
+static void duplicate_tab(int i) {
+  if (i < 0 || i >= (int)g.tabs.size()) return;
+  TabSpec s = g.tabs[(size_t)i].spec;
+  std::string dir = g.tabs[(size_t)i].term->current_dir();
+  if (s.cmd.empty() && !dir.empty()) s.cwd = dir; // a shell: in its current folder
+  if (TermWidget *t = add_tab(s)) {
+    // next to the original
+    int at = index_of(t);
+    reorder_tab(at, std::min(i + 1, (int)g.tabs.size() - 1));
+    select_tab(index_of(t));
+  }
+}
+
+static void rename_tab(int i) {
+  if (i < 0 || i >= (int)g.tabs.size()) return;
+  Tab &tb = g.tabs[(size_t)i];
+  std::string cur_name = !tb.custom.empty() ? tb.custom : tb.term->title();
+  const char *r = fl_input("Tab name (empty: the terminal's own title):", cur_name.c_str());
+  if (!r) return;
+  // the tab may have closed while the dialog was open
+  for (auto &t : g.tabs)
+    if (&t == &tb) {
+      t.custom = fld::trim(r);
+      update_title();
+    }
+}
+
+// opens a new window with what the tab runs, then closes the tab
+static void tab_to_window(int i) {
+  if (i < 0 || i >= (int)g.tabs.size() || g.tabs.size() < 2) return;
+  Tab &tb = g.tabs[(size_t)i];
+  std::vector<std::string> argv{"fl-term"};
+  std::string dir = tb.term->current_dir();
+  if (!dir.empty()) { argv.push_back("--workdir"); argv.push_back(dir); }
+  if (!tb.spec.title.empty()) { argv.push_back("--title"); argv.push_back(tb.spec.title); }
+  if (!tb.spec.scheme.empty()) { argv.push_back("--scheme"); argv.push_back(tb.spec.scheme); }
+  if (tb.spec.hold_on_error) argv.push_back("--hold-on-error");
+  if (!tb.spec.cmd.empty()) {
+    argv.push_back("-e");
+    for (auto &a : tb.spec.cmd) argv.push_back(a);
+  }
+  // a shell's state cannot move: ask before ending a running program
+  if (tb.term->has_children() &&
+      fl_choice("A program is still running in this tab. It ends when the tab moves to a new window.",
+                "Cancel", "Move", nullptr) != 1)
+    return;
+  fld::spawn(argv);
+  close_tab(i);
+}
+
+static void close_others(int keep) {
+  if (keep < 0 || keep >= (int)g.tabs.size()) return;
+  TermWidget *k = g.tabs[(size_t)keep].term;
+  for (int i = (int)g.tabs.size() - 1; i >= 0; i--)
+    if (g.tabs[(size_t)i].term != k) close_tab(i);
+}
+
+static void close_right(int from) {
+  for (int i = (int)g.tabs.size() - 1; i > from; i--) close_tab(i);
+}
+
+static void tab_menu(int i) {
+  int n = (int)g.tabs.size();
+  fld::Menu m;
+  m.item("New Tab", [] { new_tab(); }, 0, FL_CTRL + FL_SHIFT + 't');
+  if (i >= 0) {
+    if (i != g.current) select_tab(i);
+    m.item("Duplicate Tab", [i] { duplicate_tab(i); });
+    m.item("Rename Tab…", [i] { Fl::add_timeout(0, [](void *v) { rename_tab((int)(long)v); }, (void *)(long)i); });
+    m.divider();
+    m.item("Move Tab Left", [i] { reorder_tab(i, i - 1); }, i > 0 ? 0 : FL_MENU_INACTIVE);
+    m.item("Move Tab Right", [i] { reorder_tab(i, i + 1); }, i + 1 < n ? 0 : FL_MENU_INACTIVE);
+    m.item("Move to New Window", [i] { Fl::add_timeout(0, [](void *v) { tab_to_window((int)(long)v); }, (void *)(long)i); },
+           n > 1 ? 0 : FL_MENU_INACTIVE);
+    m.divider();
+    m.item("Open Folder", [i] {
+      std::string d = g.tabs[(size_t)i].term->current_dir();
+      fld::spawn({"fl-files", d.empty() ? fld::home_dir() : d});
+    });
+    m.divider();
+    m.item("Close Tab", [i] { Fl::add_timeout(0, [](void *v) { close_tab((int)(long)v); }, (void *)(long)i); }, 0,
+           FL_CTRL + FL_SHIFT + 'w');
+    m.item("Close Other Tabs", [i] { Fl::add_timeout(0, [](void *v) { close_others((int)(long)v); }, (void *)(long)i); },
+           n > 1 ? 0 : FL_MENU_INACTIVE);
+    m.item("Close Tabs to the Right", [i] { Fl::add_timeout(0, [](void *v) { close_right((int)(long)v); }, (void *)(long)i); },
+           i + 1 < n ? 0 : FL_MENU_INACTIVE);
+  } else {
+    m.item("New Window", [] { new_window(); }, 0, FL_CTRL + FL_SHIFT + 'n');
+  }
+  m.popup();
+}
+
 static int global_shortcuts(int e) {
   if (e != FL_SHORTCUT && e != FL_KEYBOARD) return 0;
   // only for the terminal window (not for dialogs)
@@ -726,10 +833,15 @@ int main(int argc, char **argv) {
   g.menubar = new TermMenuBar(0, 0, 800, 26);
   static_cast<TermMenuBar *>(g.menubar)->rebuild();
   g.menubar->box(FL_FLAT_BOX);
-  g.tabbar = new TabBar(0, 0, 800, TabBar::preferred_height());
-  g.tabbar->on_select = [](int i, void *) { select_tab(i); };
-  g.tabbar->on_close = [](int i, void *) { close_tab(i); };
-  g.tabbar->on_new = [](void *) { new_tab(); };
+  g.tabbar = new fld::TabBar(0, 0, 800, fld::TabBar::preferred_height());
+  g.tabbar->empty_label = "Terminal";
+  g.tabbar->on_select = [](int i) { select_tab(i); };
+  // deferred: the tab bar is in its own event handler
+  g.tabbar->on_close = [](int i) { Fl::add_timeout(0, [](void *v) { close_tab((int)(long)v); }, (void *)(long)i); };
+  g.tabbar->on_new = [] { new_tab(); };
+  g.tabbar->on_move = [](int from, int to) { reorder_tab(from, to); };
+  g.tabbar->on_menu = [](int i) { tab_menu(i); };
+  g.tabbar->on_detach = [](int i) { Fl::add_timeout(0, [](void *v) { tab_to_window((int)(long)v); }, (void *)(long)i); };
   g.area = new Fl_Group(0, 0, 800, 500);
   g.area->box(FL_NO_BOX);
   g.area->end();
@@ -758,13 +870,13 @@ int main(int argc, char **argv) {
   t->on_title = on_title;
   t->on_exit = on_exit;
   t->on_menu = show_menu;
-  g.tabs.push_back({t, !scheme_override.empty()});
+  g.tabs.push_back({t, !scheme_override.empty(), first, ""});
   g.current = 0;
 
   int ww, wh;
   t->size_for(cols, rows, ww, wh);
   int extra = (g.set.show_menubar ? std::max(24, fld::ui_font_size() + 12) : 0) +
-              (term::tabs_visible(g.set.tabs, 1) ? TabBar::preferred_height() : 0);
+              (term::tabs_visible(g.set.tabs, 1) ? fld::TabBar::preferred_height() : 0);
   g.win->size(ww, wh + extra);
   relayout();
   update_title();

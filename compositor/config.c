@@ -169,7 +169,6 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
 	add_binding(c, "Super+f", "fullscreen");
-	add_binding(c, "F11", "fullscreen");
 	add_binding(c, "Alt+Tab", "cycle");
 	add_binding(c, "Alt+Shift+Tab", "cycle-back");
 	add_binding(c, "Super+Shift+r", "reload");

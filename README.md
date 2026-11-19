@@ -211,7 +211,7 @@ tools/run-dev.sh -s fl-term # only a terminal
 | Super+Q, Alt+F4 | Close window |
 | Super+Up / Down | Maximize / minimize |
 | Super+Left / Right | Snap to the left / right half |
-| F11, Super+F | Fullscreen |
+| Super+F | Fullscreen (F11 is left to the applications) |
 | Alt+Tab, Alt+Shift+Tab | Window switcher: hold Alt, Tab / arrows to choose, release to switch, Esc to cancel |
 | Super+drag, Super+right-drag | Move / resize any window |
 | Super+L | Lock the screen |

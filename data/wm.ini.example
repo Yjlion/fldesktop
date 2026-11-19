@@ -82,7 +82,6 @@ Super+Down=minimize
 Super+Left=snap-left
 Super+Right=snap-right
 Super+f=fullscreen
-F11=fullscreen
 Alt+Tab=cycle
 Alt+Shift+Tab=cycle-back
 Print=exec fl-screenshot

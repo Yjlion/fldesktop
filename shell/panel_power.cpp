@@ -200,7 +200,7 @@ bool power_indicator_active() {
 void power_indicator_start(fld::FlatButton *battery) {
   g_btn = battery;
   g_btn->callback(battery_cb);
-  set_context_menu(g_btn, [](fld::Menu &m) {
+  panel_context_menu(g_btn, [](fld::Menu &m) {
     const up::State &st = up::Client::get().state();
     if (st.profiles_available) {
       for (auto &p : st.profiles)

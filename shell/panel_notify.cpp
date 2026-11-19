@@ -230,7 +230,7 @@ fld::FlatButton *notify_indicator_create() {
   g_bell->labelcolor(panel_fg());
   g_bell->hover_color(panel_hover());
   g_bell->callback(bell_cb);
-  set_context_menu(g_bell, [](fld::Menu &m) {
+  panel_context_menu(g_bell, [](fld::Menu &m) {
     m.toggle("Do Not Disturb", g_dnd, [] {
       g_dnd = !g_dnd;
       fld::NotifyHistory::get().set_dnd(g_dnd);

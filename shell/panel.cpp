@@ -806,7 +806,7 @@ static std::map<Fl_Widget *, std::function<void(fld::Menu &)>> &context_menus() 
   return m;
 }
 
-void set_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill) { context_menus()[w] = std::move(fill); }
+void panel_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill) { context_menus()[w] = std::move(fill); }
 
 void panel_menu_items(fld::Menu &m) {
   m.item("Panel Settings…", [] { fld::spawn({"fl-settings", "panel"}); });
@@ -953,7 +953,7 @@ int main(int argc, char **argv) {
   if (!fld::icon("start-here", 20) && !fld::icon("view-app-grid-symbolic", 20))
     P.menu_btn->icon_name("applications-other", 20);
 
-  set_context_menu(P.menu_btn, [](fld::Menu &m) {
+  panel_context_menu(P.menu_btn, [](fld::Menu &m) {
     m.item("Open Applications", [] { fld::spawn({"fl-launcher"}); }).divider();
     m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
     m.item("Settings…", [] { fld::spawn({"fl-settings"}); }).divider();
@@ -969,7 +969,7 @@ int main(int argc, char **argv) {
     b->icon_name(e->icon.c_str(), 22);
     b->user_data(e.get());
     fld::DesktopEntry *ep = e.get();
-    set_context_menu(b, [ep](fld::Menu &m) { quick_menu(ep, m); });
+    panel_context_menu(b, [ep](fld::Menu &m) { quick_menu(ep, m); });
     quick_entries.push_back(std::move(e));
   }
   P.quick->end();
@@ -982,7 +982,7 @@ int main(int argc, char **argv) {
   P.volume->color(panel_bg());
   P.volume->hover_color(panel_hover());
   P.volume->callback(volume_cb);
-  set_context_menu(P.volume, volume_menu);
+  panel_context_menu(P.volume, volume_menu);
   P.volume->hide();
   // on-screen keyboard button: KeyboardButton=auto (no physical keyboard) | always | never
   std::string kb_mode = fld::lower(cfg.get("Panel", "KeyboardButton", "auto"));
@@ -990,7 +990,7 @@ int main(int argc, char **argv) {
     P.keyboard = make_btn(34, "input-keyboard", "On-screen keyboard",
                           [](Fl_Widget *, void *) { fld::spawn({"fl-osk"}); });
     if (!fld::icon("input-keyboard", 20)) P.keyboard->copy_label("⌨");
-    set_context_menu(P.keyboard, [](fld::Menu &m) {
+    panel_context_menu(P.keyboard, [](fld::Menu &m) {
       m.item("Show On-screen Keyboard", [] { fld::spawn({"fl-osk"}); });
       m.item("Keyboard Settings…", [] { fld::spawn({"fl-settings", "keyboard"}); }).divider();
       panel_menu_items(m);
@@ -998,7 +998,7 @@ int main(int argc, char **argv) {
   }
 #ifdef FLD_HAVE_NM
   P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *w, void *) { network_popup(w); });
-  set_context_menu(P.network, network_context_menu);
+  panel_context_menu(P.network, network_context_menu);
   P.network->hide();
 #endif
 #ifdef FLD_HAVE_BLUETOOTH
@@ -1019,14 +1019,14 @@ int main(int argc, char **argv) {
   drives_start();
 #endif
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);
-  set_context_menu(P.clock, clock_menu);
+  panel_context_menu(P.clock, clock_menu);
 #ifdef FLD_HAVE_NOTIFY
   Fl::lock();
   P.bell = notify_indicator_create();
 #endif
   P.power = make_btn(34, "system-shutdown", "Power", power_cb);
   if (Fl_Image *pi = fld::symbolic_icon("system-shutdown", 18, panel_fg())) P.power->icon_image(pi);
-  set_context_menu(P.power, [](fld::Menu &m) {
+  panel_context_menu(P.power, [](fld::Menu &m) {
     using fld::PowerAction;
     for (PowerAction a : {PowerAction::Lock, PowerAction::LogOut, PowerAction::Suspend, PowerAction::Reboot,
                           PowerAction::PowerOff}) {

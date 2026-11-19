@@ -19,7 +19,7 @@ Fl_Color panel_hover();
 void relayout();
 // A right-click menu for a panel widget: fill adds the items when it is
 // shown. The left-click action no longer runs on a right click.
-void set_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill);
+void panel_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill);
 // Items most panel menus end with (Panel Settings…)
 void panel_menu_items(fld::Menu &m);
 

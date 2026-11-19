@@ -8,11 +8,15 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <xf86drm.h>
+#include <wlr/render/wlr_texture.h>
+#include <wlr/types/wlr_buffer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_export_dmabuf_v1.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
+#include <wlr/types/wlr_linux_dmabuf_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
@@ -68,6 +72,46 @@ static int handle_signal(int sig, void *data) {
 	}
 	wl_display_terminate(server->wl_display);
 	return 0;
+}
+
+/* linux-dmabuf: wlroots checks a client's DMA-BUF by importing it as a GEM
+ * handle on the render node and closing that handle. vmwgfx (VMware's virtual
+ * GPU) gives back handles GEM_CLOSE refuses (EINVAL), so every buffer of a
+ * client using the GPU is rejected and the client dies of a protocol error
+ * ("importing the supplied dmabufs failed": fl-video, fl-webcam, any OpenGL
+ * app). There, check by importing the buffer into the renderer instead. */
+static bool check_dmabuf_by_texture(struct wlr_dmabuf_attributes *attribs, void *data) {
+	struct wlr_texture *tex = wlr_texture_from_dmabuf(data, attribs);
+	if (!tex) return false;
+	wlr_texture_destroy(tex);
+	return true;
+}
+
+static bool renderer_on_vmwgfx(struct wlr_renderer *renderer) {
+	int fd = wlr_renderer_get_drm_fd(renderer);
+	if (fd < 0) return false;
+	drmVersion *v = drmGetVersion(fd);
+	if (!v) return false;
+	bool vmw = v->name && strcmp(v->name, "vmwgfx") == 0;
+	drmFreeVersion(v);
+	return vmw;
+}
+
+static void init_renderer_globals(struct wlr_renderer *renderer, struct wl_display *display) {
+	if (!renderer_on_vmwgfx(renderer)) {
+		wlr_renderer_init_wl_display(renderer, display);
+		return;
+	}
+	/* what wlr_renderer_init_wl_display does, with our own DMA-BUF check */
+	wlr_renderer_init_wl_shm(renderer, display);
+	if (!wlr_renderer_get_texture_formats(renderer, WLR_BUFFER_CAP_DMABUF)) return;
+	struct wlr_linux_dmabuf_v1 *dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(display, 4, renderer);
+	if (!dmabuf) {
+		wlr_log(WLR_ERROR, "failed to create linux-dmabuf");
+		return;
+	}
+	wlr_linux_dmabuf_v1_set_check_dmabuf_callback(dmabuf, check_dmabuf_by_texture, renderer);
+	wlr_log(WLR_INFO, "vmwgfx: checking client DMA-BUFs by importing them into the renderer");
 }
 
 static void usage(const char *argv0) {
@@ -167,7 +211,7 @@ int main(int argc, char *argv[]) {
 		wlr_log(WLR_ERROR, "failed to create wlr_renderer");
 		return 1;
 	}
-	wlr_renderer_init_wl_display(server.renderer, server.wl_display);
+	init_renderer_globals(server.renderer, server.wl_display);
 	server.allocator = wlr_allocator_autocreate(server.backend, server.renderer);
 	if (!server.allocator) {
 		wlr_log(WLR_ERROR, "failed to create wlr_allocator");

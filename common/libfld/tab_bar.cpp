@@ -38,7 +38,8 @@ void TabBar::set_tabs(const std::vector<TabInfo> &tabs, int active) {
   tabs_ = tabs;
   active_ = std::max(0, std::min(active, (int)tabs_.size() - 1));
   if (hover_ >= (int)tabs_.size()) hover_ = -1;
-  if (!dragging_) press_ = -1;
+  // (a press stays: selecting the pressed tab calls set_tabs before a drag)
+  if (press_ >= (int)tabs_.size()) press_ = -1, dragging_ = false;
   keep_visible(active_);
   redraw();
 }

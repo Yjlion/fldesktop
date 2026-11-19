@@ -85,6 +85,21 @@ static void test_desktop_entry() {
   CHECK_EQ(cmd[3], std::string("/y.png"));
   CHECK_EQ(cmd[5], std::string("My App"));
   CHECK_EQ(fld::desktop_unescape("a\\sb\\\\c"), std::string("a b\\c"));
+  CHECK(e.actions.empty());
+  // [Desktop Action] groups, in the order of Actions= (unknown ones skipped)
+  std::string p2 = g_tmp + "/act.desktop";
+  fld::write_file(p2,
+                  "[Desktop Entry]\nType=Application\nName=Web\nExec=web %u\nActions=private;missing;new-window;\n"
+                  "[Desktop Action new-window]\nName=New Window\nExec=web --new-window\n"
+                  "[Desktop Action private]\nName=New Private Window\nExec=web --private\nIcon=priv\n");
+  fld::DesktopEntry a;
+  CHECK(a.load(p2));
+  CHECK_EQ(a.actions.size(), 2u);
+  CHECK_EQ(a.actions[0].id, std::string("private"));
+  CHECK_EQ(a.actions[0].name, std::string("New Private Window"));
+  CHECK_EQ(a.actions[0].icon, std::string("priv"));
+  CHECK_EQ(a.actions[1].exec, std::string("web --new-window"));
+  CHECK(!a.launch_action("missing"));
 }
 
 static void test_json() {

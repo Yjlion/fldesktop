@@ -8,6 +8,7 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Scrollbar.H>
+#include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 
 #include <algorithm>
@@ -17,12 +18,15 @@
 #include <fcntl.h>
 #include <string>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/menus.h"
+#include "fld/session.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -32,6 +36,7 @@ static std::vector<int> g_visible;         // indexes into g_apps
 static std::string g_category = "All";
 static std::vector<std::string> g_recent;  // desktop ids, most recent first
 static Fl_Double_Window *g_win;
+static int g_modal = 0; // a menu or dialog is open: focus_check waits
 
 static const char *kCategories[][2] = {
     {"All", "applications-other"},          {"AudioVideo", "applications-multimedia"},
@@ -173,6 +178,84 @@ static void run_text() {
   quit_launcher();
 }
 
+// ---- the right-click menu of an application ----------------------------------------------
+
+static std::string bare_id(const std::string &id) {
+  return fld::ends_with(id, ".desktop") ? id.substr(0, id.size() - 8) : id;
+}
+
+static std::string panel_ini() { return fld::fld_config_dir() + "/panel.ini"; }
+
+static std::vector<std::string> quick_launch() {
+  fld::Ini c;
+  c.load(panel_ini());
+  std::vector<std::string> r;
+  for (auto &x : fld::split(c.get("Panel", "QuickLaunch", "fl-files;fl-term;fl-edit"), ';'))
+    if (!fld::trim(x).empty()) r.push_back(bare_id(fld::trim(x)));
+  return r;
+}
+
+// the panel restarts when panel.ini changes
+static void set_quick_launch(const std::vector<std::string> &ids) {
+  fld::Ini c;
+  c.load(panel_ini());
+  c.set("Panel", "QuickLaunch", fld::join(ids, ";"));
+  c.save(panel_ini());
+}
+
+static void add_to_desktop(const fld::DesktopEntry &e) {
+  std::string dir = fld::user_dir("DESKTOP");
+  fld::mkdir_p(dir);
+  std::string dst = fld::path_join(dir, fld::ends_with(e.id, ".desktop") ? e.id : e.id + ".desktop");
+  std::string data;
+  if (!fld::read_file(e.path, data) || !fld::write_file(dst, data)) {
+    fl_alert("Could not copy the launcher to %s.", dir.c_str());
+    return;
+  }
+  chmod(dst.c_str(), 0755); // desktop files on the desktop must be executable to be trusted
+}
+
+static void app_menu(int vis_index) {
+  if (vis_index < 0 || vis_index >= (int)g_visible.size()) return;
+  const fld::DesktopEntry e = g_apps[g_visible[vis_index]]; // a copy: the list may change
+  std::string id = bare_id(e.id);
+  auto ql = quick_launch();
+  bool in_ql = std::find(ql.begin(), ql.end(), id) != ql.end();
+  bool in_recent = std::find(g_recent.begin(), g_recent.end(), e.id) != g_recent.end();
+  fld::Menu m;
+  m.item("Open", [vis_index] { launch_index(vis_index); });
+  for (auto &a : e.actions)
+    m.item(fld::Menu::text(a.name), [e, a] {
+      e.launch_action(a.id);
+      push_recent(e.id);
+      quit_launcher();
+    });
+  m.divider();
+  if (in_ql)
+    m.item("Remove from Quick Launch", [id] {
+      auto l = quick_launch();
+      l.erase(std::remove(l.begin(), l.end(), id), l.end());
+      set_quick_launch(l);
+    });
+  else
+    m.item("Add to Quick Launch", [id] {
+      auto l = quick_launch();
+      l.push_back(id);
+      set_quick_launch(l);
+    });
+  m.item("Add to Desktop", [e] { add_to_desktop(e); });
+  if (in_recent)
+    m.item("Remove from Recent", [e] {
+      g_recent.erase(std::remove(g_recent.begin(), g_recent.end(), e.id), g_recent.end());
+      fld::write_file(recent_path(), fld::join(g_recent, "\n"));
+    });
+  m.divider();
+  m.item("Show Desktop File", [e] { fld::spawn({"fl-files", e.path}); });
+  g_modal++;
+  m.popup();
+  g_modal--;
+}
+
 int AppList::handle(int e) {
   switch (e) {
     case FL_PUSH: {
@@ -181,6 +264,7 @@ int AppList::handle(int e) {
         sel = i;
         redraw();
         if (Fl::event_button() == FL_LEFT_MOUSE) launch_index(i);
+        else if (Fl::event_button() == FL_RIGHT_MOUSE) app_menu(i);
       }
       return 1;
     }
@@ -321,12 +405,55 @@ static bool just_closed() {
 
 static void focus_check(void *) {
   static bool had_focus = false;
+  if (g_modal) return;
   if (Fl::focus()) had_focus = true;
   else if (had_focus && g_win->shown()) {
     char buf[64];
     snprintf(buf, sizeof buf, "%.3f", now_s());
     fld::write_file(closed_stamp(), buf);
     quit_launcher();
+  }
+}
+
+// ---- the bottom bar: settings and power ------------------------------------------------------
+
+static void make_power_bar(int X, int Y, int W, int H) {
+  const fld::Palette &p = fld::palette();
+  Fl_Box *bg = new Fl_Box(X, Y, W, H);
+  bg->box(FL_FLAT_BOX);
+  bg->color(p.bg);
+  Fl_Box *line = new Fl_Box(X, Y, W, 1);
+  line->box(FL_FLAT_BOX);
+  line->color(p.border);
+  const int B = 36, pad = (H - B) / 2;
+  fld::FlatButton *set = new fld::FlatButton(X + 8, Y + pad, 120, B, "Settings");
+  set->icon_name("preferences-system", 20);
+  set->color(p.bg);
+  set->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_IMAGE_NEXT_TO_TEXT);
+  set->tooltip("Open Settings");
+  set->callback([](Fl_Widget *, void *) {
+    fld::spawn({"fl-settings"});
+    quit_launcher();
+  });
+  using fld::PowerAction;
+  static const PowerAction acts[] = {PowerAction::Lock, PowerAction::LogOut, PowerAction::Suspend,
+                                     PowerAction::Reboot, PowerAction::PowerOff};
+  int bx = X + W - 8 - 5 * (B + 4);
+  for (PowerAction a : acts) {
+    fld::FlatButton *b = new fld::FlatButton(bx, Y + pad, B, B);
+    b->icon_name(fld::power_icon(a), 20);
+    b->color(p.bg);
+    b->tooltip(fld::power_label(a));
+    if (a == PowerAction::Lock && !fld::can_lock()) b->deactivate();
+    b->callback([](Fl_Widget *, void *d) {
+      PowerAction a = (PowerAction)(long)d;
+      g_modal++;
+      bool done = fld::confirm_power(a);
+      g_modal--;
+      if (done) quit_launcher();
+      else if (g_win->shown()) g_search->take_focus();
+    }, (void *)(long)a);
+    bx += B + 4;
   }
 }
 
@@ -343,7 +470,7 @@ int main(int argc, char **argv) {
   g_apps = fld::all_applications();
   load_recent();
 
-  const int W = 640, H = 520, SIDE = 190;
+  const int W = 640, H = 568, SIDE = 190, BAR = 48;
   g_win = new Fl_Double_Window(W, H, "fldesktop.launcher");
   g_win->border(0);
   g_win->color(fld::palette().border);
@@ -359,9 +486,9 @@ int main(int argc, char **argv) {
   g_search->when(FL_WHEN_CHANGED);
   g_search->tooltip("Type to search, Enter to start, Esc to close");
 
-  g_cats = new CategoryList(1, 53, SIDE, H - 54);
-  g_list = new AppList(SIDE + 1, 53, W - SIDE - 14, H - 54);
-  Fl_Scrollbar *sb = new Fl_Scrollbar(W - 13, 53, 12, H - 54);
+  g_cats = new CategoryList(1, 53, SIDE, H - 54 - BAR);
+  g_list = new AppList(SIDE + 1, 53, W - SIDE - 14, H - 54 - BAR);
+  Fl_Scrollbar *sb = new Fl_Scrollbar(W - 13, 53, 12, H - 54 - BAR);
   sb->type(FL_VERTICAL);
   sb->callback([](Fl_Widget *w, void *) {
     g_list->top = ((Fl_Scrollbar *)w)->value();
@@ -369,6 +496,7 @@ int main(int argc, char **argv) {
   });
   sb->clear_visible_focus();
   g_list->sb = sb;
+  make_power_bar(1, H - BAR - 1, W - 2, BAR);
   g_win->end();
 
   // "All" starts with recently used applications first

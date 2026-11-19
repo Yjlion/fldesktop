@@ -224,6 +224,11 @@ void view_raise(struct flwm_view *view) {
 	wlr_scene_node_raise_to_top(&view->tree->node);
 }
 
+static bool same_client(struct flwm_view *a, struct flwm_view *b) {
+	return wl_resource_get_client(a->xdg_toplevel->resource) ==
+		wl_resource_get_client(b->xdg_toplevel->resource);
+}
+
 void view_focus(struct flwm_view *view) {
 	if (!view || !view->mapped) return;
 	struct flwm_server *server = view->server;
@@ -240,7 +245,8 @@ void view_focus(struct flwm_view *view) {
 
 	/* the launcher closes itself when another window gets focus (not the panel,
 	 * whose launcher button toggles it) */
-	if (prev && prev->role == FLWM_ROLE_LAUNCHER && view->role != FLWM_ROLE_PANEL)
+	if (prev && prev->role == FLWM_ROLE_LAUNCHER && view->role != FLWM_ROLE_PANEL &&
+			!same_client(prev, view)) /* its own dialogs (confirm shut down) keep it */
 		wlr_xdg_toplevel_send_close(prev->xdg_toplevel);
 	/* panel popups close as soon as anything else gets the focus */
 	if (prev && prev->role == FLWM_ROLE_POPUP)

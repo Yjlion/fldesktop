@@ -87,7 +87,7 @@ package_fldesktop() {
 package_fldesktop-wm() {
   pkgdesc="fldesktop Wayland compositor (wlroots)"
   depends=(wlroots0.20 wayland libxkbcommon libinput pango cairo librsvg libdrm pixman)
-  optdepends=('grim: screenshots' 'slurp: area screenshots' 'wl-clipboard: copy screenshots'
+  optdepends=('grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard'
               'fldesktop-lock: screen locking' 'fldesktop-icon-theme: the default cursors')
   _stage
   _install_files usr/bin/fl-wm usr/share/fldesktop/wm.ini.example usr/share/man/man1/fl-wm.1
@@ -107,13 +107,15 @@ package_fldesktop-shell() {
               'fldesktop-polkit-agent: administrator password prompts'
               'fldesktop-notifyd: notifications and their history'
               'xdg-desktop-portal-fl: file dialogs and settings for Flatpak apps'
-              'bluez: Bluetooth button' 'cups: printer button')
+              'bluez: Bluetooth button' 'cups: printer button'
+              'grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard')
   _stage
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
-    usr/bin/fl-session usr/bin/fl-screenshot usr/share/wayland-sessions/fldesktop.desktop \
+    usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \
+    usr/share/applications/fl-snip.desktop usr/share/icons/hicolor/scalable/apps/fl-snip.svg \
     usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
   local m
-  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot; do
+  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip; do
     _install_files usr/share/man/man1/$m.1
   done
 }

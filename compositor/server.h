@@ -44,6 +44,7 @@ enum flwm_role {
 	FLWM_ROLE_POPUP, /* panel popups (calendar, volume): at the pointer, close on focus loss */
 	FLWM_ROLE_NOTIFY, /* notification popups: top right corner, overlay, never takes keyboard focus */
 	FLWM_ROLE_LOCK, /* fl-lock started by us: above everything while the session is locked */
+	FLWM_ROLE_SNIP, /* fl-snip's selection overlay: over all outputs and the panel, takes the focus */
 };
 
 /* What a scene node belongs to (stored in wlr_scene_node.data) */
@@ -400,6 +401,9 @@ void switcher_step_row(struct flwm_server *server, int dir);
 void switcher_finish(struct flwm_server *server, bool commit);
 void switcher_click(struct flwm_server *server, double lx, double ly);
 void switcher_view_gone(struct flwm_server *server, struct flwm_view *view);
+/* writes the normal windows (layout x y w h, then the title; topmost first)
+ * to $XDG_RUNTIME_DIR/fl-wm-windows, for fl-snip's window mode (SIGUSR2) */
+void view_dump_windows(struct flwm_server *server);
 void switcher_output_gone(struct flwm_server *server, struct flwm_output *o);
 struct flwm_output *output_primary(struct flwm_server *server);
 struct flwm_output *output_for_view(struct flwm_view *view);

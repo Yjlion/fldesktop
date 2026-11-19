@@ -1,0 +1,49 @@
+.TH FL-SNIP 1 "November 2026" "fldesktop" "fldesktop"
+.SH NAME
+fl-snip \- take and mark up screenshots
+.SH SYNOPSIS
+\fBfl-snip\fR [\fB\-\-snip\fR|\fB\-\-area\fR|\fB\-\-window\fR|\fB\-\-full\fR|\fB\-\-freeform\fR] [\fB\-\-delay\fR \fIN\fR]
+.br
+\fBfl-snip\fR \fB\-\-edit\fR \fIFILE\fR
+.SH DESCRIPTION
+A snipping tool. The screen is captured first (with \fBgrim\fR(1)) and shown frozen over all
+outputs, where you choose what to keep:
+.TP
+\fBRectangle\fR
+Drag a rectangle. A magnifier shows the pixels under the pointer; the arrow keys move the
+rectangle (with Shift, change its size) and Enter takes it.
+.TP
+\fBFreeform\fR
+Draw a shape around a part of the screen; what is outside it is transparent.
+.TP
+\fBWindow\fR
+Click a window (fl-wm tells fl-snip where its windows are).
+.TP
+\fBFull screen\fR
+All outputs.
+.PP
+R, F, W and S switch between them, Esc or a right click cancels.
+.PP
+Without options fl-snip opens a small window with New, the mode and a delay (none, 3, 5 or
+10 seconds). The snip then opens in the editor: pen, highlighter, line, arrow, rectangle,
+ellipse, text, pixelate (to hide something) and crop, in seven colors and three widths, with
+undo, an eraser for drawings, and a right-click menu. It copies the snip (Ctrl+C), saves it as
+PNG (Ctrl+S, Ctrl+Shift+S), opens it in the image viewer or another program, or prints it.
+.PP
+The quick modes (\fB\-\-area\fR, \fB\-\-window\fR, \fB\-\-full\fR, \fB\-\-freeform\fR) save
+the snip to \fI~/Pictures/Screenshots\fR, copy it to the clipboard and print the file's path;
+a notification offers to open, edit or show it. \fB\-\-snip\fR opens the editor instead.
+.SH KEYS
+In fl-wm: \fBPrint\fR the whole screen, \fBShift+Print\fR a rectangle, \fBSuper+Shift+S\fR
+a snip to edit.
+.PP
+In the editor: P, H, L, A, R, E, T, X, C and D choose the pen, highlighter, line, arrow,
+rectangle, ellipse, text, pixelate, crop and eraser; Shift keeps lines straight; Ctrl+Z and
+Ctrl+Shift+Z undo and redo; Ctrl+wheel, Ctrl++ and Ctrl+\- zoom.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/snip.ini\fR
+Settings: copy to the clipboard, save to Pictures/Screenshots, include the pointer,
+notifications, the last mode and delay.
+.SH SEE ALSO
+\fBgrim\fR(1), \fBwl-copy\fR(1), \fBfl-wm\fR(1), \fBfl-view\fR(1)

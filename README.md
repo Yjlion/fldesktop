@@ -6,19 +6,20 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 |-----------|------------|
 | **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, an Alt+Tab window switcher, window snapping, layer-shell and session locking (also ext-session-lock for swaylock) |
 | **fl-lock** | Screen locker: clock, user picture, PAM password check, on-screen keyboard; locks on Super+L, after an idle time and before suspend |
-| **fl-panel** | Taskbar: application button, quick launch, window list, network, volume, Bluetooth, printing, battery (UPower: time left, power modes, low battery warnings), calendar clock, notification history, power menu; mounts drives as they are plugged in (UDisks2) |
-| **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space) |
+| **fl-panel** | Taskbar: application button, quick launch, window list, network (a popup with Wi-Fi networks, wired devices and VPNs), volume, Bluetooth, printing, battery (UPower: time left, power modes, low battery warnings), calendar clock, notification history, power menu; right-click menus on everything; mounts drives as they are plugged in (UDisks2) |
+| **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space); lock, log out, suspend, restart and shut down buttons; right-click an app for its actions, quick launch and the desktop |
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder, with drag and drop and icon zoom |
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard; its look and user list are set in Settings > Login Screen |
 | **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, power, removable drives, network, proxy, firewall, date & time, software updates, login screen |
-| **fl-term** | Terminal emulator (libvterm): tabs, optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
+| **fl-term** | Terminal emulator (libvterm): tabs (drag to reorder or into a new window, right-click to rename, duplicate, close others), optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
 | **fl-files** | File manager: icon, compact and details views with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, drag and drop (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), and a search for files and folders by name, text, date and size |
-| **fl-edit** | Tabbed text editor with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
+| **fl-edit** | Tabbed text editor (tabs you can drag and right-click) with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
-| **fl-web** | Web browser on WPE WebKit: tabs, an address bar that searches and completes from bookmarks and history, downloads, find in page, zoom, bookmarks and history, the pages' password, file, permission and notification requests |
+| **fl-web** | Web browser on WPE WebKit: tabs (drag, right-click, reopen closed ones), private windows, developer tools (F12), full screen, an optional menu bar, page right-click menus, an address bar that searches and completes from bookmarks and history, downloads, find in page, zoom, bookmarks and history, the pages' password, file, permission and notification requests |
 | **fl-video** | Video and audio player on GStreamer: playlists, subtitles, track selection, speed, screenshots, resume |
 | **fl-archive** | Archive manager (libarchive): browse, extract, create and change zip, 7z and tar archives, encrypted zip, Extract Here / Compress in fl-files |
+| **fl-snip** | Snipping tool: a rectangle, a freeform shape, a window or the whole screen, chosen on a frozen picture of the screen with a magnifier; an editor with pen, highlighter, arrows, shapes, text, pixelate and crop; copy, save, print; quick snips for the Print keys |
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
@@ -33,6 +34,9 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-packages** | Software updates and packages through PackageKit, with application names and icons from AppStream: updates with changelogs, search, install/remove, a package's files, dependencies and reverse dependencies, sources, history; update notifications |
 | **fl-flatpak** | Flatpak app store for Flathub and other sources, with a permissions editor; files, runtime and dependents of installed apps and runtimes |
 | **fl-firewall** | firewalld: zones, services, ports, interfaces, sources, forwarding, panic mode |
+
+Right-click menus are everywhere: every text field and text editor has Undo, Cut, Copy, Paste and
+Select All, and the lists, tables and pictures of the programs have the commands that fit them.
 
 ![fldesktop](screenshots/desktop.png)
 
@@ -215,7 +219,8 @@ tools/run-dev.sh -s fl-term # only a terminal
 | Alt+Tab, Alt+Shift+Tab | Window switcher: hold Alt, Tab / arrows to choose, release to switch, Esc to cancel |
 | Super+drag, Super+right-drag | Move / resize any window |
 | Super+L | Lock the screen |
-| Print | Screenshot (needs grim) |
+| Print, Shift+Print | Screenshot of the whole screen / of a rectangle: saved and copied (fl-snip, needs grim) |
+| Super+Shift+S | Snip a part of the screen and mark it up |
 | Super+Shift+R | Reload configuration |
 | Ctrl+Alt+Backspace | Quit the session |
 

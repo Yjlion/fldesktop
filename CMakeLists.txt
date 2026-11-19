@@ -40,6 +40,7 @@ option(FLD_BUILD_WEBCAM   "Build the fl-webcam camera app (needs GStreamer)" ON)
 option(FLD_BUILD_ARCHIVE  "Build the fl-archive archive manager (needs libarchive)" ON)
 option(FLD_BUILD_LOCK     "Build the fl-lock screen locker (needs PAM)"    ON)
 option(FLD_BUILD_WEB      "Build the fl-web browser (needs WPE WebKit)"   ON)
+option(FLD_BUILD_SNIP     "Build the fl-snip screenshot tool"             ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -69,7 +70,7 @@ add_compile_definitions(FLD_VERSION="${FLD_VERSION_STRING}"
 
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
-foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO WEBCAM ARCHIVE WEB)
+foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR VIDEO WEBCAM ARCHIVE WEB SNIP)
   if(FLD_BUILD_${opt})
     set(FLD_NEED_FLTK ON)
   endif()
@@ -157,7 +158,7 @@ endif()
 if(FLD_BUILD_GREETER)
   add_subdirectory(greeter)
 endif()
-foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR LOCK)
+foreach(app TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER NETWORK SETTINGS NOTIFYD PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR LOCK SNIP)
   if(FLD_BUILD_${app})
     string(TOLOWER ${app} lc)
     add_subdirectory(apps/fl-${lc})

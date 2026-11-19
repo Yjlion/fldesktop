@@ -62,6 +62,10 @@ static int handle_signal(int sig, void *data) {
 		lock_request(server);
 		return 0;
 	}
+	if (sig == SIGUSR2) {
+		view_dump_windows(server);
+		return 0;
+	}
 	wl_display_terminate(server->wl_display);
 	return 0;
 }
@@ -227,6 +231,7 @@ int main(int argc, char *argv[]) {
 	struct wl_event_source *sig_term = wl_event_loop_add_signal(server.event_loop, SIGTERM, handle_signal, &server);
 	struct wl_event_source *sig_hup = wl_event_loop_add_signal(server.event_loop, SIGHUP, handle_signal, &server);
 	struct wl_event_source *sig_usr1 = wl_event_loop_add_signal(server.event_loop, SIGUSR1, handle_signal, &server);
+	struct wl_event_source *sig_usr2 = wl_event_loop_add_signal(server.event_loop, SIGUSR2, handle_signal, &server);
 
 	/* export the session to D-Bus / systemd activated services when available */
 	flwm_spawn(&server, "command -v dbus-update-activation-environment >/dev/null && "
@@ -243,6 +248,7 @@ int main(int argc, char *argv[]) {
 	wl_event_source_remove(sig_term);
 	wl_event_source_remove(sig_hup);
 	wl_event_source_remove(sig_usr1);
+	wl_event_source_remove(sig_usr2);
 	lock_finish(&server);
 	wl_display_destroy_clients(server.wl_display);
 

@@ -1,6 +1,8 @@
 #include "fld/menus.h"
 
 #include <FL/Fl.H>
+#include <FL/Fl_Button.H>
+#include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Input_.H>
 #include <FL/Fl_Text_Display.H>
 #include <FL/Fl_Text_Editor.H>
@@ -8,6 +10,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <list>
 #include <unordered_set>
 
 namespace fld {
@@ -42,6 +45,34 @@ Menu &Menu::toggle(const std::string &label, bool on, std::function<void()> acti
 
 Menu &Menu::radio(const std::string &label, bool on, std::function<void()> action, int flags) {
   return item(label, std::move(action), flags | FL_MENU_RADIO | (on ? FL_MENU_VALUE : 0));
+}
+
+Menu &Menu::button(Fl_Widget *b, const std::string &label) {
+  if (!b || !b->visible_r()) return *this;
+  std::string l = label;
+  if (l.empty() && b->label()) {
+    // drop FLTK's '&' shortcut marks and '@' symbols from the button label
+    for (const char *c = b->label(); *c; c++) {
+      if (*c == '&') {
+        if (c[1] != '&') continue; // a shortcut mark
+        c++;                       // "&&" is an '&'
+      }
+      l += *c;
+    }
+    l = text(l);
+  }
+  int flags = b->active_r() ? 0 : FL_MENU_INACTIVE;
+  auto act = [b] { b->do_callback(); };
+  if (auto *cb = dynamic_cast<Fl_Button *>(b)) {
+    if (cb->type() == FL_TOGGLE_BUTTON || dynamic_cast<Fl_Check_Button *>(b)) {
+      bool on = cb->value();
+      return toggle(l, on, [cb, on] {
+        cb->value(!on);
+        cb->do_callback();
+      }, flags);
+    }
+  }
+  return item(l, act, flags);
 }
 
 Menu &Menu::divider() {
@@ -212,7 +243,84 @@ static Fl_Widget *widget_at(Fl_Group *g, int x, int y) {
   return nullptr;
 }
 
+// Registered widgets are watched (Fl::watch_widget_pointer): a deleted
+// widget's entry has a null pointer and is dropped.
+struct ContextMenu {
+  Fl_Widget *w;
+  std::function<void(Menu &)> fill;
+  bool select_first;
+};
+
+static std::list<ContextMenu> &context_menus() {
+  static std::list<ContextMenu> m;
+  return m;
+}
+
+static ContextMenu *find_menu(Fl_Widget *w) {
+  auto &l = context_menus();
+  for (auto it = l.begin(); it != l.end();) {
+    if (!it->w) {
+      it = l.erase(it);
+      continue;
+    }
+    if (it->w == w) return &*it;
+    ++it;
+  }
+  return nullptr;
+}
+
+void set_context_menu(Fl_Widget *w, std::function<void(Menu &)> fill, bool select_first) {
+  if (!w) return;
+  if (ContextMenu *c = find_menu(w)) {
+    c->fill = std::move(fill);
+    c->select_first = select_first;
+    return;
+  }
+  context_menus().push_back({w, std::move(fill), select_first});
+  Fl::watch_widget_pointer(context_menus().back().w);
+}
+
+void remove_context_menu(Fl_Widget *w) {
+  auto &l = context_menus();
+  for (auto it = l.begin(); it != l.end(); ++it)
+    if (it->w == w) {
+      Fl::release_widget_pointer(it->w);
+      l.erase(it);
+      return;
+    }
+}
+
 static int dispatch(int e, Fl_Window *win) {
+  if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE && win && !Fl::grab() && !context_menus().empty()) {
+    // the nearest widget (or parent) with a context menu
+    Fl_Widget *w = widget_at(win, Fl::event_x(), Fl::event_y());
+    for (Fl_Widget *p = w ? w : win; p; p = p->parent()) {
+      ContextMenu *found = find_menu(p);
+      if (!found) continue;
+      // text fields inside it keep the text menu
+      if (w != p && (dynamic_cast<Fl_Input_ *>(w) || dynamic_cast<Fl_Text_Display *>(w))) break;
+      if (!p->active_r()) break;
+      ContextMenu cm = *found; // a copy: fill may change the registry
+      if (cm.select_first) {
+        // an ordinary click first (as the left button): lists and tables select the row
+        int ex = Fl::e_keysym;
+        int state = Fl::e_state;
+        Fl::e_keysym = FL_Button + FL_LEFT_MOUSE;
+        Fl::e_state = (state & ~FL_BUTTONS) | FL_BUTTON1;
+        Fl::e_clicks = 0;
+        Fl::handle_(FL_PUSH, win);
+        Fl::e_state = state & ~FL_BUTTONS;
+        Fl::handle_(FL_RELEASE, win);
+        Fl::e_keysym = ex;
+        Fl::e_state = state;
+        Fl::pushed(nullptr);
+      }
+      Menu m;
+      cm.fill(m);
+      m.popup();
+      return 1;
+    }
+  }
   if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE && win && !Fl::grab()) {
     Fl_Widget *w = widget_at(win, Fl::event_x(), Fl::event_y());
     // the text area of an Fl_Text_Display is the widget itself; its

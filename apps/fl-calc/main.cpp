@@ -14,6 +14,7 @@
 
 #include "calc_engine.h"
 #include "fld/ini.h"
+#include "fld/menus.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -336,6 +337,32 @@ int main(int argc, char **argv) {
     S.expr = S.history[line - 1].first;
     S.just_evaluated = false;
     update();
+  });
+  // right-click menus: the display, and a history entry
+  fld::set_context_menu(g_display, [](fld::Menu &m) {
+    m.item("Copy Result", [] { menu_cb(nullptr, (void *)4); }, 0, FL_CTRL + 'c');
+    m.item("Copy Expression", [] { Fl::copy(S.expr.c_str(), (int)S.expr.size(), 1); }, S.expr.empty() ? FL_MENU_INACTIVE : 0);
+    m.item("Paste", [] { menu_cb(nullptr, (void *)5); }, 0, FL_CTRL + 'v').divider();
+    m.item("Clear", [] { clear_all(); }, 0, FL_Escape);
+    m.toggle("Show History", g_hist->Fl_Widget::visible(), [] { menu_cb(nullptr, (void *)3); });
+  }, false);
+  fld::set_context_menu(g_hist, [](fld::Menu &m) {
+    int line = g_hist->value();
+    bool on = line >= 1 && line <= (int)S.history.size();
+    m.item("Use Expression", [line] {
+      S.expr = S.history[(size_t)line - 1].first;
+      S.just_evaluated = false;
+      update();
+    }, on ? 0 : FL_MENU_INACTIVE);
+    m.item("Copy Result", [line] {
+      const std::string &r = S.history[(size_t)line - 1].second;
+      Fl::copy(r.c_str(), (int)r.size(), 1);
+    }, on ? 0 : FL_MENU_INACTIVE);
+    m.item("Copy Expression", [line] {
+      const std::string &r = S.history[(size_t)line - 1].first;
+      Fl::copy(r.c_str(), (int)r.size(), 1);
+    }, on ? 0 : FL_MENU_INACTIVE).divider();
+    m.item("Clear History", [] { menu_cb(nullptr, (void *)6); }, S.history.empty() ? FL_MENU_INACTIVE : 0);
   });
   if (!cfg.get_bool("Calc", "History", false)) g_hist->hide();
   else ((Fl_Menu_Item *)g_menu->find_item("&View/&History"))->set();

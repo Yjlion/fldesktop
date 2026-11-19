@@ -23,6 +23,10 @@ public:
   Menu &item(const std::string &label, std::function<void()> action, int flags = 0, int shortcut = 0);
   Menu &toggle(const std::string &label, bool on, std::function<void()> action, int flags = 0);
   Menu &radio(const std::string &label, bool on, std::function<void()> action, int flags = 0);
+  // an item that does what button b does (its label unless one is given);
+  // left out while b is hidden, greyed out while it is inactive; a check
+  // button becomes a toggle
+  Menu &button(Fl_Widget *b, const std::string &label = "");
   Menu &divider(); // after the last item
   Menu &submenu(const std::string &label, int flags = 0);
   Menu &end_submenu();
@@ -47,6 +51,14 @@ private:
   std::vector<Fl_Menu_Item> built_;
   std::deque<std::string> labels_;
 };
+
+// A right-click menu for any widget (a list, a table, a canvas): fill adds
+// the items when it opens. With select_first the click goes to the widget
+// first as an ordinary click, so a list or table selects the row under the
+// pointer and fill sees it selected. Widgets inside w get the menu too unless
+// they have one of their own. Needs install_edit_menu (fld::init_app does it).
+void set_context_menu(Fl_Widget *w, std::function<void(Menu &)> fill, bool select_first = true);
+void remove_context_menu(Fl_Widget *w);
 
 // The text field menu (Undo, Redo, Cut, Copy, Paste, Delete, Select All) for
 // Fl_Input_ and Fl_Text_Display widgets. init_app installs it; widgets with a

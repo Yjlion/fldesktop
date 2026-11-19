@@ -23,6 +23,7 @@
 
 #include "charmap_data.h"
 #include "fld/ini.h"
+#include "fld/menus.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -392,6 +393,26 @@ int main(int argc, char **argv) {
   g_info->labelsize(12);
   g_info->labelfont(FL_COURIER);
   g_info->align(FL_ALIGN_INSIDE | FL_ALIGN_TOP_LEFT | FL_ALIGN_WRAP);
+  // right-click on a character (the click selects it first)
+  fld::set_context_menu(g_grid, [](fld::Menu &m) {
+    uint32_t cp = g_grid->sel >= 0 && g_grid->sel < (int)g_grid->cps.size() ? g_grid->cps[(size_t)g_grid->sel] : 0;
+    int f = cp ? 0 : FL_MENU_INACTIVE;
+    auto copy = [](const std::string &s) {
+      Fl::copy(s.c_str(), (int)s.size(), 1);
+      Fl::copy(s.c_str(), (int)s.size(), 0);
+    };
+    char hex[32];
+    snprintf(hex, sizeof hex, "U+%04X", (unsigned)cp);
+    std::string code = hex;
+    snprintf(hex, sizeof hex, "&#x%X;", (unsigned)cp);
+    std::string entity = hex;
+    std::string name = g_names.name(cp);
+    m.item("Add to Text", [cp] { insert_char(cp); }, f);
+    m.item("Copy Character", [cp, copy] { copy(utf8(cp)); }, f).divider();
+    m.item("Copy Code Point (" + code + ")", [code, copy] { copy(code); }, f);
+    m.item("Copy HTML Entity (" + fld::Menu::text(entity) + ")", [entity, copy] { copy(entity); }, f);
+    m.item("Copy Name", [name, copy] { copy(name); }, f | (name.empty() ? FL_MENU_INACTIVE : 0));
+  });
   Fl_Button *add = new Fl_Button(W - DET + 10, TB + 356, DET - 20, 30, "Add to Text");
   add->callback([](Fl_Widget *, void *) { if (g_current) insert_char(g_current); });
   Fl_Button *copy1 = new Fl_Button(W - DET + 10, TB + 392, DET - 20, 30, "Copy Character");

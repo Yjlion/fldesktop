@@ -22,6 +22,7 @@
 
 #include <algorithm>
 
+#include "fld/menus.h"
 #include "fld/file_dialog.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
@@ -634,6 +635,16 @@ NetworkView::NetworkView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   c_add_->callback(conn_add_vpn_cb, this);
   conn_page_->end();
   conn_page_->hide();
+  // right-click menus: the same as the buttons of each page
+  fld::set_context_menu(aps_, [this](fld::Menu &m) {
+    m.button(wifi_connect_).divider().button(wifi_scan_).button(wifi_hidden_);
+  });
+  fld::set_context_menu(conns_, [this](fld::Menu &m) {
+    m.button(c_toggle_).button(c_edit_).button(c_delete_).divider().button(c_add_);
+  });
+  fld::set_context_menu(sidebar_, [this](fld::Menu &m) {
+    if (dev_page_->visible()) m.button(dev_toggle_).button(dev_edit_);
+  });
   end();
   resizable(dev_page_);
   page_ = "";

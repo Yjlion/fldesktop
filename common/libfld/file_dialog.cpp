@@ -1,4 +1,5 @@
 #include "fld/file_dialog.h"
+#include "fld/menus.h"
 
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
@@ -206,6 +207,16 @@ public:
     accept->copy_label(al.c_str());
     accept->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->do_accept(); }, this);
     if (opt.mode == FileDialogOptions::OPEN && !opt.directory) newdir->hide();
+    // right-click on a file or folder
+    set_context_menu(list, [this](Menu &m) {
+      int i = list->value() - 1;
+      bool ok = i >= 0 && i < (int)items.size();
+      std::string full = ok ? (cwd == "/" ? "/" + items[(size_t)i].name : cwd + "/" + items[(size_t)i].name) : "";
+      if (ok && items[(size_t)i].dir) m.item("Open Folder", [this, full] { go(full); });
+      m.button(accept).divider();
+      m.item("Copy Path", [full] { Fl::copy(full.c_str(), (int)full.size(), 1); }, ok ? 0 : FL_MENU_INACTIVE);
+      m.button(up, "Parent Folder").button(newdir).divider().button(hidden, "Show Hidden Files");
+    });
     end();
     resizable(list);
     size_range(560, 360);

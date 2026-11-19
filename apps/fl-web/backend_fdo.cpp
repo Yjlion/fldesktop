@@ -116,8 +116,11 @@ public:
     e.base.x = (int)x;
     e.base.y = (int)y;
     e.base.modifiers = wmods(mods);
-    e.x_axis = dx;
-    e.y_axis = dy;
+    // WebKit's wheel deltas are positive towards the start of the page (the
+    // opposite of ours): passing them as they are scrolled the wrong way,
+    // like a touch screen
+    e.x_axis = -dx;
+    e.y_axis = -dy;
     wpe_view_backend_dispatch_axis_event(backend_, &e.base);
   }
   void key(bool down, unsigned keysym, unsigned keycode, unsigned mods, uint32_t time) override {

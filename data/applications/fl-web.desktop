@@ -10,8 +10,12 @@ Categories=Network;WebBrowser;
 Keywords=web;browser;internet;www;http;html;webkit;
 MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
 StartupWMClass=fl-web
-Actions=new-window;
+Actions=new-window;private;
 
 [Desktop Action new-window]
 Name=New Window
 Exec=fl-web --new-window
+
+[Desktop Action private]
+Name=New Private Window
+Exec=fl-web --private

@@ -82,6 +82,17 @@ bool DesktopEntry::load(const std::string &file, const std::string &id_) {
   no_display = ini.get_bool(g, "NoDisplay");
   hidden = ini.get_bool(g, "Hidden");
   if (name.empty()) name = id;
+  actions.clear();
+  for (auto &a : list_value(ini.get(g, "Actions"))) {
+    std::string ag = "Desktop Action " + a;
+    if (!ini.has(ag, "Name")) continue;
+    DesktopAction da;
+    da.id = a;
+    da.name = desktop_unescape(loc_get(ini, ag, "Name"));
+    da.icon = desktop_unescape(ini.get(ag, "Icon"));
+    da.exec = ini.get(ag, "Exec");
+    actions.push_back(da);
+  }
   return true;
 }
 
@@ -152,6 +163,17 @@ bool DesktopEntry::launch(const std::vector<std::string> &files) const {
     argv = t;
   }
   return spawn(argv, path_dir.empty() ? "" : expand_tilde(path_dir));
+}
+
+bool DesktopEntry::launch_action(const std::string &action_id) const {
+  for (auto &a : actions) {
+    if (a.id != action_id) continue;
+    if (a.exec.empty()) return false; // D-Bus activated actions are not supported
+    DesktopEntry e = *this;
+    e.exec = a.exec;
+    return e.launch();
+  }
+  return false;
 }
 
 std::string DesktopEntry::main_category() const {

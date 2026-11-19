@@ -200,6 +200,17 @@ bool power_indicator_active() {
 void power_indicator_start(fld::FlatButton *battery) {
   g_btn = battery;
   g_btn->callback(battery_cb);
+  panel_context_menu(g_btn, [](fld::Menu &m) {
+    const up::State &st = up::Client::get().state();
+    if (st.profiles_available) {
+      for (auto &p : st.profiles)
+        m.radio(fld::Menu::text(up::profile_label(p)), p == st.profile,
+                [p] { up::Client::get().set_profile(p, [](const std::string &) {}); });
+      m.divider();
+    }
+    m.item("Power Settings…", [] { fld::spawn({"fl-settings", "power"}); }).divider();
+    panel_menu_items(m);
+  });
   up::Client::get().on_changed = update;
   up::Client::get().start();
 }

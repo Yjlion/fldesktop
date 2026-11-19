@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "fld/menus.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
 #include "fld/widgets.h"
@@ -92,6 +93,32 @@ public:
     mute->selection_color(p.danger);
     end();
     resizable(slider);
+    // right-click: mute, default, a few levels, and where it plays
+    fld::set_context_menu(this, [this](fld::Menu &m) {
+      m.button(mute).button(make_default).divider();
+      for (int pct : {0, 25, 50, 75, 100}) {
+        char l[16];
+        snprintf(l, sizeof l, "%d %%", pct);
+        bool on = (int)lround(slider->value() * 100) == pct;
+        m.radio(l, on, [this, pct] {
+          slider->value(pct / 100.0);
+          slider_cb(slider, this);
+        });
+      }
+      if (target->visible() && target->size() > 1) {
+        m.divider().submenu(view->mode() == MixerView::CARDS ? "Profile" : 
+                            (view->mode() == MixerView::PLAYBACK || view->mode() == MixerView::RECORDING) ? "Device" : "Port");
+        for (int i = 0; i < target->size() - 1; i++) {
+          const char *t = target->text(i);
+          if (!t) continue;
+          m.radio(fld::Menu::text(t), target->value() == i, [this, i] {
+            target->value(i);
+            target_cb(target, this);
+          });
+        }
+        m.end_submenu();
+      }
+    }, false);
   }
 
   AudioBackend *be() const { return view->backend(); }

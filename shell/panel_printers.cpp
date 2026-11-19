@@ -186,6 +186,11 @@ void printers_cb(Fl_Widget *w, void *) {
 
 fld::FlatButton *printer_indicator_create() {
   g_btn = make_btn(34, nullptr, "Printing", printers_cb);
+  panel_context_menu(g_btn, [](fld::Menu &m) {
+    m.item("Printers…", [] { fld::spawn({"fl-printers"}); });
+    m.item("Printer Settings…", [] { fld::spawn({"fl-settings", "printers"}); }).divider();
+    panel_menu_items(m);
+  });
   g_btn->hide();
   std::thread(poll_thread).detach();
   return g_btn;

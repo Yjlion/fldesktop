@@ -405,9 +405,10 @@ static void activate_cb(GObject *src, GAsyncResult *res, gpointer data) {
 
 void Client::activate(const std::string &uuid, const std::string &device_path, Done done) {
   fld::glib_call([uuid, device_path, done] {
-    NMRemoteConnection *c = find_conn(uuid);
-    if (!c) { report(new Op{done}, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "connection not found")); return; }
-    nm_client_activate_connection_async(g_client, NM_CONNECTION(c), find_device(device_path), nullptr, nullptr,
+    // no uuid: NetworkManager picks the best connection for the device
+    NMRemoteConnection *c = uuid.empty() ? nullptr : find_conn(uuid);
+    if (!uuid.empty() && !c) { report(new Op{done}, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "connection not found")); return; }
+    nm_client_activate_connection_async(g_client, c ? NM_CONNECTION(c) : nullptr, find_device(device_path), nullptr, nullptr,
                                         activate_cb, new Op{done});
   });
 }

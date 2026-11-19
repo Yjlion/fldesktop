@@ -68,7 +68,7 @@ double now();
 // The video area. create() picks OpenGL when FLTK can do it.
 class FrameView {
 public:
-  virtual ~FrameView() = default;
+  virtual ~FrameView(); // removes the OSD timer
   virtual Fl_Widget *widget() = 0;
   virtual const char *kind() const = 0;
   virtual bool software() const = 0;

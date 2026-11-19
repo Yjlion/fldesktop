@@ -230,6 +230,19 @@ fld::FlatButton *notify_indicator_create() {
   g_bell->labelcolor(panel_fg());
   g_bell->hover_color(panel_hover());
   g_bell->callback(bell_cb);
+  panel_context_menu(g_bell, [](fld::Menu &m) {
+    m.toggle("Do Not Disturb", g_dnd, [] {
+      g_dnd = !g_dnd;
+      fld::NotifyHistory::get().set_dnd(g_dnd);
+      update_button();
+    });
+    m.item("Clear All", [] {
+      fld::NotifyHistory::get().clear();
+      g_list.clear();
+      update_button();
+    }, g_list.empty() ? FL_MENU_INACTIVE : 0).divider();
+    m.item("Notification Settings…", [] { fld::spawn({"fl-settings", "notifications"}); });
+  });
   g_bell->hide();
   fld::NotifyHistory::get().on_changed = refresh;
   fld::NotifyHistory::get().start();

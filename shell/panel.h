@@ -4,6 +4,9 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Double_Window.H>
 
+#include <functional>
+
+#include "fld/menus.h"
 #include "fld/theme.h"
 #include "fld/widgets.h"
 
@@ -14,6 +17,12 @@ Fl_Color panel_fg();
 Fl_Color panel_hover();
 // Lays out the panel again (after an indicator was shown or hidden).
 void relayout();
+// A right-click menu for a panel widget: fill adds the items when it is
+// shown. The left-click action no longer runs on a right click.
+void panel_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill);
+// Items most panel menus end with (Panel Settings…)
+void panel_menu_items(fld::Menu &m);
+
 // A flat panel button with a theme icon.
 fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Callback *cb);
 
@@ -64,3 +73,6 @@ void power_indicator_start(fld::FlatButton *battery);
 bool power_indicator_active();
 // panel_drives.cpp: mounts removable drives as they are plugged in.
 void drives_start();
+// panel_network.cpp: the network button's popup and right-click menu
+void network_popup(Fl_Widget *button);
+void network_context_menu(fld::Menu &m);

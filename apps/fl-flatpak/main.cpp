@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "fld/menus.h"
 #include "fld/icons.h"
 #include "fld/notify.h"
 #include "fld/theme.h"
@@ -410,6 +411,35 @@ public:
     size_range(820, 520);
     fld::set_window_icon(this, "fl-flatpak");
     show_detail(nullptr);
+    make_context_menus();
+  }
+
+  // right-click menus: an app (the same as its buttons), and the ref lists
+  void make_context_menus() {
+    fld::set_context_menu(list, [this](fld::Menu &m) {
+      m.button(action).button(run).button(remove).divider().button(perms);
+    });
+    files_list->type(FL_HOLD_BROWSER);
+    fld::set_context_menu(files_list, [this](fld::Menu &m) {
+      int i = files_list->value();
+      std::string f = i > 0 && files_list->text(i) ? files_list->text(i) : "";
+      bool ok = !f.empty() && f[0] == '/';
+      m.item("Open Folder", [f] { fld::spawn({"xdg-open", fld::is_dir(f) ? f : fld::dirname(f)}); },
+             ok ? 0 : FL_MENU_INACTIVE);
+      m.item("Copy Path", [f] { Fl::copy(f.c_str(), (int)f.size(), 1); }, ok ? 0 : FL_MENU_INACTIVE);
+    });
+    for (Fl_Browser *b : {deps_list, used_list})
+      fld::set_context_menu(b, [this, b](fld::Menu &m) {
+        int i = b->value();
+        std::string ref = i > 0 && b->text(i) ? b->text(i) : "";
+        ref = ref.substr(0, ref.find(' '));
+        m.item("Show", [this, b] {
+          Fl::e_clicks = 1; // as a double click
+          ref_clicked(b);
+          Fl::e_clicks = 0;
+        }, ref.empty() ? FL_MENU_INACTIVE : 0);
+        m.item("Copy Ref", [ref] { Fl::copy(ref.c_str(), (int)ref.size(), 1); }, ref.empty() ? FL_MENU_INACTIVE : 0);
+      });
   }
 
   void set_status(const std::string &s) {

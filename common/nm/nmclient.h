@@ -98,6 +98,7 @@ public:
   void set_networking(bool on, Done done = nullptr);
   void set_wireless(bool on, Done done = nullptr);
   void scan(const std::string &device_path);
+  // an empty uuid lets NetworkManager pick the connection for device_path
   void activate(const std::string &uuid, const std::string &device_path, Done done = nullptr);
   void deactivate(const std::string &uuid, Done done = nullptr);
   void disconnect_device(const std::string &device_path, Done done = nullptr);

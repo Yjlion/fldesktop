@@ -7,6 +7,8 @@
 #include "fld/json.h"
 #include "fld/mime.h"
 #include "fld/styles.h"
+#include "fld/tab_bar.h"
+#include "fld/menus.h"
 #include "fld/trash.h"
 #include "fld/util.h"
 #include "test.h"
@@ -83,6 +85,21 @@ static void test_desktop_entry() {
   CHECK_EQ(cmd[3], std::string("/y.png"));
   CHECK_EQ(cmd[5], std::string("My App"));
   CHECK_EQ(fld::desktop_unescape("a\\sb\\\\c"), std::string("a b\\c"));
+  CHECK(e.actions.empty());
+  // [Desktop Action] groups, in the order of Actions= (unknown ones skipped)
+  std::string p2 = g_tmp + "/act.desktop";
+  fld::write_file(p2,
+                  "[Desktop Entry]\nType=Application\nName=Web\nExec=web %u\nActions=private;missing;new-window;\n"
+                  "[Desktop Action new-window]\nName=New Window\nExec=web --new-window\n"
+                  "[Desktop Action private]\nName=New Private Window\nExec=web --private\nIcon=priv\n");
+  fld::DesktopEntry a;
+  CHECK(a.load(p2));
+  CHECK_EQ(a.actions.size(), 2u);
+  CHECK_EQ(a.actions[0].id, std::string("private"));
+  CHECK_EQ(a.actions[0].name, std::string("New Private Window"));
+  CHECK_EQ(a.actions[0].icon, std::string("priv"));
+  CHECK_EQ(a.actions[1].exec, std::string("web --new-window"));
+  CHECK(!a.launch_action("missing"));
 }
 
 static void test_json() {
@@ -200,6 +217,28 @@ static void test_session_env() {
   unsetenv("XDG_RUNTIME_DIR");
 }
 
+static void test_tabs() {
+  std::vector<int> v = {0, 1, 2, 3};
+  fld::move_element(v, 0, 2);
+  CHECK(v == std::vector<int>({1, 2, 0, 3}));
+  fld::move_element(v, 3, 0);
+  CHECK(v == std::vector<int>({3, 1, 2, 0}));
+  fld::move_element(v, 1, 9); // out of range: unchanged
+  CHECK(v == std::vector<int>({3, 1, 2, 0}));
+  // the current index follows the tabs
+  CHECK_EQ(fld::moved_index(0, 0, 2), 2);
+  CHECK_EQ(fld::moved_index(1, 0, 2), 0);
+  CHECK_EQ(fld::moved_index(3, 0, 2), 3);
+  CHECK_EQ(fld::moved_index(1, 3, 0), 2);
+  // drop position: past half of the next tab
+  CHECK_EQ(fld::TabBar::drop_index(0, 0, 100, 4), 0);
+  CHECK_EQ(fld::TabBar::drop_index(0, 49, 100, 4), 0);
+  CHECK_EQ(fld::TabBar::drop_index(0, 51, 100, 4), 1);
+  CHECK_EQ(fld::TabBar::drop_index(0, 1000, 100, 4), 3);
+  CHECK_EQ(fld::TabBar::drop_index(2, -300, 100, 4), 0);
+  CHECK_EQ(fld::Menu::text("a & b @ c"), std::string("a && b @@ c"));
+}
+
 int main() {
   char tmpl[] = "/tmp/fld-test-XXXXXX";
   g_tmp = mkdtemp(tmpl);
@@ -212,6 +251,7 @@ int main() {
   test_trash_and_copy();
   test_accents();
   test_session_env();
+  test_tabs();
   fld::remove_recursive(g_tmp);
   return test_result("libfld");
 }

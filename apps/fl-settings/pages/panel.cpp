@@ -7,6 +7,7 @@
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Return_Button.H>
 
+#include "fld/menus.h"
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
@@ -86,6 +87,9 @@ public:
     Fl_Button *up = new Fl_Button(wx + ww - 100, wy + 68, 100, 28, "Move Up");
     up->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->move(-1); }, this);
     Fl_Button *down = new Fl_Button(wx + ww - 100, wy + 102, 100, 28, "Move Down");
+    fld::set_context_menu(quick, [add, rm, up, down](fld::Menu &m) {
+      m.button(add).button(rm).divider().button(up).button(down);
+    });
     down->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->move(1); }, this);
     fill_quick();
 

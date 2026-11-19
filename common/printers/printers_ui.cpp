@@ -20,6 +20,7 @@
 #include <mutex>
 #include <thread>
 
+#include "fld/menus.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -496,6 +497,15 @@ PrintersView::PrintersView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   }, this);
   detail_->end();
   detail_->resizable(jobs_list_);
+  // right-click menus: a printer, and a job
+  fld::set_context_menu(list_, [this](fld::Menu &m) {
+    m.button(default_).button(test_).divider();
+    m.button(enabled_).button(accepting_).button(shared_).divider();
+    m.button(add_).button(remove_);
+  });
+  fld::set_context_menu(jobs_list_, [this](fld::Menu &m) {
+    m.button(cancel_job_).divider().button(show_done_);
+  });
   empty_ = new Fl_Box(X + 232, Y, W - 232, H);
   empty_->labelcolor(fld::palette().fg_dim);
   empty_->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER | FL_ALIGN_WRAP);

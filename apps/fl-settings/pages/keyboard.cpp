@@ -8,6 +8,7 @@
 #include <FL/Fl_Return_Button.H>
 #include <FL/Fl_Value_Slider.H>
 
+#include "fld/menus.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -73,6 +74,7 @@ public:
       p->save();
     }, this);
     Fl_Button *up = new Fl_Button(wx + ww - 100, wy + 68, 100, 28, "Move Up");
+    fld::set_context_menu(list, [add, rm, up](fld::Menu &m) { m.button(add).button(rm).divider().button(up); });
     up->callback([](Fl_Widget *, void *d) {
       KeyboardPage *p = (KeyboardPage *)d;
       int i = p->list->value() - 1;

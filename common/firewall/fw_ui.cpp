@@ -12,6 +12,7 @@
 
 #include <algorithm>
 
+#include "fld/menus.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -207,6 +208,14 @@ FirewallView::FirewallView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   }, this);
   g4->resizable(forwards_);
   g4->end();
+  // right-click menus: the same as the buttons next to each list
+  fld::set_context_menu(ports_, [padd, prm](fld::Menu &m) { m.button(padd).button(prm); });
+  fld::set_context_menu(ifaces_, [irm](fld::Menu &m) { m.button(irm); });
+  fld::set_context_menu(sources_, [sadd, srm](fld::Menu &m) { m.button(sadd).button(srm); });
+  fld::set_context_menu(forwards_, [fadd, frm](fld::Menu &m) { m.button(fadd).button(frm); });
+  fld::set_context_menu(zones_, [this](fld::Menu &m) {
+    m.button(reload_).button(to_perm_).divider().button(permanent_).button(panic_);
+  });
   tabs_->end();
   tabs_->resizable(g1);
   empty_ = new Fl_Box(X, Y + 34, W, H - 34);

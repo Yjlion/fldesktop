@@ -1,0 +1,24 @@
+[Desktop Entry]
+Type=Application
+Name=Snip
+GenericName=Screenshot Tool
+Comment=Take screenshots of a part of the screen, a window or all of it, and mark them up
+Exec=fl-snip
+Icon=fl-snip
+Terminal=false
+Categories=Utility;Graphics;
+Keywords=screenshot;snip;snipping;capture;screen;print;grab;
+StartupWMClass=fl-snip
+Actions=rectangle;window;full;
+
+[Desktop Action rectangle]
+Name=Snip a Rectangle
+Exec=fl-snip --snip
+
+[Desktop Action window]
+Name=Snip a Window
+Exec=fl-snip --window
+
+[Desktop Action full]
+Name=Snip the Whole Screen
+Exec=fl-snip --full

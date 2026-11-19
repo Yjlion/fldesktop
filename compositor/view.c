@@ -83,6 +83,7 @@ static const struct {
 	{"fldesktop.panel-popup", "fl-panel", FLWM_ROLE_POPUP},
 	{"fldesktop.notification", "fl-notifyd", FLWM_ROLE_NOTIFY},
 	{"fldesktop.lock", "fl-lock", FLWM_ROLE_LOCK},
+	{"fldesktop.snip", "fl-snip", FLWM_ROLE_SNIP},
 };
 
 static bool client_exe_is(struct flwm_server *server, struct wl_client *client, const char *exe) {
@@ -134,6 +135,7 @@ static void detect_role(struct flwm_view *view) {
 		case FLWM_ROLE_NOTIFY:
 		case FLWM_ROLE_POPUP: layer = view->server->layer_overlay; break;
 		case FLWM_ROLE_LOCK: layer = view->server->layer_lock; break;
+		case FLWM_ROLE_SNIP: layer = view->server->layer_popups; break;
 		default: break;
 		}
 		wlr_scene_node_reparent(&view->tree->node, layer);
@@ -224,6 +226,11 @@ void view_raise(struct flwm_view *view) {
 	wlr_scene_node_raise_to_top(&view->tree->node);
 }
 
+static bool same_client(struct flwm_view *a, struct flwm_view *b) {
+	return wl_resource_get_client(a->xdg_toplevel->resource) ==
+		wl_resource_get_client(b->xdg_toplevel->resource);
+}
+
 void view_focus(struct flwm_view *view) {
 	if (!view || !view->mapped) return;
 	struct flwm_server *server = view->server;
@@ -234,13 +241,14 @@ void view_focus(struct flwm_view *view) {
 	struct flwm_view *prev = view_focused(server);
 	if (view->minimized) view_set_minimized(view, false);
 	if (view->role == FLWM_ROLE_NORMAL || view->role == FLWM_ROLE_LAUNCHER ||
-			view->role == FLWM_ROLE_POPUP)
+			view->role == FLWM_ROLE_POPUP || view->role == FLWM_ROLE_SNIP)
 		view_raise(view);
 	if (prev == view) return;
 
 	/* the launcher closes itself when another window gets focus (not the panel,
 	 * whose launcher button toggles it) */
-	if (prev && prev->role == FLWM_ROLE_LAUNCHER && view->role != FLWM_ROLE_PANEL)
+	if (prev && prev->role == FLWM_ROLE_LAUNCHER && view->role != FLWM_ROLE_PANEL &&
+			!same_client(prev, view)) /* its own dialogs (confirm shut down) keep it */
 		wlr_xdg_toplevel_send_close(prev->xdg_toplevel);
 	/* panel popups close as soon as anything else gets the focus */
 	if (prev && prev->role == FLWM_ROLE_POPUP)
@@ -511,6 +519,15 @@ void view_reposition_shell(struct flwm_view *view) {
 		request_size(view, o->full_area.width, o->full_area.height);
 		view_set_position(view, o->full_area.x, o->full_area.y);
 		break;
+	case FLWM_ROLE_SNIP: {
+		/* the whole output layout, over the panel */
+		struct wlr_box box;
+		wlr_output_layout_get_box(server->output_layout, NULL, &box);
+		if (box.width <= 0 || box.height <= 0) return;
+		request_size(view, box.width, box.height);
+		view_set_position(view, box.x, box.y);
+		break;
+	}
 	case FLWM_ROLE_NOTIFY:
 		/* top right corner of the usable area (below a top panel) */
 		o = output_primary(server);
@@ -609,7 +626,8 @@ static void view_map(struct wl_listener *listener, void *data) {
 		wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
 		view_reposition_shell(view);
 		if (view->role == FLWM_ROLE_PANEL || view->role == FLWM_ROLE_OSK) arrange_all(server);
-		if (view->role == FLWM_ROLE_LAUNCHER || view->role == FLWM_ROLE_POPUP) view_focus(view);
+		if (view->role == FLWM_ROLE_LAUNCHER || view->role == FLWM_ROLE_POPUP || view->role == FLWM_ROLE_SNIP)
+			view_focus(view);
 		if (view->role == FLWM_ROLE_DESKTOP && !view_focused(server)) view_focus(view);
 		if (view->role == FLWM_ROLE_LOCK) {
 			view_focus(view);
@@ -636,6 +654,8 @@ static void view_unmap(struct wl_listener *listener, void *data) {
 	if (server->last_click_view == view) server->last_click_view = NULL;
 	bool was_focused = view_focused(server) == view;
 	view->mapped = false;
+	/* the decorations are ours, not the surface's: hide them with it */
+	wlr_scene_node_set_enabled(&view->tree->node, false);
 	if (view->ftl) {
 		wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
 		view->ftl = NULL;
@@ -716,6 +736,16 @@ static void view_commit(struct wl_listener *listener, void *data) {
 
 static void view_destroy(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = wl_container_of(listener, view, destroy);
+	struct flwm_server *server = view->server;
+	/* a client that dies (or crashes) may not unmap first */
+	if (view == server->grabbed_view) {
+		server->grabbed_view = NULL; /* its toplevel is going: no configure */
+		input_reset_cursor_mode(server);
+	}
+	if (server->cycle_current == view) server->cycle_current = NULL;
+	switcher_view_gone(server, view);
+	if (server->hover_view == view) server->hover_view = NULL;
+	if (server->last_click_view == view) server->last_click_view = NULL;
 	if (view->ftl) wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
 	wl_list_remove(&view->map.link);
 	wl_list_remove(&view->unmap.link);
@@ -733,6 +763,10 @@ static void view_destroy(struct wl_listener *listener, void *data) {
 		wl_list_remove(&view->decoration_request_mode.link);
 		wl_list_remove(&view->decoration_destroy.link);
 	}
+	/* wlroots destroys the surface's scene nodes, but view->tree and the
+	 * decorations in it are ours; their node data points at this view */
+	wlr_scene_node_destroy(&view->tree->node);
+	view->decor.tree = NULL;
 	free(view->decor.title_text);
 	free(view);
 }
@@ -995,4 +1029,28 @@ void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, 
 		server->resize_edges = edges;
 		wlr_xdg_toplevel_set_resizing(view->xdg_toplevel, true);
 	}
+}
+
+void view_dump_windows(struct flwm_server *server) {
+	const char *dir = getenv("XDG_RUNTIME_DIR");
+	if (!dir) return;
+	char path[PATH_MAX], tmp[PATH_MAX + 8];
+	snprintf(path, sizeof path, "%s/fl-wm-windows", dir);
+	snprintf(tmp, sizeof tmp, "%s.tmp", path);
+	FILE *f = fopen(tmp, "w");
+	if (!f) return;
+	struct flwm_view *v;
+	/* server->views is in stacking order, topmost first */
+	wl_list_for_each(v, &server->views, link) {
+		if (!v->mapped || v->minimized || v->role != FLWM_ROLE_NORMAL) continue;
+		struct wlr_box geo;
+		flwm_xdg_geometry(v->xdg_toplevel->base, &geo);
+		int T = deco_top(v), B = deco_side(v);
+		const char *title = v->xdg_toplevel->title ? v->xdg_toplevel->title : "";
+		fprintf(f, "%d %d %d %d ", v->x - B, v->y - T, geo.width + 2 * B, geo.height + T + B);
+		for (const char *c = title; *c; c++) fputc(*c == '\n' ? ' ' : *c, f);
+		fputc('\n', f);
+	}
+	fclose(f);
+	rename(tmp, path);
 }

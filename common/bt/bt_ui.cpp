@@ -12,6 +12,7 @@
 
 #include <algorithm>
 
+#include "fld/menus.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -217,6 +218,12 @@ BluetoothView::BluetoothView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) 
     Client::get().set_trusted(v->selected_, ((Fl_Check_Button *)w)->value(),
                               [](const std::string &e) { show_error("The setting could not be changed.", e); });
   }, this);
+  // right-click on a device: the same as the buttons below the lists
+  for (Fl_Hold_Browser *b : {mine_, nearby_})
+    fld::set_context_menu(b, [this](fld::Menu &m) {
+      if (selected_.empty() || !Client::get().state().device(selected_)) return;
+      m.button(connect_).button(pair_).button(trusted_).divider().button(forget_);
+    });
   empty_ = new Fl_Box(X, Y + 60, W, H - 60);
   empty_->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER | FL_ALIGN_WRAP);
   empty_->labelcolor(fld::palette().fg_dim);

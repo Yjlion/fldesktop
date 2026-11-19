@@ -16,6 +16,9 @@ add_library(fld STATIC
   file_dialog.cpp
   fileops.cpp
   fileops_ui.cpp
+  menus.cpp
+  session.cpp
+  tab_bar.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Threads REQUIRED)

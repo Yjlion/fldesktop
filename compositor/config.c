@@ -169,14 +169,14 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
 	add_binding(c, "Super+f", "fullscreen");
-	add_binding(c, "F11", "fullscreen");
 	add_binding(c, "Alt+Tab", "cycle");
 	add_binding(c, "Alt+Shift+Tab", "cycle-back");
 	add_binding(c, "Super+Shift+r", "reload");
 	add_binding(c, "Super+l", "lock");
 	add_binding(c, "Ctrl+Alt+BackSpace", "quit");
-	add_binding(c, "Print", "exec fl-screenshot");
-	add_binding(c, "Shift+Print", "exec fl-screenshot --area");
+	add_binding(c, "Print", "exec fl-snip --full");
+	add_binding(c, "Shift+Print", "exec fl-snip --area");
+	add_binding(c, "Super+Shift+s", "exec fl-snip --snip");
 	add_binding(c, "Ctrl+Shift+Escape", "exec fl-taskmgr");
 
 	c->autostart[c->nautostart++] = strdup("fl-desktop");

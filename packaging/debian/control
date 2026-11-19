@@ -81,7 +81,7 @@ Package: fldesktop-wm
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils
-Suggests: grim, slurp, wl-clipboard
+Suggests: grim, wl-clipboard
 Description: fldesktop Wayland compositor
  fl-wm is a stacking Wayland compositor based on wlroots with server side
  decorations, keyboard shortcuts, window snapping and the protocols used by
@@ -115,14 +115,15 @@ Architecture: any
 Depends: fldesktop-wm (= ${binary:Version}), xdg-user-dirs, ${shlibs:Depends}, ${misc:Depends}
 Recommends: dbus-user-session, pipewire-audio | pipewire, wireplumber, network-manager,
             fldesktop-polkit-agent, fldesktop-notifyd, xdg-desktop-portal-fl,
-            bluez, cups, upower, udisks2
+            bluez, cups, upower, udisks2, grim, wl-clipboard
 Suggests: power-profiles-daemon
 Description: fldesktop panel, launcher and desktop
  The fldesktop session: fl-panel (taskbar, clock, network, volume, battery,
  Bluetooth, printing, notifications, on-screen keyboard button and power
  menu), fl-launcher (searchable
  application menu), fl-desktop (wallpaper and desktop icons), XDG
- autostart support and the wayland-sessions entry.
+ autostart support, fl-snip (screenshots of an area, a window or the whole
+ screen, with an editor to mark them up) and the wayland-sessions entry.
 
 Package: fldesktop-greeter
 Architecture: any

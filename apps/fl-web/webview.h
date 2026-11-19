@@ -20,6 +20,12 @@ public:
   WebKitWebView *view() const { return view_; }
   // Keys the browser handles first (shortcuts); returns true when used.
   std::function<bool(int key, int state)> key_filter;
+  // a right button release at x, y (window coordinates)
+  std::function<void(int x, int y)> on_right_click;
+  // wheel down scrolls up, like a touch screen
+  static bool natural_scroll;
+  // pastes the system clipboard into the page (as a Ctrl+V)
+  void paste_clipboard();
 
   void activate_view(bool on); // shown in the window (the current tab)
   void draw() override;

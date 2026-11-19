@@ -38,6 +38,7 @@
 #include "archive_core.h"
 #include "fld/file_dialog.h"
 #include "fld/icons.h"
+#include "fld/menus.h"
 #include "fld/mime.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -549,6 +550,19 @@ public:
       if (k == FL_Enter || k == FL_KP_Enter) { activate_selected(); return 1; }
       if (k == FL_BackSpace) { go_up(); return 1; }
     }
+    if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE) {
+      // a row that is not selected yet becomes the selection
+      int R = -1, C = -1;
+      ResizeFlag rf;
+      if (cursor2rowcol(R, C, rf) == CONTEXT_CELL && R >= 0 && !row_selected(R)) {
+        select_all_rows(0);
+        select_row(R, 1);
+        Fl_Widget::do_callback();
+      }
+      take_focus();
+      context_menu();
+      return 1;
+    }
     int r = Fl_Table_Row::handle(e);
     if (e == FL_PUSH && Fl::event_clicks() && Fl::event_button() == FL_LEFT_MOUSE &&
         callback_context() == CONTEXT_CELL) {
@@ -564,6 +578,7 @@ public:
     show_dir(d);
   }
   void activate_selected();
+  void context_menu();
 
 protected:
   void draw_cell(TableContext ctx, int R, int C, int X, int Y, int W, int H) override {
@@ -613,6 +628,40 @@ protected:
     }
   }
 };
+
+static std::vector<std::string> selected_paths();
+static void extract_action();
+static void delete_action();
+static void add_files(bool folders);
+
+void ArchiveView::context_menu() {
+  bool open = !g_archive.empty();
+  auto sel = selected_paths();
+  bool one = sel.size() == 1;
+  fld::Menu m;
+  m.item("Open", [this] { activate_selected(); }, one ? 0 : FL_MENU_INACTIVE, FL_Enter);
+  m.item(sel.empty() ? "Extract All…" : "Extract…", [] { extract_action(); }, open ? 0 : FL_MENU_INACTIVE,
+         FL_CTRL + 'e');
+  m.item("Delete from Archive", [] { delete_action(); }, open && g_writable && !sel.empty() ? 0 : FL_MENU_INACTIVE,
+         FL_Delete).divider();
+  m.item("Copy Name", [sel] {
+    std::string t;
+    for (auto &p : sel) t += (t.empty() ? "" : "\n") + fld::basename(p);
+    Fl::copy(t.c_str(), (int)t.size(), 1);
+  }, sel.empty() ? FL_MENU_INACTIVE : 0);
+  m.item("Copy Path in Archive", [sel] {
+    std::string t = fld::join(sel, "\n");
+    Fl::copy(t.c_str(), (int)t.size(), 1);
+  }, sel.empty() ? FL_MENU_INACTIVE : 0).divider();
+  m.item("Select All", [this] {
+    select_all_rows(1);
+    Fl_Widget::do_callback();
+  }, rows_.empty() ? FL_MENU_INACTIVE : 0, FL_CTRL + 'a');
+  m.item("Go Up", [this] { go_up(); }, g_dir.empty() ? FL_MENU_INACTIVE : 0, FL_BackSpace).divider();
+  m.item("Add Files…", [] { add_files(false); }, open && g_writable ? 0 : FL_MENU_INACTIVE);
+  m.item("Add Folder…", [] { add_files(true); }, open && g_writable ? 0 : FL_MENU_INACTIVE);
+  m.popup();
+}
 
 static void update_buttons() {
   bool open = !g_archive.empty();

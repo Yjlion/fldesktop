@@ -5,6 +5,11 @@
 
 namespace fld {
 
+// [Desktop Action id] groups: extra ways to start an application
+struct DesktopAction {
+  std::string id, name, icon, exec;
+};
+
 struct DesktopEntry {
   std::string id;        // e.g. "org.example.App.desktop"
   std::string path;      // full file path
@@ -24,6 +29,7 @@ struct DesktopEntry {
   bool terminal = false;
   bool no_display = false;
   bool hidden = false;
+  std::vector<DesktopAction> actions; // in the order of Actions=
 
   bool load(const std::string &file, const std::string &id = "");
   // Should it be shown in menus for this desktop?
@@ -32,6 +38,8 @@ struct DesktopEntry {
   std::vector<std::string> command(const std::vector<std::string> &files = {}) const;
   // Launch it (wraps in a terminal if Terminal=true).
   bool launch(const std::vector<std::string> &files = {}) const;
+  // Launch one of its actions (by id); false when there is no such action.
+  bool launch_action(const std::string &action_id) const;
   // Primary menu category (Development, Graphics, ... or "Other")
   std::string main_category() const;
 };

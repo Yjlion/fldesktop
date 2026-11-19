@@ -558,6 +558,12 @@ public:
   }
 };
 
+static void volume_menu(fld::Menu &m) {
+  m.toggle("Mute", P.muted, [] { toggle_mute(); }).divider();
+  m.item("Sound Settings…", [] { fld::spawn({"fl-settings", "sound"}); });
+  m.item("Volume Mixer…", [] { fld::spawn({"fl-mixer"}); });
+}
+
 static void volume_cb(Fl_Widget *w, void *) {
   PanelPopup pop(260, 96);
   Fl_Slider *s = new Fl_Slider(12, 14, 180, 22);
@@ -598,6 +604,74 @@ static void clock_cb(Fl_Widget *w, void *) {
 }
 
 static void launcher_cb(Fl_Widget *, void *) { fld::spawn({"fl-launcher"}); }
+
+// QuickLaunch in panel.ini; the panel restarts when it changes
+static std::vector<std::string> quick_ids() {
+  fld::Ini c;
+  c.load(fld::fld_config_dir() + "/panel.ini");
+  std::vector<std::string> r;
+  for (auto &x : fld::split(c.get("Panel", "QuickLaunch", "fl-files;fl-term;fl-edit"), ';')) {
+    std::string t = fld::trim(x);
+    if (fld::ends_with(t, ".desktop")) t.resize(t.size() - 8);
+    if (!t.empty()) r.push_back(t);
+  }
+  return r;
+}
+
+static void set_quick_ids(const std::vector<std::string> &ids) {
+  fld::Ini c;
+  std::string path = fld::fld_config_dir() + "/panel.ini";
+  c.load(path);
+  c.set("Panel", "QuickLaunch", fld::join(ids, ";"));
+  c.save(path);
+}
+
+static void quick_menu(fld::DesktopEntry *e, fld::Menu &m) {
+  std::string id = e->id;
+  if (fld::ends_with(id, ".desktop")) id.resize(id.size() - 8);
+  auto ids = quick_ids();
+  int i = (int)(std::find(ids.begin(), ids.end(), id) - ids.begin());
+  int n = (int)ids.size();
+  m.item("Open", [e] { e->launch(); });
+  for (auto &a : e->actions) {
+    std::string aid = a.id;
+    m.item(fld::Menu::text(a.name), [e, aid] { e->launch_action(aid); });
+  }
+  m.divider();
+  m.item("Move Left", [i] {
+    auto l = quick_ids();
+    if (i > 0 && i < (int)l.size()) std::swap(l[(size_t)i], l[(size_t)i - 1]);
+    set_quick_ids(l);
+  }, i > 0 && i < n ? 0 : FL_MENU_INACTIVE);
+  m.item("Move Right", [i] {
+    auto l = quick_ids();
+    if (i + 1 < (int)l.size()) std::swap(l[(size_t)i], l[(size_t)i + 1]);
+    set_quick_ids(l);
+  }, i + 1 < n ? 0 : FL_MENU_INACTIVE);
+  m.item("Remove from Quick Launch", [id] {
+    auto l = quick_ids();
+    l.erase(std::remove(l.begin(), l.end(), id), l.end());
+    set_quick_ids(l);
+  });
+  m.divider();
+  panel_menu_items(m);
+}
+
+static void clock_menu(fld::Menu &m) {
+  auto copy = [](const char *fmt) {
+    char buf[128];
+    time_t t = time(nullptr);
+    strftime(buf, sizeof buf, fmt, localtime(&t));
+    Fl::copy(buf, (int)strlen(buf), 1);
+  };
+  m.item("Copy Date", [copy] { copy("%Y-%m-%d"); });
+  m.item("Copy Time", [copy] { copy("%H:%M:%S"); });
+  m.item("Copy Date and Time", [copy] { copy("%c"); }).divider();
+  m.item("Date && Time Settings…", [] { fld::spawn({"fl-settings", "datetime"}); });
+  m.item("Clock Format…", [] { fld::spawn({"fl-settings", "panel"}); });
+}
+
+static void volume_menu(fld::Menu &m);
 
 static void quick_cb(Fl_Widget *w, void *) {
   fld::DesktopEntry *e = (fld::DesktopEntry *)w->user_data();
@@ -667,48 +741,11 @@ static void network_changed() {
     if (d.connected && !d.ip4.empty()) { g_net_tip += "\n" + d.iface + ": " + d.ip4[0]; break; }
   for (auto &c : st.connections)
     if (c.active && (c.type == "vpn" || c.type == "wireguard")) g_net_tip += "\nVPN: " + c.id;
-  g_net_tip += "\nRight-click for VPN connections";
   P.network->tooltip(g_net_tip.c_str());
   if (!P.network->visible()) { P.network->show(); relayout(); }
   P.network->redraw();
 }
 
-// right-click on the network button: connect / disconnect VPNs
-static void network_menu() {
-  const nm::State &st = nm::Client::get().state();
-  static std::vector<std::string> labels, uuids;
-  labels.clear();
-  uuids.clear();
-  for (auto &c : st.connections) {
-    if (c.type != "vpn" && c.type != "wireguard") continue;
-    labels.push_back(fld::escape_at(c.id));
-    uuids.push_back(c.uuid);
-  }
-  std::vector<Fl_Menu_Item> m;
-  for (size_t i = 0; i < labels.size(); i++) {
-    const nm::Connection *c = st.connection(uuids[i]);
-    m.push_back({labels[i].c_str(), 0, nullptr, (void *)(long)(100 + i),
-                 FL_MENU_TOGGLE | (c && c->active ? FL_MENU_VALUE : 0)});
-  }
-  if (labels.empty()) m.push_back({"No VPN connections", 0, nullptr, nullptr, FL_MENU_INACTIVE});
-  m.back().flags |= FL_MENU_DIVIDER;
-  m.push_back({"Network Settings…", 0, nullptr, (void *)1});
-  m.push_back({nullptr});
-  const Fl_Menu_Item *r = m[0].popup(Fl::event_x(), Fl::event_y());
-  if (!r) return;
-  long id = (long)r->user_data();
-  if (id == 1) {
-    fld::spawn({"fl-network"});
-  } else if (id >= 100 && id - 100 < (long)uuids.size()) {
-    std::string uuid = uuids[(size_t)(id - 100)];
-    const nm::Connection *c = st.connection(uuid);
-    auto report = [](const std::string &err) {
-      if (!err.empty()) fl_alert("VPN: %s", fld::escape_at(err).c_str());
-    };
-    if (c && c->active) nm::Client::get().deactivate(uuid, report);
-    else nm::Client::get().activate(uuid, "", report);
-  }
-}
 #endif
 
 void relayout() {
@@ -762,9 +799,65 @@ void relayout() {
   P.win->redraw();
 }
 
+// ---- right-click menus ----------------------------------------------------------------------
+
+static std::map<Fl_Widget *, std::function<void(fld::Menu &)>> &context_menus() {
+  static std::map<Fl_Widget *, std::function<void(fld::Menu &)>> m;
+  return m;
+}
+
+void set_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill) { context_menus()[w] = std::move(fill); }
+
+void panel_menu_items(fld::Menu &m) {
+  m.item("Panel Settings…", [] { fld::spawn({"fl-settings", "panel"}); });
+}
+
+// the panel's own menu (a right click on an empty part)
+static void panel_menu() {
+  fld::Menu m;
+  m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
+  m.item("Applications…", [] { fld::spawn({"fl-launcher"}); }).divider();
+  m.item("Lock Screen", [] { fld::lock_screen(); }, fld::can_lock() ? 0 : FL_MENU_INACTIVE).divider();
+  panel_menu_items(m);
+  m.item("Settings…", [] { fld::spawn({"fl-settings"}); });
+  m.popup();
+}
+
+// the innermost visible widget under x, y
+static Fl_Widget *panel_widget_at(Fl_Group *g, int x, int y) {
+  for (int i = g->children() - 1; i >= 0; i--) {
+    Fl_Widget *c = g->child(i);
+    if (!c->visible() || x < c->x() || y < c->y() || x >= c->x() + c->w() || y >= c->y() + c->h()) continue;
+    if (Fl_Group *cg = c->as_group()) {
+      Fl_Widget *in = panel_widget_at(cg, x, y);
+      return in ? in : c;
+    }
+    return c;
+  }
+  return nullptr;
+}
+
 class PanelWindow : public Fl_Double_Window {
 public:
   using Fl_Double_Window::Fl_Double_Window;
+  int handle(int e) override {
+    if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE) {
+      Fl_Widget *w = panel_widget_at(this, Fl::event_x(), Fl::event_y());
+      auto it = w ? context_menus().find(w) : context_menus().end();
+      if (it != context_menus().end()) {
+        fld::Menu m;
+        it->second(m);
+        m.popup();
+        return 1;
+      }
+      // task buttons have their own menu
+      if (!w || w == P.tasks || w == P.quick) {
+        panel_menu();
+        return 1;
+      }
+    }
+    return Fl_Double_Window::handle(e);
+  }
   void resize(int X, int Y, int W, int H) override {
     Fl_Double_Window::resize(X, Y, W, H);
     relayout();
@@ -860,6 +953,13 @@ int main(int argc, char **argv) {
   if (!fld::icon("start-here", 20) && !fld::icon("view-app-grid-symbolic", 20))
     P.menu_btn->icon_name("applications-other", 20);
 
+  set_context_menu(P.menu_btn, [](fld::Menu &m) {
+    m.item("Open Applications", [] { fld::spawn({"fl-launcher"}); }).divider();
+    m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
+    m.item("Settings…", [] { fld::spawn({"fl-settings"}); }).divider();
+    panel_menu_items(m);
+  });
+
   P.quick = new Fl_Group(0, 0, 10, PANEL_H);
   static std::vector<std::unique_ptr<fld::DesktopEntry>> quick_entries;
   for (auto &id : fld::split(quick, ';')) {
@@ -868,6 +968,8 @@ int main(int argc, char **argv) {
     auto *b = make_btn(34, nullptr, e->name.c_str(), quick_cb);
     b->icon_name(e->icon.c_str(), 22);
     b->user_data(e.get());
+    fld::DesktopEntry *ep = e.get();
+    set_context_menu(b, [ep](fld::Menu &m) { quick_menu(ep, m); });
     quick_entries.push_back(std::move(e));
   }
   P.quick->end();
@@ -880,6 +982,7 @@ int main(int argc, char **argv) {
   P.volume->color(panel_bg());
   P.volume->hover_color(panel_hover());
   P.volume->callback(volume_cb);
+  set_context_menu(P.volume, volume_menu);
   P.volume->hide();
   // on-screen keyboard button: KeyboardButton=auto (no physical keyboard) | always | never
   std::string kb_mode = fld::lower(cfg.get("Panel", "KeyboardButton", "auto"));
@@ -887,12 +990,15 @@ int main(int argc, char **argv) {
     P.keyboard = make_btn(34, "input-keyboard", "On-screen keyboard",
                           [](Fl_Widget *, void *) { fld::spawn({"fl-osk"}); });
     if (!fld::icon("input-keyboard", 20)) P.keyboard->copy_label("⌨");
+    set_context_menu(P.keyboard, [](fld::Menu &m) {
+      m.item("Show On-screen Keyboard", [] { fld::spawn({"fl-osk"}); });
+      m.item("Keyboard Settings…", [] { fld::spawn({"fl-settings", "keyboard"}); }).divider();
+      panel_menu_items(m);
+    });
   }
 #ifdef FLD_HAVE_NM
-  P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *, void *) {
-    if (Fl::event_button() == FL_RIGHT_MOUSE) network_menu();
-    else fld::spawn({"fl-network"});
-  });
+  P.network = make_btn(34, "network-wired", "Network", [](Fl_Widget *w, void *) { network_popup(w); });
+  set_context_menu(P.network, network_context_menu);
   P.network->hide();
 #endif
 #ifdef FLD_HAVE_BLUETOOTH
@@ -913,12 +1019,24 @@ int main(int argc, char **argv) {
   drives_start();
 #endif
   P.clock = make_btn(140, nullptr, nullptr, clock_cb);
+  set_context_menu(P.clock, clock_menu);
 #ifdef FLD_HAVE_NOTIFY
   Fl::lock();
   P.bell = notify_indicator_create();
 #endif
   P.power = make_btn(34, "system-shutdown", "Power", power_cb);
   if (Fl_Image *pi = fld::symbolic_icon("system-shutdown", 18, panel_fg())) P.power->icon_image(pi);
+  set_context_menu(P.power, [](fld::Menu &m) {
+    using fld::PowerAction;
+    for (PowerAction a : {PowerAction::Lock, PowerAction::LogOut, PowerAction::Suspend, PowerAction::Reboot,
+                          PowerAction::PowerOff}) {
+      m.item(fld::power_label(a), [a] { fld::confirm_power(a); },
+             a == PowerAction::Lock && !fld::can_lock() ? FL_MENU_INACTIVE : 0);
+      if (a == PowerAction::LogOut) m.divider();
+    }
+    m.divider();
+    m.item("Power Settings…", [] { fld::spawn({"fl-settings", "power"}); });
+  });
   P.win->end();
   P.win->resizable(P.tasks);
   P.win->size_range(200, PANEL_H, 0, PANEL_H);

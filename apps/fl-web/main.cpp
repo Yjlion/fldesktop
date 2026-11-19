@@ -1887,8 +1887,18 @@ int main(int argc, char **argv) {
         if (!fld::trim(l).empty()) urls.push_back(fld::trim(l));
   }
 
+  // Set up GIO's session bus, network monitor and proxy resolver now, before
+  // any WebKit type exists. WebKit opens a socket in a class_init (holding
+  // GLib's class-init lock); the proxy resolver (libproxy) then asks for the
+  // network monitor, which waits for the session bus, which dconf's worker
+  // thread (started by GTK under libdecor) is creating and cannot finish
+  // without that lock: fl-web hung before showing a window.
+  if (GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr)) g_object_unref(bus);
+  g_network_monitor_get_default();
+  g_proxy_resolver_get_default();
+
   std::string cache = fld::cache_home() + "/fl-web";
-  g_session = webkit_network_session_new(data_dir().c_str(), cache.c_str());
+  g_session =webkit_network_session_new(data_dir().c_str(), cache.c_str());
   webkit_cookie_manager_set_persistent_storage(webkit_network_session_get_cookie_manager(g_session),
                                                (data_dir() + "/cookies.sqlite").c_str(),
                                                WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);

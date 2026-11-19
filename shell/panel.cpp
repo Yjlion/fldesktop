@@ -28,6 +28,8 @@
 #include <vector>
 
 #include "fld/config_watch.h"
+#include "fld/menus.h"
+#include "fld/session.h"
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -602,45 +604,16 @@ static void quick_cb(Fl_Widget *w, void *) {
   e->launch();
 }
 
-static void logout() {
-  const char *pid = getenv("FLWM_PID");
-  if (pid && atoi(pid) > 1) kill(atoi(pid), SIGTERM);
-  else exit(0);
-}
-
 static void power_cb(Fl_Widget *, void *) {
-  // fl-lock asks fl-wm to lock; swaylock works too (ext-session-lock)
-  std::string locker = !fld::which("fl-lock").empty() ? "fl-lock" : !fld::which("swaylock").empty() ? "swaylock" : "";
-  bool have_lock = !locker.empty();
-  Fl_Menu_Item items[] = {
-      {"Lock Screen", 0, nullptr, (void *)1, have_lock ? 0 : FL_MENU_INACTIVE},
-      {"Log Out", 0, nullptr, (void *)2, FL_MENU_DIVIDER},
-      {"Suspend", 0, nullptr, (void *)3},
-      {"Restart", 0, nullptr, (void *)4},
-      {"Shut Down", 0, nullptr, (void *)5},
-      {nullptr}};
-  const Fl_Menu_Item *m = items->popup(Fl::event_x(), Fl::event_y());
-  if (!m) return;
-  long id = (long)m->user_data();
-  std::string out;
-  switch (id) {
-    case 1:
-      if (locker == "fl-lock") fld::spawn({"fl-lock"});
-      else fld::spawn({"swaylock", "-f", "-c", "1e1f22"});
-      break;
-    case 2:
-      if (fl_choice("Log out of this session?", "Cancel", "Log Out", nullptr) == 1) logout();
-      break;
-    case 3: fld::spawn({"systemctl", "suspend"}); break;
-    case 4:
-      if (fl_choice("Restart the computer?", "Cancel", "Restart", nullptr) == 1)
-        fld::spawn({"systemctl", "reboot"});
-      break;
-    case 5:
-      if (fl_choice("Shut down the computer?", "Cancel", "Shut Down", nullptr) == 1)
-        fld::spawn({"systemctl", "poweroff"});
-      break;
+  using fld::PowerAction;
+  fld::Menu m;
+  for (PowerAction a : {PowerAction::Lock, PowerAction::LogOut, PowerAction::Suspend, PowerAction::Reboot,
+                        PowerAction::PowerOff}) {
+    int flags = a == PowerAction::Lock && !fld::can_lock() ? FL_MENU_INACTIVE : 0;
+    m.item(fld::power_label(a), [a] { fld::confirm_power(a); }, flags);
+    if (a == PowerAction::LogOut) m.divider();
   }
+  m.popup();
 }
 
 // True if a real keyboard is connected (a key device with auto repeat and the

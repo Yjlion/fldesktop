@@ -1,6 +1,7 @@
 #include "fld/theme.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/menus.h"
 #include "fld/styles.h"
 #include "fld/util.h"
 
@@ -102,6 +103,7 @@ void init_app(const char *app_id, int argc, char **argv) {
 
   if (app_id) Fl_Window::default_xclass(app_id);
   Fl::visual(FL_RGB);
+  install_edit_menu(); // Cut/Copy/Paste on a right click in every text field
   (void)argc;
   (void)argv;
 }

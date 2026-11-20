@@ -19,6 +19,8 @@ fldesktop (0.1.0) unstable; urgency=medium
     Electron and Java programs).
   * Workspaces in fl-wm (Super+1..9, Super+Ctrl+arrows; ext-workspace-v1)
     and a workspace pager in fl-panel.
+  * fl-screenshot is deprecated: use fl-snip --full or fl-snip --area.
+    The wrapper stays for old key bindings and will be removed later.
   * Input methods: fl-wm relays text-input-v3 and input-method-v2, so
     fcitx5 works for CJK input; Settings > Keyboard sets up fcitx5 or IBus.
 

@@ -5,6 +5,8 @@ fl-snip \- take and mark up screenshots
 \fBfl-snip\fR [\fB\-\-snip\fR|\fB\-\-area\fR|\fB\-\-window\fR|\fB\-\-full\fR|\fB\-\-freeform\fR] [\fB\-\-delay\fR \fIN\fR]
 .br
 \fBfl-snip\fR \fB\-\-edit\fR \fIFILE\fR
+.br
+\fBfl-snip\fR \fB\-\-record\fR [\fB\-\-audio\fR] [\fB\-\-seconds\fR \fIN\fR] [\fB\-o\fR \fIFILE\fR] [\fB\-\-no\-window\fR]
 .SH DESCRIPTION
 A snipping tool. The screen is captured first (with \fBgrim\fR(1)) and shown frozen over all
 outputs, where you choose what to keep:
@@ -33,6 +35,17 @@ PNG (Ctrl+S, Ctrl+Shift+S), opens it in the image viewer or another program, or 
 The quick modes (\fB\-\-area\fR, \fB\-\-window\fR, \fB\-\-full\fR, \fB\-\-freeform\fR) save
 the snip to \fI~/Pictures/Screenshots\fR, copy it to the clipboard and print the file's path;
 a notification offers to open, edit or show it. \fB\-\-snip\fR opens the editor instead.
+.SH SCREEN RECORDING
+\fBRecord\fR in the Snip window (Ctrl+R), or \fB\-\-record\fR, records a screen or a
+window as a WebM video (VP8, 30 frames a second, the pointer included) to
+\fI~/Videos/Screencasts\fR. The screen or window is chosen in the screen sharing dialog
+of the ScreenCast portal (\fBxdg-desktop-portal-fl\fR(1) in fldesktop); a small window
+shows the time and a Stop button. \fB\-\-audio\fR (More > Record with Sound) records the
+desktop's sound too (through PipeWire's PulseAudio server). \fB\-\-seconds\fR \fIN\fR
+stops after \fIN\fR seconds, \fB\-o\fR names the file, \fB\-\-no\-window\fR shows no
+window and no notification (stop with Ctrl+C), and \fB\-\-record\-node\fR \fIN\fR
+records PipeWire node \fIN\fR without asking the portal. The file's path is printed.
+Recording needs GStreamer with the PipeWire plugin and the good plugins.
 .SH KEYS
 In fl-wm: \fBPrint\fR the whole screen, \fBShift+Print\fR a rectangle, \fBSuper+Shift+S\fR
 a snip to edit.

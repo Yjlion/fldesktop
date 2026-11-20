@@ -96,7 +96,7 @@ package_fldesktop-wm() {
 
 package_fldesktop-shell() {
   pkgdesc="fldesktop panel, launcher, desktop icons and session"
-  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm libcups xdg-user-dirs)
+  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm libcups xdg-user-dirs gstreamer)
   optdepends=('pipewire: volume control' 'wireplumber: volume control'
               'pipewire-pulse: sound for PulseAudio applications'
               'pipewire-alsa: sound for ALSA applications'
@@ -108,7 +108,8 @@ package_fldesktop-shell() {
               'fldesktop-notifyd: notifications and their history'
               'xdg-desktop-portal-fl: file dialogs and settings for Flatpak apps'
               'bluez: Bluetooth button' 'cups: printer button'
-              'grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard')
+              'grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard'
+              'gst-plugin-pipewire: screen recording (fl-snip)' 'gst-plugins-good: screen recording (fl-snip)')
   _stage
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
     usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \

@@ -80,5 +80,22 @@ int main() {
   test_polygon();
   test_images();
   test_names();
+  // screen recording
+  {
+    std::string p = record_pipeline(7, 42, false);
+    CHECK(p.find("pipewiresrc fd=7 path=42") == 0);
+    CHECK(p.find("framerate=30/1") != std::string::npos);
+    CHECK(p.find("webmmux name=mux") != std::string::npos);
+    CHECK(p.find("filesink name=sink") != std::string::npos);
+    CHECK(p.find("pulsesrc") == std::string::npos);
+    std::string q = record_pipeline(-1, 42, true);
+    CHECK(q.find("fd=") == std::string::npos);
+    CHECK(q.find("pulsesrc device=@DEFAULT_MONITOR@") != std::string::npos);
+    CHECK(q.find("! mux.") != std::string::npos);
+    time_t t = 1700000000;
+    std::string n = recording_name(t);
+    CHECK(n.rfind("Screencast-", 0) == 0);
+    CHECK(n.size() > 5 && n.substr(n.size() - 5) == ".webm");
+  }
   return test_result("snip");
 }

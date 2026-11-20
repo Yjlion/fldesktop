@@ -18,7 +18,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
 | **fl-web** | Web browser on WPE WebKit: tabs (drag, right-click, reopen closed ones), private windows, developer tools (F12), full screen, an optional menu bar, page right-click menus, an address bar that searches and completes from bookmarks and history, downloads, find in page, zoom, bookmarks and history, the pages' password, file, permission and notification requests |
 | **fl-video** | Video and audio player on GStreamer: playlists, subtitles, track selection, speed, screenshots, resume |
-| **fl-docs** | PDF viewer (poppler): continuous pages with thumbnails, fit width/page and zoom, search with highlights, printing through CUPS with page ranges and two-sided printing, password protected documents |
+| **fl-docs** | Document viewer: PDF (poppler), EPUB e-books, OpenDocument text and comic books (.cbz); continuous pages with thumbnails, fit width/page and zoom, search with highlights, printing through CUPS with page ranges and two-sided printing, password protected documents |
 | **fl-archive** | Archive manager (libarchive): browse, extract, create and change zip, 7z and tar archives, encrypted zip, Extract Here / Compress in fl-files |
 | **fl-snip** | Snipping tool: a rectangle, a freeform shape, a window or the whole screen, chosen on a frozen picture of the screen with a magnifier; an editor with pen, highlighter, arrows, shapes, text, pixelate and crop; copy, save, print; quick snips for the Print keys; screen recording to WebM through the ScreenCast portal |
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
@@ -96,6 +96,7 @@ page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
 packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak),
 GStreamer with its base plugins (fl-video, fl-webcam), libarchive (fl-archive), PAM (fl-lock),
 WPE WebKit (fl-web: with the WPE Platform API, or libwpe and WPEBackend-fdo);
+poppler-cpp, and libxml2, libarchive and Pango for e-books, OpenDocument text and comic books (fl-docs);
 UPower, power-profiles-daemon and UDisks2 are used at run time when present;
 gio is used for notifications, the portal, Bluetooth and the firewall. Without
 one of them the parts that need it are left out.

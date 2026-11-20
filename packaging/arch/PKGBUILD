@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit poppler)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit poppler libxml2)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -81,7 +81,7 @@ package_fldesktop() {
               'fldesktop-webcam: camera app'
               'fldesktop-archive: archive manager'
               'fldesktop-web: web browser'
-              'fldesktop-docs: PDF viewer'
+              'fldesktop-docs: document viewer (PDF, EPUB, ODT, comic books)'
               'plymouth: boot splash'
               'fldesktop-plymouth-theme: the fldesktop boot splash')
   arch=(any)
@@ -183,8 +183,8 @@ package_fldesktop-webcam() {
 }
 
 package_fldesktop-docs() {
-  pkgdesc="fldesktop PDF viewer (poppler)"
-  depends=(fltk poppler wayland)
+  pkgdesc="fldesktop document viewer: PDF (poppler), EPUB, OpenDocument text and comic books"
+  depends=(fltk poppler wayland libxml2 libarchive pango cairo)
   optdepends=("libcups: printing" "poppler-data: documents in CJK and other encodings")
   _app docs
 }

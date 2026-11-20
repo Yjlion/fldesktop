@@ -33,6 +33,7 @@ const std::vector<Kind> &kinds() {
       {"Music:", {"audio/mpeg", "audio/ogg", "audio/flac", "audio/x-wav"}, "Audio"},
       {"Video:", {"video/mp4", "video/x-matroska", "video/webm"}, "Video"},
       {"PDF documents:", {"application/pdf"}, "Viewer"},
+      {"E-books and comics:", {"application/epub+zip", "application/vnd.comicbook+zip"}, "Viewer"},
   };
   return k;
 }

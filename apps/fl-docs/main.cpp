@@ -1,4 +1,5 @@
-// fl-docs: a PDF viewer (poppler-cpp)
+// fl-docs: a document viewer: PDF (poppler-cpp), EPUB, OpenDocument text and
+// comic books (backend.h)
 //
 // Pages scroll continuously in one strip, with page thumbnails on the left.
 // Zoom fits the width or the page or is set in steps; search finds text on
@@ -18,11 +19,6 @@
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 
-#include <poppler-document.h>
-#include <poppler-image.h>
-#include <poppler-page-renderer.h>
-#include <poppler-page.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -34,6 +30,9 @@
 #include <string>
 #include <vector>
 
+#include <unistd.h>
+
+#include "backend.h"
 #include "docs_util.h"
 #include "fld/file_dialog.h"
 #include "fld/icons.h"
@@ -50,14 +49,10 @@ using docs::Fit;
 
 // ---- the document ----------------------------------------------------------
 
-struct Hit {
-  int page;
-  double x, y, w, h; // points, top-left origin
-};
+using docs::Hit;
 
 struct Doc {
-  std::unique_ptr<poppler::document> doc;
-  std::vector<std::unique_ptr<poppler::page>> pages;
+  std::unique_ptr<docs::Backend> backend;
   std::vector<docs::PageSize> sizes;
   std::string path, title;
 };
@@ -65,96 +60,39 @@ struct Doc {
 Doc g_doc;
 
 bool load_document(const std::string &path, std::string &err, bool interactive = true) {
-  std::unique_ptr<poppler::document> d(poppler::document::load_from_file(path));
-  if (!d) {
-    err = "This is not a PDF file, or it is damaged.";
-    return false;
-  }
-  if (d->is_locked() && !interactive) {
-    err = "The document is protected by a password.";
-    return false;
-  }
-  if (d->is_locked()) {
-    for (int tries = 0; tries < 3 && d->is_locked(); tries++) {
-      const char *pw = fl_password("%s is protected. Password:", "", fld::basename(path).c_str());
-      if (!pw) {
-        err = "";
-        return false;
-      }
-      d->unlock(pw, pw);
-    }
-    if (d->is_locked()) {
-      err = "Wrong password.";
-      return false;
-    }
-  }
+  docs::PasswordFn ask;
+  if (interactive)
+    ask = [&path](std::string &pw) {
+      const char *p = fl_password("%s is protected. Password:", "", fld::basename(path).c_str());
+      if (!p) return false;
+      pw = p;
+      return true;
+    };
+  std::unique_ptr<docs::Backend> b = docs::open_document(path, err, ask);
+  if (!b) return false;
   Doc nd;
   nd.path = path;
-  for (int i = 0; i < d->pages(); i++) {
-    std::unique_ptr<poppler::page> p(d->create_page(i));
-    docs::PageSize s;
-    if (p) {
-      poppler::rectf r = p->page_rect();
-      s.w = r.width();
-      s.h = r.height();
-      // pages turned by a quarter are shown turned
-      auto o = p->orientation();
-      if (o == poppler::page::landscape || o == poppler::page::seascape) std::swap(s.w, s.h);
-    }
-    nd.sizes.push_back(s);
-    nd.pages.push_back(std::move(p));
-  }
-  poppler::byte_array t = d->get_title().to_utf8();
-  nd.title = fld::trim(std::string(t.begin(), t.end()));
-  nd.doc = std::move(d);
+  nd.sizes = b->sizes();
+  nd.title = b->title();
+  nd.backend = std::move(b);
   g_doc = std::move(nd);
   return true;
 }
 
 // All the places a text appears, page by page.
 std::vector<Hit> find_all(const std::string &text) {
-  std::vector<Hit> hits;
-  if (text.empty()) return hits;
-  poppler::ustring u = poppler::ustring::from_utf8(text.c_str());
-  for (size_t i = 0; i < g_doc.pages.size(); i++) {
-    poppler::page *p = g_doc.pages[i].get();
-    if (!p) continue;
-    poppler::rectf r;
-    auto dir = poppler::page::search_from_top;
-    while (p->search(u, r, dir, poppler::case_insensitive)) {
-      hits.push_back({(int)i, r.x(), r.y(), r.width(), r.height()});
-      dir = poppler::page::search_next_result;
-      if (hits.size() > 100000) return hits;
-    }
-  }
-  return hits;
+  if (text.empty() || !g_doc.backend) return {};
+  return g_doc.backend->find(text);
 }
 
 // A page as an FLTK image at a scale (pixels per point).
 Fl_RGB_Image *render(int index, double scale) {
-  if (index < 0 || index >= (int)g_doc.pages.size() || !g_doc.pages[index]) return nullptr;
-  poppler::page_renderer r;
-  r.set_render_hint(poppler::page_renderer::antialiasing);
-  r.set_render_hint(poppler::page_renderer::text_antialiasing);
-  r.set_image_format(poppler::image::format_argb32);
-  poppler::image img = r.render_page(g_doc.pages[index].get(), 72.0 * scale, 72.0 * scale);
-  if (!img.is_valid() || img.format() != poppler::image::format_argb32) return nullptr;
-  int w = img.width(), h = img.height(), bpr = img.bytes_per_row();
-  uchar *rgb = new uchar[(size_t)w * h * 3];
-  const uchar *src = (const uchar *)img.const_data();
-  for (int y = 0; y < h; y++) {
-    const uint32_t *row = (const uint32_t *)(src + (size_t)y * bpr);
-    uchar *o = rgb + (size_t)y * w * 3;
-    for (int x = 0; x < w; x++) {
-      uint32_t p = row[x];
-      uint32_t a = p >> 24;
-      // premultiplied over white paper
-      o[3 * x] = (uchar)(((p >> 16) & 0xff) + 255 - a);
-      o[3 * x + 1] = (uchar)(((p >> 8) & 0xff) + 255 - a);
-      o[3 * x + 2] = (uchar)((p & 0xff) + 255 - a);
-    }
-  }
-  Fl_RGB_Image *im = new Fl_RGB_Image(rgb, w, h, 3);
+  if (!g_doc.backend || index < 0 || index >= (int)g_doc.sizes.size()) return nullptr;
+  docs::Bitmap bm;
+  if (!g_doc.backend->render((size_t)index, scale, bm) || bm.w <= 0 || bm.h <= 0) return nullptr;
+  uchar *rgb = new uchar[bm.rgb.size()];
+  memcpy(rgb, bm.rgb.data(), bm.rgb.size());
+  Fl_RGB_Image *im = new Fl_RGB_Image(rgb, bm.w, bm.h, 3);
   im->alloc_array = 1;
   return im;
 }
@@ -458,7 +396,8 @@ void search(int dir) {
     g_view->hits = &g_hits;
     g_view->current_hit = -1;
     if (g_hits.empty()) {
-      g_found->copy_label(q.empty() ? "" : "Not found");
+      bool text = g_doc.backend && g_doc.backend->has_text();
+      g_found->copy_label(q.empty() ? "" : text ? "Not found" : "No text");
       g_view->redraw();
       return;
     }
@@ -503,14 +442,21 @@ void open_dialog() {
   o.title = "Open Document";
   o.folder = g_last_dir.empty() ? fld::user_dir("DOCUMENTS") : g_last_dir;
   if (o.folder.empty() || !fld::is_dir(o.folder)) o.folder = fld::home_dir();
-  o.filters = {{"PDF documents", {"*.pdf"}, {"application/pdf"}}, {"All files", {"*"}, {}}};
+  o.filters = {{"Documents", {"*.pdf", "*.epub", "*.odt", "*.ott", "*.cbz", "*.cbr", "*.cb7", "*.cbt"},
+                {"application/pdf", "application/epub+zip", "application/vnd.oasis.opendocument.text",
+                 "application/vnd.comicbook+zip", "application/x-cbz", "application/vnd.comicbook-rar"}},
+               {"PDF documents", {"*.pdf"}, {"application/pdf"}},
+               {"E-books", {"*.epub"}, {"application/epub+zip"}},
+               {"OpenDocument text", {"*.odt", "*.ott"}, {"application/vnd.oasis.opendocument.text"}},
+               {"Comic books", {"*.cbz", "*.cbr", "*.cb7", "*.cbt"}, {"application/vnd.comicbook+zip"}},
+               {"All files", {"*"}, {}}};
   fld::FileDialogResult r = fld::run_file_dialog(o);
   if (r.ok && !r.paths.empty()) open_file(r.paths[0]);
 }
 
 #ifdef FLD_HAVE_PRINTERS
 void print_dialog() {
-  if (g_doc.path.empty()) return;
+  if (g_doc.path.empty() || !g_doc.backend) return;
   std::vector<prn::Printer> ps = prn::printers();
   if (ps.empty()) {
     fl_alert("No printer is set up. Add one in Printers.");
@@ -563,8 +509,21 @@ void print_dialog() {
     opts.push_back({"sides", sd[std::max(0, sides.value())]});
     prn::Error err;
     std::string title = g_doc.title.empty() ? fld::basename(g_doc.path) : g_doc.title;
-    if (!prn::print_file(ps[printer.value()].name, g_doc.path, title, opts, &err))
+    // EPUB, ODT and comic books go to the printer as a PDF made for it
+    std::string pdf, perr;
+    bool temporary = false;
+    fl_cursor(FL_CURSOR_WAIT);
+    Fl::flush();
+    bool made = g_doc.backend->print_pdf(pdf, temporary, perr);
+    fl_cursor(FL_CURSOR_DEFAULT);
+    if (!made) {
+      fl_alert("Printing failed: %s", perr.c_str());
+      if (temporary) unlink(pdf.c_str());
+      return;
+    }
+    if (!prn::print_file(ps[printer.value()].name, pdf, title, opts, &err))
       fl_alert("Printing failed: %s", err.c_str());
+    if (temporary) unlink(pdf.c_str());
     return;
   }
 }
@@ -605,7 +564,7 @@ void command(Cmd c) {
     break;
   case FIND_PREV: search(-1); break;
   case FIND_NEXT: search(1); break;
-  case ABOUT: fld::about_dialog("Documents", "fl-docs", "A PDF viewer for fldesktop."); break;
+  case ABOUT: fld::about_dialog("Documents", "fl-docs", "A document viewer for fldesktop: PDF, EPUB, OpenDocument text and comic books."); break;
   }
 }
 
@@ -684,25 +643,53 @@ int info(const std::string &path, const std::string &find) {
   return 0;
 }
 
+// --to-pdf: the PDF that printing sends (the file itself for a PDF)
+int to_pdf(const std::string &path, const std::string &out) {
+  std::string err;
+  if (!load_document(path, err, false)) {
+    fprintf(stderr, "fl-docs: %s: %s\n", path.c_str(), err.c_str());
+    return 1;
+  }
+  std::string pdf;
+  bool temporary = false;
+  if (!g_doc.backend->print_pdf(pdf, temporary, err)) {
+    fprintf(stderr, "fl-docs: %s\n", err.c_str());
+    if (temporary) unlink(pdf.c_str());
+    return 1;
+  }
+  std::string data;
+  bool ok = fld::read_file(pdf, data, (size_t)2 << 30) && fld::write_file(out, data);
+  if (temporary) unlink(pdf.c_str());
+  if (!ok) fprintf(stderr, "fl-docs: cannot write %s\n", out.c_str());
+  return ok ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
-  std::string file, find;
+  std::string file, find, pdf_out;
   bool want_info = false;
   int start_page = 0;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-docs [--page N] [FILE.pdf]\n"
-             "       fl-docs --info FILE.pdf [--find TEXT]\n");
+      printf("Usage: fl-docs [--page N] [FILE]\n"
+             "       fl-docs --info FILE [--find TEXT]\n"
+             "       fl-docs --to-pdf FILE OUT.pdf\n"
+             "FILE: PDF, EPUB, OpenDocument text (.odt) or comic book (.cbz, .cbr, .cb7)\n");
       return 0;
     }
     if (a == "--info") want_info = true;
+    else if (a == "--to-pdf" && i + 2 < argc) {
+      file = argv[++i];
+      pdf_out = argv[++i];
+    }
     else if (a == "--find" && i + 1 < argc) find = argv[++i];
     else if (a == "--page" && i + 1 < argc) start_page = atoi(argv[++i]) - 1;
     else if (a[0] != '-' && file.empty()) file = fld::starts_with(a, "file://") ? fld::uri_decode(a.substr(7)) : a;
   }
   if (want_info) return file.empty() ? 2 : info(file, find);
+  if (!pdf_out.empty()) return to_pdf(file, pdf_out);
 
   fld::init_app("fl-docs", argc, argv);
   const int TB = 40, W = 1000, H = 760;

@@ -33,6 +33,7 @@ Build-Depends: debhelper-compat (= 13),
                libjxl-dev,
                libarchive-dev,
                libpoppler-cpp-dev,
+               libxml2-dev,
                libgstreamer1.0-dev,
                libgstreamer-plugins-base1.0-dev,
                libpam0g-dev,
@@ -207,11 +208,12 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: pdf-viewer
 Recommends: poppler-data
-Description: fldesktop PDF viewer
- fl-docs shows PDF documents in a continuously scrolling view with page
+Description: fldesktop document viewer: PDF, EPUB, OpenDocument text, comics
+ fl-docs shows PDF documents, EPUB e-books, OpenDocument text documents and
+ comic books (.cbz, .cbr, .cb7) in a continuously scrolling view with page
  thumbnails, fits the width or the page or zooms in steps, finds text on all
  pages and prints through CUPS with copies, page ranges and two-sided
- printing. Password protected documents ask for the password.
+ printing. Password protected PDF documents ask for the password.
 
 Package: fldesktop-webcam
 Architecture: any

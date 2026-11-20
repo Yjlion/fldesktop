@@ -6,6 +6,8 @@
 #include <vector>
 #include <sys/types.h>
 
+#include "term_runs.h"
+
 extern "C" {
 #include <vterm.h>
 }
@@ -84,9 +86,11 @@ private:
   int scroll_ = 0; // lines scrolled back
   Fl_Scrollbar *scrollbar_ = nullptr;
 
-  // cursor
+  // cursor; blinking stops a while after the last key press or output
   VTermPos cursor_{0, 0};
   bool cursor_visible_ = true, cursor_blink_ = true, blink_on_ = true;
+  bool has_focus_ = false;
+  double blink_until_ = 0;
   int cursor_shape_ = VTERM_PROP_CURSORSHAPE_BLOCK;
   int mouse_mode_ = VTERM_PROP_MOUSE_NONE;
   bool altscreen_ = false, reverse_video_ = false, focus_report_ = false;
@@ -100,6 +104,25 @@ private:
 
   TermColors colors_{};
   std::vector<char> out_pending_;
+
+  // Repainting: libvterm reports damaged rows; they are repainted at most
+  // once a frame, the rest of the widget is left as it is.
+  std::vector<uint8_t> dirty_; // per view row
+  bool any_dirty_ = false, full_ = true, scrollbar_dirty_ = false;
+  double last_paint_ = 0, last_cost_ = 0;
+  bool runs_ok_[4] = {false, false, false, false}; // per style: one call can draw a run of cells
+  std::vector<term::RunCell> run_cells_;
+  std::vector<uint32_t> row_bg_;
+  std::vector<VTermScreenCell> row_cells_;
+  std::vector<int> row_cols_;
+  std::vector<term::Run> runs_;
+  void mark_row(int screen_row);
+  void mark_cursor() { mark_row(cursor_.row); }
+  void mark_all();
+  void schedule_repaint();
+  void apply_damage();
+  void draw_row(int r, bool focused);
+  static void repaint_cb(void *data);
 
   void measure_font();
   void update_size();
@@ -117,6 +140,7 @@ private:
   int key_to_vterm(int key, VTermKey &out) const;
   VTermModifier modifiers() const;
   void reset_blink();
+  void stop_blink();
 
   static void pty_cb(int fd, void *data);
   static void blink_cb(void *data);

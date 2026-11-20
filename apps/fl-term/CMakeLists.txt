@@ -1,6 +1,6 @@
 pkg_check_modules(VTERM REQUIRED IMPORTED_TARGET vterm)
 pkg_check_modules(TERM_CAIRO REQUIRED IMPORTED_TARGET cairo)
-add_library(fl-term-ssh STATIC ssh_profiles.cpp term_settings.cpp)
+add_library(fl-term-ssh STATIC ssh_profiles.cpp term_settings.cpp term_runs.cpp)
 target_include_directories(fl-term-ssh PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-term-ssh PUBLIC fld)
 add_executable(fl-term main.cpp term_widget.cpp ssh_ui.cpp)

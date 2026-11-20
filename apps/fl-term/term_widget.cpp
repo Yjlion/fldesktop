@@ -19,6 +19,7 @@
 #include <pwd.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "fld/theme.h"
@@ -29,6 +30,18 @@
 #endif
 
 static inline Fl_Color rgbc(const uint8_t c[3]) { return fl_rgb_color(c[0], c[1], c[2]); }
+static inline uint32_t pack_rgb(const uint8_t c[3]) { return (uint32_t)c[0] << 16 | (uint32_t)c[1] << 8 | c[2]; }
+static inline Fl_Color unpack_rgb(uint32_t v) { return fl_rgb_color(v >> 16 & 0xff, v >> 8 & 0xff, v & 0xff); }
+
+static double mono_now() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
+
+// shortest time between two repaints; cursor blink period; the cursor stops
+// blinking this long after the last key press or output (as GTK does)
+static constexpr double kFrame = 1.0 / 60, kBlink = 0.53, kBlinkStop = 10.0;
 
 // ---- construction ------------------------------------------------------------
 
@@ -56,11 +69,11 @@ TermWidget::TermWidget(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
   vterm_state_set_bold_highbright(state_, 1);
   vterm_screen_reset(screen_, 1);
   measure_font();
-  Fl::add_timeout(0.53, blink_cb, this);
 }
 
 TermWidget::~TermWidget() {
   Fl::remove_timeout(blink_cb, this);
+  Fl::remove_timeout(repaint_cb, this);
   if (fd_ >= 0) {
     Fl::remove_fd(fd_);
     close(fd_);
@@ -80,6 +93,16 @@ void TermWidget::measure_font() {
   if (cw_ < 1) cw_ = 1;
   ch_ = fl_height();
   ascent_ = fl_height() - fl_descent();
+  // A run of cells is drawn with one call when the font's advance is the
+  // cell width; with fractional advances the text would drift off the grid
+  // and the cells are drawn one by one.
+  static const char probe[] = "MMMMMMMMMMiiiiiiiiii..........WW__##@@ll";
+  const int n = (int)sizeof probe - 1;
+  for (int st = 0; st < 4; st++) {
+    fl_font(fld::mono_font() + (st & 1 ? FL_BOLD : 0) + (st & 2 ? FL_ITALIC : 0), font_size_);
+    runs_ok_[st] = std::fabs(fl_width(probe, n) - (double)n * cw_) < 0.1;
+  }
+  fl_font(fld::mono_font(), font_size_);
 }
 
 void TermWidget::set_font_size(int size) {
@@ -246,8 +269,10 @@ void TermWidget::read_pty() {
   }
   if (got) {
     vterm_screen_flush_damage(screen_);
-    if (scroll_ == 0) update_scrollbar();
-    redraw();
+    // the screen is repainted at most once a frame; output that arrives in
+    // between is read and only marks rows
+    scrollbar_dirty_ = true;
+    schedule_repaint();
   }
 }
 
@@ -286,29 +311,36 @@ void TermWidget::output_cb(const char *s, size_t len, void *user) {
   static_cast<TermWidget *>(user)->write_pty(s, len);
 }
 
-int TermWidget::damage_cb(VTermRect, void *user) {
-  static_cast<TermWidget *>(user)->redraw();
+int TermWidget::damage_cb(VTermRect rect, void *user) {
+  TermWidget *t = static_cast<TermWidget *>(user);
+  for (int r = rect.start_row; r < rect.end_row; r++) t->mark_row(r);
   return 1;
 }
 
-int TermWidget::movecursor_cb(VTermPos pos, VTermPos, int visible, void *user) {
+int TermWidget::movecursor_cb(VTermPos pos, VTermPos oldpos, int visible, void *user) {
   TermWidget *t = static_cast<TermWidget *>(user);
+  t->mark_row(oldpos.row);
   t->cursor_ = pos;
   t->cursor_visible_ = visible;
+  t->mark_row(pos.row);
   t->reset_blink();
-  t->redraw();
   return 1;
 }
 
 int TermWidget::settermprop_cb(VTermProp prop, VTermValue *val, void *user) {
   TermWidget *t = static_cast<TermWidget *>(user);
   switch (prop) {
-    case VTERM_PROP_CURSORVISIBLE: t->cursor_visible_ = val->boolean; break;
-    case VTERM_PROP_CURSORBLINK: t->cursor_blink_ = val->boolean; break;
+    case VTERM_PROP_CURSORVISIBLE: t->cursor_visible_ = val->boolean; t->mark_cursor(); break;
+    case VTERM_PROP_CURSORBLINK:
+      t->cursor_blink_ = val->boolean;
+      t->reset_blink();
+      t->mark_cursor();
+      break;
     case VTERM_PROP_ALTSCREEN:
       t->altscreen_ = val->boolean;
       t->scroll_ = 0;
       t->update_scrollbar();
+      t->mark_all();
       break;
     case VTERM_PROP_TITLE:
       // libvterm 0.3 may deliver the title in fragments
@@ -316,13 +348,13 @@ int TermWidget::settermprop_cb(VTermProp prop, VTermValue *val, void *user) {
       t->title_.append(val->string.str, val->string.len);
       if (val->string.final && t->on_title) t->on_title(t, t->title_.c_str(), t->cb_data);
       break;
-    case VTERM_PROP_REVERSE: t->reverse_video_ = val->boolean; break;
-    case VTERM_PROP_CURSORSHAPE: t->cursor_shape_ = val->number; break;
+    case VTERM_PROP_REVERSE: t->reverse_video_ = val->boolean; t->mark_all(); break;
+    case VTERM_PROP_CURSORSHAPE: t->cursor_shape_ = val->number; t->mark_cursor(); break;
     case VTERM_PROP_MOUSE: t->mouse_mode_ = val->number; break;
     case VTERM_PROP_FOCUSREPORT: t->focus_report_ = val->boolean; break;
     default: return 0;
   }
-  t->redraw();
+  // changes come with output: read_pty() repaints
   return 1;
 }
 
@@ -388,9 +420,12 @@ void TermWidget::resize(int X, int Y, int W, int H) {
 void TermWidget::update_size() {
   int cols = std::max(2, (w() - 2 * pad_) / cw_);
   int rows = std::max(1, (h() - 2 * pad_) / ch_);
-  if (cols != cols_ || rows != rows_) {
+  if (cols != cols_ || rows != rows_ || (int)dirty_.size() != rows) {
     cols_ = cols;
     rows_ = rows;
+    dirty_.assign(rows_, 0);
+    any_dirty_ = false;
+    full_ = true;
     vterm_set_size(vt_, rows_, cols_);
     vterm_screen_flush_damage(screen_);
   }
@@ -475,96 +510,254 @@ bool TermWidget::in_selection(long line, int col) const {
 }
 
 
-void TermWidget::draw() {
-  fl_push_clip(x(), y(), w(), h());
-  fill_background(x(), y(), w(), h());
-  const bool focused = Fl::focus() == this && window() && window()->visible();
-  Fl_Font base = fld::mono_font();
+// ---- repainting -------------------------------------------------------------------
 
-  for (int r = 0; r < rows_; r++) {
-    long line = abs_line_of_row(r);
-    int ry = y() + pad_ + r * ch_;
-    for (int c = 0; c < cols_;) {
-      VTermScreenCell cell;
-      if (!get_cell(line, c, cell)) { c++; continue; }
-      int width = cell.width > 0 ? cell.width : 1;
-      uint8_t fg[3], bg[3];
-      resolve_color(cell.fg, true, fg);
-      resolve_color(cell.bg, false, bg);
-      bool rev = cell.attrs.reverse ^ reverse_video_;
-      if (rev) { uint8_t t[3]; memcpy(t, fg, 3); memcpy(fg, bg, 3); memcpy(bg, t, 3); }
-      if (in_selection(line, c)) memcpy(bg, colors_.sel_bg, 3);
-      bool is_cursor = scroll_ == 0 && cursor_visible_ && r == cursor_.row && c == cursor_.col;
-      int cx = x() + pad_ + c * cw_;
-      int cwidth = cw_ * width;
-      if (memcmp(bg, colors_.bg, 3) != 0) {
-        fl_color(rgbc(bg));
-        // extend the last column / row backgrounds into the padding
-        int ex = (c + width >= cols_) ? x() + w() - cx : cwidth;
-        fl_rectf(cx, ry, ex, ch_);
-      }
-      bool block_cursor = is_cursor && focused && (blink_on_ || !cursor_blink_) &&
-                          cursor_shape_ == VTERM_PROP_CURSORSHAPE_BLOCK;
-      if (block_cursor) {
-        fl_color(rgbc(colors_.cursor));
-        fl_rectf(cx, ry, cwidth, ch_);
-        memcpy(fg, colors_.bg, 3);
-      }
-      if (cell.chars[0] && cell.chars[0] != ' ' && !cell.attrs.conceal) {
-        char buf[VTERM_MAX_CHARS_PER_CELL * 4 + 1];
-        int n = 0;
-        for (int i = 0; i < VTERM_MAX_CHARS_PER_CELL && cell.chars[i]; i++)
-          n += fl_utf8encode(cell.chars[i], buf + n);
-        buf[n] = 0;
-        Fl_Font f = base + (cell.attrs.bold ? FL_BOLD : 0) + (cell.attrs.italic ? FL_ITALIC : 0);
-        fl_font(f, font_size_);
-        fl_color(rgbc(fg));
-        fl_draw(buf, n, cx, ry + ascent_);
-      }
-      if (cell.attrs.underline) {
-        fl_color(rgbc(fg));
-        fl_xyline(cx, ry + ch_ - 2, cx + cwidth - 1);
-        if (cell.attrs.underline == VTERM_UNDERLINE_DOUBLE) fl_xyline(cx, ry + ch_ - 4, cx + cwidth - 1);
-      }
-      if (cell.attrs.strike) {
-        fl_color(rgbc(fg));
-        fl_xyline(cx, ry + ch_ / 2, cx + cwidth - 1);
-      }
-      if (is_cursor && !block_cursor) {
-        fl_color(rgbc(colors_.cursor));
-        if (!focused) fl_rect(cx, ry, cwidth, ch_);
-        else if (blink_on_ || !cursor_blink_) {
-          if (cursor_shape_ == VTERM_PROP_CURSORSHAPE_UNDERLINE) fl_rectf(cx, ry + ch_ - 2, cwidth, 2);
-          else if (cursor_shape_ == VTERM_PROP_CURSORSHAPE_BAR_LEFT) fl_rectf(cx, ry, 2, ch_);
-        }
-      }
-      c += width;
-    }
+void TermWidget::mark_row(int screen_row) {
+  if (scroll_ > 0) {
+    // the view shows scrollback: live rows are shifted down (or hidden)
+    if (screen_row + scroll_ < rows_) full_ = true;
+    return;
   }
-  // scroll position indicator while looking at the scrollback
-  if (scroll_ > 0 && !sb_.empty()) {
-    int total = (int)sb_.size() + rows_;
-    int bar_h = std::max(20, h() * rows_ / total);
-    int top = (int)((long)(h() - bar_h) * ((long)sb_.size() - scroll_) / (long)sb_.size());
-    fl_color(fl_color_average(rgbc(colors_.fg), rgbc(colors_.bg), 0.45f));
-    fl_rectf(x() + w() - 5, y() + top, 3, bar_h);
-  }
-  fl_pop_clip();
+  if (screen_row < 0 || screen_row >= (int)dirty_.size()) return;
+  dirty_[screen_row] = 1;
+  any_dirty_ = true;
 }
 
+void TermWidget::mark_all() { full_ = true; }
+
+void TermWidget::schedule_repaint() {
+  if (!full_ && !any_dirty_ && !scrollbar_dirty_) return;
+  if (Fl::has_timeout(repaint_cb, this)) return;
+  // At most one repaint a frame, and at least as much time for reading the
+  // pty as the last repaint took: a slow repaint must not starve the output.
+  double wait = std::max(kFrame, last_cost_) - (mono_now() - last_paint_);
+  if (wait <= 0) apply_damage();
+  else Fl::add_timeout(wait, repaint_cb, this);
+}
+
+void TermWidget::repaint_cb(void *data) { static_cast<TermWidget *>(data)->apply_damage(); }
+
+void TermWidget::apply_damage() {
+  if (scrollbar_dirty_) {
+    scrollbar_dirty_ = false;
+    if (scroll_ == 0) update_scrollbar();
+  }
+  if (full_) {
+    redraw();
+    return;
+  }
+  if (!any_dirty_) return;
+  int r0 = -1, r1 = -1;
+  for (int r = 0; r < (int)dirty_.size(); r++)
+    if (dirty_[r]) {
+      if (r0 < 0) r0 = r;
+      r1 = r;
+    }
+  if (r0 < 0) {
+    any_dirty_ = false;
+    return;
+  }
+  // only the changed rows: draw() sees FL_DAMAGE_USER1
+  damage(FL_DAMAGE_USER1, x(), y() + pad_ + r0 * ch_, w(), (r1 - r0 + 1) * ch_);
+}
+
+void TermWidget::draw() {
+  const double t0 = mono_now();
+  const bool focused = Fl::focus() == this && window() && window()->visible();
+  const bool partial = damage() == FL_DAMAGE_USER1 && !full_ && scroll_ == 0;
+  const bool was_full = full_ || !partial;
+  // rows outside the area being drawn now keep their mark
+  std::vector<uint8_t> visible(rows_, 0);
+  for (int r = 0; r < rows_; r++) visible[r] = fl_not_clipped(x(), y() + pad_ + r * ch_, w(), ch_) == 1;
+
+  if (!partial) {
+    fl_push_clip(x(), y(), w(), h());
+    fill_background(x(), y(), w(), h());
+    for (int r = 0; r < rows_; r++) draw_row(r, focused);
+    // scroll position indicator while looking at the scrollback
+    if (scroll_ > 0 && !sb_.empty()) {
+      int total = (int)sb_.size() + rows_;
+      int bar_h = std::max(20, h() * rows_ / total);
+      int top = (int)((long)(h() - bar_h) * ((long)sb_.size() - scroll_) / (long)sb_.size());
+      fl_color(fl_color_average(rgbc(colors_.fg), rgbc(colors_.bg), 0.45f));
+      fl_rectf(x() + w() - 5, y() + top, 3, bar_h);
+    }
+    fl_pop_clip();
+  } else {
+    for (int r = 0; r < rows_; r++) {
+      if (r >= (int)dirty_.size() || !dirty_[r]) continue;
+      int ry = y() + pad_ + r * ch_;
+      fl_push_clip(x(), ry, w(), ch_);
+      fill_background(x(), ry, w(), ch_);
+      draw_row(r, focused);
+      fl_pop_clip();
+    }
+  }
+
+  any_dirty_ = false;
+  for (int r = 0; r < (int)dirty_.size(); r++) {
+    if (r < rows_ && visible[r]) dirty_[r] = 0;
+    else if (was_full) dirty_[r] = 1;
+    any_dirty_ |= dirty_[r] != 0;
+  }
+  full_ = false;
+  last_paint_ = mono_now();
+  last_cost_ = last_paint_ - t0;
+  if (any_dirty_) schedule_repaint(); // waits for the next frame
+}
+
+// One row in four passes: backgrounds, text (runs of cells in one call where
+// possible), lines, cursor.
+void TermWidget::draw_row(int r, bool focused) {
+  const long line = abs_line_of_row(r);
+  const int ry = y() + pad_ + r * ch_;
+  row_cells_.clear();
+  row_cols_.clear();
+  for (int c = 0; c < cols_;) {
+    VTermScreenCell cell;
+    if (!get_cell(line, c, cell)) {
+      c++;
+      continue;
+    }
+    if (cell.width < 1) cell.width = 1;
+    row_cells_.push_back(cell);
+    row_cols_.push_back(c);
+    c += cell.width;
+  }
+  const int n = (int)row_cells_.size();
+  run_cells_.resize(n);
+  row_bg_.resize(n);
+  const bool cursor_row = scroll_ == 0 && cursor_visible_ && r == cursor_.row;
+  const bool cursor_on = focused && (blink_on_ || !cursor_blink_);
+  int cursor_i = -1;
+  bool block = false;
+  for (int i = 0; i < n; i++) {
+    const VTermScreenCell &cell = row_cells_[i];
+    uint8_t fg[3], bg[3];
+    resolve_color(cell.fg, true, fg);
+    resolve_color(cell.bg, false, bg);
+    if (cell.attrs.reverse ^ reverse_video_) {
+      uint8_t t[3];
+      memcpy(t, fg, 3);
+      memcpy(fg, bg, 3);
+      memcpy(bg, t, 3);
+    }
+    if (in_selection(line, row_cols_[i])) memcpy(bg, colors_.sel_bg, 3);
+    bool is_cursor = cursor_row && row_cols_[i] == cursor_.col;
+    if (is_cursor) {
+      cursor_i = i;
+      block = cursor_on && cursor_shape_ == VTERM_PROP_CURSORSHAPE_BLOCK;
+      if (block) memcpy(fg, colors_.bg, 3);
+    }
+    int style = (cell.attrs.bold ? 1 : 0) | (cell.attrs.italic ? 2 : 0);
+    term::RunCell &rc = run_cells_[i];
+    rc.ch = cell.attrs.conceal ? 0 : cell.chars[0];
+    rc.width = cell.width;
+    rc.key = pack_rgb(fg) << 2 | (uint32_t)style;
+    rc.alone = is_cursor || (VTERM_MAX_CHARS_PER_CELL > 1 && cell.chars[1]) || !runs_ok_[style];
+    row_bg_[i] = pack_rgb(bg);
+  }
+
+  // backgrounds, cells of the same colour in one rectangle; the last column
+  // extends into the padding
+  const uint32_t def_bg = pack_rgb(colors_.bg);
+  for (int i = 0; i < n;) {
+    int j = i;
+    while (j + 1 < n && row_bg_[j + 1] == row_bg_[i]) j++;
+    if (row_bg_[i] != def_bg) {
+      int x0 = x() + pad_ + row_cols_[i] * cw_;
+      int end_col = row_cols_[j] + row_cells_[j].width;
+      int x1 = end_col >= cols_ ? x() + w() : x() + pad_ + end_col * cw_;
+      fl_color(unpack_rgb(row_bg_[i]));
+      fl_rectf(x0, ry, x1 - x0, ch_);
+    }
+    i = j + 1;
+  }
+  if (block) {
+    fl_color(rgbc(colors_.cursor));
+    fl_rectf(x() + pad_ + row_cols_[cursor_i] * cw_, ry, cw_ * row_cells_[cursor_i].width, ch_);
+  }
+
+  // text
+  term::split_runs(run_cells_, runs_);
+  const Fl_Font base = fld::mono_font();
+  int cur_style = -1;
+  std::string text;
+  for (const term::Run &run : runs_) {
+    const term::RunCell &first = run_cells_[run.first];
+    int style = (int)(first.key & 3);
+    if (style != cur_style) {
+      fl_font(base + (style & 1 ? FL_BOLD : 0) + (style & 2 ? FL_ITALIC : 0), font_size_);
+      cur_style = style;
+    }
+    fl_color(unpack_rgb(first.key >> 2));
+    int cx = x() + pad_ + row_cols_[run.first] * cw_;
+    text.clear();
+    if (run.single) {
+      const VTermScreenCell &cell = row_cells_[run.first];
+      char buf[8];
+      for (int k = 0; k < VTERM_MAX_CHARS_PER_CELL && cell.chars[k]; k++)
+        text.append(buf, fl_utf8encode(cell.chars[k], buf));
+    } else {
+      for (int i = run.first; i <= run.last; i++) text += run_cells_[i].ch ? (char)run_cells_[i].ch : ' ';
+    }
+    fl_draw(text.data(), (int)text.size(), cx, ry + ascent_);
+  }
+
+  // underline and strike-through
+  for (int i = 0; i < n; i++) {
+    const VTermScreenCell &cell = row_cells_[i];
+    if (!cell.attrs.underline && !cell.attrs.strike) continue;
+    int cx = x() + pad_ + row_cols_[i] * cw_, cwidth = cw_ * cell.width;
+    fl_color(unpack_rgb(run_cells_[i].key >> 2));
+    if (cell.attrs.underline) {
+      fl_xyline(cx, ry + ch_ - 2, cx + cwidth - 1);
+      if (cell.attrs.underline == VTERM_UNDERLINE_DOUBLE) fl_xyline(cx, ry + ch_ - 4, cx + cwidth - 1);
+    }
+    if (cell.attrs.strike) fl_xyline(cx, ry + ch_ / 2, cx + cwidth - 1);
+  }
+
+  // the other cursor shapes, and an outline without the focus
+  if (cursor_i >= 0 && !block) {
+    int cx = x() + pad_ + row_cols_[cursor_i] * cw_, cwidth = cw_ * row_cells_[cursor_i].width;
+    fl_color(rgbc(colors_.cursor));
+    if (!focused) fl_rect(cx, ry, cwidth, ch_);
+    else if (blink_on_ || !cursor_blink_) {
+      if (cursor_shape_ == VTERM_PROP_CURSORSHAPE_UNDERLINE) fl_rectf(cx, ry + ch_ - 2, cwidth, 2);
+      else if (cursor_shape_ == VTERM_PROP_CURSORSHAPE_BAR_LEFT) fl_rectf(cx, ry, 2, ch_);
+    }
+  }
+}
+
+// ---- cursor blinking ---------------------------------------------------------------
+
 void TermWidget::reset_blink() {
+  if (!blink_on_) mark_cursor();
   blink_on_ = true;
+  blink_until_ = mono_now() + kBlinkStop;
   Fl::remove_timeout(blink_cb, this);
-  Fl::add_timeout(0.53, blink_cb, this);
+  if (cursor_blink_ && has_focus_) Fl::add_timeout(kBlink, blink_cb, this);
+}
+
+void TermWidget::stop_blink() {
+  Fl::remove_timeout(blink_cb, this);
+  if (!blink_on_) mark_cursor();
+  blink_on_ = true;
 }
 
 void TermWidget::blink_cb(void *data) {
   TermWidget *t = static_cast<TermWidget *>(data);
-  if (t->cursor_blink_ && Fl::focus() == t) {
-    t->blink_on_ = !t->blink_on_;
-    t->redraw();
+  // not focused any more, or idle for a while: the cursor stays visible and
+  // nothing wakes the program up
+  if (!t->cursor_blink_ || Fl::focus() != t || mono_now() >= t->blink_until_) {
+    t->stop_blink();
+    t->schedule_repaint();
+    return;
   }
-  Fl::repeat_timeout(0.53, blink_cb, data);
+  t->blink_on_ = !t->blink_on_;
+  t->mark_cursor();
+  t->schedule_repaint();
+  Fl::repeat_timeout(kBlink, blink_cb, data);
 }
 
 // ---- selection & clipboard -----------------------------------------------------------
@@ -665,8 +858,11 @@ int TermWidget::handle(int e) {
         if (e == FL_FOCUS) vterm_state_focus_in(state_);
         else vterm_state_focus_out(state_);
       }
-      reset_blink();
-      redraw();
+      has_focus_ = e == FL_FOCUS;
+      mark_cursor(); // drawn as an outline without the focus
+      if (has_focus_) reset_blink();
+      else stop_blink();
+      schedule_repaint();
       return 1;
 
     case FL_KEYBOARD: {
@@ -721,8 +917,12 @@ int TermWidget::handle(int e) {
         return 0;
       }
       if (scroll_) scroll_to(0);
-      has_sel_ = false;
+      if (has_sel_) {
+        has_sel_ = false;
+        mark_all();
+      }
       reset_blink();
+      schedule_repaint();
       return 1;
     }
 

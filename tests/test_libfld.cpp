@@ -253,5 +253,20 @@ int main() {
   test_session_env();
   test_tabs();
   fld::remove_recursive(g_tmp);
+  // clock formats: seconds or not
+  CHECK(!fld::strftime_has_seconds("%a %d %b  %H:%M"));
+  CHECK(fld::strftime_has_seconds("%H:%M:%S"));
+  CHECK(fld::strftime_has_seconds("%T"));
+  CHECK(fld::strftime_has_seconds("%-S"));
+  CHECK(fld::strftime_has_seconds("%OS"));
+  CHECK(fld::strftime_has_seconds("%c"));
+  CHECK(!fld::strftime_has_seconds("100%% %H"));
+  CHECK(!fld::strftime_has_seconds("%%S"));
+  CHECK(!fld::strftime_has_seconds("%"));
+  {
+    double next = fld::strftime_next_change("%H:%M", 1000000.25);
+    CHECK(next > 0 && next <= 60);
+    CHECK_NEAR(fld::strftime_next_change("%H:%M:%S", 1000000.25), 0.75);
+  }
   return test_result("libfld");
 }

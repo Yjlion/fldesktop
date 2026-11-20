@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <vector>
 
+#include "fld/config_watch.h"
 #include "fld/desktop_entry.h"
 #include "fld/fileops.h"
 #include "fld/icons.h"
@@ -564,20 +565,13 @@ static std::string appearance_signature() {
 }
 static std::string g_appearance;
 
-static void config_poll(void *) {
-  // pick up wallpaper changes made by other programs
-  static time_t last = 0;
-  struct stat st;
-  if (stat(fld::desktop_config_path().c_str(), &st) == 0 && st.st_mtime != last) {
-    if (last != 0) {
-      // a new theme, font or icon theme: start again with it
-      if (appearance_signature() != g_appearance) fld::restart_self(g_argc, g_argv);
-      g_view->load_config();
-      g_view->reload();
-    }
-    last = st.st_mtime;
-  }
-  Fl::repeat_timeout(2.0, config_poll);
+// wallpaper and other changes made by other programs (watched with inotify:
+// no polling)
+static void config_changed() {
+  // a new theme, font or icon theme: start again with it
+  if (appearance_signature() != g_appearance) fld::restart_self(g_argc, g_argv);
+  g_view->load_config();
+  g_view->reload();
 }
 
 int main(int argc, char **argv) {
@@ -606,7 +600,7 @@ int main(int argc, char **argv) {
     inotify_add_watch(g_inotify, (fld::trash_dir() + "/files").c_str(), IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_MOVED_FROM);
     Fl::add_fd(g_inotify, FL_READ, inotify_cb);
   }
-  Fl::add_timeout(2.0, config_poll);
+  static fld::ConfigWatcher config_watch(fld::desktop_config_path(), config_changed);
   win->size(Fl::w(), Fl::h());
   Fl::add_handler([](int e) -> int {
     if (e == FL_SCREEN_CONFIGURATION_CHANGED && g_view->window()) g_view->window()->size(Fl::w(), Fl::h());

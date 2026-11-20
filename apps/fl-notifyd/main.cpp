@@ -363,11 +363,25 @@ public:
   static void close_card(uint32_t id, CloseReason r);
 };
 
+void tick(void *);
+
+// The countdown of the cards runs only while one of them can expire: with
+// nothing on screen fl-notifyd does not wake up.
+void ensure_tick() {
+  if (Fl::has_timeout(tick)) return;
+  for (auto &c : g_cards)
+    if (c->remaining >= 0) {
+      Fl::add_timeout(0.25, tick);
+      return;
+    }
+}
+
 void layout_cards() {
   if (g_cards.empty()) {
     if (g_win->shown()) g_win->hide();
     return;
   }
+  ensure_tick();
   int y = 0;
   for (auto &c : g_cards) {
     c->h = measure_card(c.get(), y);
@@ -444,7 +458,13 @@ void tick(void *) {
     }
     for (uint32_t id : expired) PopupWindow::close_card(id, EXPIRED);
   }
-  Fl::repeat_timeout(dt, tick);
+  // closing a card ran ensure_tick(): keep a single timer
+  Fl::remove_timeout(tick);
+  for (auto &c : g_cards)
+    if (c->remaining >= 0) {
+      Fl::repeat_timeout(dt, tick);
+      return;
+    }
 }
 
 // ---- D-Bus (GLib thread) ---------------------------------------------------
@@ -625,7 +645,6 @@ int main(int argc, char **argv) {
   g_win = new PopupWindow();
   fld::glib_start();
   start_dbus();
-  Fl::add_timeout(0.25, tick);
   // stays running without a window
   while (true) Fl::wait(1e20);
   return 0;

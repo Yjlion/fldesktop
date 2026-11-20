@@ -19,6 +19,8 @@ fldesktop (0.1.0) unstable; urgency=medium
     Electron and Java programs).
   * Workspaces in fl-wm (Super+1..9, Super+Ctrl+arrows; ext-workspace-v1)
     and a workspace pager in fl-panel.
+  * fl-screenshot is deprecated: use fl-snip --full or fl-snip --area.
+    The wrapper stays for old key bindings and will be removed later.
   * Touchpad gestures: three finger swipes switch workspaces, open the
     launcher and show the desktop; other gestures reach the programs
     (pointer-gestures-unstable-v1). Settings in Mouse & Touchpad.

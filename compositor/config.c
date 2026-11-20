@@ -82,6 +82,12 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"launcher", FLWM_ACTION_LAUNCHER},
 		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
 		{"show-desktop", FLWM_ACTION_SHOW_DESKTOP},
+		{"workspace", FLWM_ACTION_WORKSPACE}, {"workspace-next", FLWM_ACTION_WORKSPACE_NEXT},
+		{"workspace-prev", FLWM_ACTION_WORKSPACE_PREV},
+		{"move-to-workspace", FLWM_ACTION_MOVE_TO_WORKSPACE},
+		{"move-to-workspace-next", FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT},
+		{"move-to-workspace-prev", FLWM_ACTION_MOVE_TO_WORKSPACE_PREV},
+		{"sticky", FLWM_ACTION_STICKY},
 	};
 	enum flwm_action_type type = FLWM_ACTION_NONE;
 	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
@@ -156,6 +162,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->launcher_cmd = strdup("fl-launcher");
 	c->switcher = true;
 	c->xwayland = true;
+	c->workspaces = 4;
 	c->lock_color = 0xff1e1f22;
 
 	add_binding(c, "Super+Return", "exec fl-term");
@@ -179,6 +186,20 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Shift+Print", "exec fl-snip --area");
 	add_binding(c, "Super+Shift+s", "exec fl-snip --snip");
 	add_binding(c, "Ctrl+Shift+Escape", "exec fl-taskmgr");
+	/* workspaces: Super+N goes there, Super+Shift+N sends the window there */
+	for (int i = 1; i <= FLWM_MAX_WORKSPACES; i++) {
+		char combo[32], action[32];
+		snprintf(combo, sizeof combo, "Super+%d", i);
+		snprintf(action, sizeof action, "workspace %d", i);
+		add_binding(c, combo, action);
+		snprintf(combo, sizeof combo, "Super+Shift+%d", i);
+		snprintf(action, sizeof action, "move-to-workspace %d", i);
+		add_binding(c, combo, action);
+	}
+	add_binding(c, "Super+Ctrl+Right", "workspace-next");
+	add_binding(c, "Super+Ctrl+Left", "workspace-prev");
+	add_binding(c, "Super+Ctrl+Shift+Right", "move-to-workspace-next");
+	add_binding(c, "Super+Ctrl+Shift+Left", "move-to-workspace-prev");
 
 	c->autostart[c->nautostart++] = strdup("fl-desktop");
 	c->autostart[c->nautostart++] = strdup("fl-panel");
@@ -238,6 +259,10 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
 			else if (!strcmp(k, "xwayland")) c->xwayland = parse_bool(v);
+			else if (!strcmp(k, "workspaces")) {
+				int n = atoi(v);
+				c->workspaces = n < 1 ? 1 : n > FLWM_MAX_WORKSPACES ? FLWM_MAX_WORKSPACES : n;
+			}
 		} else if (!strcasecmp(section, "keyboard")) {
 			if (!strcmp(k, "layout")) set_str(&c->kb_layout, v);
 			else if (!strcmp(k, "variant")) set_str(&c->kb_variant, v);

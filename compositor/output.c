@@ -42,6 +42,7 @@ static void output_destroy(struct wl_listener *listener, void *data) {
 			wlr_layer_surface_v1_destroy(ls->layer_surface);
 		}
 	}
+	workspace_output_removed(server, output->wlr_output);
 	wl_list_remove(&output->frame.link);
 	wl_list_remove(&output->request_state.link);
 	wl_list_remove(&output->destroy.link);
@@ -125,6 +126,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 		wlr_scene_output_layout_add_output(server->scene_layout, l_output, output->scene_output);
 	}
 
+	workspace_output_added(server, wlr_output);
 	wlr_log(WLR_INFO, "output %s: %dx%d scale %.2f", wlr_output->name,
 		wlr_output->width, wlr_output->height, wlr_output->scale);
 	arrange_all(server);

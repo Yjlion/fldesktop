@@ -52,7 +52,7 @@ static void cycle(struct flwm_server *server, bool backwards) {
 	int n = 0;
 	struct flwm_view *v;
 	wl_list_for_each(v, &server->views, link)
-		if (v->mapped && v->role == FLWM_ROLE_NORMAL && !v->no_taskbar && n < 256) list[n++] = v;
+		if (view_is_cyclable(v) && n < 256) list[n++] = v;
 	if (n < 2) return;
 	int cur = 0;
 	struct flwm_view *from = server->cycle_current ? server->cycle_current : focused_normal(server);
@@ -100,6 +100,7 @@ static void reload_config(struct flwm_server *server) {
 		}
 		decor_update(v);
 	}
+	workspace_apply_config(server);
 	arrange_all(server);
 	wlr_log(WLR_INFO, "configuration reloaded");
 }
@@ -150,6 +151,37 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 		return true;
 	case FLWM_ACTION_SHOW_DESKTOP:
 		views_show_desktop(server);
+		return true;
+	case FLWM_ACTION_WORKSPACE:
+		/* a number past the configured count does nothing (but is still ours) */
+		if (arg) workspace_switch(server, atoi(arg) - 1);
+		return true;
+	case FLWM_ACTION_WORKSPACE_NEXT:
+	case FLWM_ACTION_WORKSPACE_PREV: {
+		int n = server->config.workspaces < 1 ? 1 : server->config.workspaces;
+		int d = action == FLWM_ACTION_WORKSPACE_NEXT ? 1 : -1;
+		workspace_switch(server, (server->cur_workspace + d + n) % n);
+		return true;
+	}
+	case FLWM_ACTION_MOVE_TO_WORKSPACE:
+		if (v && arg) view_move_to_workspace(v, atoi(arg) - 1);
+		return true;
+	case FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT:
+	case FLWM_ACTION_MOVE_TO_WORKSPACE_PREV: {
+		/* the window goes along: move it, then follow it */
+		int n = server->config.workspaces < 1 ? 1 : server->config.workspaces;
+		int d = action == FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT ? 1 : -1;
+		int to = (server->cur_workspace + d + n) % n;
+		if (v && to != server->cur_workspace) {
+			v->sticky = false;
+			v->workspace = to;
+			workspace_switch(server, to);
+			view_focus(v);
+		}
+		return true;
+	}
+	case FLWM_ACTION_STICKY:
+		if (v) view_set_sticky(v, !v->sticky);
 		return true;
 	default:
 		return false;

@@ -21,6 +21,8 @@ launcher=fl-launcher
 switcher=true
 # run X11 programs through Xwayland (started with the first one); read at startup
 xwayland=true
+# number of workspaces (1-9); all outputs switch together
+workspaces=4
 
 [keyboard]
 # xkb names, e.g. layout=us,de  options=grp:alt_shift_toggle
@@ -70,7 +72,10 @@ scale=1
 # "defaults=false" first to start from an empty list instead.
 # Modifiers: Super, Alt, Ctrl, Shift. Keys are xkb keysym names.
 # Actions: exec CMD, close, maximize, minimize, fullscreen, cycle, cycle-back,
-#          snap-left, snap-right, launcher, show-desktop, lock, reload, quit
+#          snap-left, snap-right, launcher, show-desktop, lock, reload, quit,
+#          workspace N, workspace-next, workspace-prev, move-to-workspace N,
+#          move-to-workspace-next, move-to-workspace-prev (the window goes
+#          along), sticky (show the window on every workspace)
 Super+Return=exec fl-term
 Super+t=exec fl-term
 Super+e=exec fl-files
@@ -92,6 +97,28 @@ Super+Shift+s=exec fl-snip --snip
 Ctrl+Shift+Escape=exec fl-taskmgr
 Super+Shift+r=reload
 Ctrl+Alt+BackSpace=quit
+Super+1=workspace 1
+Super+2=workspace 2
+Super+3=workspace 3
+Super+4=workspace 4
+Super+5=workspace 5
+Super+6=workspace 6
+Super+7=workspace 7
+Super+8=workspace 8
+Super+9=workspace 9
+Super+Shift+1=move-to-workspace 1
+Super+Shift+2=move-to-workspace 2
+Super+Shift+3=move-to-workspace 3
+Super+Shift+4=move-to-workspace 4
+Super+Shift+5=move-to-workspace 5
+Super+Shift+6=move-to-workspace 6
+Super+Shift+7=move-to-workspace 7
+Super+Shift+8=move-to-workspace 8
+Super+Shift+9=move-to-workspace 9
+Super+Ctrl+Right=workspace-next
+Super+Ctrl+Left=workspace-prev
+Super+Ctrl+Shift+Right=move-to-workspace-next
+Super+Ctrl+Shift+Left=move-to-workspace-prev
 
 # An [autostart] section replaces the default list
 # (fl-desktop, fl-panel, fl-autostart)

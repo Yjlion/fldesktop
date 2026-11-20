@@ -17,5 +17,7 @@ fldesktop (0.1.0) unstable; urgency=medium
   * Release tags set the version (packaging/version.sh).
   * fl-wm runs X11 programs through Xwayland (Steam, games, Wine, older
     Electron and Java programs).
+  * Workspaces in fl-wm (Super+1..9, Super+Ctrl+arrows; ext-workspace-v1)
+    and a workspace pager in fl-panel.
 
  -- Yjlion <yjlion@users.noreply.github.com>  Sun, 15 Nov 2026 22:00:00 +0000

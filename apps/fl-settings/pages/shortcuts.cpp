@@ -8,8 +8,10 @@
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Return_Button.H>
+#include <FL/Fl_Spinner.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
+#include <algorithm>
 
 #include "fld/menus.h"
 #include "fld/theme.h"
@@ -21,24 +23,50 @@
 namespace fld {
 namespace {
 
+enum ArgKind { kNoArg, kCommand, kWorkspace };
 struct Action {
   const char *id, *label;
+  ArgKind arg;
 };
+// kActions[0] is the default for a new shortcut
 const Action kActions[] = {
-    {"exec", "Run a command"},        {"launcher", "Open the application menu"},
-    {"close", "Close window"},        {"maximize", "Maximize / restore"},
-    {"minimize", "Minimize"},         {"fullscreen", "Fullscreen"},
-    {"snap-left", "Snap to the left"}, {"snap-right", "Snap to the right"},
-    {"cycle", "Next window"},         {"cycle-back", "Previous window"},
-    {"show-desktop", "Show desktop"}, {"reload", "Reload configuration"},
-    {"quit", "Log out (quit fl-wm)"},
+    {"exec", "Run a command", kCommand},
+    {"launcher", "Open the application menu", kNoArg},
+    {"close", "Close window", kNoArg},
+    {"maximize", "Maximize / restore", kNoArg},
+    {"minimize", "Minimize", kNoArg},
+    {"fullscreen", "Fullscreen", kNoArg},
+    {"snap-left", "Snap to the left", kNoArg},
+    {"snap-right", "Snap to the right", kNoArg},
+    {"cycle", "Next window", kNoArg},
+    {"cycle-back", "Previous window", kNoArg},
+    {"show-desktop", "Show desktop", kNoArg},
+    {"workspace", "Go to workspace", kWorkspace},
+    {"workspace-next", "Next workspace", kNoArg},
+    {"workspace-prev", "Previous workspace", kNoArg},
+    {"move-to-workspace", "Move window to workspace", kWorkspace},
+    {"move-to-workspace-next", "Move window to the next workspace", kNoArg},
+    {"move-to-workspace-prev", "Move window to the previous workspace", kNoArg},
+    {"sticky", "Show window on all workspaces", kNoArg},
+    {"lock", "Lock the screen", kNoArg},
+    {"reload", "Reload configuration", kNoArg},
+    {"quit", "Log out (quit fl-wm)", kNoArg},
 };
 
-std::string describe(const std::string &action) {
+// "workspace 3" -> {"workspace", "3"}
+std::pair<std::string, std::string> split_action(const std::string &action) {
   std::string a = trim(action);
-  if (starts_with(a, "exec ")) return "Run: " + trim(a.substr(5));
-  for (auto &x : kActions) if (a == x.id) return x.label;
-  return a;
+  size_t sp = a.find(' ');
+  if (sp == std::string::npos) return {a, ""};
+  return {a.substr(0, sp), trim(a.substr(sp + 1))};
+}
+
+std::string describe(const std::string &action) {
+  auto [id, arg] = split_action(action);
+  if (id == "exec") return "Run: " + arg;
+  for (auto &x : kActions)
+    if (id == x.id) return x.arg == kWorkspace ? std::string(x.label) + " " + arg : x.label;
+  return trim(action);
 }
 
 // FLTK key -> xkb keysym name
@@ -135,6 +163,20 @@ public:
       save_wm(p->wm);
     }, this);
     cy += 36;
+    Fl_Spinner *ws = new Fl_Spinner(X + 24 + 160, cy, 70, 28, "Workspaces:");
+    ws->align(FL_ALIGN_LEFT);
+    ws->type(FL_INT_INPUT);
+    ws->range(1, 9);
+    ws->step(1);
+    ws->value(std::clamp(wm.ini.get_int("behaviour", "workspaces", 4), 1, 9));
+    ws->tooltip("How many workspaces there are (all screens switch together)");
+    ws->callback([](Fl_Widget *w, void *d) {
+      ShortcutsPage *p = (ShortcutsPage *)d;
+      p->wm.ini.load(p->wm.path);
+      p->wm.ini.set_int("behaviour", "workspaces", (int)((Fl_Spinner *)w)->value());
+      save_wm(p->wm);
+    }, this);
+    cy += 36;
     list = new Fl_Hold_Browser(X + 24, cy, lw, H - (cy - Y) - 64);
     list->textsize(13);
     static int widths[] = {220, 0};
@@ -215,15 +257,20 @@ public:
       keys->combo = bindings[idx].first;
       keys->update();
     }
+    auto [cur_id, cur_arg] = split_action(cur);
     int ai = 0;
     for (size_t i = 0; i < sizeof kActions / sizeof kActions[0]; i++)
-      if (cur == kActions[i].id || (std::string(kActions[i].id) == "exec" && starts_with(cur, "exec "))) ai = (int)i;
+      if (cur_id == kActions[i].id) ai = (int)i;
     action->value(ai);
-    if (starts_with(cur, "exec ")) cmd->value(trim(cur.substr(5)).c_str());
+    if (kActions[ai].arg != kNoArg) cmd->value(cur_arg.c_str());
+    // the text field holds the command or the workspace number
     auto sync = [](Fl_Widget *, void *d) {
       Fl_Input *c = (Fl_Input *)d;
       Fl_Choice *a = (Fl_Choice *)c->parent()->child(2);
-      if (a->value() == 0) c->activate(); else c->deactivate();
+      ArgKind k = kActions[std::max(0, a->value())].arg;
+      c->label(k == kWorkspace ? "Workspace:" : "Command:");
+      if (k != kNoArg) c->activate(); else c->deactivate();
+      c->parent()->redraw();
     };
     action->callback(sync, cmd);
     sync(nullptr, cmd);
@@ -238,10 +285,18 @@ public:
     w.show();
     while (w.shown()) Fl::wait();
     if (!result || keys->combo.empty()) return;
-    std::string act = kActions[std::max(0, action->value())].id;
-    if (act == "exec") {
+    const Action &chosen = kActions[std::max(0, action->value())];
+    std::string act = chosen.id;
+    if (chosen.arg == kCommand) {
       if (!*cmd->value()) return;
-      act = std::string("exec ") + cmd->value();
+      act += std::string(" ") + cmd->value();
+    } else if (chosen.arg == kWorkspace) {
+      int n = atoi(cmd->value());
+      if (n < 1 || n > 9) {
+        fl_alert("The workspace is a number from 1 to 9.");
+        return;
+      }
+      act += " " + std::to_string(n);
     }
     // one action per key combination
     for (size_t i = 0; i < bindings.size(); i++)

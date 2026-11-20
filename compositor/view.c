@@ -257,10 +257,24 @@ static void ftl_destroy(struct wl_listener *l, void *data) {
 	view->ftl = NULL;
 }
 
-static void ftl_create(struct flwm_view *view) {
-	if (view->ftl || view->role != FLWM_ROLE_NORMAL || view->no_taskbar) return;
+void view_ftl_destroy(struct flwm_view *view) {
+	if (!view->ftl) return;
+	struct wlr_foreign_toplevel_handle_v1 *h = view->ftl;
+	wlr_foreign_toplevel_handle_v1_destroy(h); /* ftl_destroy() clears view->ftl */
+	view->ftl = NULL;
+}
+
+void view_ftl_create(struct flwm_view *view) {
+	/* windows of hidden workspaces are not in the panel's list */
+	if (view->ftl || !view->mapped || view->role != FLWM_ROLE_NORMAL || view->no_taskbar ||
+			!view_on_current(view))
+		return;
 	view->ftl = wlr_foreign_toplevel_handle_v1_create(view->server->foreign_toplevel_mgr);
 	if (!view->ftl) return;
+	wlr_foreign_toplevel_handle_v1_set_maximized(view->ftl, view->maximized);
+	wlr_foreign_toplevel_handle_v1_set_minimized(view->ftl, view->minimized);
+	wlr_foreign_toplevel_handle_v1_set_fullscreen(view->ftl, view->fullscreen);
+	wlr_foreign_toplevel_handle_v1_set_activated(view->ftl, view_focused(view->server) == view);
 	if (view_title(view))
 		wlr_foreign_toplevel_handle_v1_set_title(view->ftl, view_title(view));
 	if (view_app_id(view))
@@ -311,6 +325,8 @@ void view_focus(struct flwm_view *view) {
 	if (server->locked && view->role != FLWM_ROLE_LOCK) return;
 	if (server->focused_layer && view->role != FLWM_ROLE_LOCK) return; /* an exclusive layer surface owns the keyboard */
 	struct wlr_seat *seat = server->seat;
+	/* a window of another workspace (taskbar, activation request) brings it up */
+	if (!view_on_current(view)) workspace_switch(server, view->workspace);
 	struct flwm_view *prev = view_focused(server);
 	if (view->minimized) view_set_minimized(view, false);
 	if (view->role == FLWM_ROLE_NORMAL || view->role == FLWM_ROLE_LAUNCHER ||
@@ -354,7 +370,7 @@ void view_focus(struct flwm_view *view) {
 void view_focus_next_available(struct flwm_server *server) {
 	struct flwm_view *v;
 	wl_list_for_each(v, &server->views, link) {
-		if (v->mapped && !v->minimized && v->role == FLWM_ROLE_NORMAL && !v->no_taskbar) {
+		if (view_is_cyclable(v) && !v->minimized) {
 			view_focus(v);
 			return;
 		}
@@ -434,7 +450,7 @@ void view_snap(struct flwm_view *view, int side) {
 void view_set_minimized(struct flwm_view *view, bool minimized) {
 	if (view->role != FLWM_ROLE_NORMAL || view->minimized == minimized) return;
 	view->minimized = minimized;
-	wlr_scene_node_set_enabled(&view->tree->node, !minimized);
+	wlr_scene_node_set_enabled(&view->tree->node, !minimized && view_on_current(view));
 	if (is_x11(view)) xwayland_view_set_minimized(view, minimized);
 	if (view->ftl) wlr_foreign_toplevel_handle_v1_set_minimized(view->ftl, minimized);
 	if (minimized) {
@@ -510,10 +526,11 @@ void views_show_desktop(struct flwm_server *server) {
 	bool any_visible = false;
 	struct flwm_view *view;
 	wl_list_for_each(view, &server->views, link)
-		if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized) any_visible = true;
+		if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized && view_on_current(view))
+			any_visible = true;
 	if (any_visible) {
 		wl_list_for_each(view, &server->views, link) {
-			if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized) {
+			if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized && view_on_current(view)) {
 				view_set_minimized(view, true);
 				view->hidden_by_show_desktop = true;
 			}
@@ -521,7 +538,7 @@ void views_show_desktop(struct flwm_server *server) {
 	} else {
 		struct flwm_view *tmp;
 		wl_list_for_each_safe(view, tmp, &server->views, link)
-			if (view->hidden_by_show_desktop) view_set_minimized(view, false);
+			if (view->hidden_by_show_desktop && view_on_current(view)) view_set_minimized(view, false);
 		view_focus_next_available(server);
 	}
 }
@@ -683,7 +700,7 @@ static void place_new_view(struct flwm_view *view) {
 			bool clash = false;
 			struct flwm_view *v;
 			wl_list_for_each(v, &server->views, link) {
-				if (v != view && v->mapped && v->role == FLWM_ROLE_NORMAL &&
+				if (v != view && v->mapped && v->role == FLWM_ROLE_NORMAL && view_on_current(v) &&
 						abs(v->x - x) < 8 && abs(v->y - y) < 8)
 					clash = true;
 			}
@@ -707,6 +724,8 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 	struct flwm_server *server = view->server;
 	if (!is_x11(view)) detect_role(view);
 	view->mapped = true;
+	/* new windows open on the workspace the user is on */
+	if (!view->sticky) view->workspace = server->cur_workspace;
 	wlr_log(WLR_DEBUG, "map: app_id=%s title=%s role=%d%s",
 		view_app_id(view) ? view_app_id(view) : "(null)", title_or(view, "(null)"), view->role,
 		is_x11(view) ? " (X11)" : "");
@@ -729,7 +748,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 		return;
 	}
 	if (!view->placed) place_new_view(view);
-	ftl_create(view);
+	view_ftl_create(view);
 	decor_update(view);
 	if (maximized) view_set_maximized(view, true);
 	if (fullscreen) view_set_fullscreen(view, true);
@@ -1161,7 +1180,7 @@ void view_dump_windows(struct flwm_server *server) {
 	struct flwm_view *v;
 	/* server->views is in stacking order, topmost first */
 	wl_list_for_each(v, &server->views, link) {
-		if (!v->mapped || v->minimized || v->role != FLWM_ROLE_NORMAL || v->no_taskbar) continue;
+		if (!view_is_cyclable(v) || v->minimized) continue;
 		struct wlr_box geo;
 		content_geometry(v, &geo);
 		int T = deco_top(v), B = deco_side(v);

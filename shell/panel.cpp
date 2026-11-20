@@ -349,6 +349,7 @@ struct Panel {
   fld::FlatButton *network = nullptr;
   fld::FlatButton *bluetooth = nullptr;
   fld::FlatButton *printer = nullptr;
+  fld::FlatButton *nightlight = nullptr;
   fld::FlatButton *battery = nullptr;
   fld::FlatButton *bell = nullptr;
   fld::FlatButton *clock = nullptr;
@@ -786,7 +787,7 @@ void relayout() {
     P.battery->resize(r - bw, 2, bw, H - 4);
     r -= bw + 2;
   }
-  for (fld::FlatButton *b : {P.printer, P.bluetooth}) {
+  for (fld::FlatButton *b : {P.nightlight, P.printer, P.bluetooth}) {
     if (b && b->visible()) {
       b->resize(r - 34, 2, 34, H - 4);
       r -= 36;
@@ -828,6 +829,7 @@ static void panel_menu() {
   m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
   m.item("Applications…", [] { fld::spawn({"fl-launcher"}); }).divider();
   m.item("Lock Screen", [] { fld::lock_screen(); }, fld::can_lock() ? 0 : FL_MENU_INACTIVE).divider();
+  nightlight_menu_items(m);
   panel_menu_items(m);
   m.item("Settings…", [] { fld::spawn({"fl-settings"}); });
   m.popup();
@@ -1022,6 +1024,7 @@ int main(int argc, char **argv) {
 #ifdef FLD_HAVE_PRINTERS
   P.printer = printer_indicator_create();
 #endif
+  P.nightlight = nightlight_indicator_create();
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
 #ifdef FLD_HAVE_POWER

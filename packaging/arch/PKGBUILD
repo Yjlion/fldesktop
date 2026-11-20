@@ -112,11 +112,12 @@ package_fldesktop-shell() {
               'gst-plugin-pipewire: screen recording (fl-snip)' 'gst-plugins-good: screen recording (fl-snip)')
   _stage
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
+    usr/bin/fl-nightlight etc/xdg/autostart/fl-nightlight.desktop \
     usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \
     usr/share/applications/fl-snip.desktop usr/share/icons/hicolor/scalable/apps/fl-snip.svg \
     usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
   local m
-  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip; do
+  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip fl-nightlight; do
     _install_files usr/share/man/man1/$m.1
   done
 }

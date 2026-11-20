@@ -257,6 +257,7 @@ int main(int argc, char *argv[]) {
 	output_init(&server);
 	view_init(&server);
 	workspace_init(&server);
+	capture_init(&server);
 	layer_init(&server);
 	input_init(&server);
 	xwayland_init(&server); /* sets DISPLAY for the programs we start */

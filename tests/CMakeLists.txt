@@ -79,6 +79,11 @@ if(TARGET fld-portal-util)
   add_test(NAME portal COMMAND test_portal)
 endif()
 
+if(FLD_BUILD_WM AND TARGET xdg-desktop-portal-fl AND TARGET fl-calc)
+  add_test(NAME screencast-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/screencast-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  set_tests_properties(screencast-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+endif()
+
 if(FLD_BUILD_WM AND TARGET fl-notifyd AND TARGET xdg-desktop-portal-fl)
   add_test(NAME portal-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/portal-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   set_tests_properties(portal-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)

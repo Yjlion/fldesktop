@@ -73,6 +73,8 @@ struct wlr_xwayland;
 struct wlr_ext_workspace_manager_v1;
 struct wlr_ext_workspace_group_handle_v1;
 struct wlr_ext_workspace_handle_v1;
+struct wlr_ext_foreign_toplevel_handle_v1;
+struct wlr_ext_image_capture_source_v1;
 struct wlr_xwayland_surface;
 
 struct flwm_node_desc {
@@ -360,6 +362,11 @@ struct flwm_view {
 	struct wlr_box saved; /* geometry before maximize/fullscreen/snap */
 	struct wlr_xdg_toplevel_decoration_v1 *decoration;
 	struct wlr_foreign_toplevel_handle_v1 *ftl;
+	/* capture.c: ext-foreign-toplevel-list handle and the scene a shared
+	 * window is drawn into (wlroots 0.20+) */
+	struct wlr_ext_foreign_toplevel_handle_v1 *ext_ftl;
+	struct wlr_scene *capture_scene;
+	struct wlr_ext_image_capture_source_v1 *capture_source;
 
 	struct wl_listener map;
 	struct wl_listener unmap;
@@ -501,6 +508,12 @@ void view_ftl_destroy(struct flwm_view *view);
 
 /* workspace.c */
 void workspace_init(struct flwm_server *server);
+
+/* capture.c */
+void capture_init(struct flwm_server *server);
+void capture_view_map(struct flwm_view *view);
+void capture_view_update(struct flwm_view *view); /* title or app_id changed */
+void capture_view_unmap(struct flwm_view *view);
 void workspace_finish(struct flwm_server *server);
 void workspace_apply_config(struct flwm_server *server); /* after a reload */
 void workspace_output_added(struct flwm_server *server, struct wlr_output *output);

@@ -237,9 +237,9 @@ package_fldesktop-notifyd() {
 }
 package_xdg-desktop-portal-fl() {
   pkgdesc="xdg-desktop-portal backend for fldesktop"
-  depends=(fltk glib2 xdg-desktop-portal)
+  depends=(fltk glib2 xdg-desktop-portal libpipewire wayland)
   optdepends=('grim: screenshots' 'slurp: area screenshots and color picking'
-              'xdg-desktop-portal-wlr: screen casting' 'xdg-desktop-portal-gtk: other portals')
+              'pipewire: screen casting' 'xdg-desktop-portal-gtk: other portals')
   _stage
   _install_files usr/lib/xdg-desktop-portal-fl \
     usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.fl.service \

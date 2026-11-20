@@ -330,6 +330,7 @@ static void x_set_title(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = wl_container_of(listener, view, set_title);
 	if (view->ftl && view->xsurface->title)
 		wlr_foreign_toplevel_handle_v1_set_title(view->ftl, view->xsurface->title);
+	capture_view_update(view);
 	if (view->mapped) decor_update(view);
 }
 
@@ -337,6 +338,7 @@ static void x_set_class(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = wl_container_of(listener, view, set_app_id);
 	if (view->ftl && view->xsurface->class)
 		wlr_foreign_toplevel_handle_v1_set_app_id(view->ftl, view->xsurface->class);
+	capture_view_update(view);
 }
 
 static void x_set_decorations(struct wl_listener *listener, void *data) {

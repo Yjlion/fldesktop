@@ -38,6 +38,11 @@ void access_call(const std::string &method, GVariant *params, GDBusMethodInvocat
 void account_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
 void notification_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
 void wallpaper_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
+void screencast_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
+GVariant *screencast_property(const std::string &prop);
+
+// display name of an application (dialogs.cpp)
+std::string app_name(const std::string &app_id);
 // starts watching desktop.ini for SettingChanged (FLTK thread)
 void settings_watch();
 
@@ -69,5 +74,21 @@ Appearance read_appearance(const fld::Ini &desktop_ini);
 GVariant *settings_read_all(const Appearance &a, const std::vector<std::string> &namespaces);
 // one value or nullptr
 GVariant *settings_read(const Appearance &a, const std::string &ns, const std::string &key);
+
+// ScreenCast (cast_util.cpp)
+enum { CAST_MONITOR = 1, CAST_WINDOW = 2 };
+enum { CAST_CURSOR_HIDDEN = 1, CAST_CURSOR_EMBEDDED = 2, CAST_CURSOR_METADATA = 4 };
+struct CastSource {
+  int kind = CAST_MONITOR;
+  std::string id;    // output name, or the window's identifier (this session only)
+  std::string title; // window title, or the screen's description
+  std::string app_id;
+};
+// restore_data (suv) for the chosen sources, and back
+GVariant *cast_restore_to_variant(const std::vector<CastSource> &chosen);
+std::vector<CastSource> cast_parse_restore(GVariant *restore_data); // empty if not ours or invalid
+// indices into `available` for every restored source, or empty when any is missing
+std::vector<int> cast_match_restore(const std::vector<CastSource> &wanted, const std::vector<CastSource> &available);
+bool cast_embed_cursor(guint32 cursor_mode);
 
 } // namespace portal

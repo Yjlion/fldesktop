@@ -31,9 +31,16 @@ passes notifications on to \fBfl-notifyd\fR(1).
 .TP
 \fBWallpaper\fR
 sets the desktop background.
+.TP
+\fBScreenCast\fR
+screen sharing for browsers, video calls and recorders: a dialog picks a
+screen or a single window, which is then sent as a PipeWire video stream.
+Applications may ask to remember the choice. Windows can be shared when
+\fBfl-wm\fR(1) is built with wlroots 0.20 or newer; with wlroots 0.18 only
+whole screens can be shared (through wlr-screencopy).
 .PP
-Screen casting is left to xdg-desktop-portal-wlr, other portals to the GTK
-backend, as listed in
+Other portals are left to the GTK backend (and xdg-desktop-portal-wlr is
+the fallback for screen casting), as listed in
 \fI/usr/share/xdg-desktop-portal/fldesktop-portals.conf\fR. The program is
 started by D-Bus; \fBfl-autostart\fR(1) passes WAYLAND_DISPLAY to D-Bus
 activated programs at login.

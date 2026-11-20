@@ -17,8 +17,7 @@ jobs:
           pacman -Syu --noconfirm --needed base-devel git cmake ninja pkgconf wayland-protocols \
             fltk wlroots0.20 libvterm pango cairo librsvg libinput libxkbcommon pixman shared-mime-info \
             glib2 libpipewire polkit libnm fontconfig xkeyboard-config ttf-dejavu \
-            libcups packagekit flatpak appstream libjxl libarchive wpewebkit gstreamer gst-plugins-base gst-plugins-good gst-plugin-pipewire wireplumber wtype dbus python-dbusmock xdg-desktop-portal \
-            libcups packagekit flatpak appstream libjxl libarchive poppler wpewebkit gstreamer gst-plugins-base gst-plugins-good wtype dbus python-dbusmock xdg-desktop-portal \
+            libcups packagekit flatpak appstream libjxl libarchive poppler wpewebkit gstreamer gst-plugins-base gst-plugins-good gst-plugin-pipewire wireplumber wtype dbus python-dbusmock xdg-desktop-portal \
             libxcb xcb-util-wm xorg-xwayland
       - uses: actions/checkout@v4
       - name: Build

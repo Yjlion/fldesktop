@@ -788,8 +788,7 @@ void relayout() {
     P.battery->resize(r - bw, 2, bw, H - 4);
     r -= bw + 2;
   }
-  for (fld::FlatButton *b : {P.nightlight, P.printer, P.bluetooth}) {
-  for (fld::FlatButton *b : {P.clipboard, P.printer, P.bluetooth}) {
+  for (fld::FlatButton *b : {P.nightlight, P.clipboard, P.printer, P.bluetooth}) {
     if (b && b->visible()) {
       b->resize(r - 34, 2, 34, H - 4);
       r -= 36;

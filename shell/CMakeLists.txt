@@ -1,7 +1,7 @@
 set(PANEL_PROTO)
 fld_wayland_protocol(PANEL_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-foreign-toplevel-management-unstable-v1.xml client)
 
-add_executable(fl-panel panel.cpp panel_nightlight.cpp ${PANEL_PROTO} panel_clipboard.cpp)
+add_executable(fl-panel panel.cpp panel_nightlight.cpp panel_clipboard.cpp ${PANEL_PROTO})
 target_include_directories(fl-panel PRIVATE ${FLD_PROTO_OUT})
 target_link_libraries(fl-panel PRIVATE fld fl-cliphist-store PkgConfig::WAYLAND_CLIENT)
 # the workspace pager (ext-workspace-v1, wayland-protocols 1.40+)
@@ -65,6 +65,8 @@ add_executable(fl-nightlight nightlight.cpp ${NIGHT_PROTO})
 target_include_directories(fl-nightlight PRIVATE ${FLD_PROTO_OUT})
 target_link_libraries(fl-nightlight PRIVATE fl-nightlight-util fld PkgConfig::WAYLAND_CLIENT)
 install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-nightlight.desktop
+        DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
+
 # clipboard history: the store (also in fl-panel) and the recorder
 add_library(fl-cliphist-store STATIC cliphist_store.cpp)
 target_include_directories(fl-cliphist-store PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -81,5 +83,5 @@ foreach(s fl-session fl-screenshot)
   configure_file(${s} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${s} COPYONLY)
 endforeach()
 
-install(TARGETS fl-panel fl-launcher fl-desktop fl-autostart fl-nightlight RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} fl-cliphist)
+install(TARGETS fl-panel fl-launcher fl-desktop fl-autostart fl-nightlight fl-cliphist RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(PROGRAMS fl-session fl-screenshot DESTINATION ${CMAKE_INSTALL_BINDIR})

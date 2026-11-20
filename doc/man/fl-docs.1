@@ -1,0 +1,42 @@
+.TH FL-DOCS 1 "November 2026" "fldesktop" "fldesktop"
+.SH NAME
+fl-docs \- PDF viewer
+.SH SYNOPSIS
+\fBfl-docs\fR [\fB\-\-page\fR \fIN\fR] [\fIFILE.pdf\fR]
+.br
+\fBfl-docs \-\-info\fR \fIFILE.pdf\fR [\fB\-\-find\fR \fITEXT\fR]
+.SH DESCRIPTION
+Shows PDF documents (through poppler) in one continuously scrolling strip of
+pages, with page thumbnails on the left. The zoom fits the width (of the
+widest page) or the whole page, or is set from 10% to 800%. Search finds a
+text on all pages, without regard to case, and highlights every match.
+Printing goes to a CUPS printer with copies, a page range and two-sided
+printing. Documents protected by a password ask for it. A PDF dropped onto
+the window opens.
+.SH KEYS
+.TP
+Ctrl+O, Ctrl+P
+Open, print.
+.TP
+Ctrl+F, Enter, F3, Shift+F3
+Find; the next and the previous match.
+.TP
+Page Up, Page Down, Space, arrows, Home, End, N, P
+Scroll; first and last page; next and previous page.
+.TP
+Ctrl+Plus, Ctrl+Minus, Ctrl+0, Ctrl+wheel
+Zoom in, out, to 100%.
+.TP
+F9
+Show or hide the thumbnails.
+.SH OPTIONS
+.TP
+\fB\-\-page\fR \fIN\fR
+Open at page \fIN\fR.
+.TP
+\fB\-\-info\fR \fIFILE\fR [\fB\-\-find\fR \fITEXT\fR]
+Print the number of pages, the title and the page sizes in points and, with
+\fB\-\-find\fR, every match as "hit PAGE X Y WIDTH HEIGHT" (points from the
+top left corner), without opening a window.
+.SH SEE ALSO
+\fBfl-printers\fR(1), \fBfl-view\fR(1)

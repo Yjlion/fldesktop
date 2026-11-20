@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit poppler)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -80,7 +80,8 @@ package_fldesktop() {
               'fldesktop-video: video player'
               'fldesktop-webcam: camera app'
               'fldesktop-archive: archive manager'
-              'fldesktop-web: web browser')
+              'fldesktop-web: web browser'
+              'fldesktop-docs: PDF viewer')
   arch=(any)
 }
 
@@ -164,6 +165,13 @@ package_fldesktop-webcam() {
   depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
   optdepends=("gst-plugin-pipewire: cameras and microphones through PipeWire")
   _app webcam
+}
+
+package_fldesktop-docs() {
+  pkgdesc="fldesktop PDF viewer (poppler)"
+  depends=(fltk poppler wayland)
+  optdepends=("libcups: printing" "poppler-data: documents in CJK and other encodings")
+  _app docs
 }
 
 package_fldesktop-web() {

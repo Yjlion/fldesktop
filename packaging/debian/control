@@ -32,6 +32,7 @@ Build-Depends: debhelper-compat (= 13),
                libappstream-dev,
                libjxl-dev,
                libarchive-dev,
+               libpoppler-cpp-dev,
                libgstreamer1.0-dev,
                libgstreamer-plugins-base1.0-dev,
                libpam0g-dev,
@@ -70,7 +71,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
             fldesktop-webcam, fldesktop-archive, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
-            fldesktop-flatpak, fldesktop-firewall, fldesktop-web
+            fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
  toolkit: its own wlroots compositor, a taskbar panel, an application
@@ -183,6 +184,16 @@ Description: fldesktop video player
  fl-video plays video and audio files, playlists and network streams with
  GStreamer: subtitles, audio and subtitle track selection, playback speed,
  screenshots, full screen and resuming where playback stopped.
+
+Package: fldesktop-docs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: poppler-data
+Description: fldesktop PDF viewer
+ fl-docs shows PDF documents in a continuously scrolling view with page
+ thumbnails, fits the width or the page or zooms in steps, finds text on all
+ pages and prints through CUPS with copies, page ranges and two-sided
+ printing. Password protected documents ask for the password.
 
 Package: fldesktop-webcam
 Architecture: any

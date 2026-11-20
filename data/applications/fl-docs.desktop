@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Documents
+GenericName=Document Viewer
+Comment=View, search and print PDF documents
+Exec=fl-docs %f
+Icon=fl-docs
+Categories=Office;Viewer;
+MimeType=application/pdf;
+Keywords=pdf;document;viewer;print;
+StartupWMClass=fl-docs

@@ -351,6 +351,23 @@ int print_test_page(const std::string &name, Error *err) {
   return id;
 }
 
+int print_file(const std::string &printer, const std::string &file, const std::string &title,
+               const std::vector<std::pair<std::string, std::string>> &options, Error *err) {
+  http_t *http = connect();
+  if (!http) {
+    if (err) *err = "Cannot connect to the printing service (CUPS).";
+    return 0;
+  }
+  cups_option_t *opts = nullptr;
+  int n = 0;
+  for (const auto &o : options) n = cupsAddOption(o.first.c_str(), o.second.c_str(), n, &opts);
+  int id = cupsPrintFile2(http, printer.c_str(), file.c_str(), title.c_str(), n, opts);
+  cupsFreeOptions(n, opts);
+  if (!id && err) *err = last_error();
+  httpClose(http);
+  return id;
+}
+
 std::vector<Option> options(const std::string &name) {
   std::vector<Option> out;
   http_t *http = connect();

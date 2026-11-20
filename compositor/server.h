@@ -577,6 +577,14 @@ void lock_finish(struct flwm_server *server);
 void lock_request(struct flwm_server *server);
 void lock_arrange(struct flwm_server *server);
 void lock_activity(struct flwm_server *server);
+
+/* im.c: text-input-v3 <-> input-method-v2 relay */
+struct wlr_keyboard;
+struct wlr_input_method_keyboard_grab_v2;
+void im_init(struct flwm_server *server); /* after the seat */
+void im_finish(void);
+/* the input method's keyboard grab when keys of kb should go to it, else NULL */
+struct wlr_input_method_keyboard_grab_v2 *im_keyboard_grab(struct wlr_keyboard *kb);
 void lock_view_mapped(struct flwm_server *server, struct flwm_view *view);
 bool lock_client_is_locker(struct flwm_server *server, struct wl_client *client);
 

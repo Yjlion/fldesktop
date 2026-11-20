@@ -88,7 +88,8 @@ package_fldesktop-wm() {
   pkgdesc="fldesktop Wayland compositor (wlroots)"
   depends=(wlroots0.20 wayland libxkbcommon libinput pango cairo librsvg libdrm pixman libxcb xcb-util-wm)
   optdepends=('xorg-xwayland: X11 programs' 'grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard'
-              'fldesktop-lock: screen locking' 'fldesktop-icon-theme: the default cursors')
+              'fldesktop-lock: screen locking' 'fldesktop-icon-theme: the default cursors'
+              'fcitx5: Chinese, Japanese and Korean input')
   _stage
   _install_files usr/bin/fl-wm usr/share/fldesktop/wm.ini.example usr/share/man/man1/fl-wm.1
   install -Dm644 "$(_srcdir)/COPYING" "$pkgdir/usr/share/licenses/$pkgname/COPYING"

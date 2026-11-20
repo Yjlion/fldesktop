@@ -83,7 +83,7 @@ Package: fldesktop-wm
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils, xwayland
-Suggests: grim, wl-clipboard
+Suggests: grim, wl-clipboard, fcitx5
 Description: fldesktop Wayland compositor
  fl-wm is a stacking Wayland compositor based on wlroots with server side
  decorations, keyboard shortcuts, window snapping and the protocols used by

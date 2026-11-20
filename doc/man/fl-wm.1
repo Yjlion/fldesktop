@@ -26,6 +26,15 @@ current workspace. The panel's window list and Alt+Tab show the windows of the c
 activating a window of another workspace (a notification, another program asking for it) goes
 there. With wlroots 0.20 the workspaces are published through ext-workspace-v1, which the panel's
 pager uses.
+.SH INPUT METHODS
+fl-wm relays between programs that use text-input-unstable-v3 (GTK, Qt 6,
+FLTK, Firefox, Chromium with \-\-enable\-wayland\-ime) and an input method that
+uses input-method-unstable-v2, such as \fBfcitx5\fR(1), for Chinese, Japanese,
+Korean and other composed input. While the input method grabs the keyboard
+the keys go to it (key bindings still work); its candidate window is placed
+below the text cursor. Settings > Keyboard chooses the input method and sets
+up the session environment for programs that use IM modules instead
+(XMODIFIERS, QT_IM_MODULE, GTK_IM_MODULE for IBus).
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

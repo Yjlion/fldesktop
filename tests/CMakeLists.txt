@@ -167,6 +167,21 @@ if(VPTR_WL_FOUND)
   set_target_properties(fl-vptr PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endif()
 
+# test helper: a fake input method (input-method-unstable-v2)
+if(VPTR_WL_FOUND)
+  set(IM_PROTO)
+  fld_wayland_protocol(IM_PROTO ${CMAKE_SOURCE_DIR}/protocols/input-method-unstable-v2.xml client)
+  add_executable(fl-im tools/fl-im.c ${IM_PROTO})
+  target_include_directories(fl-im PRIVATE ${FLD_PROTO_OUT})
+  target_link_libraries(fl-im PRIVATE PkgConfig::VPTR_WL)
+  set_target_properties(fl-im PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  if(FLD_BUILD_WM AND FLD_BUILD_EDIT)
+    add_test(NAME im-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/im-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-im>)
+    set_tests_properties(im-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
+  endif()
+endif()
+
 # test helper: lists and switches workspaces (ext-workspace-v1), installed nowhere
 set(_ws_xml ${WAYLAND_PROTOCOLS_DIR}/staging/ext-workspace/ext-workspace-v1.xml)
 if(VPTR_WL_FOUND AND EXISTS ${_ws_xml})

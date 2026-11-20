@@ -12,9 +12,10 @@ int main(int argc, char **argv) {
   bool dry = argc > 1 && std::string(argv[1]) == "--list";
   if (!dry && !fld::which("dbus-update-activation-environment").empty()) {
     // programs started by D-Bus (xdg-desktop-portal-fl, fl-notifyd) need the
-    // session's display; also tell systemd --user when there is one
+    // session's display (and fl-session's libdecor setting); also tell
+    // systemd --user when there is one
     std::vector<std::string> vars = {"WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE",
-                                     "XDG_SESSION_DESKTOP", "DISPLAY"};
+                                     "XDG_SESSION_DESKTOP", "DISPLAY", "LIBDECOR_PLUGIN_DIR"};
     std::vector<std::string> cmd = {"dbus-update-activation-environment", "--systemd"};
     for (auto &v : vars)
       if (getenv(v.c_str())) cmd.push_back(v);

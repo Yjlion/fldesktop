@@ -7,5 +7,12 @@ fl-session \- start an fldesktop session
 Sets XDG_CURRENT_DESKTOP and related variables, reads
 \fI~/.config/fldesktop/environment\fR (KEY=value lines), starts a D\-Bus session bus
 when none is running and executes \fBfl-wm\fR(1).
+.SH ENVIRONMENT
+.TP
+.B LIBDECOR_PLUGIN_DIR
+Unless it is set already (for example in the environment file), it is set to an
+empty directory in \fBXDG_RUNTIME_DIR\fR: \fBfl-wm\fR(1) draws the window
+decorations itself, so libdecor's GTK and cairo plugins are not needed and
+applications start faster without them.
 .SH SEE ALSO
 \fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)

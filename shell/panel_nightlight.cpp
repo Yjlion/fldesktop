@@ -52,7 +52,7 @@ fld::FlatButton *nightlight_indicator_create() {
   g_btn->color(panel_bg());
   g_btn->labelcolor(panel_fg());
   g_btn->hover_color(panel_hover());
-  if (Fl_Image *i = fld::symbolic_icon("night-light", 18, panel_fg())) g_btn->icon_image(i);
+  if (Fl_Image *i = fld::symbolic_icon("weather-clear-night", 18, panel_fg())) g_btn->icon_image(i);
   else g_btn->icon_name("weather-clear-night", 20);
   g_btn->tooltip("Night light is on. Click to turn it off.");
   g_btn->callback([](Fl_Widget *, void *) { set_enabled(false); });

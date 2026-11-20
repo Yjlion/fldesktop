@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 
+#include "adblock.h"
 #include "browser_util.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -58,6 +59,30 @@ struct Config {
   bool natural_scroll = false; // the page follows the fingers (wheel down scrolls up)
   bool devtools = true;        // developer tools (F12) through WebKit's inspector server
   bool menubar = false;        // a menu bar above the tabs
+  bool block_ads = true;       // content blocking with EasyList / EasyPrivacy
+  bool easylist = true, easyprivacy = true;
+  std::vector<std::string> adblock_extra; // more filter list addresses
+  std::vector<std::string> adblock_allow; // sites where nothing is blocked
+  static std::vector<std::string> list(const std::string &v) {
+    std::vector<std::string> out;
+    for (auto &x : fld::split(v, ','))
+      if (!fld::trim(x).empty()) out.push_back(fld::trim(x));
+    return out;
+  }
+  static std::string join(const std::vector<std::string> &v) {
+    std::string s;
+    for (auto &x : v) s += (s.empty() ? "" : ",") + x;
+    return s;
+  }
+  web::adblock::Settings adblock() const {
+    web::adblock::Settings a;
+    a.enabled = block_ads;
+    a.easylist = easylist;
+    a.easyprivacy = easyprivacy;
+    a.extra = adblock_extra;
+    a.allow = adblock_allow;
+    return a;
+  }
   void load() {
     fld::Ini c;
     c.load(path());
@@ -68,6 +93,16 @@ struct Config {
     natural_scroll = c.get_bool("Web", "NaturalScrolling", natural_scroll);
     devtools = c.get_bool("Web", "DeveloperTools", devtools);
     menubar = c.get_bool("Web", "ShowMenuBar", menubar);
+    block_ads = c.get_bool("Web", "BlockAds", block_ads);
+    std::string lists = c.get("Web", "AdblockLists", "easylist,easyprivacy");
+    easylist = false;
+    easyprivacy = false;
+    for (auto &l : list(lists)) {
+      if (l == "easylist") easylist = true;
+      if (l == "easyprivacy") easyprivacy = true;
+    }
+    adblock_extra = list(c.get("Web", "AdblockExtra", ""));
+    adblock_allow = list(c.get("Web", "AdblockAllow", ""));
   }
   void save() const {
     fld::Ini c;
@@ -79,6 +114,13 @@ struct Config {
     c.set_bool("Web", "NaturalScrolling", natural_scroll);
     c.set_bool("Web", "DeveloperTools", devtools);
     c.set_bool("Web", "ShowMenuBar", menubar);
+    c.set_bool("Web", "BlockAds", block_ads);
+    std::vector<std::string> lists;
+    if (easylist) lists.push_back("easylist");
+    if (easyprivacy) lists.push_back("easyprivacy");
+    c.set("Web", "AdblockLists", join(lists));
+    c.set("Web", "AdblockExtra", join(adblock_extra));
+    c.set("Web", "AdblockAllow", join(adblock_allow));
     c.save(path());
   }
   static std::string path() { return fld::fld_config_dir() + "/web.ini"; }
@@ -1234,8 +1276,43 @@ enum Cmd {
   C_NEW_TAB = 1, C_NEW_WINDOW, C_OPEN_FILE, C_FIND, C_ZOOM_IN, C_ZOOM_OUT, C_ZOOM_RESET, C_BOOKMARK, C_BOOKMARKS,
   C_HISTORY, C_DOWNLOADS, C_SETTINGS, C_ABOUT, C_CLOSE_WINDOW, C_QUIT, C_PRIVATE, C_FULLSCREEN, C_DEVTOOLS,
   C_MENUBAR, C_SAVE_PAGE, C_SOURCE, C_REOPEN, C_CLOSE_TAB, C_RELOAD, C_BACK, C_FORWARD, C_HOME, C_UNDO, C_REDO,
-  C_CUT, C_COPY, C_PASTE, C_SELECT_ALL, C_BOOKMARK_BASE = 1000,
+  C_CUT, C_COPY, C_PASTE, C_SELECT_ALL, C_ADBLOCK_SITE, C_BOOKMARK_BASE = 1000,
 };
+
+// a site in the allowed list (example.com covers www.example.com too)
+static bool host_matches(const std::string &host, const std::string &site) {
+  return host == site || (host.size() > site.size() && host.compare(host.size() - site.size(), site.size(), site) == 0 &&
+                          host[host.size() - site.size() - 1] == '.');
+}
+
+static bool site_allowed(const std::string &uri) {
+  std::string host = url_host(uri);
+  if (host.empty()) return false;
+  for (auto &a : g_cfg.adblock_allow)
+    if (host_matches(host, a)) return true;
+  return false;
+}
+
+// "Block Ads on This Site": the site joins or leaves the allowed sites; the
+// page reloads once the filter is rebuilt
+static void toggle_site_blocking(Tab *t) {
+  if (!t) return;
+  std::string host = url_host(t->uri);
+  if (host.empty()) return;
+  auto &allow = g_cfg.adblock_allow;
+  if (site_allowed(t->uri)) {
+    allow.erase(std::remove_if(allow.begin(), allow.end(), [&](const std::string &a) { return host_matches(host, a); }),
+                allow.end());
+  } else {
+    if (host.compare(0, 4, "www.") == 0) host = host.substr(4);
+    allow.push_back(host);
+  }
+  g_cfg.save();
+  web::adblock::apply(g_cfg.adblock(), [t] {
+    if (tab_alive(t)) webkit_web_view_reload(t->wv->view());
+    glib_loop_poke();
+  });
+}
 
 void Browser::command(long id) {
   WebKitWebView *v = view();
@@ -1282,6 +1359,7 @@ void Browser::command(long id) {
       if (tab()) tab()->wv->paste_clipboard();
       break;
     case C_SELECT_ALL: edit(WEBKIT_EDITING_COMMAND_SELECT_ALL); break;
+    case C_ADBLOCK_SITE: toggle_site_blocking(tab()); break;
     default:
       if (id >= C_BOOKMARK_BASE && id - C_BOOKMARK_BASE < (long)g_bookmarks.size())
         load(g_bookmarks[(size_t)(id - C_BOOKMARK_BASE)].url);
@@ -1293,6 +1371,12 @@ void Browser::command(long id) {
 // toolbar's menu button
 void Browser::build_menu(fld::Menu &m, bool for_bar) {
   auto cmd = [this](long id) { return [this, id] { command(id); }; };
+  auto adblock_item = [&](fld::Menu &mm) {
+    std::string uri = tab() ? tab()->uri : "";
+    bool web = uri.compare(0, 7, "http://") == 0 || uri.compare(0, 8, "https://") == 0;
+    mm.toggle("Block Ads on This Site", g_cfg.block_ads && web && !site_allowed(uri), cmd(C_ADBLOCK_SITE),
+              g_cfg.block_ads && web ? 0 : FL_MENU_INACTIVE);
+  };
   auto bookmarks = [&]() {
     bool marked = tab() && is_bookmarked(tab()->uri);
     m.item(marked ? "Remove Bookmark" : "Bookmark This Page", cmd(C_BOOKMARK), 0, FL_CTRL + 'd');
@@ -1316,7 +1400,9 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
     m.item("Zoom Out", cmd(C_ZOOM_OUT), 0, FL_CTRL + '-');
     m.item("Actual Size", cmd(C_ZOOM_RESET), 0, FL_CTRL + '0');
     m.toggle("Full Screen", fullscreen, cmd(C_FULLSCREEN));
-    m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR)).divider();
+    m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR));
+    adblock_item(m);
+    m.divider();
     m.submenu("Bookmarks");
     bookmarks();
     m.end_submenu();
@@ -1357,7 +1443,9 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
   m.item("Zoom Out", cmd(C_ZOOM_OUT), 0, FL_CTRL + '-');
   m.item("Actual Size", cmd(C_ZOOM_RESET), 0, FL_CTRL + '0').divider();
   m.toggle("Full Screen", fullscreen, cmd(C_FULLSCREEN));
-  m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR)).divider();
+  m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR));
+  adblock_item(m);
+  m.divider();
   m.item("View Page Source", cmd(C_SOURCE), 0, FL_CTRL + 'u');
   m.item("Developer Tools", cmd(C_DEVTOOLS), g_inspector_port ? 0 : FL_MENU_INACTIVE, FL_F + 12);
   m.end_submenu();
@@ -1740,7 +1828,7 @@ static void apply_settings() {
 }
 
 static void show_settings() {
-  Fl_Double_Window dlg(480, 400, "Web Settings");
+  Fl_Double_Window dlg(480, 530, "Web Settings");
   Fl_Input home(140, 14, 326, 28, "Home page:");
   home.value(g_cfg.home.c_str());
   Fl_Choice search(140, 50, 200, 28, "Search with:");
@@ -1761,9 +1849,42 @@ static void show_settings() {
   menubar.value(g_cfg.menubar);
   Fl_Check_Button devtools(140, 198, 330, 26, "Developer tools (F12; after a restart)");
   devtools.value(g_cfg.devtools);
-  Fl_Box privacy(14, 260, 120, 28, "Privacy:");
+  Fl_Box adlabel(14, 236, 120, 26, "Ad blocking:");
+  adlabel.align(FL_ALIGN_RIGHT | FL_ALIGN_INSIDE);
+  Fl_Check_Button ads(140, 236, 330, 26, "Block ads and trackers");
+  ads.value(g_cfg.block_ads);
+  Fl_Check_Button easylist(160, 262, 140, 26, "EasyList (ads)");
+  easylist.value(g_cfg.easylist);
+  Fl_Check_Button easyprivacy(300, 262, 170, 26, "EasyPrivacy (trackers)");
+  easyprivacy.value(g_cfg.easyprivacy);
+  Fl_Input extra(160, 292, 306, 28);
+  extra.tooltip("Addresses of more filter lists in Adblock Plus format, separated by spaces");
+  {
+    std::string e;
+    for (auto &u : g_cfg.adblock_extra) e += (e.empty() ? "" : " ") + u;
+    extra.value(e.c_str());
+  }
+  Fl_Box extra_label(14, 292, 144, 28, "More lists:");
+  extra_label.align(FL_ALIGN_RIGHT | FL_ALIGN_INSIDE);
+  Fl_Box adstatus(160, 324, 306, 22);
+  adstatus.align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
+  adstatus.labelsize(fld::ui_font_size() - 1);
+  adstatus.copy_label(web::adblock::status().c_str());
+  web::adblock::on_status = [&adstatus] { adstatus.copy_label(web::adblock::status().c_str()); adstatus.redraw(); };
+  Fl_Button update(160, 350, 160, 28, "Update Lists Now");
+  update.callback([](Fl_Widget *, void *) { web::adblock::update_now(); });
+  auto sync = [](Fl_Widget *, void *d) {
+    Fl_Check_Button **b = (Fl_Check_Button **)d;
+    if (b[0]->value()) { b[1]->activate(); b[2]->activate(); }
+    else { b[1]->deactivate(); b[2]->deactivate(); }
+  };
+  Fl_Check_Button *ad_buttons[3] = {&ads, &easylist, &easyprivacy};
+  ads.callback(sync, ad_buttons);
+  sync(&ads, ad_buttons);
+  int py = 390;
+  Fl_Box privacy(14, py, 120, 28, "Privacy:");
   privacy.align(FL_ALIGN_RIGHT | FL_ALIGN_INSIDE);
-  Fl_Button clear(140, 260, 230, 28, "Clear Cookies and Site Data…");
+  Fl_Button clear(140, py, 230, 28, "Clear Cookies and Site Data…");
   clear.callback([](Fl_Widget *, void *) {
     if (fl_choice("Remove all cookies, caches and data that web sites stored? You will be signed out of sites.",
                   "Cancel", "Clear", nullptr) != 1)
@@ -1772,13 +1893,13 @@ static void show_settings() {
                                       WEBKIT_WEBSITE_DATA_ALL, 0, nullptr, nullptr, nullptr);
     glib_loop_poke();
   });
-  Fl_Button defb(140, 296, 230, 28, "Make Web the Default Browser");
+  Fl_Button defb(140, py + 36, 230, 28, "Make Web the Default Browser");
   defb.callback([](Fl_Widget *, void *) {
     bool ok = fld::spawn({"xdg-settings", "set", "default-web-browser", "fl-web.desktop"});
     fl_message(ok ? "Web is now the default browser." : "Could not run xdg-settings.");
   });
-  Fl_Button cancel(268, 358, 96, 30, "Cancel");
-  Fl_Return_Button ok(370, 358, 96, 30, "Save");
+  Fl_Button cancel(268, 488, 96, 30, "Cancel");
+  Fl_Return_Button ok(370, 488, 96, 30, "Save");
   int result = -1;
   cancel.callback([](Fl_Widget *, void *r) { *(int *)r = 0; }, &result);
   ok.callback([](Fl_Widget *, void *r) { *(int *)r = 1; }, &result);
@@ -1786,6 +1907,7 @@ static void show_settings() {
   dlg.set_modal();
   dlg.show();
   while (result < 0 && dlg.shown()) Fl::wait();
+  web::adblock::on_status = nullptr;
   if (result != 1) return;
   std::string h = fld::trim(home.value());
   g_cfg.home = h.empty() ? "about:blank" : url_from_input(h, search_template(g_cfg.search));
@@ -1795,8 +1917,16 @@ static void show_settings() {
   g_cfg.natural_scroll = natural.value();
   g_cfg.menubar = menubar.value();
   g_cfg.devtools = devtools.value();
+  g_cfg.block_ads = ads.value();
+  g_cfg.easylist = easylist.value();
+  g_cfg.easyprivacy = easyprivacy.value();
+  g_cfg.adblock_extra.clear();
+  for (auto &u : fld::split(extra.value(), ' '))
+    if (fld::trim(u).compare(0, 8, "https://") == 0 || fld::trim(u).compare(0, 7, "http://") == 0)
+      g_cfg.adblock_extra.push_back(fld::trim(u));
   g_cfg.save();
   apply_settings();
+  web::adblock::apply(g_cfg.adblock());
   for (auto *w : g_windows) w->layout();
 }
 
@@ -1851,8 +1981,17 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-web [--private] [--new-window] [URL or file...]\n");
+      printf("Usage: fl-web [--private] [--new-window] [URL or file...]\n"
+             "       fl-web --adblock-convert LIST... (prints WebKit content blocker rules)\n");
       return 0;
+    }
+    if (a == "--adblock-convert") {
+      std::vector<std::string> files(argv + i + 1, argv + argc);
+      size_t rules = 0, skipped = 0;
+      std::string json = web::adblock::convert_files(files, &rules, &skipped);
+      printf("%s\n", json.c_str());
+      fprintf(stderr, "%zu rules, %zu filters skipped\n", rules, skipped);
+      return rules ? 0 : 1;
     }
     if (a == "-v" || a == "--version") {
       // the rendering (GPU or CPU) can only be told with a display
@@ -1911,9 +2050,11 @@ int main(int argc, char **argv) {
   webkit_settings_set_enable_developer_extras(g_settings, g_inspector_port != 0);
   apply_settings();
   g_ucm = webkit_user_content_manager_new();
+  web::adblock::init(g_ucm, data_dir(), cache + "/adblock");
   Backend::on_copy = [](const std::string &text) { Fl::copy(text.c_str(), (int)text.size(), 1); };
 
   glib_loop_start();
+  web::adblock::apply(g_cfg.adblock());
   new_window(urls, priv);
   int r = Fl::run();
   save_session();

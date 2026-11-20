@@ -190,7 +190,8 @@ Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils
 Description: fldesktop web browser
  fl-web is a web browser built with FLTK and WPE WebKit: tabs, an address
  bar that searches and completes from bookmarks and history, downloads,
- find in page, zoom, and the pages' password, file, permission and
+ find in page, zoom, ad and tracker blocking with the EasyList and
+ EasyPrivacy filter lists, and the pages' password, file, permission and
  notification requests.
 
 Package: fldesktop-video

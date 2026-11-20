@@ -16,6 +16,18 @@ window (restoring it when minimized), Escape or a click outside closes the panel
 \fBswitcher=false\fR in the \fB[behaviour]\fR section of \fIwm.ini\fR each Alt+Tab raises the next
 window directly instead. Application icons come from the windows' desktop files and the icon theme
 (SVG icons need librsvg).
+.SH SNAPPING
+Dragging a window by its title bar to the left or right edge of a screen
+snaps it to that half, to a corner snaps it to that quarter and to the top
+edge maximizes it; a translucent preview shows where it goes
+(\fBdrag_snap=false\fR in \fB[behaviour]\fR turns this off). Super+Left and
+Super+Right snap to the halves, and from a half Super+Up and Super+Down go to
+its quarters; Super+Up maximizes a free window, Super+Down restores a
+maximized one and minimizes a free one. Dragging a snapped window away or the
+opposite arrow gives it back the size and place it had. Snapped windows stay
+snapped when the panel or the screen changes. \fBSuper+R\fR resizes the focused
+window with the arrow keys (Shift for small steps); Enter keeps the size and
+Escape goes back.
 .SH WORKSPACES
 There are four workspaces by default (\fBworkspaces=\fR1 to 9 in the \fB[behaviour]\fR section of
 \fIwm.ini\fR); all outputs switch together. Super+1 to Super+9 go to a workspace and
@@ -26,6 +38,54 @@ current workspace. The panel's window list and Alt+Tab show the windows of the c
 activating a window of another workspace (a notification, another program asking for it) goes
 there. With wlroots 0.20 the workspaces are published through ext-workspace-v1, which the panel's
 pager uses.
+.SH TOUCHPAD GESTURES
+Swiping sideways with three fingers switches to the next or previous
+workspace; swiping up opens the launcher and swiping down shows the desktop.
+The \fB[gestures]\fR section of \fIwm.ini\fR sets the number of fingers
+(\fBfingers=\fR3 to 5), the direction (\fBnatural=true\fR: the workspaces
+follow the fingers), the actions for swiping up and down (\fBswipe_up=\fR,
+\fBswipe_down=\fR: any key binding action, or \fBnone\fR) and turns them off
+(\fBenabled=false\fR). Pinches, holds and swipes with other finger counts go to
+the window under the pointer (pointer-gestures-unstable-v1), for example to
+zoom in a browser or an image viewer.
+.SH SCREEN BLANKING
+After ten minutes without input (\fBblank_minutes=\fR in the \fB[power]\fR
+section of \fIwm.ini\fR, 0 = never) fl-wm turns the screens off; the next key
+press or pointer motion turns them on again. Programs that inhibit idle
+(idle-inhibit-unstable-v1, such as video players) keep them on. Clients of
+wlr-output-power-management, such as swayidle or wlopm, can turn screens off
+and on as well; a screen a client turned off stays off until it turns it on.
+.SH INPUT METHODS
+fl-wm relays between programs that use text-input-unstable-v3 (GTK, Qt 6,
+FLTK, Firefox, Chromium with \-\-enable\-wayland\-ime) and an input method that
+uses input-method-unstable-v2, such as \fBfcitx5\fR(1), for Chinese, Japanese,
+Korean and other composed input. While the input method grabs the keyboard
+the keys go to it (key bindings still work); its candidate window is placed
+below the text cursor. Settings > Keyboard chooses the input method and sets
+up the session environment for programs that use IM modules instead
+(XMODIFIERS, QT_IM_MODULE, GTK_IM_MODULE for IBus).
+.SH KEY BINDINGS IN VIRTUAL MACHINES
+Programs that ask for the keyboard shortcuts (keyboard-shortcuts-inhibit,
+used by virtual machines, remote desktop viewers and some games) get every
+key while they have the focus, Super and Alt+Tab included. \fBSuper+Escape\fR
+takes the bindings back for that window and gives them again. VT switching
+and Ctrl+Alt+BackSpace always work.
+.SH DIALOGS
+Dialogs open centered over their window. A modal dialog (xdg-dialog-v1,
+wlroots 0.19 and newer) keeps the focus: clicking or switching to its window
+brings up the dialog instead. Windows that name their icon
+(xdg-toplevel-icon-v1) show it in the Alt+Tab switcher.
+.SH ACCESSIBILITY
+\fBSuper+=\fR (or Super+Plus) zooms the screen in around the pointer in steps from 1.5x to
+8x, \fBSuper+Minus\fR zooms out and \fBSuper+0\fR ends the zoom (actions \fBzoom-in\fR,
+\fBzoom-out\fR, \fBzoom-reset\fR). The point under the pointer stays where it is, so
+what the pointer shows is what it clicks.
+.PP
+In the \fB[accessibility]\fR section of \fIwm.ini\fR, \fBsticky_keys=true\fR makes a
+modifier (Shift, Ctrl, Alt, Super) pressed and released on its own apply to the next key, so
+shortcuts can be typed one key at a time; pressed twice it stays on until pressed once more.
+\fBbounce_keys=\fR\fIMS\fR ignores a key pressed again within \fIMS\fR milliseconds of its
+release.
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

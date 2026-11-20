@@ -24,5 +24,30 @@ fldesktop (0.1.0) unstable; urgency=medium
   * Screen sharing: xdg-desktop-portal-fl implements ScreenCast (screens and
     single windows through PipeWire, with a picker and remembered choices);
     fl-wm offers ext-image-copy-capture-v1.
+  * fl-snip records screens and windows to WebM (with sound if asked).
+  * Touchpad gestures: three finger swipes switch workspaces, open the
+    launcher and show the desktop; other gestures reach the programs
+    (pointer-gestures-unstable-v1). Settings in Mouse & Touchpad.
+  * Screen blanking: fl-wm turns the screens off after 10 idle minutes
+    ([power] blank_minutes, in Settings > Screen Lock) and offers
+    wlr-output-power-management for swayidle and wlopm.
+  * Night light: fl-nightlight makes the screens warmer from sunset to
+    sunrise (worked out from the time zone), at custom hours or always;
+    settings in Displays, a toggle in the panel.
+  * Input methods: fl-wm relays text-input-v3 and input-method-v2, so
+    fcitx5 works for CJK input; Settings > Keyboard sets up fcitx5 or IBus.
+  * fl-wm: keyboard-shortcuts-inhibit for virtual machines and remote
+    desktops (Super+Escape takes the bindings back), modal dialogs
+    (xdg-dialog-v1) and window icons in Alt+Tab (xdg-toplevel-icon-v1).
+  * Snapping: drag a window to an edge or corner for halves and quarters,
+    Super+arrows move between them, Super+R resizes with the keyboard.
+  * fl-docs, a PDF viewer on poppler: thumbnails, zoom, search and printing.
+  * Clipboard history: fl-cliphist records texts and images (not
+    passwords), fl-panel lists them with pins.
+  * Accessibility in fl-wm: a screen magnifier (Super+=, Super+-, Super+0),
+    sticky keys and bounce keys.
+  * Accessibility settings: high contrast, larger text, larger pointer,
+    Orca, sticky and bounce keys; the portal announces contrast and text
+    scaling to GTK and Qt programs.
 
  -- Yjlion <yjlion@users.noreply.github.com>  Sun, 15 Nov 2026 22:00:00 +0000

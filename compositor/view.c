@@ -12,6 +12,10 @@
 #include <wlr/util/log.h>
 
 #include "server.h"
+#if FLWM_WLR_AT_LEAST(0, 19)
+#include <wlr/types/wlr_xdg_dialog_v1.h>
+#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
+#endif
 
 /* ---- geometry helpers -------------------------------------------------- */
 
@@ -318,8 +322,38 @@ static bool same_client(struct flwm_view *a, struct flwm_view *b) {
 		wl_resource_get_client(b->xdg_toplevel->resource);
 }
 
+/* the modal dialog (xdg-dialog-v1) open over view, if any; nested ones too */
+static struct flwm_view *modal_child(struct flwm_view *view) {
+#if FLWM_WLR_AT_LEAST(0, 19)
+	for (int depth = 0; depth < 8 && view && !is_x11(view); depth++) {
+		struct flwm_view *child = NULL, *v;
+		wl_list_for_each(v, &view->server->views, link) {
+			if (!v->mapped || is_x11(v) || v->xdg_toplevel->parent != view->xdg_toplevel) continue;
+			struct wlr_xdg_dialog_v1 *d = wlr_xdg_dialog_v1_try_from_wlr_xdg_toplevel(v->xdg_toplevel);
+			if (d && d->modal) {
+				child = v;
+				break;
+			}
+		}
+		if (!child) return depth ? view : NULL;
+		view = child;
+	}
+	return view;
+#else
+	(void)view;
+	return NULL;
+#endif
+}
+
 void view_focus(struct flwm_view *view) {
 	if (!view || !view->mapped) return;
+	/* a window with a modal dialog gives the focus to the dialog */
+	struct flwm_view *modal = modal_child(view);
+	if (modal) {
+		if (view->minimized) view_set_minimized(view, false);
+		view_raise(view);
+		view = modal;
+	}
 	struct flwm_server *server = view->server;
 	/* while locked only the locker gets the keyboard */
 	if (server->locked && view->role != FLWM_ROLE_LOCK) return;
@@ -419,7 +453,9 @@ void view_set_maximized(struct flwm_view *view, bool maximized) {
 		return;
 	}
 	if (maximized) {
-		save_geometry(view);
+		/* a snapped window keeps the geometry it had before the snap */
+		if (view->snap != FLWM_SNAP_NONE) view->snap = FLWM_SNAP_NONE;
+		else save_geometry(view);
 		view->maximized = true;
 		struct wlr_box ua;
 		usable_area_for(view, &ua);
@@ -434,17 +470,60 @@ void view_set_maximized(struct flwm_view *view, bool maximized) {
 	decor_update(view);
 }
 
-void view_snap(struct flwm_view *view, int side) {
-	if (view->role != FLWM_ROLE_NORMAL) return;
-	if (view->maximized) view_set_maximized(view, false);
-	if (view->fullscreen) view_set_fullscreen(view, false);
+void view_resize_to(struct flwm_view *view, int w, int h) {
+	view->snap = FLWM_SNAP_NONE;
+	view_configure_size(view, w < 64 ? 64 : w, h < 64 ? 64 : h);
+}
+
+void view_set_geometry(struct flwm_view *view, const struct wlr_box *g) {
+	view_configure_size(view, g->width, g->height);
+	view_set_position(view, g->x, g->y);
+}
+
+enum flwm_snap view_snap_state(struct flwm_view *view) {
+	return view->maximized ? FLWM_SNAP_MAXIMIZED : view->snap;
+}
+
+static void apply_snap(struct flwm_view *view) {
 	struct wlr_box ua;
 	usable_area_for(view, &ua);
-	if (view->saved.width <= 0) save_geometry(view);
-	struct wlr_box box = ua;
-	box.width = ua.width / 2;
-	if (side > 0) box.x = ua.x + ua.width - box.width;
+	struct flwm_rect r = flwm_snap_rect(view->snap, (struct flwm_rect){ua.x, ua.y, ua.width, ua.height});
+	struct wlr_box box = {r.x, r.y, r.width, r.height};
 	apply_box(view, &box);
+}
+
+void view_set_snap(struct flwm_view *view, enum flwm_snap snap) {
+	if (view->role != FLWM_ROLE_NORMAL || !view_initialized(view)) return;
+	if (snap == FLWM_SNAP_MINIMIZED) {
+		view_set_minimized(view, true);
+		return;
+	}
+	if (snap == FLWM_SNAP_MAXIMIZED) {
+		view_set_maximized(view, true);
+		return;
+	}
+	if (view->fullscreen) view_set_fullscreen(view, false);
+	if (snap == FLWM_SNAP_NONE) {
+		if (view->maximized) {
+			view_set_maximized(view, false);
+		} else if (view->snap != FLWM_SNAP_NONE) {
+			view->snap = FLWM_SNAP_NONE;
+			restore_geometry(view);
+		}
+		return;
+	}
+	if (view->maximized) {
+		/* keep the geometry saved by maximizing */
+		view->maximized = false;
+		view_send_maximized(view, false);
+		if (view->ftl) wlr_foreign_toplevel_handle_v1_set_maximized(view->ftl, false);
+		view->decor.width = -1;
+	} else if (view->snap == FLWM_SNAP_NONE) {
+		save_geometry(view);
+	}
+	view->snap = snap;
+	apply_snap(view);
+	decor_update(view);
 }
 
 void view_set_minimized(struct flwm_view *view, bool minimized) {
@@ -518,6 +597,8 @@ void views_reconfigure_maximized(struct flwm_server *server) {
 			struct wlr_box ua;
 			usable_area_for(view, &ua);
 			apply_box(view, &ua);
+		} else if (view->snap != FLWM_SNAP_NONE) {
+			apply_snap(view);
 		}
 	}
 }
@@ -768,6 +849,7 @@ void view_handle_unmap(struct flwm_view *view) {
 	wlr_log(WLR_DEBUG, "unmap: %s", title_or(view, "?"));
 	if (view == server->grabbed_view) input_reset_cursor_mode(server);
 	if (server->cycle_current == view) server->cycle_current = NULL;
+	if (server->resize_view == view) server->resize_view = NULL;
 	switcher_view_gone(server, view);
 	if (server->hover_view == view) server->hover_view = NULL;
 	if (server->last_click_view == view) server->last_click_view = NULL;
@@ -903,6 +985,7 @@ void view_free(struct flwm_view *view) {
 	wlr_scene_node_destroy(&view->tree->node);
 	view->decor.tree = NULL;
 	free(view->decor.title_text);
+	free(view->icon_name);
 	free(view);
 }
 
@@ -1119,6 +1202,20 @@ static void request_activate(struct wl_listener *listener, void *data) {
 	if (view && view->mapped) view_focus(view);
 }
 
+#if FLWM_WLR_AT_LEAST(0, 19)
+/* xdg-toplevel-icon-v1: a window names its icon (the Alt+Tab switcher shows
+ * it). Icons sent as pixels are not used. */
+static void set_toplevel_icon(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, set_toplevel_icon);
+	struct wlr_xdg_toplevel_icon_manager_v1_set_icon_event *ev = data;
+	struct flwm_view *view = view_from_toplevel(server, ev->toplevel);
+	if (!view) return;
+	free(view->icon_name);
+	view->icon_name = ev->icon && ev->icon->name && *ev->icon->name ? strdup(ev->icon->name) : NULL;
+	wlr_log(WLR_DEBUG, "icon of %s: %s", title_or(view, "?"), view->icon_name ? view->icon_name : "(none)");
+}
+#endif
+
 void view_init(struct flwm_server *server) {
 	wl_list_init(&server->views);
 	server->xdg_shell = wlr_xdg_shell_create(server->wl_display, 6);
@@ -1137,6 +1234,24 @@ void view_init(struct flwm_server *server) {
 	server->xdg_activation = wlr_xdg_activation_v1_create(server->wl_display);
 	server->request_activate.notify = request_activate;
 	wl_signal_add(&server->xdg_activation->events.request_activate, &server->request_activate);
+
+#if FLWM_WLR_AT_LEAST(0, 19)
+	/* modal dialogs keep the focus from their parent (view_focus) */
+	wlr_xdg_wm_dialog_v1_create(server->wl_display, 1);
+	struct wlr_xdg_toplevel_icon_manager_v1 *icons =
+		wlr_xdg_toplevel_icon_manager_v1_create(server->wl_display, 1);
+	server->set_toplevel_icon.notify = set_toplevel_icon;
+	wl_signal_add(&icons->events.set_icon, &server->set_toplevel_icon);
+	server->toplevel_icon_mgr = icons;
+#endif
+}
+
+void view_finish(struct flwm_server *server) {
+#if FLWM_WLR_AT_LEAST(0, 19)
+	if (server->toplevel_icon_mgr) wl_list_remove(&server->set_toplevel_icon.link);
+#else
+	(void)server;
+#endif
 }
 
 /* ---- interactive move / resize ------------------------------------------- */
@@ -1145,6 +1260,17 @@ void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, 
 	struct flwm_server *server = view->server;
 	if (view->fullscreen) return;
 	if (mode == FLWM_CURSOR_RESIZE && view->maximized) return;
+	if (mode == FLWM_CURSOR_RESIZE) view->snap = FLWM_SNAP_NONE; /* resized by hand: no longer a half */
+	if (mode == FLWM_CURSOR_MOVE && view->snap != FLWM_SNAP_NONE) {
+		/* back to the size it had, keeping the pointer at the same relative x */
+		struct wlr_box cur;
+		view_get_geometry(view, &cur);
+		double rel = cur.width > 0 ? (server->cursor->x - cur.x) / cur.width : 0.5;
+		view->snap = FLWM_SNAP_NONE;
+		int w = view->saved.width > 0 ? view->saved.width : cur.width;
+		if (view->saved.width > 0) view_configure_size(view, view->saved.width, view->saved.height);
+		view_set_position(view, (int)(server->cursor->x - rel * w), (int)server->cursor->y + deco_top(view) / 2);
+	}
 	if (mode == FLWM_CURSOR_MOVE && view->maximized) {
 		/* un-maximize, keeping the pointer at the same relative x in the title */
 		struct wlr_box cur;
@@ -1159,6 +1285,7 @@ void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, 
 	server->grabbed_view = view;
 	server->cursor_mode = mode;
 	if (mode == FLWM_CURSOR_MOVE) {
+		view_get_geometry(view, &server->drag_from);
 		server->grab_x = server->cursor->x - view->x;
 		server->grab_y = server->cursor->y - view->y;
 	} else {

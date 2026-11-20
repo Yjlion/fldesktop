@@ -138,5 +138,24 @@ int main() {
   CHECK_EQ(image_type("<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\"/>"), std::string("svg"));
   CHECK_EQ(image_type("<?xml?><!ENTITY x SYSTEM \"file:///etc/shadow\"><svg/>"), std::string(""));
   CHECK_EQ(image_type("root:x:0:0"), std::string(""));
+  // input methods in the session environment
+  {
+    locale_env::EnvFile ime;
+    ime.parse("LANG=ja_JP.UTF-8\nGTK_IM_MODULE=xim\n");
+    CHECK_EQ(locale_env::input_method_from_env(ime), std::string(""));
+    locale_env::set_input_method(ime, "fcitx5");
+    CHECK_EQ(locale_env::input_method_from_env(ime), std::string("fcitx5"));
+    CHECK_EQ(ime.get("QT_IM_MODULE"), std::string("fcitx"));
+    CHECK_EQ(ime.get("GTK_IM_MODULE"), std::string("")); // text-input-v3 instead
+    CHECK_EQ(ime.get("LANG"), std::string("ja_JP.UTF-8"));
+    locale_env::set_input_method(ime, "ibus");
+    CHECK_EQ(locale_env::input_method_from_env(ime), std::string("ibus"));
+    CHECK_EQ(ime.get("GTK_IM_MODULE"), std::string("ibus"));
+    locale_env::set_input_method(ime, "");
+    CHECK_EQ(locale_env::input_method_from_env(ime), std::string(""));
+    CHECK_EQ(ime.get("XMODIFIERS"), std::string(""));
+    CHECK_EQ(locale_env::input_method_command("fcitx5"), std::string("fcitx5 -d --replace"));
+    CHECK_EQ(locale_env::input_method_command(""), std::string(""));
+  }
   return test_result("settings");
 }

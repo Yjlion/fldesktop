@@ -17,8 +17,8 @@ namespace {
 class LockPage : public Fl_Group {
 public:
   ConfigFile desk{desktop_ini_path()}, wm{wm_ini_path()};
-  Fl_Check_Button *auto_lock, *on_suspend, *clock, *clock24, *keyboard, *same_bg;
-  Fl_Spinner *minutes;
+  Fl_Check_Button *auto_lock, *auto_blank, *on_suspend, *clock, *clock24, *keyboard, *same_bg;
+  Fl_Spinner *minutes, *blank_minutes;
   WallpaperGallery *gallery;
 
   LockPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
@@ -41,7 +41,19 @@ public:
     minutes->callback(cb, this);
     Fl_Box *mlabel = new Fl_Box(wx + 312, wy, 200, 28, "minutes of inactivity");
     mlabel->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    f.note("Programs playing a video or a presentation can hold the lock off.");
+    // [power] blank_minutes may be fractional; the default is 10
+    double blank = wm.ini.get_double("power", "blank_minutes", 10);
+    f.row("", 28, wx, wy, ww);
+    auto_blank = new Fl_Check_Button(wx, wy, 230, 28, "Turn the screen off after");
+    auto_blank->value(blank > 0);
+    auto_blank->callback(cb, this);
+    blank_minutes = new Fl_Spinner(wx + 236, wy, 70, 28);
+    blank_minutes->range(1, 240);
+    blank_minutes->value(blank >= 1 ? (int)blank : 10);
+    blank_minutes->callback(cb, this);
+    Fl_Box *blabel = new Fl_Box(wx + 312, wy, 200, 28, "minutes of inactivity");
+    blabel->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+    f.note("Programs playing a video or a presentation can hold the lock and the screen off.");
     f.row("", 26, wx, wy, ww);
     on_suspend = new Fl_Check_Button(wx, wy, ww, 26, "Lock the screen before the computer suspends");
     on_suspend->value(desk.ini.get_bool("Lock", "OnSuspend", true));
@@ -93,6 +105,8 @@ public:
   void update() {
     if (auto_lock->value()) minutes->activate();
     else minutes->deactivate();
+    if (auto_blank->value()) blank_minutes->activate();
+    else blank_minutes->deactivate();
     if (clock->value()) clock24->activate();
     else clock24->deactivate();
   }
@@ -108,6 +122,7 @@ public:
     desk.save();
     wm.ini.load(wm.path);
     wm.ini.set_int("lock", "idle_minutes", auto_lock->value() ? (int)minutes->value() : 0);
+    wm.ini.set_int("power", "blank_minutes", auto_blank->value() ? (int)blank_minutes->value() : 0);
     save_wm(wm);
   }
 };
@@ -118,7 +133,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new LockPage(x, y, w, h); 
 
 PageInfo page_lock() {
   return {"lock", "Screen Lock", "system-lock-screen", "Personal",
-          "lock screen locker idle timeout suspend password privacy", create};
+          "lock screen locker idle timeout suspend password privacy blank screen off dpms power saving", create};
 }
 
 }  // namespace fld

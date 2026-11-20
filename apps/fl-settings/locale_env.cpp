@@ -118,4 +118,30 @@ std::string preview(const std::string &locale) {
   return std::string(date) + "\n" + num + "\n" + money;
 }
 
+
+std::vector<std::pair<std::string, std::string>> input_method_env(const std::string &im) {
+  if (im == "fcitx5")
+    return {{"XMODIFIERS", "@im=fcitx"}, {"QT_IM_MODULE", "fcitx"}, {"SDL_IM_MODULE", "fcitx"}, {"GTK_IM_MODULE", ""}};
+  if (im == "ibus")
+    return {{"XMODIFIERS", "@im=ibus"}, {"QT_IM_MODULE", "ibus"}, {"SDL_IM_MODULE", "ibus"}, {"GTK_IM_MODULE", "ibus"}};
+  return {{"XMODIFIERS", ""}, {"QT_IM_MODULE", ""}, {"SDL_IM_MODULE", ""}, {"GTK_IM_MODULE", ""}};
+}
+
+std::string input_method_from_env(const EnvFile &env) {
+  std::string x = env.get("XMODIFIERS");
+  if (x == "@im=fcitx") return "fcitx5";
+  if (x == "@im=ibus") return "ibus";
+  return "";
+}
+
+void set_input_method(EnvFile &env, const std::string &im) {
+  for (const auto &kv : input_method_env(im)) env.set(kv.first, kv.second);
+}
+
+std::string input_method_command(const std::string &im) {
+  if (im == "fcitx5") return "fcitx5 -d --replace";
+  if (im == "ibus") return "ibus-daemon -drx";
+  return "";
+}
+
 } // namespace locale_env

@@ -9,6 +9,7 @@ namespace fld {
 
 struct Palette {
   bool dark;
+  bool high_contrast; // [Appearance] Contrast=high: black and white, strong borders
   Fl_Color bg, bg2, fg, fg_dim, accent, accent_fg, selection, border, panel_bg, panel_fg, danger;
 };
 

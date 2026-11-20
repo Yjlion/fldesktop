@@ -43,9 +43,28 @@ void init_app(const char *app_id, int argc, char **argv) {
   cfg.load(desktop_config_path());
   const std::string A = "Appearance";
   bool dark = lower(cfg.get(A, "Theme", "light")) == "dark";
+  // Accessibility: Contrast=high for black and white with strong borders
+  bool high = lower(cfg.get(A, "Contrast", "normal")) == "high";
   Palette &p = g_pal;
   p.dark = dark;
-  if (dark) {
+  p.high_contrast = high;
+  if (high && dark) {
+    p.bg = FL_BLACK;
+    p.bg2 = FL_BLACK;
+    p.fg = FL_WHITE;
+    p.fg_dim = fl_rgb_color(0xdd, 0xdd, 0xdd);
+    p.border = FL_WHITE;
+    p.panel_bg = FL_BLACK;
+    p.panel_fg = FL_WHITE;
+  } else if (high) {
+    p.bg = FL_WHITE;
+    p.bg2 = FL_WHITE;
+    p.fg = FL_BLACK;
+    p.fg_dim = fl_rgb_color(0x22, 0x22, 0x22);
+    p.border = FL_BLACK;
+    p.panel_bg = FL_BLACK;
+    p.panel_fg = FL_WHITE;
+  } else if (dark) {
     p.bg = fl_rgb_color(0x2b, 0x2d, 0x31);
     p.bg2 = fl_rgb_color(0x1e, 0x1f, 0x22);
     p.fg = fl_rgb_color(0xe6, 0xe6, 0xe6);
@@ -63,7 +82,9 @@ void init_app(const char *app_id, int argc, char **argv) {
     p.panel_fg = fl_rgb_color(0xf0, 0xf0, 0xf0);
   }
   p.accent = parse_color(cfg.get(A, "Accent", "#3584e4"), fl_rgb_color(0x35, 0x84, 0xe4));
-  p.accent_fg = FL_WHITE;
+  // a dark accent on white, a light one on black, so text on it stays readable
+  if (high) p.accent = dark ? fl_rgb_color(0xff, 0xd7, 0x00) : fl_rgb_color(0x00, 0x3d, 0xa5);
+  p.accent_fg = high && dark ? FL_BLACK : FL_WHITE;
   p.selection = p.accent;
   p.danger = fl_rgb_color(0xe0, 0x1b, 0x24);
 
@@ -75,7 +96,9 @@ void init_app(const char *app_id, int argc, char **argv) {
   Fl::get_color(p.fg, r, g, b);
   Fl::foreground(r, g, b);
   Fl::set_color(FL_SELECTION_COLOR, p.selection);
-  apply_style(cfg.get(A, "Scheme", "gtk+"), cfg.get_int(A, "Radius", 4));
+  // high contrast: flat boxes framed in the border colour (styles.cpp)
+  if (high) apply_style("fld-flat", 0);
+  else apply_style(cfg.get(A, "Scheme", "gtk+"), cfg.get_int(A, "Radius", 4));
   Fl::set_color(FL_INACTIVE_COLOR, p.fg_dim);
   Fl_Tooltip::color(dark ? fl_rgb_color(0x10, 0x10, 0x12) : fl_rgb_color(0x30, 0x32, 0x36));
   Fl_Tooltip::textcolor(FL_WHITE);
@@ -83,8 +106,11 @@ void init_app(const char *app_id, int argc, char **argv) {
 
   std::string ui_font = cfg.get(A, "Font", "Sans");
   std::string mono = cfg.get(A, "MonoFont", "Monospace");
-  g_ui_size = cfg.get_int(A, "FontSize", 14);
-  g_mono_size = cfg.get_int(A, "MonoFontSize", 14);
+  // Accessibility: TextScale (1.0 .. 2.0) makes all text larger
+  double scale = cfg.get_double(A, "TextScale", 1.0);
+  if (scale < 1.0 || scale > 2.0) scale = 1.0;
+  g_ui_size = (int)(cfg.get_int(A, "FontSize", 14) * scale + 0.5);
+  g_mono_size = (int)(cfg.get_int(A, "MonoFontSize", 14) * scale + 0.5);
   // FL_HELVETICA family -> UI font, FL_COURIER family -> monospace font
   static std::string uf, ufb, ufi, ufbi, mf, mfb, mfi, mfbi;
   uf = ui_font; ufb = ui_font + " Bold"; ufi = ui_font + " Italic"; ufbi = ui_font + " Bold Italic";

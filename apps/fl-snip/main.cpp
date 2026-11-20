@@ -44,6 +44,9 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "snip_util.h"
+#ifdef FLD_HAVE_RECORD
+#include "record.h"
+#endif
 
 using snip::Image;
 using snip::Point;
@@ -1365,7 +1368,12 @@ static void show_settings() {
 
 static void make_main_window() {
   const fld::Palette &p = fld::palette();
-  g_main = new Fl_Double_Window(520, 64, "Snip");
+#ifdef FLD_HAVE_RECORD
+  const int RX = 100; // room for the Record button
+#else
+  const int RX = 0;
+#endif
+  g_main = new Fl_Double_Window(520 + RX, 64, "Snip");
   g_main->color(p.bg);
   fld::FlatButton *nw = new fld::FlatButton(8, 12, 96, 40, "New");
   nw->icon_name("applets-screenshooter", 22);
@@ -1379,10 +1387,22 @@ static void make_main_window() {
     new_snip(S.mode, S.delay);
     if (g_editors.empty() && g_main) g_main->show();
   });
-  g_mode_choice = new Fl_Choice(170, 18, 130, 28, "Mode:");
+#ifdef FLD_HAVE_RECORD
+  fld::FlatButton *rb = new fld::FlatButton(108, 12, 96, 40, "Record");
+  rb->icon_name("media-record", 22);
+  rb->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER | FL_ALIGN_IMAGE_NEXT_TO_TEXT);
+  rb->tooltip("Record a screen or a window (Ctrl+R)");
+  rb->shortcut(FL_CTRL + 'r');
+  rb->callback([](Fl_Widget *, void *) {
+    // a separate process: the recording outlives this window
+    fld::spawn({"fl-snip", "--record"});
+    if (g_editors.empty() && g_main) g_main->hide();
+  });
+#endif
+  g_mode_choice = new Fl_Choice(170 + RX, 18, 130, 28, "Mode:");
   for (Mode m : {Mode::Rect, Mode::Freeform, Mode::Window, Mode::Full}) g_mode_choice->add(mode_name(m));
   g_mode_choice->value((int)S.mode);
-  g_delay_choice = new Fl_Choice(356, 18, 100, 28, "Delay:");
+  g_delay_choice = new Fl_Choice(356 + RX, 18, 100, 28, "Delay:");
   g_delay_choice->add("None");
   g_delay_choice->add("3 seconds");
   g_delay_choice->add("5 seconds");
@@ -1391,13 +1411,19 @@ static void make_main_window() {
   for (int i = 0; i < 4; i++)
     if (kDelays[i] == S.delay) di = i;
   g_delay_choice->value(di);
-  fld::FlatButton *more = new fld::FlatButton(470, 12, 40, 40);
+  fld::FlatButton *more = new fld::FlatButton(470 + RX, 12, 40, 40);
   more->icon_name("open-menu", 20);
   if (!fld::icon("open-menu", 20)) more->label("…");
   more->tooltip("More");
   more->callback([](Fl_Widget *w, void *) {
     fld::Menu m;
     m.item("Settings…", [] { show_settings(); });
+#ifdef FLD_HAVE_RECORD
+    m.item("Record with Sound…", [] {
+      fld::spawn({"fl-snip", "--record", "--audio"});
+      if (g_editors.empty() && g_main) g_main->hide();
+    });
+#endif
     m.item("Open Screenshots Folder", [] {
       fld::mkdir_p(screenshots_dir());
       fld::spawn({"fl-files", screenshots_dir()});
@@ -1503,10 +1529,21 @@ static const char *kUsage =
     "  --freeform      draw a shape around a part; save and copy it\n"
     "  --delay N       wait N seconds first\n"
     "  --edit FILE     open an image in the editor\n"
+#ifdef FLD_HAVE_RECORD
+    "  --record        record a screen or a window (WebM) until Stop\n"
+    "    --audio         with the desktop's sound\n"
+    "    --seconds N     stop after N seconds\n"
+    "    -o FILE         the file (default: Videos/Screencasts)\n"
+    "    --record-node N record PipeWire node N (no portal)\n"
+    "    --no-window     no time window and no notification\n"
+#endif
     "Quick snips print the saved file's path.\n";
 
 int main(int argc, char **argv) {
-  enum { MAIN, SNIP, QUICK, EDIT } what = MAIN;
+  enum { MAIN, SNIP, QUICK, EDIT, RECORD } what = MAIN;
+#ifdef FLD_HAVE_RECORD
+  record::Options rec;
+#endif
   Mode mode = Mode::Rect;
   int delay = -1;
   std::string edit_file;
@@ -1527,11 +1564,22 @@ int main(int argc, char **argv) {
     else if (a == "--freeform") { what = QUICK; mode = Mode::Freeform; }
     else if (a == "--delay" && i + 1 < argc) delay = std::max(0, std::min(60, atoi(argv[++i])));
     else if (a == "--edit" && i + 1 < argc) { what = EDIT; edit_file = argv[++i]; }
+#ifdef FLD_HAVE_RECORD
+    else if (a == "--record") what = RECORD;
+    else if (a == "--audio") rec.audio = true;
+    else if (a == "--seconds" && i + 1 < argc) rec.seconds = std::max(0, atoi(argv[++i]));
+    else if ((a == "-o" || a == "--output") && i + 1 < argc) rec.output = argv[++i];
+    else if (a == "--record-node" && i + 1 < argc) { what = RECORD; rec.node = (uint32_t)atol(argv[++i]); }
+    else if (a == "--no-window") { rec.window = false; rec.notify = false; }
+#endif
     else {
       fprintf(stderr, "fl-snip: unknown option %s\n%s", a.c_str(), kUsage);
       return 2;
     }
   }
+#ifdef FLD_HAVE_RECORD
+  if (what == RECORD && !rec.window) return record::run(rec);
+#endif
   fld::init_app("fl-snip", argc, argv);
   Fl::lock(); // notification answers come through Fl::awake
   fl_register_images();
@@ -1565,6 +1613,9 @@ int main(int argc, char **argv) {
       open_editor(std::move(img), fld::abs_path(edit_file));
       return Fl::run();
     }
+#ifdef FLD_HAVE_RECORD
+    case RECORD: return record::run(rec);
+#endif
     case MAIN:
       break;
   }

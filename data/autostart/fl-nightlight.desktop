@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Night Light
+Comment=Makes the screen colours warmer at night
+Exec=fl-nightlight
+OnlyShowIn=fldesktop;
+NoDisplay=true
+X-GNOME-AutoRestart=true

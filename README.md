@@ -18,13 +18,16 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
 | **fl-web** | Web browser on WPE WebKit: tabs (drag, right-click, reopen closed ones), private windows, developer tools (F12), full screen, an optional menu bar, page right-click menus, an address bar that searches and completes from bookmarks and history, downloads, find in page, zoom, bookmarks and history, the pages' password, file, permission and notification requests |
 | **fl-video** | Video and audio player on GStreamer: playlists, subtitles, track selection, speed, screenshots, resume |
+| **fl-docs** | PDF viewer (poppler): continuous pages with thumbnails, fit width/page and zoom, search with highlights, printing through CUPS with page ranges and two-sided printing, password protected documents |
 | **fl-archive** | Archive manager (libarchive): browse, extract, create and change zip, 7z and tar archives, encrypted zip, Extract Here / Compress in fl-files |
-| **fl-snip** | Snipping tool: a rectangle, a freeform shape, a window or the whole screen, chosen on a frozen picture of the screen with a magnifier; an editor with pen, highlighter, arrows, shapes, text, pixelate and crop; copy, save, print; quick snips for the Print keys |
+| **fl-snip** | Snipping tool: a rectangle, a freeform shape, a window or the whole screen, chosen on a frozen picture of the screen with a magnifier; an editor with pen, highlighter, arrows, shapes, text, pixelate and crop; copy, save, print; quick snips for the Print keys; screen recording to WebM through the ScreenCast portal |
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
+| **fl-cliphist** | Clipboard history: texts and images, pins, a list in the panel; password managers' copies are not kept |
 | **fl-polkit-agent** | Password dialog for polkit (administrator actions) |
+| **fl-nightlight** | Night light: warmer screen colours from sunset to sunrise, at set hours or always (wlr-gamma-control); a toggle in the panel |
 | **fl-osk** | On-screen keyboard (Wayland virtual-keyboard protocol) |
 | **fl-charmap** | Unicode character map with search by name |
 | **fl-notifyd** | Notification server (org.freedesktop.Notifications): popups with actions, history and do not disturb in the panel |
@@ -213,8 +216,9 @@ tools/run-dev.sh -s fl-term # only a terminal
 | Super+E | File manager |
 | Super+D | Show desktop |
 | Super+Q, Alt+F4 | Close window |
-| Super+Up / Down | Maximize / minimize |
-| Super+Left / Right | Snap to the left / right half |
+| Super+Left / Right / Up / Down | Snap to halves and quarters; Up maximizes a free window, Down restores and minimizes |
+| Super+R | Resize with the arrow keys (Shift: finer), Enter keeps, Escape undoes |
+| Super+= / Super+- / Super+0 | Zoom the screen in and out around the pointer, end the zoom |
 | Super+F | Fullscreen (F11 is left to the applications) |
 | Alt+Tab, Alt+Shift+Tab | Window switcher: hold Alt, Tab / arrows to choose, release to switch, Esc to cancel |
 | Super+drag, Super+right-drag | Move / resize any window |
@@ -263,7 +267,7 @@ dialogs.
 | File | Used by |
 |------|---------|
 | `~/.config/fldesktop/wm.ini` | compositor: appearance, keys, input, outputs, autostart, `[lock] idle_minutes`, `[environment]` variables for new programs |
-| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts; `[Desktop]` wallpaper; `[General]` icon theme, terminal; `[Lock]` lock screen; `[Proxy]` proxy settings |
+| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts, `Contrast=high`, `TextScale=1.25`; `[Desktop]` wallpaper; `[General]` icon theme, terminal; `[Lock]` lock screen; `[NightLight]` night light; `[Proxy]` proxy settings |
 | `~/.config/fldesktop/panel.ini` | `[Panel] QuickLaunch=`, `KeyboardButton=auto\|always\|never`; `[Clock] Format=` |
 | `~/.config/fldesktop/environment` | `LANG`, `LC_*` and other variables for the session |
 | `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth`, `KeyPreview=true\|false` |

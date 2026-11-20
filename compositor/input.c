@@ -16,6 +16,8 @@
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 
+#include <wlr/types/wlr_input_method_v2.h>
+
 #include "server.h"
 
 #define MOD_MASK (WLR_MODIFIER_LOGO | WLR_MODIFIER_ALT | WLR_MODIFIER_CTRL | WLR_MODIFIER_SHIFT)
@@ -124,10 +126,25 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 		if (v) view_set_fullscreen(v, !v->fullscreen);
 		return true;
 	case FLWM_ACTION_SNAP_LEFT:
-		if (v) view_snap(v, -1);
+		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_LEFT));
 		return true;
 	case FLWM_ACTION_SNAP_RIGHT:
-		if (v) view_snap(v, 1);
+		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_RIGHT));
+		return true;
+	case FLWM_ACTION_SNAP_UP:
+		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_UP));
+		return true;
+	case FLWM_ACTION_SNAP_DOWN:
+		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_DOWN));
+		return true;
+	case FLWM_ACTION_RESIZE_MODE:
+		if (v && !v->maximized && !v->fullscreen) {
+			view_get_geometry(v, &server->resize_orig);
+			server->resize_w = server->resize_orig.width;
+			server->resize_h = server->resize_orig.height;
+			server->resize_view = v;
+			wlr_log(WLR_INFO, "resize mode: arrows resize, Enter keeps, Escape undoes");
+		}
 		return true;
 	case FLWM_ACTION_CYCLE:
 		cycle(server, false);
@@ -183,6 +200,15 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	case FLWM_ACTION_STICKY:
 		if (v) view_set_sticky(v, !v->sticky);
 		return true;
+	case FLWM_ACTION_ZOOM_IN:
+		zoom_step(server, 1);
+		return true;
+	case FLWM_ACTION_ZOOM_OUT:
+		zoom_step(server, -1);
+		return true;
+	case FLWM_ACTION_ZOOM_RESET:
+		zoom_step(server, 0);
+		return true;
 	default:
 		return false;
 	}
@@ -200,6 +226,12 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 		if (!(mods & server->cycle_modifier)) finish_cycle(server);
 	}
 	if (!keyboard->wlr_keyboard->keymap) return;
+	struct wlr_input_method_keyboard_grab_v2 *grab = im_keyboard_grab(keyboard->wlr_keyboard);
+	if (grab) {
+		wlr_input_method_keyboard_grab_v2_set_keyboard(grab, keyboard->wlr_keyboard);
+		wlr_input_method_keyboard_grab_v2_send_modifiers(grab, &keyboard->wlr_keyboard->modifiers);
+		return;
+	}
 	wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
 	wlr_seat_keyboard_notify_modifiers(server->seat, &keyboard->wlr_keyboard->modifiers);
 }
@@ -216,10 +248,8 @@ static bool handle_binding(struct flwm_server *server, uint32_t mods, xkb_keysym
 	return false;
 }
 
-static void keyboard_handle_key(struct wl_listener *listener, void *data) {
-	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+static void handle_key(struct flwm_keyboard *keyboard, struct wlr_keyboard_key_event *event) {
 	struct flwm_server *server = keyboard->server;
-	struct wlr_keyboard_key_event *event = data;
 	struct wlr_seat *seat = server->seat;
 	uint32_t keycode = event->keycode + 8;
 	lock_activity(server);
@@ -239,6 +269,34 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 		}
 		/* bindings match on the unshifted keysym of the active layout */
 		uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
+		/* keyboard resize mode (Super+R) has the keyboard until Enter or Escape */
+		if (!handled && server->resize_view) {
+			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
+			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap, keycode, layout, 0, &syms);
+			xkb_keysym_t sym = nsyms > 0 ? syms[0] : XKB_KEY_NoSymbol;
+			int step = (mods & WLR_MODIFIER_SHIFT) ? 8 : 32;
+			struct flwm_view *rv = server->resize_view;
+			int *w = &server->resize_w, *h = &server->resize_h;
+			switch (sym) {
+			case XKB_KEY_Left: *w = *w - step < 64 ? 64 : *w - step; break;
+			case XKB_KEY_Right: *w += step; break;
+			case XKB_KEY_Up: *h = *h - step < 64 ? 64 : *h - step; break;
+			case XKB_KEY_Down: *h += step; break;
+			case XKB_KEY_Escape:
+				view_set_geometry(rv, &server->resize_orig);
+				/* fall through */
+			case XKB_KEY_Return: case XKB_KEY_KP_Enter:
+				server->resize_view = NULL;
+				wlr_log(WLR_INFO, "resize mode: done");
+				break;
+			default: break;
+			}
+			if (server->resize_view && (sym == XKB_KEY_Left || sym == XKB_KEY_Right || sym == XKB_KEY_Up ||
+					sym == XKB_KEY_Down))
+				view_resize_to(rv, *w, *h);
+			/* everything but modifiers stays here */
+			if (!(sym >= XKB_KEY_Shift_L && sym <= XKB_KEY_Hyper_R)) handled = true;
+		}
 		/* the switcher has the keyboard while it is open */
 		if (!handled && switcher_active(server)) {
 			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
@@ -263,7 +321,13 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
 			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap,
 				keycode, layout, 0, &syms);
-			for (int i = 0; i < nsyms && !handled; i++) handled = handle_binding(server, mods, syms[i]);
+			/* Super+Escape takes the bindings back from (or gives them again to)
+			 * a window that inhibits them (a virtual machine, remote desktop) */
+			for (int i = 0; i < nsyms && !handled; i++)
+				if (syms[i] == XKB_KEY_Escape && (mods & MOD_MASK) == WLR_MODIFIER_LOGO)
+					handled = inhibit_shortcuts_toggle(server);
+			if (!inhibit_shortcuts_active(server))
+				for (int i = 0; i < nsyms && !handled; i++) handled = handle_binding(server, mods, syms[i]);
 		}
 		/* Ctrl+Alt+BackSpace and friends even when a layer surface owns the keyboard */
 		if (!handled && server->focused_layer && (mods & MOD_MASK) == (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)) {
@@ -275,10 +339,27 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 				}
 		}
 	}
+	/* an input method (fcitx5, IBus) composing text gets the keys first */
+	struct wlr_input_method_keyboard_grab_v2 *grab =
+		!handled && keyboard->wlr_keyboard->keymap ? im_keyboard_grab(keyboard->wlr_keyboard) : NULL;
+	if (grab) {
+		wlr_input_method_keyboard_grab_v2_set_keyboard(grab, keyboard->wlr_keyboard);
+		wlr_input_method_keyboard_grab_v2_send_key(grab, event->time_msec, event->keycode, event->state);
+		return;
+	}
 	if (!handled && keyboard->wlr_keyboard->keymap) {
 		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
 	}
+}
+
+static void keyboard_handle_key(struct wl_listener *listener, void *data) {
+	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+	struct wlr_keyboard_key_event *event = data;
+	/* bounce keys drop the key; sticky keys update the modifiers after it */
+	if (a11y_key(keyboard->server, keyboard->wlr_keyboard, event)) return;
+	handle_key(keyboard, event);
+	a11y_key_done(keyboard->server, keyboard->wlr_keyboard, event);
 }
 
 /* A virtual keyboard got its keymap: use it right away if no keyboard is active */
@@ -537,7 +618,44 @@ static void seat_start_drag(struct wl_listener *listener, void *data) {
 
 /* ---- cursor ---------------------------------------------------------------- */
 
+/* While a window is dragged: the pointer at a screen edge or corner shows
+ * where it will snap; releasing the button there snaps it. */
+static void update_snap_preview(struct flwm_server *server) {
+	struct flwm_view *view = server->grabbed_view;
+	enum flwm_snap zone = FLWM_SNAP_NONE;
+	struct flwm_output *o = output_at(server, server->cursor->x, server->cursor->y);
+	if (server->config.drag_snap && view && view->role == FLWM_ROLE_NORMAL && o) {
+		struct wlr_box f = o->full_area;
+		zone = flwm_snap_zone((int)server->cursor->x, (int)server->cursor->y,
+			(struct flwm_rect){f.x, f.y, f.width, f.height}, 8, 64);
+	}
+	server->drag_snap = zone;
+	if (zone == FLWM_SNAP_NONE) {
+		if (server->snap_preview) wlr_scene_node_set_enabled(&server->snap_preview->node, false);
+		return;
+	}
+	struct wlr_box u = o->usable_area;
+	struct flwm_rect r = flwm_snap_rect(zone, (struct flwm_rect){u.x, u.y, u.width, u.height});
+	if (!server->snap_preview || !server->snap_preview->node.enabled) {
+		/* the accent colour, translucent (premultiplied); read once per showing */
+		uint32_t c = flwm_accent_color();
+		float color[4] = {((c >> 16) & 0xff) / 255.0f * 0.35f, ((c >> 8) & 0xff) / 255.0f * 0.35f,
+			(c & 0xff) / 255.0f * 0.35f, 0.35f};
+		if (!server->snap_preview)
+			server->snap_preview = wlr_scene_rect_create(server->layer_views, r.width, r.height, color);
+		else
+			wlr_scene_rect_set_color(server->snap_preview, color);
+	}
+	struct wlr_scene_rect *p = server->snap_preview;
+	wlr_scene_rect_set_size(p, r.width, r.height);
+	wlr_scene_node_set_position(&p->node, r.x, r.y);
+	wlr_scene_node_reparent(&p->node, view->tree->node.parent);
+	wlr_scene_node_place_below(&p->node, &view->tree->node);
+	wlr_scene_node_set_enabled(&p->node, true);
+}
+
 void input_reset_cursor_mode(struct flwm_server *server) {
+	if (server->snap_preview) wlr_scene_node_set_enabled(&server->snap_preview->node, false);
 	if (server->cursor_mode == FLWM_CURSOR_RESIZE && server->grabbed_view &&
 			server->grabbed_view->type == FLWM_VIEW_XDG)
 		wlr_xdg_toplevel_set_resizing(server->grabbed_view->xdg_toplevel, false);
@@ -633,12 +751,14 @@ void input_update_pointer_focus(struct flwm_server *server, uint32_t time) {
 }
 
 static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
+	zoom_cursor_moved(server);
 	if (server->drag_icon)
 		wlr_scene_node_set_position(&server->drag_icon->node, server->cursor->x, server->cursor->y);
 	switch (server->cursor_mode) {
 	case FLWM_CURSOR_MOVE:
 		view_set_position(server->grabbed_view, (int)(server->cursor->x - server->grab_x),
 			(int)(server->cursor->y - server->grab_y));
+		update_snap_preview(server);
 		return;
 	case FLWM_CURSOR_RESIZE:
 		process_cursor_resize(server);
@@ -705,7 +825,15 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 			input_update_pointer_focus(server, event->time_msec);
 			return;
 		}
+		struct flwm_view *dropped = mode == FLWM_CURSOR_MOVE ? server->grabbed_view : NULL;
+		enum flwm_snap snap = server->drag_snap;
+		server->drag_snap = FLWM_SNAP_NONE;
 		input_reset_cursor_mode(server);
+		if (dropped && snap != FLWM_SNAP_NONE) {
+			view_set_snap(dropped, snap);
+			/* unsnapping brings it back where the drag began */
+			dropped->saved = server->drag_from;
+		}
 		if (mode == FLWM_CURSOR_PASSTHROUGH)
 			wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
 		else

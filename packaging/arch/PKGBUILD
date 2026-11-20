@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -14,7 +14,7 @@ pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit poppler)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -80,7 +80,8 @@ package_fldesktop() {
               'fldesktop-video: video player'
               'fldesktop-webcam: camera app'
               'fldesktop-archive: archive manager'
-              'fldesktop-web: web browser')
+              'fldesktop-web: web browser'
+              'fldesktop-docs: PDF viewer')
   arch=(any)
 }
 
@@ -88,7 +89,8 @@ package_fldesktop-wm() {
   pkgdesc="fldesktop Wayland compositor (wlroots)"
   depends=(wlroots0.20 wayland libxkbcommon libinput pango cairo librsvg libdrm pixman libxcb xcb-util-wm)
   optdepends=('xorg-xwayland: X11 programs' 'grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard'
-              'fldesktop-lock: screen locking' 'fldesktop-icon-theme: the default cursors')
+              'fldesktop-lock: screen locking' 'fldesktop-icon-theme: the default cursors'
+              'fcitx5: Chinese, Japanese and Korean input')
   _stage
   _install_files usr/bin/fl-wm usr/share/fldesktop/wm.ini.example usr/share/man/man1/fl-wm.1
   install -Dm644 "$(_srcdir)/COPYING" "$pkgdir/usr/share/licenses/$pkgname/COPYING"
@@ -96,7 +98,7 @@ package_fldesktop-wm() {
 
 package_fldesktop-shell() {
   pkgdesc="fldesktop panel, launcher, desktop icons and session"
-  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm libcups xdg-user-dirs)
+  depends=(fldesktop-wm fltk wayland glib2 libpipewire libnm libcups xdg-user-dirs gstreamer)
   optdepends=('pipewire: volume control' 'wireplumber: volume control'
               'pipewire-pulse: sound for PulseAudio applications'
               'pipewire-alsa: sound for ALSA applications'
@@ -108,14 +110,17 @@ package_fldesktop-shell() {
               'fldesktop-notifyd: notifications and their history'
               'xdg-desktop-portal-fl: file dialogs and settings for Flatpak apps'
               'bluez: Bluetooth button' 'cups: printer button'
-              'grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard')
+              'grim: screenshots (fl-snip)' 'wl-clipboard: screenshots stay on the clipboard'
+              'gst-plugin-pipewire: screen recording (fl-snip)' 'gst-plugins-good: screen recording (fl-snip)')
   _stage
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
+    usr/bin/fl-nightlight etc/xdg/autostart/fl-nightlight.desktop \
+    usr/bin/fl-cliphist etc/xdg/autostart/fl-cliphist.desktop \
     usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \
     usr/share/applications/fl-snip.desktop usr/share/icons/hicolor/scalable/apps/fl-snip.svg \
     usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
   local m
-  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip; do
+  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip fl-nightlight fl-cliphist; do
     _install_files usr/share/man/man1/$m.1
   done
 }
@@ -164,6 +169,13 @@ package_fldesktop-webcam() {
   depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
   optdepends=("gst-plugin-pipewire: cameras and microphones through PipeWire")
   _app webcam
+}
+
+package_fldesktop-docs() {
+  pkgdesc="fldesktop PDF viewer (poppler)"
+  depends=(fltk poppler wayland)
+  optdepends=("libcups: printing" "poppler-data: documents in CJK and other encodings")
+  _app docs
 }
 
 package_fldesktop-web() {

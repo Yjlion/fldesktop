@@ -263,10 +263,20 @@ static int idle_timeout(void *data) {
 	return 0;
 }
 
+static int blank_timeout(void *data) {
+	struct flwm_server *server = data;
+	if (server->idle_inhibitors == 0) output_idle_blank(server);
+	return 0;
+}
+
 void lock_activity(struct flwm_server *server) {
 	if (server->idle_notifier && server->seat) wlr_idle_notifier_v1_notify_activity(server->idle_notifier, server->seat);
 	int min = server->config.lock_idle_minutes;
 	wl_event_source_timer_update(server->idle_timer, min > 0 ? min * 60000 : 0);
+	if (server->blanked) output_idle_wake(server);
+	if (server->blank_timer) {
+		wl_event_source_timer_update(server->blank_timer, server->config.blank_ms);
+	}
 }
 
 struct flwm_inhibitor {
@@ -309,6 +319,7 @@ void lock_init(struct flwm_server *server) {
 	server->new_idle_inhibitor.notify = new_inhibitor;
 	wl_signal_add(&server->idle_inhibit_mgr->events.new_inhibitor, &server->new_idle_inhibitor);
 	server->idle_timer = wl_event_loop_add_timer(server->event_loop, idle_timeout, server);
+	server->blank_timer = wl_event_loop_add_timer(server->event_loop, blank_timeout, server);
 	server->lock_restart_timer = wl_event_loop_add_timer(server->event_loop, restart_locker, server);
 	server->sigchld = wl_event_loop_add_signal(server->event_loop, SIGCHLD, handle_sigchld, server);
 	lock_activity(server);
@@ -319,6 +330,7 @@ void lock_finish(struct flwm_server *server) {
 	wl_list_remove(&server->new_idle_inhibitor.link);
 	if (server->ext_lock) ext_lock_finish(server);
 	wl_event_source_remove(server->idle_timer);
+	wl_event_source_remove(server->blank_timer);
 	wl_event_source_remove(server->lock_restart_timer);
 	wl_event_source_remove(server->sigchld);
 	if (server->lock_pid > 0) kill(server->lock_pid, SIGTERM);

@@ -103,7 +103,7 @@ static char *ini_get(const char *path, const char *group, const char *key) {
 	return res;
 }
 
-static uint32_t accent_color(void) {
+uint32_t flwm_accent_color(void) {
 	uint32_t c = 0xff3584e4;
 	char *path = config_home();
 	char *v = ini_get(path, "Appearance", "Accent");
@@ -242,8 +242,11 @@ struct icon_cache_entry {
 };
 static struct icon_cache_entry *icon_cache;
 
-static const char *icon_for(const char *app_id) {
-	const char *key = app_id ? app_id : "";
+static const char *icon_for(const char *app_id, const char *icon_name) {
+	/* a window that names its own icon (xdg-toplevel-icon-v1): cached under "=name" */
+	char named[300];
+	if (icon_name) snprintf(named, sizeof named, "=%s", icon_name);
+	const char *key = icon_name ? named : app_id ? app_id : "";
 	for (struct icon_cache_entry *e = icon_cache; e; e = e->next)
 		if (!strcmp(e->app_id, key)) return e->path;
 	char dirs[16][512];
@@ -251,7 +254,7 @@ static const char *icon_for(const char *app_id) {
 	char *cfg = config_home();
 	char *theme = ini_get(cfg, "General", "IconTheme");
 	free(cfg);
-	char *name = desktop_icon(app_id, dirs, nd);
+	char *name = icon_name ? strdup(icon_name) : desktop_icon(app_id, dirs, nd);
 	char *path = find_icon_file(name ? name : key, dirs, nd, theme);
 	if (!path) path = find_icon_file("application-x-executable", dirs, nd, theme);
 	free(name);
@@ -334,7 +337,7 @@ static void sw_render(struct flwm_server *server) {
 	cairo_set_line_width(cr, 1);
 	cairo_stroke(cr);
 
-	uint32_t accent = accent_color();
+	uint32_t accent = flwm_accent_color();
 	const char *font = server->config.font ? server->config.font : "Sans Bold 10";
 	/* the item font: the configured family, regular weight */
 	PangoFontDescription *fd = pango_font_description_from_string(font);
@@ -353,7 +356,7 @@ static void sw_render(struct flwm_server *server) {
 			set_argb(cr, accent, 0.85);
 			cairo_fill(cr);
 		}
-		const char *path = icon_for(view_app_id(v));
+		const char *path = icon_for(view_app_id(v), v->icon_name);
 		double ix = cx + (CELL_W - ICON) / 2.0, iy = cy + 12;
 		if (v->minimized) cairo_push_group(cr);
 		bool drawn = path && draw_icon_file(cr, path, ix, iy, ICON);

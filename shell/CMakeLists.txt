@@ -1,9 +1,9 @@
 set(PANEL_PROTO)
 fld_wayland_protocol(PANEL_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-foreign-toplevel-management-unstable-v1.xml client)
 
-add_executable(fl-panel panel.cpp ${PANEL_PROTO})
+add_executable(fl-panel panel.cpp panel_nightlight.cpp panel_clipboard.cpp ${PANEL_PROTO})
 target_include_directories(fl-panel PRIVATE ${FLD_PROTO_OUT})
-target_link_libraries(fl-panel PRIVATE fld PkgConfig::WAYLAND_CLIENT)
+target_link_libraries(fl-panel PRIVATE fld fl-cliphist-store PkgConfig::WAYLAND_CLIENT)
 # the workspace pager (ext-workspace-v1, wayland-protocols 1.40+)
 set(_ws_xml ${WAYLAND_PROTOCOLS_DIR}/staging/ext-workspace/ext-workspace-v1.xml)
 if(EXISTS ${_ws_xml})
@@ -56,10 +56,32 @@ target_link_libraries(fl-desktop PRIVATE fld)
 add_executable(fl-autostart autostart.cpp)
 target_link_libraries(fl-autostart PRIVATE fld)
 
+# night light: warmer colours at night through wlr-gamma-control
+add_library(fl-nightlight-util STATIC nightlight_util.cpp)
+target_include_directories(fl-nightlight-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+set(NIGHT_PROTO)
+fld_wayland_protocol(NIGHT_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-gamma-control-unstable-v1.xml client)
+add_executable(fl-nightlight nightlight.cpp ${NIGHT_PROTO})
+target_include_directories(fl-nightlight PRIVATE ${FLD_PROTO_OUT})
+target_link_libraries(fl-nightlight PRIVATE fl-nightlight-util fld PkgConfig::WAYLAND_CLIENT)
+install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-nightlight.desktop
+        DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
+
+# clipboard history: the store (also in fl-panel) and the recorder
+add_library(fl-cliphist-store STATIC cliphist_store.cpp)
+target_include_directories(fl-cliphist-store PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+set(CLIP_PROTO)
+fld_wayland_protocol(CLIP_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-data-control-unstable-v1.xml client)
+add_executable(fl-cliphist cliphist.cpp ${CLIP_PROTO})
+target_include_directories(fl-cliphist PRIVATE ${FLD_PROTO_OUT})
+target_link_libraries(fl-cliphist PRIVATE fl-cliphist-store fld PkgConfig::WAYLAND_CLIENT)
+install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-cliphist.desktop
+        DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
+
 # scripts are copied next to the binaries so a build tree works without installing
 foreach(s fl-session fl-screenshot)
   configure_file(${s} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${s} COPYONLY)
 endforeach()
 
-install(TARGETS fl-panel fl-launcher fl-desktop fl-autostart RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS fl-panel fl-launcher fl-desktop fl-autostart fl-nightlight fl-cliphist RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(PROGRAMS fl-session fl-screenshot DESTINATION ${CMAKE_INSTALL_BINDIR})

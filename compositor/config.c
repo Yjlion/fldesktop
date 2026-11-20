@@ -38,6 +38,48 @@ static char *trim(char *s) {
 	return s;
 }
 
+/* "name [argument]" -> action; *arg_out is malloc'ed (or NULL) */
+static bool parse_action(const char *action, enum flwm_action_type *type_out, char **arg_out) {
+	char abuf[512];
+	snprintf(abuf, sizeof abuf, "%s", action);
+	char *a = trim(abuf);
+	char *arg = NULL;
+	char *sp = strchr(a, ' ');
+	if (sp) {
+		*sp = 0;
+		arg = trim(sp + 1);
+	}
+	static const struct { const char *name; enum flwm_action_type type; } actions[] = {
+		{"exec", FLWM_ACTION_EXEC}, {"close", FLWM_ACTION_CLOSE},
+		{"maximize", FLWM_ACTION_MAXIMIZE}, {"minimize", FLWM_ACTION_MINIMIZE},
+		{"fullscreen", FLWM_ACTION_FULLSCREEN}, {"cycle", FLWM_ACTION_CYCLE},
+		{"cycle-back", FLWM_ACTION_CYCLE_BACK}, {"snap-left", FLWM_ACTION_SNAP_LEFT},
+		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"snap-up", FLWM_ACTION_SNAP_UP},
+		{"snap-down", FLWM_ACTION_SNAP_DOWN}, {"resize-mode", FLWM_ACTION_RESIZE_MODE},
+		{"launcher", FLWM_ACTION_LAUNCHER},
+		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
+		{"show-desktop", FLWM_ACTION_SHOW_DESKTOP},
+		{"workspace", FLWM_ACTION_WORKSPACE}, {"workspace-next", FLWM_ACTION_WORKSPACE_NEXT},
+		{"workspace-prev", FLWM_ACTION_WORKSPACE_PREV},
+		{"move-to-workspace", FLWM_ACTION_MOVE_TO_WORKSPACE},
+		{"move-to-workspace-next", FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT},
+		{"move-to-workspace-prev", FLWM_ACTION_MOVE_TO_WORKSPACE_PREV},
+		{"sticky", FLWM_ACTION_STICKY},
+		{"zoom-in", FLWM_ACTION_ZOOM_IN}, {"zoom-out", FLWM_ACTION_ZOOM_OUT},
+		{"zoom-reset", FLWM_ACTION_ZOOM_RESET},
+	};
+	enum flwm_action_type type = FLWM_ACTION_NONE;
+	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
+		if (!strcasecmp(a, actions[i].name)) type = actions[i].type;
+	if (type == FLWM_ACTION_NONE) {
+		wlr_log(WLR_ERROR, "config: unknown action '%s'", a);
+		return false;
+	}
+	*type_out = type;
+	*arg_out = xstrdup(arg);
+	return true;
+}
+
 static void add_binding(struct flwm_config *c, const char *combo, const char *action) {
 	if (c->nbindings >= FLWM_MAX_BINDINGS) return;
 	uint32_t mods = 0;
@@ -65,44 +107,16 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 	/* keysyms are compared lower-case so Super+Shift+Q matches 'q' */
 	sym = xkb_keysym_to_lower(sym);
 
-	char abuf[512];
-	snprintf(abuf, sizeof abuf, "%s", action);
-	char *a = trim(abuf);
-	char *arg = NULL;
-	char *sp = strchr(a, ' ');
-	if (sp) {
-		*sp = 0;
-		arg = trim(sp + 1);
-	}
-	static const struct { const char *name; enum flwm_action_type type; } actions[] = {
-		{"exec", FLWM_ACTION_EXEC}, {"close", FLWM_ACTION_CLOSE},
-		{"maximize", FLWM_ACTION_MAXIMIZE}, {"minimize", FLWM_ACTION_MINIMIZE},
-		{"fullscreen", FLWM_ACTION_FULLSCREEN}, {"cycle", FLWM_ACTION_CYCLE},
-		{"cycle-back", FLWM_ACTION_CYCLE_BACK}, {"snap-left", FLWM_ACTION_SNAP_LEFT},
-		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"launcher", FLWM_ACTION_LAUNCHER},
-		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
-		{"show-desktop", FLWM_ACTION_SHOW_DESKTOP},
-		{"workspace", FLWM_ACTION_WORKSPACE}, {"workspace-next", FLWM_ACTION_WORKSPACE_NEXT},
-		{"workspace-prev", FLWM_ACTION_WORKSPACE_PREV},
-		{"move-to-workspace", FLWM_ACTION_MOVE_TO_WORKSPACE},
-		{"move-to-workspace-next", FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT},
-		{"move-to-workspace-prev", FLWM_ACTION_MOVE_TO_WORKSPACE_PREV},
-		{"sticky", FLWM_ACTION_STICKY},
-	};
-	enum flwm_action_type type = FLWM_ACTION_NONE;
-	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
-		if (!strcasecmp(a, actions[i].name)) type = actions[i].type;
-	if (type == FLWM_ACTION_NONE) {
-		wlr_log(WLR_ERROR, "config: unknown action '%s'", a);
-		return;
-	}
+	enum flwm_action_type type;
+	char *arg;
+	if (!parse_action(action, &type, &arg)) return;
 	/* replace an existing binding for the same combo */
 	for (int i = 0; i < c->nbindings; i++) {
 		struct flwm_binding *b = &c->bindings[i];
 		if (b->modifiers == mods && b->sym == sym) {
 			free(b->arg);
 			b->action = type;
-			b->arg = xstrdup(arg);
+			b->arg = arg;
 			return;
 		}
 	}
@@ -110,7 +124,7 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 	b->modifiers = mods;
 	b->sym = sym;
 	b->action = type;
-	b->arg = xstrdup(arg);
+	b->arg = arg;
 }
 
 /* [environment] KEY=value sets a variable for the programs started from now
@@ -163,7 +177,14 @@ void config_init_defaults(struct flwm_config *c) {
 	c->switcher = true;
 	c->xwayland = true;
 	c->workspaces = 4;
+	c->gestures = true;
+	c->gesture_fingers = 3;
+	c->gesture_natural = true;
+	c->gesture_up.type = FLWM_ACTION_LAUNCHER;
+	c->gesture_down.type = FLWM_ACTION_SHOW_DESKTOP;
+	c->drag_snap = true;
 	c->lock_color = 0xff1e1f22;
+	c->blank_ms = 10 * 60000;
 
 	add_binding(c, "Super+Return", "exec fl-term");
 	add_binding(c, "Super+t", "exec fl-term");
@@ -172,11 +193,18 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+d", "show-desktop");
 	add_binding(c, "Super+q", "close");
 	add_binding(c, "Alt+F4", "close");
-	add_binding(c, "Super+Up", "maximize");
-	add_binding(c, "Super+Down", "minimize");
+	add_binding(c, "Super+Up", "snap-up");
+	add_binding(c, "Super+Down", "snap-down");
+	add_binding(c, "Super+r", "resize-mode");
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
 	add_binding(c, "Super+f", "fullscreen");
+	add_binding(c, "Super+equal", "zoom-in");
+	add_binding(c, "Super+plus", "zoom-in");
+	add_binding(c, "Super+KP_Add", "zoom-in");
+	add_binding(c, "Super+minus", "zoom-out");
+	add_binding(c, "Super+KP_Subtract", "zoom-out");
+	add_binding(c, "Super+0", "zoom-reset");
 	add_binding(c, "Alt+Tab", "cycle");
 	add_binding(c, "Alt+Shift+Tab", "cycle-back");
 	add_binding(c, "Super+Shift+r", "reload");
@@ -256,6 +284,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 		} else if (!strcasecmp(section, "behaviour") || !strcasecmp(section, "behavior")) {
 			if (!strcmp(k, "panel_position")) c->panel_top = !strcasecmp(v, "top");
 			else if (!strcmp(k, "focus_follows_mouse")) c->focus_follows_mouse = parse_bool(v);
+			else if (!strcmp(k, "drag_snap")) c->drag_snap = parse_bool(v);
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
 			else if (!strcmp(k, "xwayland")) c->xwayland = parse_bool(v);
@@ -278,6 +307,19 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "disable_while_typing")) c->disable_while_typing = parse_bool(v);
 			else if (!strcmp(k, "middle_emulation")) c->middle_emulation = parse_bool(v);
 			else if (!strcmp(k, "scroll_method")) set_str(&c->scroll_method, v);
+		} else if (!strcasecmp(section, "gestures")) {
+			if (!strcmp(k, "enabled")) c->gestures = parse_bool(v);
+			else if (!strcmp(k, "fingers")) {
+				int n = atoi(v);
+				c->gesture_fingers = n < 3 ? 3 : n > 5 ? 5 : n;
+			} else if (!strcmp(k, "natural")) c->gesture_natural = parse_bool(v);
+			else if (!strcmp(k, "swipe_up") || !strcmp(k, "swipe_down")) {
+				struct flwm_gesture_action *g = k[6] == 'u' ? &c->gesture_up : &c->gesture_down;
+				free(g->arg);
+				g->arg = NULL;
+				g->type = FLWM_ACTION_NONE;
+				if (*v && strcasecmp(v, "none")) parse_action(v, &g->type, &g->arg);
+			}
 		} else if (!strcasecmp(section, "cursor")) {
 			if (!strcmp(k, "theme")) set_str(&c->cursor_theme, v);
 			else if (!strcmp(k, "size")) c->cursor_size = atoi(v);
@@ -285,6 +327,17 @@ bool config_load(struct flwm_config *c, const char *path) {
 			if (!strcmp(k, "idle_minutes")) c->lock_idle_minutes = atoi(v);
 			else if (!strcmp(k, "command")) set_str(&c->lock_cmd, v);
 			else if (!strcmp(k, "color")) c->lock_color = parse_color(v, c->lock_color);
+		} else if (!strcasecmp(section, "power")) {
+			if (!strcmp(k, "blank_minutes")) {
+				double m = atof(v);
+				c->blank_ms = m > 0 ? (int)(m * 60000) : 0;
+			}
+		} else if (!strcasecmp(section, "accessibility")) {
+			if (!strcmp(k, "sticky_keys")) c->sticky_keys = parse_bool(v);
+			else if (!strcmp(k, "bounce_keys")) {
+				int ms = atoi(v);
+				c->bounce_keys_ms = ms < 0 ? 0 : ms > 2000 ? 2000 : ms;
+			}
 		} else if (!strcasecmp(section, "environment")) {
 			env_apply(k, v);
 		} else if (!strcasecmp(section, "output")) {
@@ -337,6 +390,8 @@ void config_free(struct flwm_config *c) {
 	free(c->launcher_cmd);
 	free(c->lock_cmd);
 	free(c->scroll_method);
+	free(c->gesture_up.arg);
+	free(c->gesture_down.arg);
 	free(c->path);
 	for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);
 	for (int i = 0; i < c->nautostart; i++) free(c->autostart[i]);

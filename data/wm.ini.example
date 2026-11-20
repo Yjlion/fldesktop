@@ -19,6 +19,8 @@ focus_follows_mouse=false
 launcher=fl-launcher
 # Alt+Tab shows a window switcher; false: each Alt+Tab raises the next window
 switcher=true
+# dragging a window to a screen edge or corner snaps it (half, quarter, top: maximized)
+drag_snap=true
 # run X11 programs through Xwayland (started with the first one); read at startup
 xwayland=true
 # number of workspaces (1-9); all outputs switch together
@@ -38,6 +40,17 @@ natural_scroll=false
 # -1.0 .. 1.0
 accel=0
 
+[gestures]
+# touchpad swipes with this many fingers (3-5) belong to fl-wm; other
+# gestures (pinch, hold, other swipes) go to the program under the pointer
+enabled=true
+fingers=3
+# sideways swipes switch workspaces; true: the workspaces follow the fingers
+natural=true
+# actions for swiping up and down (any key binding action, or none)
+swipe_up=launcher
+swipe_down=show-desktop
+
 [cursor]
 theme=fldesktop-cursors
 size=24
@@ -49,6 +62,16 @@ idle_minutes=0
 #command=fl-lock --locker
 # shown while the lock screen starts
 #color=#1e1f22
+
+[power]
+# turn the screens off after this many idle minutes (0 = never); input turns
+# them on again. Programs that inhibit idle (videos) keep them on.
+blank_minutes=10
+[accessibility]
+# a modifier pressed and released alone applies to the next key (twice: stays on)
+sticky_keys=false
+# ignore a key pressed again within this many milliseconds of its release (0 = off)
+bounce_keys=0
 
 #[environment]
 # variables for the programs started from now on (applied on reload);
@@ -72,10 +95,13 @@ scale=1
 # "defaults=false" first to start from an empty list instead.
 # Modifiers: Super, Alt, Ctrl, Shift. Keys are xkb keysym names.
 # Actions: exec CMD, close, maximize, minimize, fullscreen, cycle, cycle-back,
-#          snap-left, snap-right, launcher, show-desktop, lock, reload, quit,
+#          snap-left, snap-right, snap-up, snap-down (halves and quarters),
+#          resize-mode (arrows resize, Enter/Escape), launcher, show-desktop,
+#          lock, reload, quit,
 #          workspace N, workspace-next, workspace-prev, move-to-workspace N,
 #          move-to-workspace-next, move-to-workspace-prev (the window goes
-#          along), sticky (show the window on every workspace)
+#          along), sticky (show the window on every workspace),
+#          zoom-in, zoom-out, zoom-reset (the magnifier)
 Super+Return=exec fl-term
 Super+t=exec fl-term
 Super+e=exec fl-files
@@ -84,11 +110,15 @@ Super+l=lock
 Super+d=show-desktop
 Super+q=close
 Alt+F4=close
-Super+Up=maximize
-Super+Down=minimize
+Super+Up=snap-up
+Super+Down=snap-down
+Super+r=resize-mode
 Super+Left=snap-left
 Super+Right=snap-right
 Super+f=fullscreen
+Super+equal=zoom-in
+Super+minus=zoom-out
+Super+0=zoom-reset
 Alt+Tab=cycle
 Alt+Shift+Tab=cycle-back
 Print=exec fl-snip --full

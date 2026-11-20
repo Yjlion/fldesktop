@@ -22,6 +22,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "compat.h"
+#include "snap.h"
 
 #define FLWM_MAX_BINDINGS 96
 #define FLWM_MAX_AUTOSTART 32
@@ -75,6 +76,7 @@ struct wlr_ext_workspace_group_handle_v1;
 struct wlr_ext_workspace_handle_v1;
 struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_ext_image_capture_source_v1;
+struct wlr_xdg_toplevel_icon_manager_v1;
 struct wlr_xwayland_surface;
 
 struct flwm_node_desc {
@@ -95,6 +97,9 @@ enum flwm_action_type {
 	FLWM_ACTION_CYCLE_BACK,
 	FLWM_ACTION_SNAP_LEFT,
 	FLWM_ACTION_SNAP_RIGHT,
+	FLWM_ACTION_SNAP_UP,
+	FLWM_ACTION_SNAP_DOWN,
+	FLWM_ACTION_RESIZE_MODE,
 	FLWM_ACTION_LAUNCHER,
 	FLWM_ACTION_QUIT,
 	FLWM_ACTION_RELOAD,
@@ -107,6 +112,9 @@ enum flwm_action_type {
 	FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT,
 	FLWM_ACTION_MOVE_TO_WORKSPACE_PREV,
 	FLWM_ACTION_STICKY,
+	FLWM_ACTION_ZOOM_IN,
+	FLWM_ACTION_ZOOM_OUT,
+	FLWM_ACTION_ZOOM_RESET,
 };
 
 #define FLWM_MAX_WORKSPACES 9
@@ -139,6 +147,7 @@ struct flwm_config {
 	char *font; /* pango font description, e.g. "Sans Bold 10" */
 	bool panel_top;
 	bool focus_follows_mouse;
+	bool drag_snap; /* dragging a window to an edge or corner snaps it */
 	/* keyboard */
 	char *kb_layout, *kb_variant, *kb_options, *kb_model;
 	int repeat_rate, repeat_delay;
@@ -158,8 +167,17 @@ struct flwm_config {
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
 	int workspaces; /* number of workspaces, 1..FLWM_MAX_WORKSPACES */
+	/* touchpad gestures (gesture.c) */
+	bool gestures;         /* swipes with gesture_fingers are ours */
+	int gesture_fingers;   /* 3..5 */
+	bool gesture_natural;  /* sideways: the workspaces follow the fingers */
+	struct flwm_gesture_action { enum flwm_action_type type; char *arg; } gesture_up, gesture_down;
+	/* [accessibility] (a11y.c) */
+	bool sticky_keys;
+	int bounce_keys_ms;
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
+	int blank_ms;          /* [power] blank_minutes (may be fractional): screens off; 0 = never */
 	char *lock_cmd;        /* default "fl-lock --locker" */
 	uint32_t lock_color;
 	/* key bindings & autostart */
@@ -218,6 +236,8 @@ struct flwm_server {
 	struct wl_listener new_toplevel_decoration;
 
 	struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_mgr;
+	struct wlr_xdg_toplevel_icon_manager_v1 *toplevel_icon_mgr; /* wlroots 0.19+ */
+	struct wl_listener set_toplevel_icon;
 
 	/* workspaces (workspace.c): one set shared by all outputs, 0-based */
 	int cur_workspace;
@@ -274,6 +294,15 @@ struct flwm_server {
 	struct flwm_layer_surface *focused_layer; /* exclusive keyboard focus */
 
 	struct wlr_scene_tree *drag_icon;
+	/* dragging a window to a screen edge: where it will snap */
+	enum flwm_snap drag_snap;
+	struct wlr_scene_rect *snap_preview;
+	/* keyboard resize mode (Super+R): the window and its size before */
+	struct flwm_view *resize_view;
+	struct wlr_box resize_orig;
+	int resize_w, resize_h; /* the size asked for so far (the client may lag) */
+	struct wlr_box drag_from; /* geometry when the move began: a drop-snap restores it */
+	double zoom; /* zoom.c: the magnifier, 1 = off */
 	struct wl_listener drag_destroy;
 	struct flwm_view *hover_view;      /* view whose title buttons show hover */
 	uint32_t last_click_time;
@@ -294,6 +323,10 @@ struct flwm_server {
 	pid_t lock_pid; /* our fl-lock --locker child */
 	long lock_started;
 	struct wl_event_source *lock_restart_timer, *idle_timer, *sigchld;
+	struct wl_event_source *blank_timer; /* [power] blank_minutes */
+	bool blanked;                        /* screens off by blank_timer */
+	struct wlr_output_power_manager_v1 *output_power;
+	struct wl_listener output_power_set_mode;
 	struct wlr_session_lock_manager_v1 *lock_mgr;
 	struct wl_listener new_ext_lock;
 	struct wlr_session_lock_v1 *ext_lock;
@@ -320,6 +353,9 @@ struct flwm_output {
 	struct wl_listener frame;
 	struct wl_listener request_state;
 	struct wl_listener destroy;
+	bool powered_off; /* display off (DPMS), still in the layout */
+	bool idle_off;    /* turned off by the idle timeout: input turns it back on */
+	struct wlr_buffer *zoom_buffer; /* zoom.c: the magnified frame */
 };
 
 struct flwm_decor {
@@ -349,6 +385,7 @@ struct flwm_view {
 	bool ssd;          /* we draw decorations */
 	bool mapped;
 	bool minimized, maximized, fullscreen;
+	enum flwm_snap snap; /* half or quarter of the screen (never MAXIMIZED: see maximized) */
 	bool placed;       /* initial position chosen */
 	bool hidden_by_show_desktop;
 	bool no_taskbar;   /* not in the panel's window list (X11 menus, splash screens) */
@@ -367,6 +404,7 @@ struct flwm_view {
 	struct wlr_ext_foreign_toplevel_handle_v1 *ext_ftl;
 	struct wlr_scene *capture_scene;
 	struct wlr_ext_image_capture_source_v1 *capture_source;
+	char *icon_name; /* xdg-toplevel-icon-v1 name, or NULL */
 
 	struct wl_listener map;
 	struct wl_listener unmap;
@@ -470,6 +508,8 @@ void arrange_all(struct flwm_server *server);
 void output_apply_config(struct flwm_server *server);
 void output_manager_update(struct flwm_server *server);
 void output_finish(struct flwm_server *server);
+void output_idle_blank(struct flwm_server *server); /* screens off */
+void output_idle_wake(struct flwm_server *server);  /* the ones blank turned off on again */
 int shell_reserved_bottom(struct flwm_server *server, struct flwm_output *output);
 
 /* view.c */
@@ -480,6 +520,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 void view_handle_unmap(struct flwm_view *view);
 void view_handle_commit(struct flwm_view *view);
 void view_free(struct flwm_view *view); /* removes the common listeners */
+void view_finish(struct flwm_server *server);
 struct wlr_surface *view_surface(struct flwm_view *view);
 const char *view_title(struct flwm_view *view);  /* may be NULL */
 const char *view_app_id(struct flwm_view *view); /* may be NULL */
@@ -491,7 +532,13 @@ void view_close(struct flwm_view *view);
 void view_set_maximized(struct flwm_view *view, bool maximized);
 void view_set_minimized(struct flwm_view *view, bool minimized);
 void view_set_fullscreen(struct flwm_view *view, bool fullscreen);
-void view_snap(struct flwm_view *view, int side); /* -1 left, +1 right */
+/* snaps to a half or quarter, maximizes, minimizes or (NONE) frees the window */
+void view_set_snap(struct flwm_view *view, enum flwm_snap snap);
+enum flwm_snap view_snap_state(struct flwm_view *view); /* MAXIMIZED when maximized */
+uint32_t flwm_accent_color(void); /* switcher.c: [Appearance] Accent of desktop.ini, 0xRRGGBB */
+/* keyboard resize mode: asks for a content size (at least 64x64) */
+void view_resize_to(struct flwm_view *view, int w, int h);
+void view_set_geometry(struct flwm_view *view, const struct wlr_box *content);
 void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, uint32_t edges);
 struct flwm_view *view_focused(struct flwm_server *server);
 struct flwm_view *view_find_role(struct flwm_server *server, enum flwm_role role);
@@ -590,6 +637,33 @@ void lock_finish(struct flwm_server *server);
 void lock_request(struct flwm_server *server);
 void lock_arrange(struct flwm_server *server);
 void lock_activity(struct flwm_server *server);
+
+/* gesture.c */
+void gesture_init(struct flwm_server *server);
+void gesture_finish(void);
+/* im.c: text-input-v3 <-> input-method-v2 relay */
+struct wlr_keyboard;
+struct wlr_input_method_keyboard_grab_v2;
+void im_init(struct flwm_server *server); /* after the seat */
+void im_finish(void);
+/* the input method's keyboard grab when keys of kb should go to it, else NULL */
+struct wlr_input_method_keyboard_grab_v2 *im_keyboard_grab(struct wlr_keyboard *kb);
+/* inhibit.c: keyboard-shortcuts-inhibit */
+void inhibit_init(struct flwm_server *server); /* after the seat */
+void inhibit_finish(void);
+bool inhibit_shortcuts_active(struct flwm_server *server); /* the focused window has the bindings */
+bool inhibit_shortcuts_toggle(struct flwm_server *server);  /* false: no inhibitor there */
+/* zoom.c: the magnifier */
+void zoom_step(struct flwm_server *server, int dir); /* +1 in, -1 out, 0 off */
+void zoom_cursor_moved(struct flwm_server *server);
+bool zoom_output_frame(struct flwm_output *output); /* false: render normally */
+void zoom_output_gone(struct flwm_output *output);
+
+/* a11y.c: sticky and bounce keys */
+struct wlr_keyboard_key_event;
+bool a11y_key(struct flwm_server *server, struct wlr_keyboard *kb, const struct wlr_keyboard_key_event *ev); /* true: drop it */
+void a11y_key_done(struct flwm_server *server, struct wlr_keyboard *kb, const struct wlr_keyboard_key_event *ev);
+void a11y_reset(void);
 void lock_view_mapped(struct flwm_server *server, struct flwm_view *view);
 bool lock_client_is_locker(struct flwm_server *server, struct wl_client *client);
 

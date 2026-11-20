@@ -9,13 +9,15 @@
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
 
+#include <wlr/types/wlr_output_power_management_v1.h>
+
 #include "server.h"
 
 static void output_frame(struct wl_listener *listener, void *data) {
 	struct flwm_output *output = wl_container_of(listener, output, frame);
 	struct wlr_scene_output *scene_output = output->scene_output;
 	if (!scene_output) return;
-	wlr_scene_output_commit(scene_output, NULL);
+	if (!zoom_output_frame(output)) wlr_scene_output_commit(scene_output, NULL);
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	wlr_scene_output_send_frame_done(scene_output, &now);
@@ -33,6 +35,7 @@ static void output_destroy(struct wl_listener *listener, void *data) {
 	struct flwm_output *output = wl_container_of(listener, output, destroy);
 	struct flwm_server *server = output->server;
 	switcher_output_gone(server, output);
+	zoom_output_gone(output);
 	for (int i = 0; i < 4; i++) {
 		struct flwm_layer_surface *ls, *tmp;
 		wl_list_for_each_safe(ls, tmp, &output->layers[i], link) {
@@ -141,6 +144,60 @@ static void layout_change(struct wl_listener *listener, void *data) {
 static void output_manager_apply(struct wl_listener *listener, void *data);
 static void output_manager_test(struct wl_listener *listener, void *data);
 
+/* ---- power (DPMS): idle blanking and wlr-output-power-management ------------ */
+
+/* Turns an output's display on or off. Off keeps it in the layout, so windows
+ * stay where they are; on applies its configured mode again. */
+static bool output_set_power(struct flwm_server *server, struct wlr_output *wlr_output, bool on) {
+	struct wlr_output_state state;
+	wlr_output_state_init(&state);
+	if (on) configure_output(server, wlr_output, &state);
+	else wlr_output_state_set_enabled(&state, false);
+	bool ok = wlr_output_commit_state(wlr_output, &state);
+	wlr_output_state_finish(&state);
+	if (ok && on) wlr_output_schedule_frame(wlr_output);
+	return ok;
+}
+
+static void output_power_set_mode(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, output_power_set_mode);
+	struct wlr_output_power_v1_set_mode_event *ev = data;
+	struct flwm_output *o = ev->output->data;
+	if (!o) return;
+	bool on = ev->mode == ZWLR_OUTPUT_POWER_V1_MODE_ON;
+	if (!wlr_output_layout_get(server->output_layout, ev->output)) return; /* disabled in the settings */
+	if (output_set_power(server, ev->output, on)) {
+		o->powered_off = !on;
+		o->idle_off = false; /* a client (swayidle, wlopm) owns it now */
+	}
+}
+
+void output_idle_blank(struct flwm_server *server) {
+	struct flwm_output *o;
+	wl_list_for_each(o, &server->outputs, link) {
+		if (o->powered_off || !o->wlr_output->enabled) continue;
+		if (output_set_power(server, o->wlr_output, false)) {
+			o->powered_off = true;
+			o->idle_off = true;
+			server->blanked = true;
+		}
+	}
+	if (server->blanked) wlr_log(WLR_INFO, "idle: screens off");
+}
+
+void output_idle_wake(struct flwm_server *server) {
+	server->blanked = false;
+	struct flwm_output *o;
+	wl_list_for_each(o, &server->outputs, link) {
+		if (!o->idle_off) continue;
+		if (output_set_power(server, o->wlr_output, true)) {
+			o->powered_off = false;
+			o->idle_off = false;
+		}
+	}
+	wlr_log(WLR_INFO, "idle: screens on");
+}
+
 void output_init(struct flwm_server *server) {
 	wl_list_init(&server->outputs);
 	server->new_output.notify = server_new_output;
@@ -152,6 +209,9 @@ void output_init(struct flwm_server *server) {
 	wl_signal_add(&server->output_manager->events.apply, &server->output_manager_apply);
 	server->output_manager_test.notify = output_manager_test;
 	wl_signal_add(&server->output_manager->events.test, &server->output_manager_test);
+	server->output_power = wlr_output_power_manager_v1_create(server->wl_display);
+	server->output_power_set_mode.notify = output_power_set_mode;
+	wl_signal_add(&server->output_power->events.set_mode, &server->output_power_set_mode);
 }
 
 struct flwm_output *output_at(struct flwm_server *server, double lx, double ly) {
@@ -266,6 +326,7 @@ static void output_manager_test(struct wl_listener *listener, void *data) {
 void output_finish(struct flwm_server *server) {
 	wl_list_remove(&server->output_manager_apply.link);
 	wl_list_remove(&server->output_manager_test.link);
+	wl_list_remove(&server->output_power_set_mode.link);
 }
 
 void arrange_all(struct flwm_server *server) {

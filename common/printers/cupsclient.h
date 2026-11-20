@@ -65,6 +65,10 @@ std::vector<Device> discover(int timeout_s, Error *err = nullptr);
 std::vector<Driver> drivers(const std::string &device_id, const std::string &make, Error *err = nullptr);
 // returns the job id or 0
 int print_test_page(const std::string &name, Error *err = nullptr);
+// Prints a file (PDF, PostScript, images, text) with IPP options such as
+// copies, page-ranges, sides; returns the job id or 0.
+int print_file(const std::string &printer, const std::string &file, const std::string &title,
+               const std::vector<std::pair<std::string, std::string>> &options, Error *err = nullptr);
 std::vector<Option> options(const std::string &name);
 Error set_option(const std::string &name, const std::string &key, const std::string &value);
 

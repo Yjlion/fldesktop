@@ -56,5 +56,14 @@ void pixelate(Image &img, Rect r, int block);
 
 // "Screenshot-2026-11-19-143005.png"
 std::string file_name(time_t t);
+// "Screencast-2026-11-19-221005.webm"
+std::string recording_name(time_t t);
+
+// The GStreamer pipeline that records a PipeWire video node (from the
+// ScreenCast portal; fd < 0: the default PipeWire) as VP8 in WebM, at a
+// steady 30 frames a second (the screen sends frames only when it changes),
+// with the desktop's sound as Opus when audio is set. The file goes to the
+// element named "sink" (its location is set separately).
+std::string record_pipeline(int fd, uint32_t node, bool audio);
 
 } // namespace snip

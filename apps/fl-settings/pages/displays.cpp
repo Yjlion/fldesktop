@@ -7,7 +7,9 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Return_Button.H>
+#include <FL/Fl_Input.H>
 #include <FL/Fl_Spinner.H>
+#include <FL/Fl_Value_Slider.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 #include <FL/platform.H>
@@ -240,6 +242,11 @@ public:
   int sel = 0;
   bool dirty = false;
   std::vector<HeadConfig> edited;
+  // night light ([NightLight] in desktop.ini, applied by fl-nightlight)
+  Fl_Check_Button *night;
+  Fl_Choice *night_schedule;
+  Fl_Input *night_from, *night_to;
+  Fl_Value_Slider *night_temp;
 
   DisplaysPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     g_page = this;
@@ -288,6 +295,44 @@ public:
     status->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_WRAP);
     status->labelsize(12);
     status->labelcolor(palette().fg_dim);
+
+    Form nf(g, X + 24, cy + 450, lw);
+    nf.heading("Night Light");
+    ConfigFile desk(desktop_ini_path());
+    const std::string N = "NightLight";
+    auto ncb = [](Fl_Widget *, void *d) { ((DisplaysPage *)d)->save_night(); };
+    nf.row("", 26, wx, wy, ww);
+    night = new Fl_Check_Button(wx, wy, ww, 26, "Warmer colours at night");
+    night->value(desk.ini.get_bool(N, "Enabled", false));
+    night->callback(ncb, this);
+    nf.row("When:", 28, wx, wy, ww);
+    night_schedule = new Fl_Choice(wx, wy, 220, 28);
+    night_schedule->add("Sunset to sunrise|Custom hours|All the time");
+    std::string sch = desk.ini.get(N, "Schedule", "sunset");
+    night_schedule->value(sch == "custom" ? 1 : sch == "always" ? 2 : 0);
+    night_schedule->callback(ncb, this);
+    nf.row("From:", 28, wx, wy, ww);
+    night_from = new Fl_Input(wx, wy, 70, 28);
+    night_from->value(desk.ini.get(N, "From", "20:00").c_str());
+    Fl_Box *to_label = new Fl_Box(wx + 76, wy, 30, 28, "to");
+    to_label->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER);
+    night_to = new Fl_Input(wx + 112, wy, 70, 28);
+    night_to->value(desk.ini.get(N, "To", "07:00").c_str());
+    for (Fl_Input *in : {night_from, night_to}) {
+      in->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
+      in->callback(ncb, this);
+    }
+    nf.row("Warmth:", 26, wx, wy, ww);
+    night_temp = new Fl_Value_Slider(wx, wy, std::min(ww, 320), 26);
+    night_temp->type(FL_HOR_NICE_SLIDER);
+    // left: barely warmer, right: very warm; the value shown is in kelvin
+    night_temp->bounds(6000, 2500);
+    night_temp->step(100);
+    night_temp->value(desk.ini.get_int(N, "Temperature", 4000));
+    night_temp->when(FL_WHEN_RELEASE);
+    night_temp->callback(ncb, this);
+    nf.note("Sunset and sunrise are worked out from the time zone (Date & Time).");
+    update_night();
     g->end();
     end();
     if (wl_display *dpy = fl_wl_display()) {
@@ -382,6 +427,38 @@ public:
     return result == 1;
   }
 
+  void update_night() {
+    bool on = night->value();
+    bool custom = night_schedule->value() == 1;
+    for (Fl_Widget *w : {(Fl_Widget *)night_schedule, (Fl_Widget *)night_temp})
+      on ? w->activate() : w->deactivate();
+    for (Fl_Widget *w : {(Fl_Widget *)night_from, (Fl_Widget *)night_to})
+      on && custom ? w->activate() : w->deactivate();
+  }
+
+  static bool valid_hhmm(const char *s) {
+    int h, m;
+    char extra;
+    return sscanf(s, "%d:%d%c", &h, &m, &extra) == 2 && h >= 0 && h < 24 && m >= 0 && m < 60;
+  }
+
+  void save_night() {
+    update_night();
+    ConfigFile desk(desktop_ini_path());
+    const std::string N = "NightLight";
+    bool was_on = desk.ini.get_bool(N, "Enabled", false);
+    desk.ini.set_bool(N, "Enabled", night->value());
+    const char *sch[] = {"sunset", "custom", "always"};
+    desk.ini.set(N, "Schedule", sch[std::max(0, night_schedule->value())]);
+    if (valid_hhmm(night_from->value())) desk.ini.set(N, "From", night_from->value());
+    if (valid_hhmm(night_to->value())) desk.ini.set(N, "To", night_to->value());
+    desk.ini.set_int(N, "Temperature", (int)night_temp->value());
+    desk.save();
+    // fl-nightlight starts with the session; start it now if it is not running
+    if (night->value() && !was_on && !which("fl-nightlight").empty())
+      spawn({"sh", "-c", "pgrep -u \"$(id -u)\" -x fl-nightlight >/dev/null || exec fl-nightlight"});
+  }
+
   void save_config() {
     ConfigFile wm(wm_ini_path());
     for (auto &c : edited) {
@@ -438,7 +515,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new DisplaysPage(x, y, w, 
 
 PageInfo page_displays() {
   return {"displays", "Displays", "video-display", "Hardware",
-          "display monitor screen resolution scale hidpi rotation position output refresh", create};
+          "display monitor screen resolution scale hidpi rotation position output refresh night light warm colour color temperature", create};
 }
 
 } // namespace fld

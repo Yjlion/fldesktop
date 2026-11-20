@@ -25,6 +25,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
 | **fl-polkit-agent** | Password dialog for polkit (administrator actions) |
+| **fl-nightlight** | Night light: warmer screen colours from sunset to sunrise, at set hours or always (wlr-gamma-control); a toggle in the panel |
 | **fl-osk** | On-screen keyboard (Wayland virtual-keyboard protocol) |
 | **fl-charmap** | Unicode character map with search by name |
 | **fl-notifyd** | Notification server (org.freedesktop.Notifications): popups with actions, history and do not disturb in the panel |
@@ -263,7 +264,7 @@ dialogs.
 | File | Used by |
 |------|---------|
 | `~/.config/fldesktop/wm.ini` | compositor: appearance, keys, input, outputs, autostart, `[lock] idle_minutes`, `[environment]` variables for new programs |
-| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts; `[Desktop]` wallpaper; `[General]` icon theme, terminal; `[Lock]` lock screen; `[Proxy]` proxy settings |
+| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts; `[Desktop]` wallpaper; `[General]` icon theme, terminal; `[Lock]` lock screen; `[NightLight]` night light; `[Proxy]` proxy settings |
 | `~/.config/fldesktop/panel.ini` | `[Panel] QuickLaunch=`, `KeyboardButton=auto\|always\|never`; `[Clock] Format=` |
 | `~/.config/fldesktop/environment` | `LANG`, `LC_*` and other variables for the session |
 | `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth`, `KeyPreview=true\|false` |

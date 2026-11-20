@@ -1,0 +1,34 @@
+.TH FL-NIGHTLIGHT 1 "November 2026" "fldesktop" "fldesktop"
+.SH NAME
+fl-nightlight \- warmer screen colours at night
+.SH SYNOPSIS
+\fBfl-nightlight\fR [\fB\-\-print\fR]
+.SH DESCRIPTION
+Shifts the colours of all screens towards red at night, through the
+wlr-gamma-control protocol of \fBfl-wm\fR(1). The session starts it
+(\fI/etc/xdg/autostart/fl-nightlight.desktop\fR); it follows changes to its
+settings right away and fades between day and night. While night light is
+off it leaves the screens' colours alone.
+.PP
+Settings > Displays and the panel's right-click menu turn it on and off.
+.SH CONFIGURATION
+The \fB[NightLight]\fR section of \fI~/.config/fldesktop/desktop.ini\fR:
+.TP
+\fBEnabled=\fRfalse
+Night light on or off.
+.TP
+\fBTemperature=\fR4000
+The colour temperature at night, 1500 to 6500 kelvin (6500 is neutral).
+.TP
+\fBSchedule=\fRsunset
+\fBsunset\fR: from sunset to sunrise, worked out from the time zone's
+location in \fIzone1970.tab\fR (or \fBLatitude=\fR and \fBLongitude=\fR in
+degrees); \fBcustom\fR: from \fBFrom=\fR to \fBTo=\fR (HH:MM, default 20:00
+to 07:00); \fBalways\fR: all the time. The change fades in over 30 minutes
+(45 around sunset and sunrise).
+.SH OPTIONS
+.TP
+\fB\-\-print\fR
+Print the colour temperature the screens should have now and exit.
+.SH SEE ALSO
+\fBfl-wm\fR(1), \fBfl-panel\fR(1), \fBfl-settings\fR(1)

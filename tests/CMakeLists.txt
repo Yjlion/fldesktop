@@ -145,6 +145,12 @@ if(FLD_BUILD_GREETER)
   add_test(NAME greetd COMMAND test_greetd)
 endif()
 
+if(TARGET fl-nightlight-util)
+  add_executable(test_nightlight test_nightlight.cpp)
+  target_link_libraries(test_nightlight PRIVATE fl-nightlight-util)
+  add_test(NAME nightlight COMMAND test_nightlight)
+endif()
+
 if(FLD_BUILD_WM AND FLD_BUILD_CALC)
   add_test(NAME wm-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/wm-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   set_tests_properties(wm-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)

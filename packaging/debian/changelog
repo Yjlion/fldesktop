@@ -19,6 +19,8 @@ fldesktop (0.1.0) unstable; urgency=medium
     Electron and Java programs).
   * Workspaces in fl-wm (Super+1..9, Super+Ctrl+arrows; ext-workspace-v1)
     and a workspace pager in fl-panel.
+  * fl-screenshot is deprecated: use fl-snip --full or fl-snip --area.
+    The wrapper stays for old key bindings and will be removed later.
   * Snapping: drag a window to an edge or corner for halves and quarters,
     Super+arrows move between them, Super+R resizes with the keyboard.
 

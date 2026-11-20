@@ -12,6 +12,10 @@
 #include <wlr/util/log.h>
 
 #include "server.h"
+#if FLWM_WLR_AT_LEAST(0, 19)
+#include <wlr/types/wlr_xdg_dialog_v1.h>
+#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
+#endif
 
 /* ---- geometry helpers -------------------------------------------------- */
 
@@ -318,8 +322,38 @@ static bool same_client(struct flwm_view *a, struct flwm_view *b) {
 		wl_resource_get_client(b->xdg_toplevel->resource);
 }
 
+/* the modal dialog (xdg-dialog-v1) open over view, if any; nested ones too */
+static struct flwm_view *modal_child(struct flwm_view *view) {
+#if FLWM_WLR_AT_LEAST(0, 19)
+	for (int depth = 0; depth < 8 && view && !is_x11(view); depth++) {
+		struct flwm_view *child = NULL, *v;
+		wl_list_for_each(v, &view->server->views, link) {
+			if (!v->mapped || is_x11(v) || v->xdg_toplevel->parent != view->xdg_toplevel) continue;
+			struct wlr_xdg_dialog_v1 *d = wlr_xdg_dialog_v1_try_from_wlr_xdg_toplevel(v->xdg_toplevel);
+			if (d && d->modal) {
+				child = v;
+				break;
+			}
+		}
+		if (!child) return depth ? view : NULL;
+		view = child;
+	}
+	return view;
+#else
+	(void)view;
+	return NULL;
+#endif
+}
+
 void view_focus(struct flwm_view *view) {
 	if (!view || !view->mapped) return;
+	/* a window with a modal dialog gives the focus to the dialog */
+	struct flwm_view *modal = modal_child(view);
+	if (modal) {
+		if (view->minimized) view_set_minimized(view, false);
+		view_raise(view);
+		view = modal;
+	}
 	struct flwm_server *server = view->server;
 	/* while locked only the locker gets the keyboard */
 	if (server->locked && view->role != FLWM_ROLE_LOCK) return;
@@ -903,6 +937,7 @@ void view_free(struct flwm_view *view) {
 	wlr_scene_node_destroy(&view->tree->node);
 	view->decor.tree = NULL;
 	free(view->decor.title_text);
+	free(view->icon_name);
 	free(view);
 }
 
@@ -1119,6 +1154,20 @@ static void request_activate(struct wl_listener *listener, void *data) {
 	if (view && view->mapped) view_focus(view);
 }
 
+#if FLWM_WLR_AT_LEAST(0, 19)
+/* xdg-toplevel-icon-v1: a window names its icon (the Alt+Tab switcher shows
+ * it). Icons sent as pixels are not used. */
+static void set_toplevel_icon(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, set_toplevel_icon);
+	struct wlr_xdg_toplevel_icon_manager_v1_set_icon_event *ev = data;
+	struct flwm_view *view = view_from_toplevel(server, ev->toplevel);
+	if (!view) return;
+	free(view->icon_name);
+	view->icon_name = ev->icon && ev->icon->name && *ev->icon->name ? strdup(ev->icon->name) : NULL;
+	wlr_log(WLR_DEBUG, "icon of %s: %s", title_or(view, "?"), view->icon_name ? view->icon_name : "(none)");
+}
+#endif
+
 void view_init(struct flwm_server *server) {
 	wl_list_init(&server->views);
 	server->xdg_shell = wlr_xdg_shell_create(server->wl_display, 6);
@@ -1137,6 +1186,24 @@ void view_init(struct flwm_server *server) {
 	server->xdg_activation = wlr_xdg_activation_v1_create(server->wl_display);
 	server->request_activate.notify = request_activate;
 	wl_signal_add(&server->xdg_activation->events.request_activate, &server->request_activate);
+
+#if FLWM_WLR_AT_LEAST(0, 19)
+	/* modal dialogs keep the focus from their parent (view_focus) */
+	wlr_xdg_wm_dialog_v1_create(server->wl_display, 1);
+	struct wlr_xdg_toplevel_icon_manager_v1 *icons =
+		wlr_xdg_toplevel_icon_manager_v1_create(server->wl_display, 1);
+	server->set_toplevel_icon.notify = set_toplevel_icon;
+	wl_signal_add(&icons->events.set_icon, &server->set_toplevel_icon);
+	server->toplevel_icon_mgr = icons;
+#endif
+}
+
+void view_finish(struct flwm_server *server) {
+#if FLWM_WLR_AT_LEAST(0, 19)
+	if (server->toplevel_icon_mgr) wl_list_remove(&server->set_toplevel_icon.link);
+#else
+	(void)server;
+#endif
 }
 
 /* ---- interactive move / resize ------------------------------------------- */

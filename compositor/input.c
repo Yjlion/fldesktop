@@ -271,7 +271,13 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
 			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap,
 				keycode, layout, 0, &syms);
-			for (int i = 0; i < nsyms && !handled; i++) handled = handle_binding(server, mods, syms[i]);
+			/* Super+Escape takes the bindings back from (or gives them again to)
+			 * a window that inhibits them (a virtual machine, remote desktop) */
+			for (int i = 0; i < nsyms && !handled; i++)
+				if (syms[i] == XKB_KEY_Escape && (mods & MOD_MASK) == WLR_MODIFIER_LOGO)
+					handled = inhibit_shortcuts_toggle(server);
+			if (!inhibit_shortcuts_active(server))
+				for (int i = 0; i < nsyms && !handled; i++) handled = handle_binding(server, mods, syms[i]);
 		}
 		/* Ctrl+Alt+BackSpace and friends even when a layer surface owns the keyboard */
 		if (!handled && server->focused_layer && (mods & MOD_MASK) == (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)) {

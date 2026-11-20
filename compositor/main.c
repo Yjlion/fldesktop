@@ -262,6 +262,7 @@ int main(int argc, char *argv[]) {
 	input_init(&server);
 	gesture_init(&server);
 	im_init(&server);
+	inhibit_init(&server);
 	xwayland_init(&server); /* sets DISPLAY for the programs we start */
 
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
@@ -323,6 +324,8 @@ int main(int argc, char *argv[]) {
 	for (size_t i = 0; i < sizeof listeners / sizeof listeners[0]; i++)
 		wl_list_remove(&listeners[i]->link);
 	im_finish();
+	inhibit_finish();
+	view_finish(&server);
 	input_finish(&server);
 	gesture_finish();
 	output_finish(&server);

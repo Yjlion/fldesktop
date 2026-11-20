@@ -75,6 +75,7 @@ struct wlr_ext_workspace_group_handle_v1;
 struct wlr_ext_workspace_handle_v1;
 struct wlr_ext_foreign_toplevel_handle_v1;
 struct wlr_ext_image_capture_source_v1;
+struct wlr_xdg_toplevel_icon_manager_v1;
 struct wlr_xwayland_surface;
 
 struct flwm_node_desc {
@@ -224,6 +225,8 @@ struct flwm_server {
 	struct wl_listener new_toplevel_decoration;
 
 	struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_mgr;
+	struct wlr_xdg_toplevel_icon_manager_v1 *toplevel_icon_mgr; /* wlroots 0.19+ */
+	struct wl_listener set_toplevel_icon;
 
 	/* workspaces (workspace.c): one set shared by all outputs, 0-based */
 	int cur_workspace;
@@ -379,6 +382,7 @@ struct flwm_view {
 	struct wlr_ext_foreign_toplevel_handle_v1 *ext_ftl;
 	struct wlr_scene *capture_scene;
 	struct wlr_ext_image_capture_source_v1 *capture_source;
+	char *icon_name; /* xdg-toplevel-icon-v1 name, or NULL */
 
 	struct wl_listener map;
 	struct wl_listener unmap;
@@ -494,6 +498,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 void view_handle_unmap(struct flwm_view *view);
 void view_handle_commit(struct flwm_view *view);
 void view_free(struct flwm_view *view); /* removes the common listeners */
+void view_finish(struct flwm_server *server);
 struct wlr_surface *view_surface(struct flwm_view *view);
 const char *view_title(struct flwm_view *view);  /* may be NULL */
 const char *view_app_id(struct flwm_view *view); /* may be NULL */
@@ -615,6 +620,11 @@ void im_init(struct flwm_server *server); /* after the seat */
 void im_finish(void);
 /* the input method's keyboard grab when keys of kb should go to it, else NULL */
 struct wlr_input_method_keyboard_grab_v2 *im_keyboard_grab(struct wlr_keyboard *kb);
+/* inhibit.c: keyboard-shortcuts-inhibit */
+void inhibit_init(struct flwm_server *server); /* after the seat */
+void inhibit_finish(void);
+bool inhibit_shortcuts_active(struct flwm_server *server); /* the focused window has the bindings */
+bool inhibit_shortcuts_toggle(struct flwm_server *server);  /* false: no inhibitor there */
 void lock_view_mapped(struct flwm_server *server, struct flwm_view *view);
 bool lock_client_is_locker(struct flwm_server *server, struct wl_client *client);
 

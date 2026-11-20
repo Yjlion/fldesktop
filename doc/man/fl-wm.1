@@ -52,6 +52,17 @@ the keys go to it (key bindings still work); its candidate window is placed
 below the text cursor. Settings > Keyboard chooses the input method and sets
 up the session environment for programs that use IM modules instead
 (XMODIFIERS, QT_IM_MODULE, GTK_IM_MODULE for IBus).
+.SH KEY BINDINGS IN VIRTUAL MACHINES
+Programs that ask for the keyboard shortcuts (keyboard-shortcuts-inhibit,
+used by virtual machines, remote desktop viewers and some games) get every
+key while they have the focus, Super and Alt+Tab included. \fBSuper+Escape\fR
+takes the bindings back for that window and gives them again. VT switching
+and Ctrl+Alt+BackSpace always work.
+.SH DIALOGS
+Dialogs open centered over their window. A modal dialog (xdg-dialog-v1,
+wlroots 0.19 and newer) keeps the focus: clicking or switching to its window
+brings up the dialog instead. Windows that name their icon
+(xdg-toplevel-icon-v1) show it in the Alt+Tab switcher.
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

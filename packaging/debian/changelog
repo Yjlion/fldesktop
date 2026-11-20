@@ -36,5 +36,8 @@ fldesktop (0.1.0) unstable; urgency=medium
     settings in Displays, a toggle in the panel.
   * Input methods: fl-wm relays text-input-v3 and input-method-v2, so
     fcitx5 works for CJK input; Settings > Keyboard sets up fcitx5 or IBus.
+  * fl-wm: keyboard-shortcuts-inhibit for virtual machines and remote
+    desktops (Super+Escape takes the bindings back), modal dialogs
+    (xdg-dialog-v1) and window icons in Alt+Tab (xdg-toplevel-icon-v1).
 
  -- Yjlion <yjlion@users.noreply.github.com>  Sun, 15 Nov 2026 22:00:00 +0000

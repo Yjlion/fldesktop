@@ -32,6 +32,7 @@ std::string g_style = "gtk+";
 int g_radius = 4;
 
 Fl_Color border_for(Fl_Color c) {
+  if (palette().high_contrast) return palette().border;
   // a border a bit darker than the fill, never lighter than the theme border
   return fl_color_average(c, palette().dark ? FL_BLACK : fl_rgb_color(0x60, 0x64, 0x6a), 0.55f);
 }

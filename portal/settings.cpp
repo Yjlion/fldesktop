@@ -34,6 +34,9 @@ const char *kKeys[][2] = {
     {"org.gnome.desktop.interface", "color-scheme"},        {"org.gnome.desktop.interface", "gtk-theme"},
     {"org.gnome.desktop.interface", "icon-theme"},          {"org.gnome.desktop.interface", "font-name"},
     {"org.gnome.desktop.interface", "monospace-font-name"},
+    {"org.freedesktop.appearance", "contrast"},
+    {"org.gnome.desktop.interface", "text-scaling-factor"},
+    {"org.gnome.desktop.a11y.interface", "high-contrast"},
 };
 
 void changed() {

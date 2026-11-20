@@ -30,6 +30,17 @@ private:
   std::vector<std::string> lines_;
 };
 
+// Input methods: "" (none), "fcitx5" or "ibus". The environment variables
+// each one needs; fcitx5 talks to fl-wm through input-method-v2 and to Wayland
+// programs through text-input-v3, so GTK needs no module for it.
+std::vector<std::pair<std::string, std::string>> input_method_env(const std::string &im);
+// which one an environment file sets up ("" when none of ours)
+std::string input_method_from_env(const EnvFile &env);
+// writes the variables for `im`, removing the other one's
+void set_input_method(EnvFile &env, const std::string &im);
+// the command that starts it ("" for none)
+std::string input_method_command(const std::string &im);
+
 // Formats a sample date, number and currency amount in a locale.
 std::string preview(const std::string &locale);
 

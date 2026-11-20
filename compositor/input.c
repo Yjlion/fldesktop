@@ -16,6 +16,8 @@
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 
+#include <wlr/types/wlr_input_method_v2.h>
+
 #include "server.h"
 
 #define MOD_MASK (WLR_MODIFIER_LOGO | WLR_MODIFIER_ALT | WLR_MODIFIER_CTRL | WLR_MODIFIER_SHIFT)
@@ -200,6 +202,12 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 		if (!(mods & server->cycle_modifier)) finish_cycle(server);
 	}
 	if (!keyboard->wlr_keyboard->keymap) return;
+	struct wlr_input_method_keyboard_grab_v2 *grab = im_keyboard_grab(keyboard->wlr_keyboard);
+	if (grab) {
+		wlr_input_method_keyboard_grab_v2_set_keyboard(grab, keyboard->wlr_keyboard);
+		wlr_input_method_keyboard_grab_v2_send_modifiers(grab, &keyboard->wlr_keyboard->modifiers);
+		return;
+	}
 	wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
 	wlr_seat_keyboard_notify_modifiers(server->seat, &keyboard->wlr_keyboard->modifiers);
 }
@@ -274,6 +282,14 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 					handled = true;
 				}
 		}
+	}
+	/* an input method (fcitx5, IBus) composing text gets the keys first */
+	struct wlr_input_method_keyboard_grab_v2 *grab =
+		!handled && keyboard->wlr_keyboard->keymap ? im_keyboard_grab(keyboard->wlr_keyboard) : NULL;
+	if (grab) {
+		wlr_input_method_keyboard_grab_v2_set_keyboard(grab, keyboard->wlr_keyboard);
+		wlr_input_method_keyboard_grab_v2_send_key(grab, event->time_msec, event->keycode, event->state);
+		return;
 	}
 	if (!handled && keyboard->wlr_keyboard->keymap) {
 		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);

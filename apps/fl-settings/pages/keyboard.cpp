@@ -1,5 +1,6 @@
 // Keyboard: layouts, switching key, compose, caps lock, repeat
 #include <FL/Fl.H>
+#include <unistd.h>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
@@ -14,6 +15,7 @@
 #include "fld/widgets.h"
 #include "settings_common.h"
 #include "settings_page.h"
+#include "locale_env.h"
 #include "xkb_rules.h"
 
 namespace fld {
@@ -117,6 +119,23 @@ public:
     rate->value(wm.ini.get_int("keyboard", "repeat_rate", 25));
     rate->callback([](Fl_Widget *, void *d) { ((KeyboardPage *)d)->save(); }, this);
     rate->when(FL_WHEN_RELEASE);
+    f.heading("Input Method");
+    f.row("Input method:", 28, wx, wy, ww);
+    im_choice = new Fl_Choice(wx, wy, 220, 28);
+    {
+      locale_env::EnvFile env;
+      env.load(env_path());
+      std::string cur = locale_env::input_method_from_env(env);
+      for (size_t i = 0; i < kInputMethods.size(); i++) {
+        const auto &m = kInputMethods[i];
+        bool have = !m.binary || !which(m.binary).empty();
+        im_choice->add(m.label, 0, nullptr, nullptr, have ? 0 : FL_MENU_INACTIVE);
+        if (cur == m.id) im_choice->value((int)i);
+      }
+      if (im_choice->value() < 0) im_choice->value(0);
+    }
+    im_choice->callback([](Fl_Widget *, void *d) { ((KeyboardPage *)d)->save_im(); }, this);
+    f.note("For Chinese, Japanese, Korean and other composed input. Takes effect at the next login.", 2);
     f.row("Test here:", 28, wx, wy, ww);
     new Fl_Input(wx, wy, ww, 28);
     g->end();
@@ -192,6 +211,35 @@ public:
     save();
   }
 
+  struct InputMethod {
+    const char *id, *label, *binary;
+  };
+  const std::vector<InputMethod> kInputMethods = {
+      {"", "None", nullptr}, {"fcitx5", "Fcitx 5", "fcitx5"}, {"ibus", "IBus", "ibus-daemon"}};
+  Fl_Choice *im_choice = nullptr;
+
+  static std::string env_path() { return fld_config_dir() + "/environment"; }
+  static std::string im_autostart_path() { return config_home() + "/autostart/fl-input-method.desktop"; }
+
+  // the session environment and an autostart entry for the chosen input method
+  void save_im() {
+    int i = std::max(0, im_choice->value());
+    std::string id = kInputMethods[(size_t)i].id;
+    locale_env::EnvFile env;
+    env.load(env_path());
+    locale_env::set_input_method(env, id);
+    env.save(env_path());
+    std::string cmd = locale_env::input_method_command(id);
+    if (cmd.empty()) {
+      unlink(im_autostart_path().c_str());
+      return;
+    }
+    mkdir_p(config_home() + "/autostart");
+    write_file(im_autostart_path(), "[Desktop Entry]\nType=Application\nName=Input Method\n"
+                                    "Comment=Started by fldesktop Settings (Keyboard)\nExec=" + cmd +
+                                    "\nOnlyShowIn=fldesktop;\nNoDisplay=true\n");
+  }
+
   void save() {
     wm.ini.load(wm.path);
     std::string l, v;
@@ -223,7 +271,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new KeyboardPage(x, y, w, 
 
 PageInfo page_keyboard() {
   return {"keyboard", "Keyboard", "input-keyboard", "Hardware",
-          "keyboard layout language input xkb compose caps lock repeat delay rate switch", create};
+          "keyboard layout language input xkb compose caps lock repeat delay rate switch input method ime fcitx ibus chinese japanese korean", create};
 }
 
 } // namespace fld

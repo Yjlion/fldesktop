@@ -249,6 +249,7 @@ int main(int argc, char *argv[]) {
 	server.layer_bottom = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_views = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_top = wlr_scene_tree_create(&server.scene->tree);
+	server.layer_xunmanaged = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_overlay = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_popups = wlr_scene_tree_create(&server.scene->tree);
 	lock_init(&server); /* its layer goes above all the others */
@@ -257,6 +258,7 @@ int main(int argc, char *argv[]) {
 	view_init(&server);
 	layer_init(&server);
 	input_init(&server);
+	xwayland_init(&server); /* sets DISPLAY for the programs we start */
 
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
 	if (!socket) {
@@ -278,9 +280,13 @@ int main(int argc, char *argv[]) {
 	struct wl_event_source *sig_usr2 = wl_event_loop_add_signal(server.event_loop, SIGUSR2, handle_signal, &server);
 
 	/* export the session to D-Bus / systemd activated services when available */
-	flwm_spawn(&server, "command -v dbus-update-activation-environment >/dev/null && "
-		"dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP "
-		"XDG_SESSION_TYPE FLWM_PID 2>/dev/null");
+	flwm_spawn(&server, xwayland_display(&server)
+		? "command -v dbus-update-activation-environment >/dev/null && "
+		  "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP "
+		  "XDG_SESSION_TYPE FLWM_PID 2>/dev/null"
+		: "command -v dbus-update-activation-environment >/dev/null && "
+		  "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP "
+		  "XDG_SESSION_TYPE FLWM_PID 2>/dev/null");
 
 	if (startup_cmd) flwm_spawn(&server, startup_cmd);
 	else if (autostart)
@@ -294,6 +300,7 @@ int main(int argc, char *argv[]) {
 	wl_event_source_remove(sig_usr1);
 	wl_event_source_remove(sig_usr2);
 	lock_finish(&server);
+	xwayland_finish(&server);
 	wl_display_destroy_clients(server.wl_display);
 
 	/* wlroots asserts that no listeners remain when objects are destroyed */

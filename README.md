@@ -4,7 +4,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 
 | Component | What it is |
 |-----------|------------|
-| **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, an Alt+Tab window switcher, window snapping, layer-shell and session locking (also ext-session-lock for swaylock) |
+| **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, an Alt+Tab window switcher, window snapping, layer-shell, session locking (also ext-session-lock for swaylock) and X11 programs through Xwayland |
 | **fl-lock** | Screen locker: clock, user picture, PAM password check, on-screen keyboard; locks on Super+L, after an idle time and before suspend |
 | **fl-panel** | Taskbar: application button, quick launch, window list, network (a popup with Wi-Fi networks, wired devices and VPNs), volume, Bluetooth, printing, battery (UPower: time left, power modes, low battery warnings), calendar clock, notification history, power menu; right-click menus on everything; mounts drives as they are plugged in (UDisks2) |
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space); lock, log out, suspend, restart and shut down buttons; right-click an app for its actions, quick launch and the desktop |

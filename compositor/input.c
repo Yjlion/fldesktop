@@ -52,7 +52,7 @@ static void cycle(struct flwm_server *server, bool backwards) {
 	int n = 0;
 	struct flwm_view *v;
 	wl_list_for_each(v, &server->views, link)
-		if (v->mapped && v->role == FLWM_ROLE_NORMAL && n < 256) list[n++] = v;
+		if (v->mapped && v->role == FLWM_ROLE_NORMAL && !v->no_taskbar && n < 256) list[n++] = v;
 	if (n < 2) return;
 	int cur = 0;
 	struct flwm_view *from = server->cycle_current ? server->cycle_current : focused_normal(server);
@@ -426,6 +426,7 @@ static void load_cursor_theme(struct flwm_server *server) {
 	if (theme) setenv("XCURSOR_THEME", theme, 1);
 	setenv("XCURSOR_SIZE", sz, 1);
 	wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+	xwayland_update_cursor(server);
 }
 
 void input_apply_config(struct flwm_server *server) {
@@ -460,6 +461,7 @@ static void seat_pointer_focus_change(struct wl_listener *listener, void *data) 
 	struct wlr_seat_pointer_focus_change_event *event = data;
 	if (event->new_surface == NULL && server->cursor_mode == FLWM_CURSOR_PASSTHROUGH)
 		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+	xwayland_update_cursor(server);
 }
 
 static void seat_request_set_selection(struct wl_listener *listener, void *data) {
@@ -504,7 +506,8 @@ static void seat_start_drag(struct wl_listener *listener, void *data) {
 /* ---- cursor ---------------------------------------------------------------- */
 
 void input_reset_cursor_mode(struct flwm_server *server) {
-	if (server->cursor_mode == FLWM_CURSOR_RESIZE && server->grabbed_view)
+	if (server->cursor_mode == FLWM_CURSOR_RESIZE && server->grabbed_view &&
+			server->grabbed_view->type == FLWM_VIEW_XDG)
 		wlr_xdg_toplevel_set_resizing(server->grabbed_view->xdg_toplevel, false);
 	server->cursor_mode = FLWM_CURSOR_PASSTHROUGH;
 	server->grabbed_view = NULL;
@@ -531,6 +534,14 @@ static void process_cursor_resize(struct flwm_server *server) {
 	} else if (server->resize_edges & WLR_EDGE_RIGHT) {
 		right = (int)bx;
 		if (right < left + min) right = left + min;
+	}
+	if (view->type == FLWM_VIEW_XWAYLAND) {
+		/* X11 windows take their new position along with the size */
+		view->x = left;
+		view->y = top;
+		wlr_scene_node_set_position(&view->tree->node, left, top);
+		xwayland_view_configure(view, left, top, right - left, bottom - top);
+		return;
 	}
 	/* position is fixed up on commit for top/left edges (see view_commit) */
 	wlr_xdg_toplevel_set_size(view->xdg_toplevel, right - left, bottom - top);
@@ -569,6 +580,7 @@ void input_update_pointer_focus(struct flwm_server *server, uint32_t time) {
 			set_hover(server, NULL, FLWM_PART_NONE);
 		} else {
 			wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+	xwayland_update_cursor(server);
 			set_hover(server, view, decor_part_at(view, server->cursor->x, server->cursor->y));
 		}
 		wlr_seat_pointer_clear_focus(server->seat);

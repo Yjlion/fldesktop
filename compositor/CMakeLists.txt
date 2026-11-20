@@ -26,6 +26,32 @@ fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-
 fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml server)
 
 add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c switcher.c)
+
+# X11 programs through Xwayland, when wlroots was built with it
+option(FLD_XWAYLAND "Run X11 programs in fl-wm through Xwayland (if wlroots supports it)" ON)
+set(_wm_xwayland FALSE)
+if(FLD_XWAYLAND)
+  include(CheckCSourceCompiles)
+  set(CMAKE_REQUIRED_INCLUDES ${WLROOTS_INCLUDE_DIRS})
+  check_c_source_compiles("#include <wlr/config.h>
+#if !WLR_HAS_XWAYLAND
+#error no xwayland
+#endif
+int main(void) { return 0; }" FLWM_WLR_HAS_XWAYLAND)
+  unset(CMAKE_REQUIRED_INCLUDES)
+  pkg_check_modules(WM_XCB QUIET IMPORTED_TARGET xcb xcb-icccm)
+  if(FLWM_WLR_HAS_XWAYLAND AND WM_XCB_FOUND)
+    set(_wm_xwayland TRUE)
+  endif()
+endif()
+if(_wm_xwayland)
+  message(STATUS "fl-wm: X11 programs run through Xwayland")
+  target_sources(fl-wm PRIVATE xwayland.c)
+  target_compile_definitions(fl-wm PRIVATE FLWM_XWAYLAND)
+  target_link_libraries(fl-wm PRIVATE PkgConfig::WM_XCB)
+elseif(FLD_XWAYLAND)
+  message(STATUS "fl-wm: wlroots without Xwayland (or no xcb-icccm), X11 programs will not run")
+endif()
 # wlroots headers include "<name>-protocol.h" for some protocols
 file(GLOB _hdrs ${FLD_PROTO_OUT}/*-server-protocol.h)
 foreach(h ${_hdrs})

@@ -1,0 +1,670 @@
+Package: fldesktop
+Version: 0.1.3
+Architecture: all
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 14
+Depends: fldesktop-wm (>= 0.1.3), fldesktop-shell (>= 0.1.3), fldesktop-term (>= 0.1.3), fldesktop-files (>= 0.1.3), fldesktop-edit (>= 0.1.3), fldesktop-calc (>= 0.1.3), fldesktop-taskmgr (>= 0.1.3), fldesktop-view (>= 0.1.3), fldesktop-settings (>= 0.1.3), fldesktop-mixer (>= 0.1.3), fldesktop-network (>= 0.1.3), fldesktop-polkit-agent (>= 0.1.3), fldesktop-osk (>= 0.1.3), fldesktop-charmap (>= 0.1.3), fldesktop-notifyd (>= 0.1.3), xdg-desktop-portal-fl (>= 0.1.3), fldesktop-icon-theme (>= 0.1.3), fldesktop-lock (>= 0.1.3)
+Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video, fldesktop-webcam, fldesktop-archive, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages, fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop_0.1.3_all.deb
+Size: 5208
+SHA256: 10dee488c4eac00a51ea7a5079e517cd8954204b34c2521e451d16c502e15853
+SHA1: 369423c76d89c56b638eb419ec0bb22c1d38be9e
+MD5sum: 9f4942e9ef9031fd6b3ddecdd3c10cb0
+Description: lightweight Wayland desktop built with FLTK (metapackage)
+ fldesktop is a small desktop environment for Wayland made with the FLTK
+ toolkit: its own wlroots compositor, a taskbar panel, an application
+ launcher, wallpaper and desktop icons, a greetd greeter, a settings
+ center, system tools and a set of core applications.
+ .
+ This metapackage installs the whole desktop.
+
+Package: fldesktop-archive
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 655
+Depends: libarchive13t64 (>= 3.3.3), libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 12)
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-archive_0.1.3_amd64.deb
+Size: 221100
+SHA256: 7c308efe3f2f06a7d1206250c0b19c743cb88f1faed44a2f9c76b25682f09df4
+SHA1: ca069bc547d87bf0d7d1b8590cde7f1934e91049
+MD5sum: 074494d9b8a2f29bcf76352780a7698e
+Description: fldesktop archive manager
+ fl-archive browses, extracts, creates and changes archives with
+ libarchive: zip (optionally encrypted), 7z and tar with gzip, xz, zstd or
+ bzip2; it also reads rar, iso, cpio, deb, rpm and single compressed files.
+ The file manager uses it for Extract Here, Extract To and Compress.
+
+Package: fldesktop-archive-keyring
+Source: fldesktop
+Version: 0.1.3
+Architecture: all
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 16
+Multi-Arch: foreign
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-archive-keyring_0.1.3_all.deb
+Size: 5332
+SHA256: d8e73ddf21a5ae14f7f8d9e685c96f79e0f723cf0f99048eff2f00ba13bfb83f
+SHA1: 9a4aaaafb8254215207b31726272a0bf3d986820
+MD5sum: 08017552e9d364fb0a08d48a9d617da9
+Description: OpenPGP key of the fldesktop package repository
+ The key that signs the fldesktop apt repository at
+ https://yjlion.github.io/fldesktop/debian, installed as
+ /usr/share/keyrings/fldesktop-archive-keyring.asc for use with signed-by.
+
+Package: fldesktop-bluetooth
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 416
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.30.0), libstdc++6 (>= 12)
+Recommends: bluez
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-bluetooth_0.1.3_amd64.deb
+Size: 142364
+SHA256: 7d45735e604b0212f549c46ce556e4eb5562119fbf10eff724b3ca2126740918
+SHA1: 3383fb105d818d233ae804298d4646abd1befe32
+MD5sum: bbeda679e4c107bb4cb7156ccf6bb568
+Description: fldesktop Bluetooth settings
+ fl-bluetooth turns Bluetooth on and off and pairs, connects, trusts and
+ forgets devices through BlueZ.
+
+Package: fldesktop-calc
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 292
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 11)
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-calc_0.1.3_amd64.deb
+Size: 101788
+SHA256: 9b60223230e2321401e0383706f76d03803a538e63b0846c6d3fc4e8bb8c5222
+SHA1: 6c5c630e10ec59f8010a172a479f8ebe65345f2d
+MD5sum: b0e5f16aa66a9c80311c8226f8ea4c59
+Description: fldesktop calculator
+ fl-calc is a basic and scientific calculator with history and memory.
+
+Package: fldesktop-charmap
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 341
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libfontconfig1 (>= 2.12.6), libgcc-s1 (>= 3.0), libstdc++6 (>= 11)
+Recommends: unicode-data
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-charmap_0.1.3_amd64.deb
+Size: 118176
+SHA256: 40a000c258aebc5e42f09ef986f72f5f71e45df6e37e055ee0f22426109897b3
+SHA1: bc54db48b97cb717f6024bad6bb80d013df0540f
+MD5sum: dc02671fb3fc106422c15a89c6aa36e2
+Description: fldesktop character map
+ fl-charmap browses the Unicode characters by block in any installed font,
+ searches them by name or code point and copies them to the clipboard.
+
+Package: fldesktop-docs
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 652
+Depends: libc6 (>= 2.38), libcups2t64 (>= 1.7.0), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libpoppler-cpp2 (>= 25.03.0), libstdc++6 (>= 11)
+Recommends: poppler-data
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-docs_0.1.3_amd64.deb
+Size: 225648
+SHA256: f2a51ee202b8f6ea4208a5ebf3d4c0d3041319bdd9aea99c77e05aa985dfa161
+SHA1: ceb1561a0afa0ef17ce8e4ef38f5138c42d4cb5f
+MD5sum: 4c73328670b9ae529e0c0d2609e9c564
+Description: fldesktop PDF viewer
+ fl-docs shows PDF documents in a continuously scrolling view with page
+ thumbnails, fits the width or the page or zooms in steps, finds text on all
+ pages and prints through CUPS with copies, page ranges and two-sided
+ printing. Password protected documents ask for the password.
+
+Package: fldesktop-edit
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 420
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 11)
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-edit_0.1.3_amd64.deb
+Size: 146044
+SHA256: 41c6159646dfea78fe0cdb815a7273c723fc7a24607bc8089af481f610cd7d2f
+SHA1: 9da9d0be6ec0b99cdc50da1dfe36f0128712ece9
+MD5sum: 40432cc21b3e0f5248625e1f647de43a
+Description: fldesktop text editor
+ fl-edit is a tabbed text and code editor with syntax highlighting,
+ find and replace, auto-indent and line numbers.
+
+Package: fldesktop-files
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 898
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.30.0), libstdc++6 (>= 12), shared-mime-info
+Recommends: xdg-utils, udisks2
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-files_0.1.3_amd64.deb
+Size: 305976
+SHA256: 7d6e687578acc445a55d09f92cc3cfab950c0f13557836a41ee197d55a821473
+SHA1: cb761c5350ccf23d4ac631de9c68bf1d90133da8
+MD5sum: 983685b12a382099a77fe5c61442d250
+Description: fldesktop file manager
+ fl-files is a file manager with icon and list views, thumbnails, the XDG
+ trash, background copy and move, drag and drop and "open with". With
+ udisks2 it lists drives and mounts, unmounts and ejects them.
+
+Package: fldesktop-firewall
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 432
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.28.0), libstdc++6 (>= 12)
+Recommends: firewalld
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-firewall_0.1.3_amd64.deb
+Size: 148796
+SHA256: bbbdce01bee37e26290d30940b91bb243cc806a87ab0109215d0db15e37c5b26
+SHA1: 6e7f5de754c46bbca44ca589c9b900d3065e6367
+MD5sum: 1b64bab08f2fb389fc9ff249fe7fbae2
+Description: fldesktop firewall settings
+ fl-firewall configures firewalld: default zone, panic mode, and per zone
+ services, ports, interfaces, sources, masquerading and port forwarding.
+
+Package: fldesktop-flatpak
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 560
+Depends: libappstream5 (>= 1.0.0), libc6 (>= 2.38), libflatpak0 (>= 1.4), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.32.0), libstdc++6 (>= 12), flatpak
+Recommends: curl
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-flatpak_0.1.3_amd64.deb
+Size: 190296
+SHA256: b5a0ec7411ad8dec6754c6c061a64b13d8154c4628ee5c051c6e3be55cbf8a42
+SHA1: f04bb5ba853991e1157bc83e793e77dd8075cc4b
+MD5sum: e3e5bdebf2e1ffa0cddc62d670981526
+Description: fldesktop Flatpak app store
+ fl-flatpak finds, installs, updates and removes Flatpak apps from Flathub
+ and other sources, installs .flatpakref files and edits the permissions
+ of installed apps.
+
+Package: fldesktop-greeter
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 489
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 11), greetd, cage
+Recommends: fldesktop-icon-theme
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-greeter_0.1.3_amd64.deb
+Size: 172228
+SHA256: 97874ec86e42782863eafde65499a0e803d26a8db03ad5858d7289ce543e3e2e
+SHA1: a507680c2cc026618f5b675dc14ca0634c494847
+MD5sum: 735a8359059b72dbc58120918480852a
+Description: FLTK greeter for greetd
+ fl-greet is a graphical login screen for the greetd login manager. It runs
+ inside the cage kiosk compositor and offers user and session selection,
+ power buttons and a built-in on-screen keyboard. Its look and the listed
+ users are set in /etc/fldesktop/greeter.ini (Settings > Login Screen).
+
+Package: fldesktop-icon-theme
+Source: fldesktop
+Version: 0.1.3
+Architecture: all
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 22130
+Recommends: hicolor-icon-theme
+Multi-Arch: foreign
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-icon-theme_0.1.3_all.deb
+Size: 4042728
+SHA256: 13c14f9e813d9ad9d7259eaac502818a20b64fb7b2600b41e10dfe7c57608503
+SHA1: 19d8a41f97c5a5004d94f32c7c66a70a93b17a08
+MD5sum: f9968825d0036312370bbdd0faf3f5fe
+Description: fldesktop icon and cursor themes
+ The fldesktop icon theme in full color (with folder colors for eight accent
+ colors) and in monochrome versions for light and dark backgrounds, with
+ symbolic icons, and the fldesktop cursor themes (dark and light).
+
+Package: fldesktop-lock
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 300
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.30.0), libpam0g (>= 0.99.7.1), libstdc++6 (>= 11), libpam-runtime
+Recommends: fldesktop-wm
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-lock_0.1.3_amd64.deb
+Size: 106660
+SHA256: 903ae8b8d58b7184c74173c9510d9e8126c29e9fb325f1e275e8dc93bf9b471f
+SHA1: 0062e032b307da3406c5d5e212b768a65d3aa2f9
+MD5sum: e4142b556085cd9109f365cd20285d78
+Description: fldesktop screen locker
+ fl-lock locks the fldesktop session: a lock screen with a clock, the user's
+ picture, password entry through PAM and an on-screen keyboard. fl-wm starts
+ it and keeps the screen covered until it reports a successful
+ authentication, even if it crashes. Its daemon locks the screen before the
+ system suspends and when logind asks (loginctl lock-session).
+
+Package: fldesktop-mixer
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 424
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libpipewire-0.3-0t64 (>= 0.3.1), libstdc++6 (>= 11)
+Recommends: pipewire-audio | pipewire, wireplumber
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-mixer_0.1.3_amd64.deb
+Size: 147680
+SHA256: 868a56f84025be075efb11901a2f758431e57560c9b859111aeddf24e31f35a8
+SHA1: 904daf0a4808a324c089e3d0d6e9ac60f9fff4e9
+MD5sum: a60d92986c960f54104d092f2ec18d4d
+Description: fldesktop volume mixer for PipeWire
+ fl-mixer sets the volume of applications, output and input devices,
+ chooses the default devices and ports and selects sound card profiles.
+
+Package: fldesktop-network
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 768
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.80.0), libnm0 (>= 1.24.0), libssl3t64 (>= 3.0.0), libstdc++6 (>= 12)
+Recommends: network-manager, fldesktop-polkit-agent
+Suggests: network-manager-openvpn, network-manager-openconnect, network-manager-vpnc
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-network_0.1.3_amd64.deb
+Size: 257920
+SHA256: 2a3e67978b6a7f735d3b477f479967341211da1e9e7825493ecb9c0bfafc1014
+SHA1: e2eb346b9c4afeafd7f18f0739bdb3d10063f989
+MD5sum: c96f43aefb843d483b6115eb34adac7c
+Description: fldesktop network settings for NetworkManager
+ fl-network shows wired and Wi-Fi devices, connects to wireless networks
+ and edits saved NetworkManager connections (IPv4/IPv6, DNS, Wi-Fi
+ security). It sets up WireGuard VPNs (keys, peers, wg-quick import) and
+ imports and edits the VPNs of NetworkManager's VPN plugins.
+
+Package: fldesktop-notifyd
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 353
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.26.0), libstdc++6 (>= 12)
+Recommends: fldesktop-wm
+Provides: notification-daemon
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-notifyd_0.1.3_amd64.deb
+Size: 123436
+SHA256: 925b111018dc93b4e974516e8080c9a07da24894cb933e2aa7ef4a261a1fb89e
+SHA1: 6b8d488857131e613a25bafb3f5e8cf8a343fee2
+MD5sum: 5cf8feff692e8eed68a0f1b8b6485517
+Description: fldesktop notification server
+ fl-notifyd shows desktop notifications (org.freedesktop.Notifications):
+ icons and images, action buttons, urgency and timeouts. The panel keeps
+ a history of them and switches "do not disturb".
+
+Package: fldesktop-osk
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 277
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 11), libwayland-client0 (>= 1.20.0), libxkbcommon0 (>= 1.0.0)
+Recommends: fldesktop-wm
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-osk_0.1.3_amd64.deb
+Size: 98872
+SHA256: e9e7bb2d2d4eceed35bb4b3af2d6c22457230855bc4c96c579a5f79ac456fbe3
+SHA1: a07f962046e2b4431b0122ced52af16eca47c2db
+MD5sum: bc9da47a36a33a38bddae7a0b7f3e9ce
+Description: fldesktop on-screen keyboard
+ fl-osk is an on-screen keyboard for touch screens. It types into the
+ focused window through the Wayland virtual-keyboard protocol and offers
+ US, German and French layouts plus a symbols page.
+
+Package: fldesktop-packages
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 610
+Depends: libappstream5 (>= 1.0.0), libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.26.0), libjxl0.11 (>= 0.7.0), libpackagekit-glib2-18 (>= 1.2.4), libstdc++6 (>= 12), packagekit
+Recommends: appstream
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-packages_0.1.3_amd64.deb
+Size: 198152
+SHA256: 7c9275e4c970d4eef517b45c15dc70c785f7c77fa45a2ccd2859147a3f1415c8
+SHA1: b95d0584f0cb487de7e75a471945a770396e587a
+MD5sum: 0477397421cdc265e39455bc376c70e8
+Description: fldesktop software updates and package manager
+ fl-packages installs updates (with their changelogs and security
+ advisories), searches, installs and removes packages, enables software
+ sources and shows the history, through PackageKit. At login it checks for
+ updates and announces them with a notification. Packages of desktop
+ applications show the application's name and icon from the AppStream
+ catalog.
+
+Package: fldesktop-polkit-agent
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 306
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.80.0), libpolkit-agent-1-0 (>= 0.99), libpolkit-gobject-1-0 (>= 0.101), libstdc++6 (>= 12)
+Recommends: polkitd
+Provides: polkit-1-auth-agent
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-polkit-agent_0.1.3_amd64.deb
+Size: 104428
+SHA256: c2eb5ba2ae4bb29c801ad34118b02e2bc6f185a1765182ab8b2205d4fdc5c3d6
+SHA1: b3e63237722d9e89351c1b5a8596073c0b546698
+MD5sum: bbe5be8b500f208bdf8170e49e3d7728
+Description: fldesktop polkit authentication agent
+ fl-polkit-agent asks for the administrator password when a program needs
+ polkit authorization in an fldesktop session.
+
+Package: fldesktop-printers
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 440
+Depends: libc6 (>= 2.38), libcups2t64 (>= 1.7.0), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 12)
+Recommends: cups
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-printers_0.1.3_amd64.deb
+Size: 155932
+SHA256: aac026668bd144f4da430cac11536f3385e8592d069947e98a3a5721894275cb
+SHA1: 5a992dd736dbcb5e68491785f8c29a1d030066e6
+MD5sum: 1d058febc7e34c2badb2f4037242ea99
+Description: fldesktop printer settings
+ fl-printers adds printers (driverless IPP Everywhere or with a driver),
+ changes their settings and defaults, prints test pages and shows and
+ cancels print jobs.
+
+Package: fldesktop-settings
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 2262
+Depends: libc6 (>= 2.38), libcups2t64 (>= 1.7.0), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.80.0), libnm0 (>= 1.24.0), libpipewire-0.3-0t64 (>= 0.3.1), libssl3t64 (>= 3.0.0), libstdc++6 (>= 12), libwayland-client0 (>= 1.20.0)
+Recommends: fldesktop-wm, xkb-data, fldesktop-polkit-agent, pkexec, fldesktop-icon-theme
+Suggests: fldesktop-mixer, fldesktop-network, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages, fldesktop-firewall, fldesktop-notifyd
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-settings_0.1.3_amd64.deb
+Size: 700616
+SHA256: 498045fd785224b0d6d253971b3eae0d8b6ff51f62a7a8f4eb72e64d38932c12
+SHA1: 1b430dbadc0143eab61a60d0128edf7f2c1920db
+MD5sum: 6bd35f68a01886021f2db19f64a1f5a3
+Description: fldesktop settings center
+ fl-settings collects the desktop settings in one window: appearance,
+ panel and desktop, notifications, language and region, default
+ applications, keyboard layouts, shortcuts, mouse and touchpad, displays,
+ sound, printers, Bluetooth, network, proxy, firewall, screen lock, login
+ screen, date and time, software updates and system information. Settings tools of other programs are
+ listed as well.
+
+Package: fldesktop-shell
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 3766
+Depends: fldesktop-wm (= 0.1.3), xdg-user-dirs, libc6 (>= 2.38), libcups2t64 (>= 1.7.0), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.80.0), libgstreamer1.0-0 (>= 1.0.0), libnm0 (>= 1.24.0), libpipewire-0.3-0t64 (>= 0.3.1), libssl3t64 (>= 3.0.0), libstdc++6 (>= 12), libwayland-client0 (>= 1.20.0)
+Recommends: dbus-user-session, pipewire-audio | pipewire, wireplumber, network-manager, fldesktop-polkit-agent, fldesktop-notifyd, xdg-desktop-portal-fl, bluez, cups, upower, udisks2, grim, wl-clipboard, gstreamer1.0-pipewire, gstreamer1.0-plugins-good
+Suggests: power-profiles-daemon
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-shell_0.1.3_amd64.deb
+Size: 829944
+SHA256: 60243c9ce767bf85b321d852bee0e22e1eca9927a97000b65a748cb31fbe87a8
+SHA1: ed49ae9f3bf6613cdda33daa56c488d3d622fb8f
+MD5sum: 7cf19b9078e7ea710852695e45fda9be
+Description: fldesktop panel, launcher and desktop
+ The fldesktop session: fl-panel (taskbar, clock, network, volume, battery,
+ Bluetooth, printing, notifications, on-screen keyboard button and power
+ menu), fl-launcher (searchable
+ application menu), fl-desktop (wallpaper and desktop icons), XDG
+ autostart support, fl-snip (screenshots of an area, a window or the whole
+ screen, with an editor to mark them up) and the wayland-sessions entry.
+
+Package: fldesktop-taskmgr
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 396
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 11)
+Suggests: pkexec
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-taskmgr_0.1.3_amd64.deb
+Size: 142556
+SHA256: ddbf5a1a1ccdba8cace0aadedf5844315802941a959796a3d4acc71a39b4c289
+SHA1: 47fa328ecdf089055c758d49f79d8cd6df3f280e
+MD5sum: 7d75a2b6318dda539f014696a7e3446a
+Description: fldesktop task manager
+ fl-taskmgr lists running processes with their CPU and memory use and can
+ end, kill, stop, continue and re-prioritise them. Its performance view
+ graphs CPU, memory, network and disk use.
+
+Package: fldesktop-term
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 523
+Depends: libc6 (>= 2.38), libcairo2 (>= 1.2.4), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 11), libvterm0 (>= 0.3.1), libwayland-client0 (>= 1.20.0)
+Recommends: openssh-client
+Suggests: sshfs
+Provides: x-terminal-emulator
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-term_0.1.3_amd64.deb
+Size: 184184
+SHA256: f9ddff956af0054e3faf72c9399471b7c9d6cfd80a9d647ae78cc5b585c54d11
+SHA1: 5f2b7153a13fcd19a8eadf08ce4b1aa83e5d4f48
+MD5sum: 9583f91abc7844610d8e71ba8936fdda
+Description: fldesktop terminal emulator
+ fl-term is a terminal emulator built with FLTK and libvterm, with
+ scrollback, 256 and true colour support, mouse reporting and bracketed paste.
+ It keeps a list of SSH connections (and reads ~/.ssh/config) for
+ one-click remote sessions, and can browse remote files with sshfs.
+
+Package: fldesktop-video
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 401
+Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libc6 (>= 2.38), libfltk-gl1.4, libfltk-images1.4, libfltk1.4 (>= 1.4.1), libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.12.0), libgstreamer-plugins-base1.0-0 (>= 1.0.0), libgstreamer1.0-0 (>= 1.4.0), libopengl0, libstdc++6 (>= 11), libwayland-client0 (>= 1.20.0)
+Recommends: gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pipewire | gstreamer1.0-pulseaudio
+Suggests: yt-dlp
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-video_0.1.3_amd64.deb
+Size: 140064
+SHA256: 0796c6acc8cbe589ee4bcec4d6138de53c4c77479986dc2066b570742224607a
+SHA1: fa585d32d7a96e39e000411e2ab7d827d1b0f12f
+MD5sum: 03602cdd527a1538f19c9fb68a694eb4
+Description: fldesktop video player
+ fl-video plays video and audio files, playlists and network streams with
+ GStreamer: subtitles, audio and subtitle track selection, playback speed,
+ screenshots, full screen and resuming where playback stopped.
+
+Package: fldesktop-view
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 464
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libstdc++6 (>= 11)
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-view_0.1.3_amd64.deb
+Size: 157952
+SHA256: 420231d6e6c41b355eb1f990fc3428937a89c6ab934333d48533b409f81dd35d
+SHA1: 25d91a316175e6715bb56496a4c10dbf5edc0e5f
+MD5sum: c13b8c30c9439853ad310c631693b2a2
+Description: fldesktop image viewer
+ fl-view shows PNG, JPEG, GIF (animated), BMP, SVG and other images with
+ zoom, rotation, slideshow and folder navigation.
+
+Package: fldesktop-web
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 733
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4 (>= 1.4.1), libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.32.0), libstdc++6 (>= 12), libwayland-server0 (>= 1.3.92), libwpe-1.0-1 (>= 1.3.0), libwpebackend-fdo-1.0-1 (>= 1.8.0), libwpewebkit-2.0-1 (>= 2.39.91)
+Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-web_0.1.3_amd64.deb
+Size: 246348
+SHA256: d405cea2a82f9fd644f49c3c0c502274397b9164a046d26ee9d12ea906ea9edc
+SHA1: 938d64de156459bb32f05854850e3bb2515d2c54
+MD5sum: 4e7a4ac93cbab480af22a2f9b65968ef
+Description: fldesktop web browser
+ fl-web is a web browser built with FLTK and WPE WebKit: tabs, an address
+ bar that searches and completes from bookmarks and history, downloads,
+ find in page, zoom, and the pages' password, file, permission and
+ notification requests.
+
+Package: fldesktop-webcam
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 524
+Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libc6 (>= 2.38), libfltk-gl1.4, libfltk-images1.4, libfltk1.4 (>= 1.4.1), libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.28.0), libgstreamer-plugins-base1.0-0 (>= 1.0.0), libgstreamer1.0-0 (>= 1.20.0), libopengl0, libstdc++6 (>= 11)
+Recommends: gstreamer1.0-pipewire
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-webcam_0.1.3_amd64.deb
+Size: 179456
+SHA256: 353e17826baca0e2cb95b16f6c49e0fe47e5a32af743b9c281a7937c567dc5f3
+SHA1: 5b73f038e27229ad709296ae20eba75ecb324aaa
+MD5sum: 258e88cd683534ec2d413df6a5f26716
+Description: fldesktop camera app
+ fl-webcam shows a live preview of a webcam and takes photos (JPEG or PNG)
+ or records videos with sound (WebM), with a self-timer, a choice of camera
+ and resolution, and a mirrored preview. Cameras are found through
+ Video4Linux and PipeWire.
+
+Package: fldesktop-wm
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 186
+Depends: libc6 (>= 2.38), libcairo2 (>= 1.2.4), libdrm2 (>= 2.3.1), libglib2.0-0t64 (>= 2.12.0), libinput10 (>= 0.21.0), libpango-1.0-0 (>= 1.20.0), libpangocairo-1.0-0 (>= 1.14.0), libpixman-1-0 (>= 0.11.2), librsvg2-2 (>= 2.46.0), libwayland-server0 (>= 1.14.91), libwlroots-0.18 (>= 0.18.0), libxkbcommon0 (>= 0.8.0)
+Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils, xwayland
+Suggests: grim, wl-clipboard, fcitx5
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/fldesktop-wm_0.1.3_amd64.deb
+Size: 65644
+SHA256: 9b214e97ca38cf389b6f2dae1b1912b8dfef978de8cf81ec0e0783f358e541e1
+SHA1: e6594f88ea04c50f2cf83898e87b533617091378
+MD5sum: c068f5f602aebdec9b5a9ecfd67e4561
+Description: fldesktop Wayland compositor
+ fl-wm is a stacking Wayland compositor based on wlroots with server side
+ decorations, keyboard shortcuts, window snapping and the protocols used by
+ the fldesktop panel (wlr-foreign-toplevel-management, layer-shell). It locks
+ the session with fl-lock (or any ext-session-lock client such as swaylock),
+ also after a configurable idle time.
+
+Package: xdg-desktop-portal-fl
+Source: fldesktop
+Version: 0.1.3
+Architecture: amd64
+Maintainer: Yjlion <yjlion@users.noreply.github.com>
+Installed-Size: 841
+Depends: libc6 (>= 2.38), libfltk-images1.4, libfltk1.4, libgcc-s1 (>= 3.0), libglib2.0-0t64 (>= 2.38.0), libpipewire-0.3-0t64 (>= 0.3.34), libstdc++6 (>= 12), libwayland-client0 (>= 1.20.0), xdg-desktop-portal
+Recommends: grim, slurp, pipewire, xdg-desktop-portal-gtk
+Homepage: https://github.com/Yjlion/fldesktop
+Priority: optional
+Section: x11
+Filename: pool/main/f/fldesktop/xdg-desktop-portal-fl_0.1.3_amd64.deb
+Size: 277904
+SHA256: a5c362f9c90f5a92631957c49462db5456ddebc126dbdebbe6f846ee1aae69d3
+SHA1: f673e1e63e5a09db86317e308d36f574c0d5205f
+MD5sum: a47e901d61f86cedd5ee6f72aaa381fb
+Description: xdg-desktop-portal backend for fldesktop
+ Implements the file chooser, "open with" dialog, settings (color scheme,
+ accent color, fonts), screenshot and color picker, access and account
+ dialogs, notification, wallpaper and screen casting (screens and single
+ windows through PipeWire) portals for fldesktop sessions, so
+ that Flatpak and other portal aware programs use fldesktop dialogs.
+

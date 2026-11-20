@@ -1,0 +1,17 @@
+Origin: fldesktop
+Label: fldesktop
+Suite: trixie
+Codename: trixie
+Architectures: amd64 arm64
+Components: main
+Description: fldesktop, a Wayland desktop built with FLTK (releases)
+SignWith: 4A493D037B26F7619470F83060F9733B07BDAA7B
+
+Origin: fldesktop
+Label: fldesktop
+Suite: trixie-devel
+Codename: trixie-devel
+Architectures: amd64 arm64
+Components: main
+Description: fldesktop, a Wayland desktop built with FLTK (development builds of main)
+SignWith: 4A493D037B26F7619470F83060F9733B07BDAA7B

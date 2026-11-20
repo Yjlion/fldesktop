@@ -38,6 +38,17 @@ natural_scroll=false
 # -1.0 .. 1.0
 accel=0
 
+[gestures]
+# touchpad swipes with this many fingers (3-5) belong to fl-wm; other
+# gestures (pinch, hold, other swipes) go to the program under the pointer
+enabled=true
+fingers=3
+# sideways swipes switch workspaces; true: the workspaces follow the fingers
+natural=true
+# actions for swiping up and down (any key binding action, or none)
+swipe_up=launcher
+swipe_down=show-desktop
+
 [cursor]
 theme=fldesktop-cursors
 size=24

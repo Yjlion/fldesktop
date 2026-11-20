@@ -26,6 +26,16 @@ current workspace. The panel's window list and Alt+Tab show the windows of the c
 activating a window of another workspace (a notification, another program asking for it) goes
 there. With wlroots 0.20 the workspaces are published through ext-workspace-v1, which the panel's
 pager uses.
+.SH TOUCHPAD GESTURES
+Swiping sideways with three fingers switches to the next or previous
+workspace; swiping up opens the launcher and swiping down shows the desktop.
+The \fB[gestures]\fR section of \fIwm.ini\fR sets the number of fingers
+(\fBfingers=\fR3 to 5), the direction (\fBnatural=true\fR: the workspaces
+follow the fingers), the actions for swiping up and down (\fBswipe_up=\fR,
+\fBswipe_down=\fR: any key binding action, or \fBnone\fR) and turns them off
+(\fBenabled=false\fR). Pinches, holds and swipes with other finger counts go to
+the window under the pointer (pointer-gestures-unstable-v1), for example to
+zoom in a browser or an image viewer.
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

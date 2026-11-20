@@ -16,8 +16,8 @@ class MousePage : public Fl_Group {
 public:
   ConfigFile wm{wm_ini_path()};
   Fl_Value_Slider *speed;
-  Fl_Check_Button *left, *natural, *tap, *dwt, *middle, *ffm;
-  Fl_Choice *scroll;
+  Fl_Check_Button *left, *natural, *tap, *dwt, *middle, *ffm, *gestures, *gnatural;
+  Fl_Choice *scroll, *fingers, *gup, *gdown;
 
   Fl_Check_Button *check(Form &f, const char *label, bool v) {
     int wx, wy, ww;
@@ -26,6 +26,26 @@ public:
     b->value(v);
     b->callback([](Fl_Widget *, void *d) { ((MousePage *)d)->save(); }, this);
     return b;
+  }
+
+  // actions a vertical swipe can run (value written to wm.ini, label)
+  static constexpr const char *kActions[][2] = {
+      {"launcher", "Open the launcher"}, {"show-desktop", "Show the desktop"},
+      {"workspace-prev", "Previous workspace"}, {"workspace-next", "Next workspace"},
+      {"none", "Nothing"}};
+
+  Fl_Choice *action_choice(Form &f, const char *label, const std::string &cur) {
+    int wx, wy, ww;
+    f.row(label, 28, wx, wy, ww);
+    Fl_Choice *c = new Fl_Choice(wx, wy, 220, 28);
+    int sel = 0;
+    for (size_t i = 0; i < sizeof kActions / sizeof kActions[0]; i++) {
+      c->add(kActions[i][1]);
+      if (cur == kActions[i][0]) sel = (int)i;
+    }
+    c->value(sel);
+    c->callback([](Fl_Widget *, void *d) { ((MousePage *)d)->save(); }, this);
+    return c;
   }
 
   MousePage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
@@ -60,6 +80,18 @@ public:
     f.heading("Touchpad");
     tap = check(f, "Tap to click", wm.ini.get_bool(P, "tap_to_click", true));
     dwt = check(f, "Disable while typing", wm.ini.get_bool(P, "disable_while_typing", true));
+    f.heading("Touchpad Gestures");
+    const std::string G = "gestures";
+    gestures = check(f, "Swipe gestures (workspaces and the actions below)", wm.ini.get_bool(G, "enabled", true));
+    f.row("Fingers:", 28, wx, wy, ww);
+    fingers = new Fl_Choice(wx, wy, 220, 28);
+    fingers->add("Three fingers|Four fingers");
+    fingers->value(wm.ini.get_int(G, "fingers", 3) == 4 ? 1 : 0);
+    fingers->callback([](Fl_Widget *, void *d) { ((MousePage *)d)->save(); }, this);
+    gnatural = check(f, "Workspaces follow the fingers", wm.ini.get_bool(G, "natural", true));
+    gup = action_choice(f, "Swipe up:", wm.ini.get(G, "swipe_up", "launcher"));
+    gdown = action_choice(f, "Swipe down:", wm.ini.get(G, "swipe_down", "show-desktop"));
+    f.note("Other gestures, such as pinching to zoom, go to the program under the pointer.", 2);
     f.heading("Windows");
     ffm = check(f, "Focus follows the mouse", wm.ini.get_bool("behaviour", "focus_follows_mouse", false));
     g->end();
@@ -81,6 +113,12 @@ public:
     wm.ini.set_bool(P, "tap_to_click", tap->value());
     wm.ini.set_bool(P, "disable_while_typing", dwt->value());
     wm.ini.set_bool("behaviour", "focus_follows_mouse", ffm->value());
+    const std::string G = "gestures";
+    wm.ini.set_bool(G, "enabled", gestures->value());
+    wm.ini.set(G, "fingers", fingers->value() == 1 ? "4" : "3");
+    wm.ini.set_bool(G, "natural", gnatural->value());
+    wm.ini.set(G, "swipe_up", kActions[gup->value() < 0 ? 0 : gup->value()][0]);
+    wm.ini.set(G, "swipe_down", kActions[gdown->value() < 0 ? 1 : gdown->value()][0]);
     save_wm(wm);
   }
 };
@@ -91,7 +129,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new MousePage(x, y, w, h);
 
 PageInfo page_mouse() {
   return {"mouse", "Mouse & Touchpad", "input-mouse", "Hardware",
-          "mouse touchpad pointer speed acceleration tap click scroll natural left handed focus", create};
+          "mouse touchpad pointer speed acceleration tap click scroll natural left handed focus gestures swipe fingers", create};
 }
 
 } // namespace fld

@@ -155,6 +155,13 @@ if(FLD_BUILD_GREETER)
   add_test(NAME greetd COMMAND test_greetd)
 endif()
 
+if(FLD_BUILD_WM)
+  add_executable(test_gesture test_gesture.cpp ${CMAKE_SOURCE_DIR}/compositor/gesture_decide.c)
+  target_include_directories(test_gesture PRIVATE ${CMAKE_SOURCE_DIR}/compositor)
+  target_link_libraries(test_gesture PRIVATE m)
+  add_test(NAME gesture COMMAND test_gesture)
+endif()
+
 if(FLD_BUILD_WM AND FLD_BUILD_CALC)
   add_test(NAME wm-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/wm-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   set_tests_properties(wm-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)

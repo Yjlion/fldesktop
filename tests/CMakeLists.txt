@@ -145,6 +145,12 @@ if(FLD_BUILD_GREETER)
   add_test(NAME greetd COMMAND test_greetd)
 endif()
 
+if(FLD_BUILD_WM)
+  add_executable(test_snap test_snap.cpp ${CMAKE_SOURCE_DIR}/compositor/snap.c)
+  target_include_directories(test_snap PRIVATE ${CMAKE_SOURCE_DIR}/compositor)
+  add_test(NAME snap COMMAND test_snap)
+endif()
+
 if(FLD_BUILD_WM AND FLD_BUILD_CALC)
   add_test(NAME wm-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/wm-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   set_tests_properties(wm-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
@@ -165,6 +171,11 @@ if(VPTR_WL_FOUND)
   target_include_directories(fl-vptr PRIVATE ${FLD_PROTO_OUT})
   target_link_libraries(fl-vptr PRIVATE PkgConfig::VPTR_WL)
   set_target_properties(fl-vptr PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  if(FLD_BUILD_WM AND FLD_BUILD_EDIT)
+    add_test(NAME snap-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/snap-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-vptr>)
+    set_tests_properties(snap-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+  endif()
 endif()
 
 # test helper: lists and switches workspaces (ext-workspace-v1), installed nowhere

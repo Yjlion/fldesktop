@@ -79,7 +79,9 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 		{"maximize", FLWM_ACTION_MAXIMIZE}, {"minimize", FLWM_ACTION_MINIMIZE},
 		{"fullscreen", FLWM_ACTION_FULLSCREEN}, {"cycle", FLWM_ACTION_CYCLE},
 		{"cycle-back", FLWM_ACTION_CYCLE_BACK}, {"snap-left", FLWM_ACTION_SNAP_LEFT},
-		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"launcher", FLWM_ACTION_LAUNCHER},
+		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"snap-up", FLWM_ACTION_SNAP_UP},
+		{"snap-down", FLWM_ACTION_SNAP_DOWN}, {"resize-mode", FLWM_ACTION_RESIZE_MODE},
+		{"launcher", FLWM_ACTION_LAUNCHER},
 		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
 		{"show-desktop", FLWM_ACTION_SHOW_DESKTOP},
 		{"workspace", FLWM_ACTION_WORKSPACE}, {"workspace-next", FLWM_ACTION_WORKSPACE_NEXT},
@@ -163,6 +165,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->switcher = true;
 	c->xwayland = true;
 	c->workspaces = 4;
+	c->drag_snap = true;
 	c->lock_color = 0xff1e1f22;
 
 	add_binding(c, "Super+Return", "exec fl-term");
@@ -172,8 +175,9 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+d", "show-desktop");
 	add_binding(c, "Super+q", "close");
 	add_binding(c, "Alt+F4", "close");
-	add_binding(c, "Super+Up", "maximize");
-	add_binding(c, "Super+Down", "minimize");
+	add_binding(c, "Super+Up", "snap-up");
+	add_binding(c, "Super+Down", "snap-down");
+	add_binding(c, "Super+r", "resize-mode");
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
 	add_binding(c, "Super+f", "fullscreen");
@@ -256,6 +260,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 		} else if (!strcasecmp(section, "behaviour") || !strcasecmp(section, "behavior")) {
 			if (!strcmp(k, "panel_position")) c->panel_top = !strcasecmp(v, "top");
 			else if (!strcmp(k, "focus_follows_mouse")) c->focus_follows_mouse = parse_bool(v);
+			else if (!strcmp(k, "drag_snap")) c->drag_snap = parse_bool(v);
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
 			else if (!strcmp(k, "xwayland")) c->xwayland = parse_bool(v);

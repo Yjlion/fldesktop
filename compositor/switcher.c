@@ -103,7 +103,7 @@ static char *ini_get(const char *path, const char *group, const char *key) {
 	return res;
 }
 
-static uint32_t accent_color(void) {
+uint32_t flwm_accent_color(void) {
 	uint32_t c = 0xff3584e4;
 	char *path = config_home();
 	char *v = ini_get(path, "Appearance", "Accent");
@@ -334,7 +334,7 @@ static void sw_render(struct flwm_server *server) {
 	cairo_set_line_width(cr, 1);
 	cairo_stroke(cr);
 
-	uint32_t accent = accent_color();
+	uint32_t accent = flwm_accent_color();
 	const char *font = server->config.font ? server->config.font : "Sans Bold 10";
 	/* the item font: the configured family, regular weight */
 	PangoFontDescription *fd = pango_font_description_from_string(font);

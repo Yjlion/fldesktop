@@ -22,6 +22,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "compat.h"
+#include "snap.h"
 
 #define FLWM_MAX_BINDINGS 96
 #define FLWM_MAX_AUTOSTART 32
@@ -93,6 +94,9 @@ enum flwm_action_type {
 	FLWM_ACTION_CYCLE_BACK,
 	FLWM_ACTION_SNAP_LEFT,
 	FLWM_ACTION_SNAP_RIGHT,
+	FLWM_ACTION_SNAP_UP,
+	FLWM_ACTION_SNAP_DOWN,
+	FLWM_ACTION_RESIZE_MODE,
 	FLWM_ACTION_LAUNCHER,
 	FLWM_ACTION_QUIT,
 	FLWM_ACTION_RELOAD,
@@ -137,6 +141,7 @@ struct flwm_config {
 	char *font; /* pango font description, e.g. "Sans Bold 10" */
 	bool panel_top;
 	bool focus_follows_mouse;
+	bool drag_snap; /* dragging a window to an edge or corner snaps it */
 	/* keyboard */
 	char *kb_layout, *kb_variant, *kb_options, *kb_model;
 	int repeat_rate, repeat_delay;
@@ -272,6 +277,14 @@ struct flwm_server {
 	struct flwm_layer_surface *focused_layer; /* exclusive keyboard focus */
 
 	struct wlr_scene_tree *drag_icon;
+	/* dragging a window to a screen edge: where it will snap */
+	enum flwm_snap drag_snap;
+	struct wlr_scene_rect *snap_preview;
+	/* keyboard resize mode (Super+R): the window and its size before */
+	struct flwm_view *resize_view;
+	struct wlr_box resize_orig;
+	int resize_w, resize_h; /* the size asked for so far (the client may lag) */
+	struct wlr_box drag_from; /* geometry when the move began: a drop-snap restores it */
 	struct wl_listener drag_destroy;
 	struct flwm_view *hover_view;      /* view whose title buttons show hover */
 	uint32_t last_click_time;
@@ -347,6 +360,7 @@ struct flwm_view {
 	bool ssd;          /* we draw decorations */
 	bool mapped;
 	bool minimized, maximized, fullscreen;
+	enum flwm_snap snap; /* half or quarter of the screen (never MAXIMIZED: see maximized) */
 	bool placed;       /* initial position chosen */
 	bool hidden_by_show_desktop;
 	bool no_taskbar;   /* not in the panel's window list (X11 menus, splash screens) */
@@ -484,7 +498,13 @@ void view_close(struct flwm_view *view);
 void view_set_maximized(struct flwm_view *view, bool maximized);
 void view_set_minimized(struct flwm_view *view, bool minimized);
 void view_set_fullscreen(struct flwm_view *view, bool fullscreen);
-void view_snap(struct flwm_view *view, int side); /* -1 left, +1 right */
+/* snaps to a half or quarter, maximizes, minimizes or (NONE) frees the window */
+void view_set_snap(struct flwm_view *view, enum flwm_snap snap);
+enum flwm_snap view_snap_state(struct flwm_view *view); /* MAXIMIZED when maximized */
+uint32_t flwm_accent_color(void); /* switcher.c: [Appearance] Accent of desktop.ini, 0xRRGGBB */
+/* keyboard resize mode: asks for a content size (at least 64x64) */
+void view_resize_to(struct flwm_view *view, int w, int h);
+void view_set_geometry(struct flwm_view *view, const struct wlr_box *content);
 void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, uint32_t edges);
 struct flwm_view *view_focused(struct flwm_server *server);
 struct flwm_view *view_find_role(struct flwm_server *server, enum flwm_role role);

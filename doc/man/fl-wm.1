@@ -16,6 +16,18 @@ window (restoring it when minimized), Escape or a click outside closes the panel
 \fBswitcher=false\fR in the \fB[behaviour]\fR section of \fIwm.ini\fR each Alt+Tab raises the next
 window directly instead. Application icons come from the windows' desktop files and the icon theme
 (SVG icons need librsvg).
+.SH SNAPPING
+Dragging a window by its title bar to the left or right edge of a screen
+snaps it to that half, to a corner snaps it to that quarter and to the top
+edge maximizes it; a translucent preview shows where it goes
+(\fBdrag_snap=false\fR in \fB[behaviour]\fR turns this off). Super+Left and
+Super+Right snap to the halves, and from a half Super+Up and Super+Down go to
+its quarters; Super+Up maximizes a free window, Super+Down restores a
+maximized one and minimizes a free one. Dragging a snapped window away or the
+opposite arrow gives it back the size and place it had. Snapped windows stay
+snapped when the panel or the screen changes. \fBSuper+R\fR resizes the focused
+window with the arrow keys (Shift for small steps); Enter keeps the size and
+Escape goes back.
 .SH WORKSPACES
 There are four workspaces by default (\fBworkspaces=\fR1 to 9 in the \fB[behaviour]\fR section of
 \fIwm.ini\fR); all outputs switch together. Super+1 to Super+9 go to a workspace and

@@ -30,7 +30,9 @@ Fl_Box *Form::note(const char *text, int lines) {
 
 void Form::row(const char *label, int h, int &wx, int &wy, int &ww) {
   if (label && *label) {
-    Fl_Box *l = new Fl_Box(x_, y_, label_w_ - 10, h, label);
+    // copied: callers pass temporary strings (the About page's rows)
+    Fl_Box *l = new Fl_Box(x_, y_, label_w_ - 10, h);
+    l->copy_label(label);
     l->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
   }
   wx = x_ + label_w_;

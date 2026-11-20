@@ -1,8 +1,13 @@
 // fl-settings: the fldesktop settings center
 #include <FL/Fl.H>
+#include <FL/Fl_Browser_.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Scroll.H>
+#include <FL/Fl_Spinner.H>
+#include <FL/Fl_Text_Display.H>
+#include <FL/Fl_Valuator.H>
 #include <FL/fl_draw.H>
 
 #include <algorithm>
@@ -21,8 +26,14 @@
 static Fl_Double_Window *g_win;
 static Fl_Input *g_search;
 static Fl_Hold_Browser *g_list;
-static Fl_Group *g_content;
+class ContentArea;
+static ContentArea *g_content;
 static std::map<std::string, Fl_Group *> g_created;
+// the size a page needs: its widgets' extent, or (height) a minimum for pages
+// whose list or tabs stretch to fill the window
+static std::map<Fl_Group *, int> g_page_min_h, g_page_min_w;
+static const int kMinPageH = 380; // pages are not laid out smaller
+static const int kMinPageW = 530; // the narrowest the pages are made for
 static std::string g_current;
 
 struct Entry {
@@ -80,6 +91,105 @@ static void rebuild_list() {
     if (g_entries[i].page_id == g_current) g_list->value((int)i + 1);
 }
 
+// The page area scrolls: pages keep the height their widgets need and a
+// scroll bar appears when the window is shorter (small screens).
+class ContentArea : public Fl_Scroll {
+public:
+  ContentArea(int X, int Y, int W, int H) : Fl_Scroll(X, Y, W, H) { type(Fl_Scroll::BOTH); }
+  // The wheel scrolls the page, unless it is over a list or another widget
+  // that scrolls itself. (FLTK would hand it to any widget of the page that
+  // takes it, wherever that is.)
+  int handle(int e) override {
+    if (e == FL_MOUSEWHEEL && Fl::event_dy() && scrollbar.visible()) {
+      Fl_Widget *w = scrolls_itself(this);
+      if (w && w->handle(FL_MOUSEWHEEL)) return 1;
+      int top = std::max(0, std::min(yposition() + Fl::event_dy() * 48, (int)scrollbar.maximum()));
+      scroll_to(xposition(), top);
+      scrollbar.value(top);
+      return 1;
+    }
+    return Fl_Scroll::handle(e);
+  }
+  // the widget under the mouse that scrolls on its own, if any
+  Fl_Widget *scrolls_itself(Fl_Group *g) {
+    for (int i = g->children(); i--;) {
+      Fl_Widget *c = g->child(i);
+      if (c == &scrollbar || c == &hscrollbar || !c->visible() || !Fl::event_inside(c)) continue;
+      if (dynamic_cast<Fl_Browser_ *>(c) || dynamic_cast<Fl_Text_Display *>(c) || dynamic_cast<Fl_Valuator *>(c) ||
+          dynamic_cast<Fl_Scroll *>(c) || dynamic_cast<Fl_Spinner *>(c))
+        return c;
+      if (Fl_Group *cg = c->as_group())
+        if (Fl_Widget *w = scrolls_itself(cg)) return w;
+    }
+    return nullptr;
+  }
+  static int page_h(Fl_Group *g, int H) {
+    auto it = g_page_min_h.find(g);
+    return std::max(H, it == g_page_min_h.end() ? H : it->second);
+  }
+  static int min_w(Fl_Group *g) {
+    auto it = g_page_min_w.find(g);
+    return it == g_page_min_w.end() ? kMinPageW : it->second;
+  }
+  // places one page: at least the visible size and the page's own minimum;
+  // scroll bars take their room when it is more
+  void place(Fl_Group *g) {
+    int sb = Fl::scrollbar_size();
+    int ph = page_h(g, h());
+    bool need_v = ph > h();
+    bool need_h = min_w(g) > w() - (need_v ? sb : 0);
+    if (need_h) {
+      ph = page_h(g, h() - sb);
+      need_v = ph > h() - sb;
+    }
+    int pw = std::max(w() - (need_v ? sb : 0), min_w(g));
+    g->resize(x() - xposition(), y() - yposition(), pw, ph);
+  }
+  void resize(int X, int Y, int W, int H) override {
+    int top = yposition(), left = xposition();
+    // moves the pages along and places the scroll bars; the pages are sized here
+    Fl_Scroll::resize(X, Y, W, H);
+    int maxtop = 0, maxleft = 0;
+    for (int i = 0; i < children(); i++) {
+      Fl_Widget *c = child(i);
+      if (c == &scrollbar || c == &hscrollbar) continue;
+      place((Fl_Group *)c);
+      if (c->visible()) {
+        maxtop = std::max(0, c->h() - H);
+        maxleft = std::max(0, c->w() - W);
+      }
+    }
+    // keep the scroll position when it still fits
+    scroll_to(std::min(left, maxleft), std::min(top, maxtop));
+    redraw();
+  }
+};
+
+// how far the widgets inside g reach (right and bottom), relative to x0, y0
+static void content_extent(Fl_Group *g, int x0, int y0, int &right, int &bottom) {
+  for (int i = 0; i < g->children(); i++) {
+    Fl_Widget *c = g->child(i);
+    if (!c->visible()) continue;
+    // groups are as large as the page: what counts is inside them (a
+    // scrolling group, the wallpaper gallery, holds more than it shows)
+    Fl_Group *cg = c->as_group();
+    if (cg && !dynamic_cast<Fl_Scroll *>(cg) && cg->children()) {
+      content_extent(cg, x0, y0, right, bottom);
+      continue;
+    }
+    right = std::max(right, c->x() + c->w() - x0);
+    bottom = std::max(bottom, c->y() + c->h() - y0);
+  }
+}
+
+// a page whose inner group stretches a widget (a list, tabs) fills the window
+static bool fills_window(Fl_Group *g) {
+  for (int i = 0; i < g->children(); i++)
+    if (Fl_Group *cg = g->child(i)->as_group())
+      if (cg->resizable() && cg->resizable() != cg) return true;
+  return false;
+}
+
 static void show_page(const std::string &id) {
   const fld::PageInfo *info = nullptr;
   for (auto &p : fld::all_pages()) if (p.id == id) info = &p;
@@ -87,16 +197,25 @@ static void show_page(const std::string &id) {
   for (auto &kv : g_created) kv.second->hide();
   Fl_Group *g;
   auto it = g_created.find(id);
+  g_content->scroll_to(0, 0);
   if (it == g_created.end()) {
+    // laid out for the visible size (not less than the minimum), then
+    // measured: form pages need their rows' extent, list pages stretch and
+    // scroll only below the minimum
+    int cw = std::max(kMinPageW, g_content->w() - Fl::scrollbar_size());
     g_content->begin();
-    g = info->create(g_content->x(), g_content->y(), g_content->w(), g_content->h());
+    g = info->create(g_content->x(), g_content->y(), cw, std::max(kMinPageH, g_content->h()));
     g_content->end();
     g_created[id] = g;
+    int right = 0, bottom = 0;
+    content_extent(g, g->x(), g->y(), right, bottom);
+    g_page_min_h[g] = fills_window(g) ? kMinPageH : std::max(kMinPageH, bottom + 16);
+    g_page_min_w[g] = std::max(kMinPageW, std::min(right + 12, 1400));
   } else {
     g = it->second;
   }
-  g->resize(g_content->x(), g_content->y(), g_content->w(), g_content->h());
   g->show();
+  g_content->place(g);
   g_current = id;
   std::string title = info->title + " – Settings";
   g_win->copy_label(title.c_str());
@@ -121,15 +240,6 @@ static void list_cb(Fl_Widget *, void *) {
     rebuild_list();
   }
 }
-
-class ContentArea : public Fl_Group {
-public:
-  using Fl_Group::Fl_Group;
-  void resize(int X, int Y, int W, int H) override {
-    Fl_Widget::resize(X, Y, W, H);
-    for (int i = 0; i < children(); i++) child(i)->resize(X, Y, W, H);
-  }
-};
 
 int main(int argc, char **argv) {
   std::string start;
@@ -156,7 +266,12 @@ int main(int argc, char **argv) {
     g_external.push_back(d);
   }
 
-  const int W = 1020, H = 680, SIDE = 230;
+  // fits small screens; the page area scrolls when it is shorter than a page
+  int sx, sy, sw, sh;
+  Fl::screen_work_area(sx, sy, sw, sh);
+  const int SIDE = sw > 0 && sw < 960 ? 190 : 230;
+  const int W = sw > 0 ? std::max(600, std::min(1020, sw - 40)) : 1020;
+  const int H = sh > 0 ? std::max(320, std::min(680, sh - 60)) : 680;
   const fld::Palette &p = fld::palette();
   g_win = new Fl_Double_Window(W, H, "Settings");
   Fl_Group *side = new Fl_Group(0, 0, SIDE, H);
@@ -185,7 +300,7 @@ int main(int argc, char **argv) {
   g_content->end();
   g_win->resizable(g_content);
   g_win->end();
-  g_win->size_range(760, 480);
+  g_win->size_range(600, 320);
   fld::set_window_icon(g_win, "fl-settings");
 
   rebuild_list();

@@ -61,5 +61,62 @@ int main() {
   CHECK(!ok);
   page_ranges(",", 10, &ok);
   CHECK(!ok);
+
+  // file formats
+  CHECK(sniff("%PDF-1.7\n", "x") == Format::Pdf);
+  CHECK(sniff("junk\n%PDF-1.4", "x") == Format::Pdf);
+  CHECK(sniff("hello", "a.pdf") == Format::Pdf);
+  CHECK(sniff("hello", "a.txt") == Format::Unknown);
+  auto zip_with_mimetype = [](const std::string &mime) {
+    std::string h = "PK\x03\x04";
+    h += std::string(4, '\0');                   // version, flags
+    h += std::string(2, '\0');                   // stored
+    h += std::string(8, '\0');                   // time, date, crc
+    for (int k = 0; k < 2; k++)                  // compressed and real size
+      for (int b = 0; b < 4; b++) h += (char)((mime.size() >> (8 * b)) & 0xff);
+    h += std::string("\x08\0\0\0", 4);          // name length 8, no extra
+    return h + "mimetype" + mime + "PK\x03\x04";
+  };
+  CHECK(sniff(zip_with_mimetype("application/epub+zip"), "x") == Format::Epub);
+  CHECK(sniff(zip_with_mimetype("application/vnd.oasis.opendocument.text"), "x") == Format::Odt);
+  CHECK(sniff(zip_with_mimetype("application/vnd.oasis.opendocument.spreadsheet"), "x") == Format::OdfOther);
+  CHECK(sniff(std::string("PK\x03\x04", 4) + std::string(60, 'x'), "x.cbz") == Format::Zip);
+  CHECK(sniff(std::string("Rar!\x1a\x07\x00", 7), "x.cbr") == Format::Archive);
+
+  CHECK(natural_less("page2.png", "page10.png"));
+  CHECK(!natural_less("page10.png", "page2.png"));
+  CHECK(natural_less("a/Page1.png", "a/page2.png"));
+  CHECK(natural_less("01.jpg", "2.jpg"));
+  CHECK(natural_less("ch1/10.png", "ch2/1.png"));
+  CHECK(!natural_less("x", "x"));
+
+  int iw, ih;
+  std::string png = std::string("\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\x01\x2c\0\0\x01\x90", 24) + std::string(8, '\0');
+  CHECK(image_size(png, iw, ih));
+  CHECK_EQ(iw, 300);
+  CHECK_EQ(ih, 400);
+  std::string gif = std::string("GIF89a\x0a\0\x05\0", 10) + std::string(4, '\0');
+  CHECK(image_size(gif, iw, ih));
+  CHECK_EQ(iw, 10);
+  CHECK_EQ(ih, 5);
+  // JPEG: SOI, an APP0 segment, then SOF0 with 16 x 8
+  std::string jpg = std::string("\xff\xd8\xff\xe0\x00\x04\x00\x00\xff\xc0\x00\x11\x08\x00\x08\x00\x10\x03", 18) +
+                    std::string(16, '\0');
+  CHECK(image_size(jpg, iw, ih));
+  CHECK_EQ(iw, 16);
+  CHECK_EQ(ih, 8);
+  CHECK(!image_size("not an image", iw, ih));
+  CHECK(is_image_name("a/B.JPG"));
+  CHECK(!is_image_name("a/b.txt"));
+  CHECK(!is_image_name("png"));
+
+  CHECK_NEAR(parse_length("1in", 0), 72.0);
+  CHECK_NEAR(parse_length("2.54cm", 0), 72.0);
+  CHECK(std::fabs(parse_length("10mm", 0) - 28.3465) < 1e-3);
+  CHECK_NEAR(parse_length("12pt", 0), 12.0);
+  CHECK_NEAR(parse_length("16px", 0), 12.0);
+  CHECK_NEAR(parse_length("1pc", 0), 12.0);
+  CHECK_NEAR(parse_length("bogus", 5), 5.0);
+  CHECK_NEAR(parse_length("3em", 5), 5.0);
   return test_result("docs");
 }

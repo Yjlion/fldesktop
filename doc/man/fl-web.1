@@ -3,6 +3,8 @@
 fl-web \- web browser
 .SH SYNOPSIS
 \fBfl-web\fR [\fB\-\-private\fR] [\fB\-\-new\-window\fR] [\fIURL\fR|\fIFILE\fR...]
+.br
+\fBfl-web \-\-adblock\-convert\fR \fILIST\fR...
 .SH DESCRIPTION
 A web browser built with FLTK and \fBWPE WebKit\fR. Each URL or file given opens in a tab; text
 that is not an address is searched for.
@@ -21,6 +23,15 @@ Full Screen, Inspect).
 .PP
 A private window (\fB\-\-private\fR, Ctrl+Shift+N) keeps its cookies and site data in memory
 only, and records no history and no session. Its tab strip is purple.
+.PP
+Ads and trackers are blocked with WebKit's content blockers, from the EasyList and
+EasyPrivacy filter lists (and any other lists in Adblock Plus format given by address in
+Settings). The lists are downloaded at the first start and again when they are older than four
+days, or with Update Lists Now; until the first download has finished nothing is blocked.
+Network filters, element hiding and their exceptions are used; filters WebKit cannot express
+(regular expressions, scriptlets, procedural element hiding, $redirect, $csp and the like) are
+left out. "Block Ads on This Site" in the menu turns blocking off for the site of the current
+page, and Settings turns it off everywhere. Private windows block too.
 .PP
 The developer tools (F12) are WebKit's Web Inspector: fl-web serves it on a loopback port
 chosen at start, and F12 opens it in a window that lists the pages to inspect. They can be
@@ -65,17 +76,25 @@ Developer tools, view the page source (in the text editor), save the page (MHTML
 .TP
 \fBCtrl+Shift+M\fR
 Show or hide the menu bar.
+.SH OPTIONS
+.TP
+\fB\-\-adblock\-convert\fR \fILIST\fR...
+Print the WebKit content blocker rules made from filter list files (the rule and skipped filter
+counts go to standard error).
 .SH FILES
 .TP
 \fI~/.config/fldesktop/web.ini\fR
 Settings: home page, search engine, JavaScript, reopening the last session's tabs, natural
-scrolling (\fBNaturalScrolling\fR), the menu bar (\fBShowMenuBar\fR, off by default) and the
-developer tools (\fBDeveloperTools\fR).
+scrolling (\fBNaturalScrolling\fR), the menu bar (\fBShowMenuBar\fR, off by default), the
+developer tools (\fBDeveloperTools\fR) and ad blocking: \fBBlockAds\fR, \fBAdblockLists\fR
+(\fIeasylist\fR, \fIeasyprivacy\fR), \fBAdblockExtra\fR (more list addresses) and
+\fBAdblockAllow\fR (sites where nothing is blocked), lists separated by commas.
 .TP
 \fI~/.local/share/fl-web/\fR
-Bookmarks (\fIbookmarks.tsv\fR), history (\fIhistory.tsv\fR), cookies and site data.
+Bookmarks (\fIbookmarks.tsv\fR), history (\fIhistory.tsv\fR), cookies and site data, and the
+compiled ad blocking rules (\fIcontent-filters/\fR).
 .TP
 \fI~/.cache/fl-web/\fR
-The web cache.
+The web cache, and the downloaded filter lists (\fIadblock/\fR).
 .SH SEE ALSO
 \fBfl-files\fR(1)

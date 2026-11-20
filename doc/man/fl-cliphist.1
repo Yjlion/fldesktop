@@ -1,0 +1,48 @@
+.TH FL-CLIPHIST 1 "November 2026" "fldesktop" "fldesktop"
+.SH NAME
+fl-cliphist \- clipboard history
+.SH SYNOPSIS
+\fBfl-cliphist\fR
+.br
+\fBfl-cliphist\fR \fB\-\-list\fR | \fB\-\-copy\fR \fIID\fR | \fB\-\-set\fR \fITEXT\fR | \fB\-\-set\-file\fR \fIFILE\fR | \fB\-\-paste\fR
+.br
+\fBfl-cliphist\fR \fB\-\-pin\fR \fIID\fR | \fB\-\-unpin\fR \fIID\fR | \fB\-\-delete\fR \fIID\fR | \fB\-\-clear\fR
+.SH DESCRIPTION
+Without options, \fBfl-cliphist\fR records what is copied, through the
+wlr-data-control protocol of \fBfl-wm\fR(1): texts (as UTF-8) and PNG images,
+up to 32 MB each. The session starts it
+(\fI/etc/xdg/autostart/fl-cliphist.desktop\fR). Copying the same thing again
+moves it to the top. Copies marked by password managers
+(x-kde-passwordManagerHint) are not recorded.
+.PP
+The clipboard button of \fBfl-panel\fR(1) lists the history; clicking an
+entry puts it on the clipboard again, entries can be pinned (kept when the
+history is cleared or full) and removed.
+.SH OPTIONS
+.TP
+\fB\-\-list\fR
+The history, newest first: id, P for pinned, type and a preview, separated
+by tabs.
+.TP
+\fB\-\-copy\fR \fIID\fR
+Put an entry on the clipboard; a background process offers it until
+something else is copied.
+.TP
+\fB\-\-set\fR \fITEXT\fR, \fB\-\-set\-file\fR \fIFILE\fR
+Put a text, or a file's contents (a PNG file as an image), on the clipboard.
+.TP
+\fB\-\-paste\fR
+Print the text on the clipboard.
+.TP
+\fB\-\-pin\fR, \fB\-\-unpin\fR, \fB\-\-delete\fR \fIID\fR; \fB\-\-clear\fR
+Pin, unpin or remove an entry; remove all but the pinned ones.
+.SH FILES
+.TP
+\fI~/.local/state/fldesktop/clipboard/\fR
+The history (\fB$XDG_STATE_HOME\fR).
+.TP
+\fI~/.config/fldesktop/panel.ini\fR
+\fB[Clipboard]\fR: \fBHistory=false\fR stops recording, \fBMax=\fR (50) is the
+number of unpinned entries kept, \fBButton=false\fR hides the panel button.
+.SH SEE ALSO
+\fBfl-panel\fR(1), \fBfl-wm\fR(1)

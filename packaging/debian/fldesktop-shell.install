@@ -4,6 +4,8 @@ usr/bin/fl-desktop
 usr/bin/fl-autostart
 usr/bin/fl-nightlight
 etc/xdg/autostart/fl-nightlight.desktop
+usr/bin/fl-cliphist
+etc/xdg/autostart/fl-cliphist.desktop
 usr/bin/fl-session
 usr/bin/fl-screenshot
 usr/bin/fl-snip
@@ -20,3 +22,4 @@ usr/share/man/man1/fl-autostart.1
 usr/share/man/man1/fl-screenshot.1
 usr/share/man/man1/fl-snip.1
 usr/share/man/man1/fl-nightlight.1
+usr/share/man/man1/fl-cliphist.1

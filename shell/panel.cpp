@@ -350,6 +350,7 @@ struct Panel {
   fld::FlatButton *bluetooth = nullptr;
   fld::FlatButton *printer = nullptr;
   fld::FlatButton *nightlight = nullptr;
+  fld::FlatButton *clipboard = nullptr;
   fld::FlatButton *battery = nullptr;
   fld::FlatButton *bell = nullptr;
   fld::FlatButton *clock = nullptr;
@@ -788,6 +789,7 @@ void relayout() {
     r -= bw + 2;
   }
   for (fld::FlatButton *b : {P.nightlight, P.printer, P.bluetooth}) {
+  for (fld::FlatButton *b : {P.clipboard, P.printer, P.bluetooth}) {
     if (b && b->visible()) {
       b->resize(r - 34, 2, 34, H - 4);
       r -= 36;
@@ -1025,6 +1027,7 @@ int main(int argc, char **argv) {
   P.printer = printer_indicator_create();
 #endif
   P.nightlight = nightlight_indicator_create();
+  P.clipboard = clipboard_indicator_create();
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();
 #ifdef FLD_HAVE_POWER

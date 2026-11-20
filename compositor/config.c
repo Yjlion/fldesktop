@@ -164,6 +164,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->xwayland = true;
 	c->workspaces = 4;
 	c->lock_color = 0xff1e1f22;
+	c->blank_ms = 10 * 60000;
 
 	add_binding(c, "Super+Return", "exec fl-term");
 	add_binding(c, "Super+t", "exec fl-term");
@@ -285,6 +286,11 @@ bool config_load(struct flwm_config *c, const char *path) {
 			if (!strcmp(k, "idle_minutes")) c->lock_idle_minutes = atoi(v);
 			else if (!strcmp(k, "command")) set_str(&c->lock_cmd, v);
 			else if (!strcmp(k, "color")) c->lock_color = parse_color(v, c->lock_color);
+		} else if (!strcasecmp(section, "power")) {
+			if (!strcmp(k, "blank_minutes")) {
+				double m = atof(v);
+				c->blank_ms = m > 0 ? (int)(m * 60000) : 0;
+			}
 		} else if (!strcasecmp(section, "environment")) {
 			env_apply(k, v);
 		} else if (!strcasecmp(section, "output")) {

@@ -167,6 +167,21 @@ if(VPTR_WL_FOUND)
   set_target_properties(fl-vptr PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endif()
 
+# test helper: watches and sets the output power mode (wlr-output-power-management)
+if(VPTR_WL_FOUND)
+  set(POWER_PROTO)
+  fld_wayland_protocol(POWER_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-power-management-unstable-v1.xml client)
+  add_executable(fl-power tools/fl-power.c ${POWER_PROTO})
+  target_include_directories(fl-power PRIVATE ${FLD_PROTO_OUT})
+  target_link_libraries(fl-power PRIVATE PkgConfig::VPTR_WL)
+  set_target_properties(fl-power PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  if(FLD_BUILD_WM AND TARGET fl-vptr)
+    add_test(NAME dpms-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/dpms-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-power> $<TARGET_FILE:fl-vptr>)
+    set_tests_properties(dpms-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
+  endif()
+endif()
+
 # test helper: lists and switches workspaces (ext-workspace-v1), installed nowhere
 set(_ws_xml ${WAYLAND_PROTOCOLS_DIR}/staging/ext-workspace/ext-workspace-v1.xml)
 if(VPTR_WL_FOUND AND EXISTS ${_ws_xml})

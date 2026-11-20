@@ -50,6 +50,11 @@ idle_minutes=0
 # shown while the lock screen starts
 #color=#1e1f22
 
+[power]
+# turn the screens off after this many idle minutes (0 = never); input turns
+# them on again. Programs that inhibit idle (videos) keep them on.
+blank_minutes=10
+
 #[environment]
 # variables for the programs started from now on (applied on reload);
 # "NAME=" unsets, "NAME=@inherit" restores the value the session started with

@@ -108,6 +108,39 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 	enum flwm_action_type type;
 	char *arg;
 	if (!parse_action(action, &type, &arg)) return;
+	char abuf[512];
+	snprintf(abuf, sizeof abuf, "%s", action);
+	char *a = trim(abuf);
+	char *arg = NULL;
+	char *sp = strchr(a, ' ');
+	if (sp) {
+		*sp = 0;
+		arg = trim(sp + 1);
+	}
+	static const struct { const char *name; enum flwm_action_type type; } actions[] = {
+		{"exec", FLWM_ACTION_EXEC}, {"close", FLWM_ACTION_CLOSE},
+		{"maximize", FLWM_ACTION_MAXIMIZE}, {"minimize", FLWM_ACTION_MINIMIZE},
+		{"fullscreen", FLWM_ACTION_FULLSCREEN}, {"cycle", FLWM_ACTION_CYCLE},
+		{"cycle-back", FLWM_ACTION_CYCLE_BACK}, {"snap-left", FLWM_ACTION_SNAP_LEFT},
+		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"launcher", FLWM_ACTION_LAUNCHER},
+		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
+		{"show-desktop", FLWM_ACTION_SHOW_DESKTOP},
+		{"workspace", FLWM_ACTION_WORKSPACE}, {"workspace-next", FLWM_ACTION_WORKSPACE_NEXT},
+		{"workspace-prev", FLWM_ACTION_WORKSPACE_PREV},
+		{"move-to-workspace", FLWM_ACTION_MOVE_TO_WORKSPACE},
+		{"move-to-workspace-next", FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT},
+		{"move-to-workspace-prev", FLWM_ACTION_MOVE_TO_WORKSPACE_PREV},
+		{"sticky", FLWM_ACTION_STICKY},
+		{"zoom-in", FLWM_ACTION_ZOOM_IN}, {"zoom-out", FLWM_ACTION_ZOOM_OUT},
+		{"zoom-reset", FLWM_ACTION_ZOOM_RESET},
+	};
+	enum flwm_action_type type = FLWM_ACTION_NONE;
+	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
+		if (!strcasecmp(a, actions[i].name)) type = actions[i].type;
+	if (type == FLWM_ACTION_NONE) {
+		wlr_log(WLR_ERROR, "config: unknown action '%s'", a);
+		return;
+	}
 	/* replace an existing binding for the same combo */
 	for (int i = 0; i < c->nbindings; i++) {
 		struct flwm_binding *b = &c->bindings[i];
@@ -197,6 +230,12 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
 	add_binding(c, "Super+f", "fullscreen");
+	add_binding(c, "Super+equal", "zoom-in");
+	add_binding(c, "Super+plus", "zoom-in");
+	add_binding(c, "Super+KP_Add", "zoom-in");
+	add_binding(c, "Super+minus", "zoom-out");
+	add_binding(c, "Super+KP_Subtract", "zoom-out");
+	add_binding(c, "Super+0", "zoom-reset");
 	add_binding(c, "Alt+Tab", "cycle");
 	add_binding(c, "Alt+Shift+Tab", "cycle-back");
 	add_binding(c, "Super+Shift+r", "reload");
@@ -323,6 +362,11 @@ bool config_load(struct flwm_config *c, const char *path) {
 			if (!strcmp(k, "blank_minutes")) {
 				double m = atof(v);
 				c->blank_ms = m > 0 ? (int)(m * 60000) : 0;
+		} else if (!strcasecmp(section, "accessibility")) {
+			if (!strcmp(k, "sticky_keys")) c->sticky_keys = parse_bool(v);
+			else if (!strcmp(k, "bounce_keys")) {
+				int ms = atoi(v);
+				c->bounce_keys_ms = ms < 0 ? 0 : ms > 2000 ? 2000 : ms;
 			}
 		} else if (!strcasecmp(section, "environment")) {
 			env_apply(k, v);

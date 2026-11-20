@@ -112,6 +112,9 @@ enum flwm_action_type {
 	FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT,
 	FLWM_ACTION_MOVE_TO_WORKSPACE_PREV,
 	FLWM_ACTION_STICKY,
+	FLWM_ACTION_ZOOM_IN,
+	FLWM_ACTION_ZOOM_OUT,
+	FLWM_ACTION_ZOOM_RESET,
 };
 
 #define FLWM_MAX_WORKSPACES 9
@@ -169,6 +172,9 @@ struct flwm_config {
 	int gesture_fingers;   /* 3..5 */
 	bool gesture_natural;  /* sideways: the workspaces follow the fingers */
 	struct flwm_gesture_action { enum flwm_action_type type; char *arg; } gesture_up, gesture_down;
+	/* [accessibility] (a11y.c) */
+	bool sticky_keys;
+	int bounce_keys_ms;
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
 	int blank_ms;          /* [power] blank_minutes (may be fractional): screens off; 0 = never */
@@ -296,6 +302,7 @@ struct flwm_server {
 	struct wlr_box resize_orig;
 	int resize_w, resize_h; /* the size asked for so far (the client may lag) */
 	struct wlr_box drag_from; /* geometry when the move began: a drop-snap restores it */
+	double zoom; /* zoom.c: the magnifier, 1 = off */
 	struct wl_listener drag_destroy;
 	struct flwm_view *hover_view;      /* view whose title buttons show hover */
 	uint32_t last_click_time;
@@ -348,6 +355,7 @@ struct flwm_output {
 	struct wl_listener destroy;
 	bool powered_off; /* display off (DPMS), still in the layout */
 	bool idle_off;    /* turned off by the idle timeout: input turns it back on */
+	struct wlr_buffer *zoom_buffer; /* zoom.c: the magnified frame */
 };
 
 struct flwm_decor {
@@ -645,6 +653,17 @@ void inhibit_init(struct flwm_server *server); /* after the seat */
 void inhibit_finish(void);
 bool inhibit_shortcuts_active(struct flwm_server *server); /* the focused window has the bindings */
 bool inhibit_shortcuts_toggle(struct flwm_server *server);  /* false: no inhibitor there */
+/* zoom.c: the magnifier */
+void zoom_step(struct flwm_server *server, int dir); /* +1 in, -1 out, 0 off */
+void zoom_cursor_moved(struct flwm_server *server);
+bool zoom_output_frame(struct flwm_output *output); /* false: render normally */
+void zoom_output_gone(struct flwm_output *output);
+
+/* a11y.c: sticky and bounce keys */
+struct wlr_keyboard_key_event;
+bool a11y_key(struct flwm_server *server, struct wlr_keyboard *kb, const struct wlr_keyboard_key_event *ev); /* true: drop it */
+void a11y_key_done(struct flwm_server *server, struct wlr_keyboard *kb, const struct wlr_keyboard_key_event *ev);
+void a11y_reset(void);
 void lock_view_mapped(struct flwm_server *server, struct flwm_view *view);
 bool lock_client_is_locker(struct flwm_server *server, struct wl_client *client);
 

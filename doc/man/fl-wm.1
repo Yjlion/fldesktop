@@ -75,6 +75,17 @@ Dialogs open centered over their window. A modal dialog (xdg-dialog-v1,
 wlroots 0.19 and newer) keeps the focus: clicking or switching to its window
 brings up the dialog instead. Windows that name their icon
 (xdg-toplevel-icon-v1) show it in the Alt+Tab switcher.
+.SH ACCESSIBILITY
+\fBSuper+=\fR (or Super+Plus) zooms the screen in around the pointer in steps from 1.5x to
+8x, \fBSuper+Minus\fR zooms out and \fBSuper+0\fR ends the zoom (actions \fBzoom-in\fR,
+\fBzoom-out\fR, \fBzoom-reset\fR). The point under the pointer stays where it is, so
+what the pointer shows is what it clicks.
+.PP
+In the \fB[accessibility]\fR section of \fIwm.ini\fR, \fBsticky_keys=true\fR makes a
+modifier (Shift, Ctrl, Alt, Super) pressed and released on its own apply to the next key, so
+shortcuts can be typed one key at a time; pressed twice it stays on until pressed once more.
+\fBbounce_keys=\fR\fIMS\fR ignores a key pressed again within \fIMS\fR milliseconds of its
+release.
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

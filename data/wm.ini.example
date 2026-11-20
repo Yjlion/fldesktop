@@ -67,6 +67,11 @@ idle_minutes=0
 # turn the screens off after this many idle minutes (0 = never); input turns
 # them on again. Programs that inhibit idle (videos) keep them on.
 blank_minutes=10
+[accessibility]
+# a modifier pressed and released alone applies to the next key (twice: stays on)
+sticky_keys=false
+# ignore a key pressed again within this many milliseconds of its release (0 = off)
+bounce_keys=0
 
 #[environment]
 # variables for the programs started from now on (applied on reload);
@@ -95,7 +100,8 @@ scale=1
 #          lock, reload, quit,
 #          workspace N, workspace-next, workspace-prev, move-to-workspace N,
 #          move-to-workspace-next, move-to-workspace-prev (the window goes
-#          along), sticky (show the window on every workspace)
+#          along), sticky (show the window on every workspace),
+#          zoom-in, zoom-out, zoom-reset (the magnifier)
 Super+Return=exec fl-term
 Super+t=exec fl-term
 Super+e=exec fl-files
@@ -110,6 +116,9 @@ Super+r=resize-mode
 Super+Left=snap-left
 Super+Right=snap-right
 Super+f=fullscreen
+Super+equal=zoom-in
+Super+minus=zoom-out
+Super+0=zoom-reset
 Alt+Tab=cycle
 Alt+Shift+Tab=cycle-back
 Print=exec fl-snip --full

@@ -260,6 +260,10 @@ if(VPTR_WL_FOUND)
     add_test(NAME toplevel-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/toplevel-smoke.sh
              ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-toplevel> $<TARGET_FILE:fl-vptr>)
     set_tests_properties(toplevel-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+  if(FLD_BUILD_WM AND FLD_BUILD_CALC AND FLD_BUILD_EDIT)
+    add_test(NAME a11y-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/a11y-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-vptr>)
+    set_tests_properties(a11y-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
   endif()
 endif()
 

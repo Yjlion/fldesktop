@@ -259,6 +259,7 @@ int main(int argc, char *argv[]) {
 	workspace_init(&server);
 	layer_init(&server);
 	input_init(&server);
+	gesture_init(&server);
 	xwayland_init(&server); /* sets DISPLAY for the programs we start */
 
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
@@ -320,6 +321,7 @@ int main(int argc, char *argv[]) {
 	for (size_t i = 0; i < sizeof listeners / sizeof listeners[0]; i++)
 		wl_list_remove(&listeners[i]->link);
 	input_finish(&server);
+	gesture_finish();
 	output_finish(&server);
 
 	wlr_scene_node_destroy(&server.scene->tree.node);

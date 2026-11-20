@@ -38,33 +38,8 @@ static char *trim(char *s) {
 	return s;
 }
 
-static void add_binding(struct flwm_config *c, const char *combo, const char *action) {
-	if (c->nbindings >= FLWM_MAX_BINDINGS) return;
-	uint32_t mods = 0;
-	xkb_keysym_t sym = XKB_KEY_NoSymbol;
-	char buf[128];
-	snprintf(buf, sizeof buf, "%s", combo);
-	char *save = NULL;
-	for (char *tok = strtok_r(buf, "+", &save); tok; tok = strtok_r(NULL, "+", &save)) {
-		tok = trim(tok);
-		if (!strcasecmp(tok, "Super") || !strcasecmp(tok, "Logo") || !strcasecmp(tok, "Mod4"))
-			mods |= WLR_MODIFIER_LOGO;
-		else if (!strcasecmp(tok, "Alt") || !strcasecmp(tok, "Mod1")) mods |= WLR_MODIFIER_ALT;
-		else if (!strcasecmp(tok, "Ctrl") || !strcasecmp(tok, "Control")) mods |= WLR_MODIFIER_CTRL;
-		else if (!strcasecmp(tok, "Shift")) mods |= WLR_MODIFIER_SHIFT;
-		else {
-			sym = xkb_keysym_from_name(tok, XKB_KEYSYM_NO_FLAGS);
-			if (sym == XKB_KEY_NoSymbol)
-				sym = xkb_keysym_from_name(tok, XKB_KEYSYM_CASE_INSENSITIVE);
-		}
-	}
-	if (sym == XKB_KEY_NoSymbol) {
-		wlr_log(WLR_ERROR, "config: unknown key in binding '%s'", combo);
-		return;
-	}
-	/* keysyms are compared lower-case so Super+Shift+Q matches 'q' */
-	sym = xkb_keysym_to_lower(sym);
-
+/* "name [argument]" -> action; *arg_out is malloc'ed (or NULL) */
+static bool parse_action(const char *action, enum flwm_action_type *type_out, char **arg_out) {
 	char abuf[512];
 	snprintf(abuf, sizeof abuf, "%s", action);
 	char *a = trim(abuf);
@@ -94,15 +69,50 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 		if (!strcasecmp(a, actions[i].name)) type = actions[i].type;
 	if (type == FLWM_ACTION_NONE) {
 		wlr_log(WLR_ERROR, "config: unknown action '%s'", a);
+		return false;
+	}
+	*type_out = type;
+	*arg_out = xstrdup(arg);
+	return true;
+}
+
+static void add_binding(struct flwm_config *c, const char *combo, const char *action) {
+	if (c->nbindings >= FLWM_MAX_BINDINGS) return;
+	uint32_t mods = 0;
+	xkb_keysym_t sym = XKB_KEY_NoSymbol;
+	char buf[128];
+	snprintf(buf, sizeof buf, "%s", combo);
+	char *save = NULL;
+	for (char *tok = strtok_r(buf, "+", &save); tok; tok = strtok_r(NULL, "+", &save)) {
+		tok = trim(tok);
+		if (!strcasecmp(tok, "Super") || !strcasecmp(tok, "Logo") || !strcasecmp(tok, "Mod4"))
+			mods |= WLR_MODIFIER_LOGO;
+		else if (!strcasecmp(tok, "Alt") || !strcasecmp(tok, "Mod1")) mods |= WLR_MODIFIER_ALT;
+		else if (!strcasecmp(tok, "Ctrl") || !strcasecmp(tok, "Control")) mods |= WLR_MODIFIER_CTRL;
+		else if (!strcasecmp(tok, "Shift")) mods |= WLR_MODIFIER_SHIFT;
+		else {
+			sym = xkb_keysym_from_name(tok, XKB_KEYSYM_NO_FLAGS);
+			if (sym == XKB_KEY_NoSymbol)
+				sym = xkb_keysym_from_name(tok, XKB_KEYSYM_CASE_INSENSITIVE);
+		}
+	}
+	if (sym == XKB_KEY_NoSymbol) {
+		wlr_log(WLR_ERROR, "config: unknown key in binding '%s'", combo);
 		return;
 	}
+	/* keysyms are compared lower-case so Super+Shift+Q matches 'q' */
+	sym = xkb_keysym_to_lower(sym);
+
+	enum flwm_action_type type;
+	char *arg;
+	if (!parse_action(action, &type, &arg)) return;
 	/* replace an existing binding for the same combo */
 	for (int i = 0; i < c->nbindings; i++) {
 		struct flwm_binding *b = &c->bindings[i];
 		if (b->modifiers == mods && b->sym == sym) {
 			free(b->arg);
 			b->action = type;
-			b->arg = xstrdup(arg);
+			b->arg = arg;
 			return;
 		}
 	}
@@ -110,7 +120,7 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 	b->modifiers = mods;
 	b->sym = sym;
 	b->action = type;
-	b->arg = xstrdup(arg);
+	b->arg = arg;
 }
 
 /* [environment] KEY=value sets a variable for the programs started from now
@@ -163,6 +173,11 @@ void config_init_defaults(struct flwm_config *c) {
 	c->switcher = true;
 	c->xwayland = true;
 	c->workspaces = 4;
+	c->gestures = true;
+	c->gesture_fingers = 3;
+	c->gesture_natural = true;
+	c->gesture_up.type = FLWM_ACTION_LAUNCHER;
+	c->gesture_down.type = FLWM_ACTION_SHOW_DESKTOP;
 	c->lock_color = 0xff1e1f22;
 
 	add_binding(c, "Super+Return", "exec fl-term");
@@ -278,6 +293,19 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "disable_while_typing")) c->disable_while_typing = parse_bool(v);
 			else if (!strcmp(k, "middle_emulation")) c->middle_emulation = parse_bool(v);
 			else if (!strcmp(k, "scroll_method")) set_str(&c->scroll_method, v);
+		} else if (!strcasecmp(section, "gestures")) {
+			if (!strcmp(k, "enabled")) c->gestures = parse_bool(v);
+			else if (!strcmp(k, "fingers")) {
+				int n = atoi(v);
+				c->gesture_fingers = n < 3 ? 3 : n > 5 ? 5 : n;
+			} else if (!strcmp(k, "natural")) c->gesture_natural = parse_bool(v);
+			else if (!strcmp(k, "swipe_up") || !strcmp(k, "swipe_down")) {
+				struct flwm_gesture_action *g = k[6] == 'u' ? &c->gesture_up : &c->gesture_down;
+				free(g->arg);
+				g->arg = NULL;
+				g->type = FLWM_ACTION_NONE;
+				if (*v && strcasecmp(v, "none")) parse_action(v, &g->type, &g->arg);
+			}
 		} else if (!strcasecmp(section, "cursor")) {
 			if (!strcmp(k, "theme")) set_str(&c->cursor_theme, v);
 			else if (!strcmp(k, "size")) c->cursor_size = atoi(v);
@@ -337,6 +365,8 @@ void config_free(struct flwm_config *c) {
 	free(c->launcher_cmd);
 	free(c->lock_cmd);
 	free(c->scroll_method);
+	free(c->gesture_up.arg);
+	free(c->gesture_down.arg);
 	free(c->path);
 	for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);
 	for (int i = 0; i < c->nautostart; i++) free(c->autostart[i]);

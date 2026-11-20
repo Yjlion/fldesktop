@@ -156,6 +156,11 @@ struct flwm_config {
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
 	int workspaces; /* number of workspaces, 1..FLWM_MAX_WORKSPACES */
+	/* touchpad gestures (gesture.c) */
+	bool gestures;         /* swipes with gesture_fingers are ours */
+	int gesture_fingers;   /* 3..5 */
+	bool gesture_natural;  /* sideways: the workspaces follow the fingers */
+	struct flwm_gesture_action { enum flwm_action_type type; char *arg; } gesture_up, gesture_down;
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
 	char *lock_cmd;        /* default "fl-lock --locker" */
@@ -577,6 +582,10 @@ void lock_finish(struct flwm_server *server);
 void lock_request(struct flwm_server *server);
 void lock_arrange(struct flwm_server *server);
 void lock_activity(struct flwm_server *server);
+
+/* gesture.c */
+void gesture_init(struct flwm_server *server);
+void gesture_finish(void);
 void lock_view_mapped(struct flwm_server *server, struct flwm_view *view);
 bool lock_client_is_locker(struct flwm_server *server, struct wl_client *client);
 

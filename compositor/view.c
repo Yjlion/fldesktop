@@ -453,7 +453,9 @@ void view_set_maximized(struct flwm_view *view, bool maximized) {
 		return;
 	}
 	if (maximized) {
-		save_geometry(view);
+		/* a snapped window keeps the geometry it had before the snap */
+		if (view->snap != FLWM_SNAP_NONE) view->snap = FLWM_SNAP_NONE;
+		else save_geometry(view);
 		view->maximized = true;
 		struct wlr_box ua;
 		usable_area_for(view, &ua);
@@ -468,17 +470,60 @@ void view_set_maximized(struct flwm_view *view, bool maximized) {
 	decor_update(view);
 }
 
-void view_snap(struct flwm_view *view, int side) {
-	if (view->role != FLWM_ROLE_NORMAL) return;
-	if (view->maximized) view_set_maximized(view, false);
-	if (view->fullscreen) view_set_fullscreen(view, false);
+void view_resize_to(struct flwm_view *view, int w, int h) {
+	view->snap = FLWM_SNAP_NONE;
+	view_configure_size(view, w < 64 ? 64 : w, h < 64 ? 64 : h);
+}
+
+void view_set_geometry(struct flwm_view *view, const struct wlr_box *g) {
+	view_configure_size(view, g->width, g->height);
+	view_set_position(view, g->x, g->y);
+}
+
+enum flwm_snap view_snap_state(struct flwm_view *view) {
+	return view->maximized ? FLWM_SNAP_MAXIMIZED : view->snap;
+}
+
+static void apply_snap(struct flwm_view *view) {
 	struct wlr_box ua;
 	usable_area_for(view, &ua);
-	if (view->saved.width <= 0) save_geometry(view);
-	struct wlr_box box = ua;
-	box.width = ua.width / 2;
-	if (side > 0) box.x = ua.x + ua.width - box.width;
+	struct flwm_rect r = flwm_snap_rect(view->snap, (struct flwm_rect){ua.x, ua.y, ua.width, ua.height});
+	struct wlr_box box = {r.x, r.y, r.width, r.height};
 	apply_box(view, &box);
+}
+
+void view_set_snap(struct flwm_view *view, enum flwm_snap snap) {
+	if (view->role != FLWM_ROLE_NORMAL || !view_initialized(view)) return;
+	if (snap == FLWM_SNAP_MINIMIZED) {
+		view_set_minimized(view, true);
+		return;
+	}
+	if (snap == FLWM_SNAP_MAXIMIZED) {
+		view_set_maximized(view, true);
+		return;
+	}
+	if (view->fullscreen) view_set_fullscreen(view, false);
+	if (snap == FLWM_SNAP_NONE) {
+		if (view->maximized) {
+			view_set_maximized(view, false);
+		} else if (view->snap != FLWM_SNAP_NONE) {
+			view->snap = FLWM_SNAP_NONE;
+			restore_geometry(view);
+		}
+		return;
+	}
+	if (view->maximized) {
+		/* keep the geometry saved by maximizing */
+		view->maximized = false;
+		view_send_maximized(view, false);
+		if (view->ftl) wlr_foreign_toplevel_handle_v1_set_maximized(view->ftl, false);
+		view->decor.width = -1;
+	} else if (view->snap == FLWM_SNAP_NONE) {
+		save_geometry(view);
+	}
+	view->snap = snap;
+	apply_snap(view);
+	decor_update(view);
 }
 
 void view_set_minimized(struct flwm_view *view, bool minimized) {
@@ -552,6 +597,8 @@ void views_reconfigure_maximized(struct flwm_server *server) {
 			struct wlr_box ua;
 			usable_area_for(view, &ua);
 			apply_box(view, &ua);
+		} else if (view->snap != FLWM_SNAP_NONE) {
+			apply_snap(view);
 		}
 	}
 }
@@ -802,6 +849,7 @@ void view_handle_unmap(struct flwm_view *view) {
 	wlr_log(WLR_DEBUG, "unmap: %s", title_or(view, "?"));
 	if (view == server->grabbed_view) input_reset_cursor_mode(server);
 	if (server->cycle_current == view) server->cycle_current = NULL;
+	if (server->resize_view == view) server->resize_view = NULL;
 	switcher_view_gone(server, view);
 	if (server->hover_view == view) server->hover_view = NULL;
 	if (server->last_click_view == view) server->last_click_view = NULL;
@@ -1212,6 +1260,17 @@ void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, 
 	struct flwm_server *server = view->server;
 	if (view->fullscreen) return;
 	if (mode == FLWM_CURSOR_RESIZE && view->maximized) return;
+	if (mode == FLWM_CURSOR_RESIZE) view->snap = FLWM_SNAP_NONE; /* resized by hand: no longer a half */
+	if (mode == FLWM_CURSOR_MOVE && view->snap != FLWM_SNAP_NONE) {
+		/* back to the size it had, keeping the pointer at the same relative x */
+		struct wlr_box cur;
+		view_get_geometry(view, &cur);
+		double rel = cur.width > 0 ? (server->cursor->x - cur.x) / cur.width : 0.5;
+		view->snap = FLWM_SNAP_NONE;
+		int w = view->saved.width > 0 ? view->saved.width : cur.width;
+		if (view->saved.width > 0) view_configure_size(view, view->saved.width, view->saved.height);
+		view_set_position(view, (int)(server->cursor->x - rel * w), (int)server->cursor->y + deco_top(view) / 2);
+	}
 	if (mode == FLWM_CURSOR_MOVE && view->maximized) {
 		/* un-maximize, keeping the pointer at the same relative x in the title */
 		struct wlr_box cur;
@@ -1226,6 +1285,7 @@ void view_begin_interactive(struct flwm_view *view, enum flwm_cursor_mode mode, 
 	server->grabbed_view = view;
 	server->cursor_mode = mode;
 	if (mode == FLWM_CURSOR_MOVE) {
+		view_get_geometry(view, &server->drag_from);
 		server->grab_x = server->cursor->x - view->x;
 		server->grab_y = server->cursor->y - view->y;
 	} else {

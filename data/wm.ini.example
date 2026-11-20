@@ -19,6 +19,8 @@ focus_follows_mouse=false
 launcher=fl-launcher
 # Alt+Tab shows a window switcher; false: each Alt+Tab raises the next window
 switcher=true
+# dragging a window to a screen edge or corner snaps it (half, quarter, top: maximized)
+drag_snap=true
 # run X11 programs through Xwayland (started with the first one); read at startup
 xwayland=true
 # number of workspaces (1-9); all outputs switch together
@@ -88,7 +90,9 @@ scale=1
 # "defaults=false" first to start from an empty list instead.
 # Modifiers: Super, Alt, Ctrl, Shift. Keys are xkb keysym names.
 # Actions: exec CMD, close, maximize, minimize, fullscreen, cycle, cycle-back,
-#          snap-left, snap-right, launcher, show-desktop, lock, reload, quit,
+#          snap-left, snap-right, snap-up, snap-down (halves and quarters),
+#          resize-mode (arrows resize, Enter/Escape), launcher, show-desktop,
+#          lock, reload, quit,
 #          workspace N, workspace-next, workspace-prev, move-to-workspace N,
 #          move-to-workspace-next, move-to-workspace-prev (the window goes
 #          along), sticky (show the window on every workspace)
@@ -100,8 +104,9 @@ Super+l=lock
 Super+d=show-desktop
 Super+q=close
 Alt+F4=close
-Super+Up=maximize
-Super+Down=minimize
+Super+Up=snap-up
+Super+Down=snap-down
+Super+r=resize-mode
 Super+Left=snap-left
 Super+Right=snap-right
 Super+f=fullscreen

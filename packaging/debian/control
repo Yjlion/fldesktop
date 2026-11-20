@@ -117,7 +117,8 @@ Architecture: any
 Depends: fldesktop-wm (= ${binary:Version}), xdg-user-dirs, ${shlibs:Depends}, ${misc:Depends}
 Recommends: dbus-user-session, pipewire-audio | pipewire, wireplumber, network-manager,
             fldesktop-polkit-agent, fldesktop-notifyd, xdg-desktop-portal-fl,
-            bluez, cups, upower, udisks2, grim, wl-clipboard
+            bluez, cups, upower, udisks2, grim, wl-clipboard,
+            gstreamer1.0-pipewire, gstreamer1.0-plugins-good
 Suggests: power-profiles-daemon
 Description: fldesktop panel, launcher and desktop
  The fldesktop session: fl-panel (taskbar, clock, network, volume, battery,

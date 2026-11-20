@@ -163,4 +163,25 @@ std::string file_name(time_t t) {
   return buf;
 }
 
+std::string recording_name(time_t t) {
+  char buf[64];
+  struct tm tm;
+  localtime_r(&t, &tm);
+  strftime(buf, sizeof buf, "Screencast-%Y-%m-%d-%H%M%S.webm", &tm);
+  return buf;
+}
+
+std::string record_pipeline(int fd, uint32_t node, bool audio) {
+  std::string src = "pipewiresrc";
+  if (fd >= 0) src += " fd=" + std::to_string(fd);
+  src += " path=" + std::to_string(node) + " do-timestamp=true keepalive-time=1000 always-copy=true";
+  std::string p = src +
+                  " ! queue ! videorate ! video/x-raw,framerate=30/1 ! videoconvert ! video/x-raw,format=I420"
+                  " ! queue ! vp8enc deadline=1 cpu-used=8 threads=4 end-usage=cq cq-level=10 target-bitrate=8000000"
+                  " ! queue ! webmmux name=mux ! filesink name=sink";
+  if (audio)
+    p += " pulsesrc device=@DEFAULT_MONITOR@ ! queue ! audioconvert ! audioresample ! opusenc ! queue ! mux.";
+  return p;
+}
+
 } // namespace snip

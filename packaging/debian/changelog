@@ -24,5 +24,6 @@ fldesktop (0.1.0) unstable; urgency=medium
   * Screen sharing: xdg-desktop-portal-fl implements ScreenCast (screens and
     single windows through PipeWire, with a picker and remembered choices);
     fl-wm offers ext-image-copy-capture-v1.
+  * fl-snip records screens and windows to WebM (with sound if asked).
 
  -- Yjlion <yjlion@users.noreply.github.com>  Sun, 15 Nov 2026 22:00:00 +0000

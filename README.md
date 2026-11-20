@@ -110,7 +110,7 @@ sudo apt install cmake ninja-build pkgconf libfltk1.4-dev libwlroots-0.18-dev li
   wayland-protocols libwayland-dev libxkbcommon-dev libinput-dev libpango1.0-dev librsvg2-dev libdrm-dev \
   libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libssl-dev libfontconfig-dev \
   libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libjxl-dev libarchive-dev libgstreamer1.0-dev \
-  libgstreamer-plugins-base1.0-dev libegl-dev libgl-dev \
+  libgstreamer-plugins-base1.0-dev libegl-dev libgles-dev libgl-dev \
   libpam0g-dev libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev
 
 cmake -B build -G Ninja

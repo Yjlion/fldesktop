@@ -1,9 +1,12 @@
 // Backend for WPE WebKit with libwpe and WPEBackend-fdo (Debian 13's
-// WebKit): the view backend exports shared memory buffers that are copied
-// into memory for FLTK to draw.
+// WebKit). With a GPU, WebKit renders with it and the view backend exports
+// EGL images, which are read back into memory for FLTK to draw; otherwise it
+// renders with the CPU and exports shared memory buffers.
 #include "backend.h"
+#include "gl_readback.h"
 
 #include <wayland-server.h>
+#include <wpe/fdo-egl.h>
 #include <wpe/fdo.h>
 #include <wpe/unstable/fdo-shm.h>
 #include <wpe/wpe.h>
@@ -14,11 +17,18 @@ namespace web {
 namespace {
 
 bool g_initialized = false;
+bool g_egl = false; // EGL images, else shared memory
 
 void initialize() {
   if (g_initialized) return;
   g_initialized = true;
   wpe_loader_init("libWPEBackend-fdo-1.0.so.1");
+  EGLDisplay dpy = gpu_display();
+  if (dpy != EGL_NO_DISPLAY && wpe_fdo_initialize_for_egl_display(dpy)) {
+    g_egl = true;
+    return;
+  }
+  if (dpy != EGL_NO_DISPLAY) g_message("fl-web: WPEBackend-fdo cannot use the GPU, rendering with the CPU");
   if (!wpe_fdo_initialize_shm()) g_warning("fl-web: could not initialize WPEBackend-fdo");
 }
 
@@ -35,11 +45,20 @@ class FdoBackend : public Backend {
 public:
   FdoBackend() {
     initialize();
-    static const wpe_view_backend_exportable_fdo_client client = {
-        nullptr, nullptr, [](void *data, wpe_fdo_shm_exported_buffer *buffer) { export_shm((Proxy *)data, buffer); },
-        nullptr, nullptr};
     proxy_ = new Proxy{this};
-    exportable_ = wpe_view_backend_exportable_fdo_create(&client, proxy_, (uint32_t)width_, (uint32_t)height_);
+    if (g_egl) {
+      static const wpe_view_backend_exportable_fdo_egl_client client = {
+          nullptr,
+          [](void *data, wpe_fdo_egl_exported_image *image) { export_image((Proxy *)data, image); },
+          [](void *data, wpe_fdo_shm_exported_buffer *buffer) { export_shm((Proxy *)data, buffer); },
+          nullptr, nullptr};
+      exportable_ = wpe_view_backend_exportable_fdo_egl_create(&client, proxy_, (uint32_t)width_, (uint32_t)height_);
+    } else {
+      static const wpe_view_backend_exportable_fdo_client client = {
+          nullptr, nullptr, [](void *data, wpe_fdo_shm_exported_buffer *buffer) { export_shm((Proxy *)data, buffer); },
+          nullptr, nullptr};
+      exportable_ = wpe_view_backend_exportable_fdo_create(&client, proxy_, (uint32_t)width_, (uint32_t)height_);
+    }
     proxy_->exportable = exportable_;
   }
   ~FdoBackend() override { proxy_->owner = nullptr; }
@@ -135,13 +154,43 @@ public:
   }
 
 private:
+  static void release_shm(wpe_view_backend_exportable_fdo *e, wpe_fdo_shm_exported_buffer *buffer) {
+    if (g_egl) wpe_view_backend_exportable_fdo_egl_dispatch_release_shm_exported_buffer(e, buffer);
+    else wpe_view_backend_exportable_fdo_dispatch_release_shm_exported_buffer(e, buffer);
+  }
   static void export_shm(Proxy *p, wpe_fdo_shm_exported_buffer *buffer) {
     if (!p->owner) {
-      wpe_view_backend_exportable_fdo_dispatch_release_shm_exported_buffer(p->exportable, buffer);
+      release_shm(p->exportable, buffer);
       wpe_view_backend_exportable_fdo_dispatch_frame_complete(p->exportable);
       return;
     }
     p->owner->copy_shm(buffer);
+  }
+  static void export_image(Proxy *p, wpe_fdo_egl_exported_image *image) {
+    if (!p->owner) {
+      wpe_view_backend_exportable_fdo_egl_dispatch_release_exported_image(p->exportable, image);
+      wpe_view_backend_exportable_fdo_dispatch_frame_complete(p->exportable);
+      return;
+    }
+    p->owner->copy_image(image);
+  }
+  // the image is read back at once and given back to WebKit; the next frame
+  // comes after frame_shown()
+  void copy_image(wpe_fdo_egl_exported_image *image) {
+    auto f = std::make_shared<Frame>();
+    bool ok = GLReadback::get().read(wpe_fdo_egl_exported_image_get_egl_image(image),
+                                     (int)wpe_fdo_egl_exported_image_get_width(image),
+                                     (int)wpe_fdo_egl_exported_image_get_height(image), *f);
+    wpe_view_backend_exportable_fdo_egl_dispatch_release_exported_image(exportable_, image);
+    pending_frame_ = true;
+    if (!ok) {
+      static bool warned = false;
+      if (!warned) g_warning("fl-web: could not read a frame back from the GPU");
+      warned = true;
+      frame_shown(); // let WebKit go on
+      return;
+    }
+    if (on_frame) on_frame(f);
   }
   void copy_shm(wpe_fdo_shm_exported_buffer *buffer) {
     wl_shm_buffer *shm = wpe_fdo_shm_exported_buffer_get_shm_buffer(buffer);
@@ -155,7 +204,7 @@ private:
       f->pixels.assign(p, p + (size_t)f->stride * (size_t)f->height);
       wl_shm_buffer_end_access(shm);
     }
-    wpe_view_backend_exportable_fdo_dispatch_release_shm_exported_buffer(exportable_, buffer);
+    release_shm(exportable_, buffer);
     pending_frame_ = true;
     if (on_frame && shm) on_frame(f);
   }

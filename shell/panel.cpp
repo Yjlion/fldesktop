@@ -404,7 +404,6 @@ static void relayout_tasks() {
   else P.tasks->redraw();
 }
 
-static void tick(void *);
 
 static void update_clock() {
   time_t now = time(nullptr);
@@ -884,20 +883,45 @@ public:
   }
 };
 
-static int volume_ticks = 0;
+// Timers wake the panel only as often as needed (it runs on battery-powered
+// laptops): the clock when its text can change, the volume only without the
+// PipeWire backend (which reports changes), the battery every 30 s.
+static double now_s() {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
 
-static void tick(void *) {
+static void clock_tick(void *) {
   update_clock();
-  if (++volume_ticks % 3 == 0) {
-    query_volume();
-    update_volume_widget();
-  }
-#ifdef FLD_HAVE_POWER
-  if (volume_ticks % 30 == 1 && !power_indicator_active()) update_battery();
+  // recomputed from the wall clock each time, so a resume from suspend or a
+  // changed time zone is right at the next firing; 50 ms after the change
+  // so that the new minute has surely begun
+  Fl::add_timeout(fld::strftime_next_change(P.clock_fmt, now_s()) + 0.05, clock_tick);
+}
+
+static bool volume_polled() {
+#ifdef FLD_HAVE_AUDIO
+  return !g_audio;
 #else
-  if (volume_ticks % 30 == 1) update_battery();
+  return true;
 #endif
-  Fl::repeat_timeout(1.0, tick);
+}
+
+static void volume_tick(void *) {
+  if (!volume_polled()) return;
+  query_volume();
+  update_volume_widget();
+  Fl::repeat_timeout(3.0, volume_tick);
+}
+
+static void battery_tick(void *) {
+#ifdef FLD_HAVE_POWER
+  if (!power_indicator_active()) update_battery();
+#else
+  update_battery();
+#endif
+  Fl::repeat_timeout(30.0, battery_tick);
 }
 
 fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Callback *cb) {
@@ -1099,6 +1123,8 @@ int main(int argc, char **argv) {
   } else {
     fprintf(stderr, "fl-panel: needs a Wayland session\n");
   }
-  Fl::add_timeout(1.0, tick);
+  clock_tick(nullptr);
+  if (volume_polled()) Fl::add_timeout(3.0, volume_tick);
+  Fl::add_timeout(1.0, battery_tick);
   return Fl::run();
 }

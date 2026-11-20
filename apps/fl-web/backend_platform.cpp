@@ -1,10 +1,15 @@
 // Backend for WPE WebKit built with the WPE Platform API: a WPEDisplay and
 // WPEView of our own whose buffers are copied into memory for FLTK to draw.
+// With a GPU the display offers its EGL display and DRM device, WebKit
+// renders into DMA-BUF buffers and they are read back with GL; otherwise
+// WebKit renders with the CPU into shared memory.
 #include "backend.h"
+#include "gl_readback.h"
 
 #include <wpe/wpe-platform.h>
 
 #include <cstring>
+#include <vector>
 
 namespace web {
 class PlatformBackend;
@@ -27,6 +32,8 @@ struct _FldWpeDisplay {
   WPEDisplay parent;
   WPEKeymap *keymap;
   WPEClipboard *clipboard;
+  WPEDRMDevice *drm; // null without a GPU
+  WPEBufferFormats *formats;
 };
 struct _FldWpeClipboard {
   WPEClipboard parent;
@@ -138,7 +145,15 @@ public:
     auto f = std::make_shared<Frame>();
     f->width = wpe_buffer_get_width(buffer);
     f->height = wpe_buffer_get_height(buffer);
-    if (WPE_IS_BUFFER_SHM(buffer)) {
+    if (WPE_IS_BUFFER_DMA_BUF(buffer) && gpu_display() != EGL_NO_DISPLAY) {
+      // rendered by the GPU: copy it back with GL
+      auto image = (EGLImageKHR)wpe_buffer_import_to_egl_image(buffer, error);
+      if (!image) return FALSE;
+      if (!GLReadback::get().read(image, f->width, f->height, *f)) {
+        g_set_error_literal(error, WPE_VIEW_ERROR, WPE_VIEW_ERROR_RENDER_FAILED, "fl-web: could not read the frame back");
+        return FALSE;
+      }
+    } else if (WPE_IS_BUFFER_SHM(buffer)) {
       WPEBufferSHM *shm = WPE_BUFFER_SHM(buffer);
       GBytes *data = wpe_buffer_shm_get_data(shm);
       f->stride = (int)wpe_buffer_shm_get_stride(shm);
@@ -237,9 +252,53 @@ static WPEView *display_create_view(WPEDisplay *d) {
   return WPE_VIEW(g_object_new(FLD_TYPE_WPE_VIEW, "display", d, nullptr));
 }
 static gpointer display_get_egl_display(WPEDisplay *, GError **error) {
-  // no EGL: WebKit renders with the CPU into shared memory buffers
+  EGLDisplay dpy = web::gpu_display();
+  if (dpy != EGL_NO_DISPLAY) return dpy;
+  // no GPU: WebKit renders with the CPU into shared memory buffers
   g_set_error_literal(error, WPE_DISPLAY_ERROR, WPE_DISPLAY_ERROR_NOT_SUPPORTED, "fl-web renders without EGL");
   return nullptr;
+}
+static WPEDRMDevice *display_get_drm_device(WPEDisplay *d) {
+  FldWpeDisplay *self = FLD_WPE_DISPLAY(d);
+  if (!self->drm) {
+    web::DrmNodes n = web::gpu_drm_nodes();
+    if (n.render.empty()) return nullptr;
+    self->drm = wpe_drm_device_new(n.primary.empty() ? nullptr : n.primary.c_str(), n.render.c_str());
+  }
+  return self->drm;
+}
+// The formats the readback can import (as GL_TEXTURE_2D): ARGB8888 and
+// XRGB8888 with the modifiers the EGL display supports.
+static WPEBufferFormats *display_get_preferred_buffer_formats(WPEDisplay *d) {
+  FldWpeDisplay *self = FLD_WPE_DISPLAY(d);
+  if (!self->formats) {
+    EGLDisplay dpy = web::gpu_display();
+    WPEDRMDevice *drm = display_get_drm_device(d);
+    if (dpy == EGL_NO_DISPLAY || !drm) return nullptr;
+    auto query_modifiers = (PFNEGLQUERYDMABUFMODIFIERSEXTPROC)eglGetProcAddress("eglQueryDmaBufModifiersEXT");
+    const guint64 kInvalid = 0x00ffffffffffffffULL; // DRM_FORMAT_MOD_INVALID: the driver's choice
+    WPEBufferFormatsBuilder *b = wpe_buffer_formats_builder_new(drm);
+    wpe_buffer_formats_builder_append_group(b, drm, WPE_BUFFER_FORMAT_USAGE_RENDERING);
+    for (guint32 fourcc : {0x34325241u /* AR24 */, 0x34325258u /* XR24 */}) {
+      std::vector<EGLuint64KHR> mods;
+      std::vector<EGLBoolean> external;
+      EGLint n = 0;
+      if (query_modifiers && query_modifiers(dpy, (EGLint)fourcc, 0, nullptr, nullptr, &n) && n > 0) {
+        mods.resize(n);
+        external.resize(n);
+        if (!query_modifiers(dpy, (EGLint)fourcc, n, mods.data(), external.data(), &n)) n = 0;
+      }
+      bool any = false;
+      for (EGLint i = 0; i < n; i++)
+        if (!external[i]) {
+          wpe_buffer_formats_builder_append_format(b, fourcc, mods[i]);
+          any = true;
+        }
+      if (!any) wpe_buffer_formats_builder_append_format(b, fourcc, kInvalid);
+    }
+    self->formats = wpe_buffer_formats_builder_end(b);
+  }
+  return self->formats; // transfer none
 }
 static WPEKeymap *display_get_keymap(WPEDisplay *d) {
   FldWpeDisplay *self = FLD_WPE_DISPLAY(d);
@@ -257,6 +316,11 @@ static WPEClipboard *display_get_clipboard(WPEDisplay *d) {
 static void display_dispose(GObject *o) {
   g_clear_object(&FLD_WPE_DISPLAY(o)->keymap);
   g_clear_object(&FLD_WPE_DISPLAY(o)->clipboard);
+  g_clear_object(&FLD_WPE_DISPLAY(o)->formats);
+  if (FLD_WPE_DISPLAY(o)->drm) {
+    wpe_drm_device_unref(FLD_WPE_DISPLAY(o)->drm);
+    FLD_WPE_DISPLAY(o)->drm = nullptr;
+  }
   G_OBJECT_CLASS(fld_wpe_display_parent_class)->dispose(o);
 }
 static void fld_wpe_display_class_init(FldWpeDisplayClass *k) {
@@ -264,6 +328,8 @@ static void fld_wpe_display_class_init(FldWpeDisplayClass *k) {
   dc->connect = display_connect;
   dc->create_view = display_create_view;
   dc->get_egl_display = display_get_egl_display;
+  dc->get_drm_device = display_get_drm_device;
+  dc->get_preferred_buffer_formats = display_get_preferred_buffer_formats;
   dc->get_keymap = display_get_keymap;
   dc->get_clipboard = display_get_clipboard;
   dc->create_toplevel = display_create_toplevel;

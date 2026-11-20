@@ -110,6 +110,7 @@ void apply(Snapshot *s) {
 
 void poll_thread() {
   std::set<int> last_active;
+  bool first = true;
   while (true) {
     Snapshot *s = new Snapshot;
     s->active = prn::jobs(true, "", true);
@@ -120,8 +121,12 @@ void poll_thread() {
       if (!ids.count(id)) left = true;
     if (left) s->finished = prn::jobs(false, "", true);
     if (!s->active.empty() || left) s->printers = prn::printers();
+    // nothing printing now or before: no need to wake the panel up
+    bool idle = ids.empty() && last_active.empty() && !first;
+    first = false;
     last_active = ids;
-    Fl::awake([](void *d) { apply((Snapshot *)d); }, s);
+    if (idle) delete s;
+    else Fl::awake([](void *d) { apply((Snapshot *)d); }, s);
     std::unique_lock<std::mutex> l(g_mutex);
     g_cv.wait_for(l, std::chrono::milliseconds(ids.empty() ? 3000 : 1500), [] { return g_kick; });
     g_kick = false;

@@ -47,6 +47,11 @@ std::string shell_quote(const std::string &s);
 std::vector<std::string> shell_split(const std::string &cmd); // simple POSIX-ish word split
 std::string human_size(unsigned long long bytes);
 std::string format_time(time_t t, const char *fmt = "%Y-%m-%d %H:%M");
+// Whether a strftime() format shows seconds (%S, %T, %r, %X, %c, %s, ...):
+// a clock with this format needs updating every second, others every minute.
+bool strftime_has_seconds(const std::string &fmt);
+// Seconds until the text of strftime(fmt) can next change after now.
+double strftime_next_change(const std::string &fmt, double now);
 std::string uri_encode_path(const std::string &path);
 std::string uri_decode(const std::string &s);
 

@@ -48,8 +48,9 @@ public:
 using Done = std::function<void(const std::string &error)>; // "" = success
 using ProgressFn = std::function<void(const Progress &)>;
 
-// refresh: download the remotes' AppStream data first
-void load_catalog(bool refresh, std::function<void(const Catalog &)> done, ProgressFn progress = nullptr);
+// refresh: download the remotes' AppStream data first; done() may move the
+// catalog away
+void load_catalog(bool refresh, std::function<void(Catalog &)> done, ProgressFn progress = nullptr);
 Job install(const App &app, bool user, ProgressFn progress, Done done);
 Job uninstall(const App &app, ProgressFn progress, Done done);
 Job update(const std::vector<App> &apps, ProgressFn progress, Done done);

@@ -13,6 +13,19 @@ if [ -r "$conf" ]; then
 	set +a
 fi
 
+# fl-wm always draws the window decorations (xdg-decoration, server side), so
+# libdecor's plugins (GTK, cairo) would only be loaded and set up for nothing:
+# about 110 ms in every FLTK app's start on a slow machine. An empty plugin
+# directory leaves libdecor its built-in server-side mode. Only in this session:
+# under another compositor apps may need the plugins to get a frame.
+# The directory must be private (libdecor loads what is in it): never /tmp.
+if [ -z "$LIBDECOR_PLUGIN_DIR" ] && [ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+	nodecor="$XDG_RUNTIME_DIR/fldesktop-libdecor-none"
+	if mkdir -p -m 700 "$nodecor" 2>/dev/null && [ -O "$nodecor" ]; then
+		export LIBDECOR_PLUGIN_DIR="$nodecor"
+	fi
+fi
+
 # Remember the proxy settings the session starts with: Settings > Proxy
 # offers to keep using them ("inherit") and fl-wm / spawn() restore them
 # from here (wm.ini [environment] KEY=@inherit).

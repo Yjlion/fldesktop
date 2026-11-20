@@ -2,7 +2,9 @@
 #include "fld/ini.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -298,6 +300,29 @@ std::string human_size(unsigned long long b) {
   if (i == 0) snprintf(buf, sizeof buf, "%llu B", b);
   else snprintf(buf, sizeof buf, v < 10 ? "%.1f %s" : "%.0f %s", v, u[i]);
   return buf;
+}
+
+bool strftime_has_seconds(const std::string &fmt) {
+  for (size_t i = 0; i + 1 < fmt.size(); i++) {
+    if (fmt[i] != '%') continue;
+    size_t j = i + 1;
+    // glibc flags and width (%-S, %_3S), then the E / O modifiers
+    while (j < fmt.size() && (strchr("_-0^#", fmt[j]) || isdigit((unsigned char)fmt[j]))) j++;
+    if (j < fmt.size() && (fmt[j] == 'E' || fmt[j] == 'O')) j++;
+    if (j >= fmt.size()) break;
+    if (strchr("STrXcs+", fmt[j])) return true;
+    i = j; // "%%" too: the second '%' is not a conversion
+  }
+  return false;
+}
+
+double strftime_next_change(const std::string &fmt, double now) {
+  double frac = now - std::floor(now);
+  if (strftime_has_seconds(fmt)) return 1.0 - frac;
+  time_t t = (time_t)std::floor(now);
+  struct tm tm;
+  localtime_r(&t, &tm);
+  return std::max(0.0, (60 - tm.tm_sec) - frac); // tm_sec is 60 in a leap second
 }
 
 std::string format_time(time_t t, const char *fmt) {

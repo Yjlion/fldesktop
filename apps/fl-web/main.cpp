@@ -42,6 +42,7 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "glib_loop.h"
+#include "gl_readback.h"
 #include "webview.h"
 
 using namespace web;
@@ -1854,8 +1855,10 @@ int main(int argc, char **argv) {
       return 0;
     }
     if (a == "-v" || a == "--version") {
-      printf("fl-web %s (WPE WebKit %u.%u.%u, %s)\n", FLD_VERSION, webkit_get_major_version(),
-             webkit_get_minor_version(), webkit_get_micro_version(), backend_name());
+      // the rendering (GPU or CPU) can only be told with a display
+      const char *mode = getenv("WAYLAND_DISPLAY") ? web::render_mode() : "no display";
+      printf("fl-web %s (WPE WebKit %u.%u.%u, %s, rendering: %s)\n", FLD_VERSION, webkit_get_major_version(),
+             webkit_get_minor_version(), webkit_get_micro_version(), backend_name(), mode);
       return 0;
     }
   }

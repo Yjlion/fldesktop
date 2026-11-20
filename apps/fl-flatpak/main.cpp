@@ -11,6 +11,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
+#include <FL/Fl_Image.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Progress.H>
 #include <FL/Fl_Return_Button.H>
@@ -19,8 +20,12 @@
 #include <FL/fl_ask.H>
 
 #include <unistd.h>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 
 #include <algorithm>
+#include <functional>
 #include <set>
 #include <thread>
 #include <cstdio>
@@ -80,6 +85,51 @@ void fetch_remote_image(const std::string &url) {
     }, nullptr);
   }).detach();
 }
+
+// Rows get this until they are first drawn: the same height as a real icon,
+// so the list does not move when icons are loaded.
+Fl_Image *placeholder_icon() {
+  static uchar pixels[32 * 32 * 4] = {};
+  static Fl_RGB_Image img(pixels, 32, 32, 4);
+  return &img;
+}
+
+// The app list. The catalog has thousands of apps: loading all their icons
+// (and downloading the missing ones) took seconds and a lot of memory, so
+// only the lines that are drawn get their icon.
+class AppList : public Fl_Hold_Browser {
+public:
+  std::function<Fl_Image *(int line)> icon_for; // line from 1; nullptr = none
+  AppList(int X, int Y, int W, int H) : Fl_Hold_Browser(X, Y, W, H) {}
+  // after the lines changed, or when better icons may be available
+  void reset_icons() {
+    loaded_.assign((size_t)size() + 1, 0);
+    redraw();
+  }
+  void draw() override {
+    // the browser finds its top line while drawing: draw, then load the
+    // icons of the lines now on screen and draw again with them
+    Fl_Hold_Browser::draw();
+    if (!icon_for) return;
+    if ((int)loaded_.size() < size() + 1) loaded_.resize((size_t)size() + 1, 0);
+    bool any = false;
+    for (int l = std::max(1, topline()); l <= size() && displayed(l); l++) {
+      if (loaded_[l]) continue;
+      loaded_[l] = 1;
+      if (Fl_Image *img = icon_for(l)) {
+        icon(l, img);
+        any = true;
+      }
+    }
+    if (any) {
+      clear_damage(FL_DAMAGE_ALL);
+      Fl_Hold_Browser::draw();
+    }
+  }
+
+private:
+  std::vector<uint8_t> loaded_;
+};
 
 Fl_Image *app_icon(const fp::App &a, int size) {
   std::string key = a.id + "|" + a.icon + "@" + std::to_string(size);
@@ -290,7 +340,8 @@ class StoreWindow : public Fl_Double_Window {
 public:
   fp::Catalog catalog;
   std::vector<int> shown; // indexes into catalog.apps
-  Fl_Hold_Browser *nav, *list;
+  Fl_Hold_Browser *nav;
+  AppList *list;
   Fl_Input *search;
   Fl_Choice *target;
   Fl_Box *banner, *icon, *title, *meta, *status;
@@ -333,7 +384,11 @@ public:
     nav->textsize(14);
     nav->format_char(0);
     nav->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->filter(); }, this);
-    list = new Fl_Hold_Browser(220, 50, 380, H - 86);
+    list = new AppList(220, 50, 380, H - 86);
+    list->icon_for = [this](int line) -> Fl_Image * {
+      if (line < 1 || line > (int)shown.size()) return nullptr;
+      return app_icon(catalog.apps[(size_t)shown[line - 1]], 32);
+    };
     list->format_char(0);
     list->textsize(14);
     list->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->app_selected(); }, this);
@@ -449,11 +504,14 @@ public:
 
   void reload(bool refresh) {
     set_status(refresh ? "Updating the catalogs…" : "Loading…");
-    fp::load_catalog(refresh, [this](const fp::Catalog &c) {
-      catalog = c;
+    fp::load_catalog(refresh, [this](fp::Catalog &c) {
+      catalog = std::move(c);
       fill_nav();
       filter();
-      if (!c.error.empty()) set_status(c.error);
+#ifdef __GLIBC__
+      malloc_trim(0); // the previous catalog
+#endif
+      if (!catalog.error.empty()) set_status(catalog.error);
       else {
         int inst = 0, apps = 0;
         for (auto &a : catalog.apps) {
@@ -515,8 +573,7 @@ public:
 
   // downloaded icons arrived: set them without rebuilding the list
   void refresh_icons() {
-    for (size_t r = 0; r < shown.size() && (int)r < list->size(); r++)
-      list->icon((int)r + 1, app_icon(catalog.apps[(size_t)shown[r]], 32));
+    list->reset_icons(); // the lines on screen ask again
     if (const fp::App *a = current()) icon->image(app_icon(*a, 64));
     redraw();
   }
@@ -542,13 +599,13 @@ public:
       std::string label = a.runtime ? a.name + "  · " + a.version
                                     : a.name + (a.update ? "  · update available" : a.installed ? "  · installed" : "");
       list->add(label.c_str());
-      list->icon(list->size(), app_icon(a, 32));
+      list->icon(list->size(), placeholder_icon());
     }
     if (shown.empty()) {
       list->add(catalog.apps.empty() ? "No apps: add a source such as Flathub." : "Nothing found.");
       show_detail(nullptr);
     }
-    list->redraw();
+    list->reset_icons();
   }
 
   const fp::App *current() const {

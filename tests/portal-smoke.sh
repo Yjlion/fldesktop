@@ -26,6 +26,12 @@ for i in $(seq 1 50); do
 	P org.freedesktop.impl.portal.Settings.Read org.freedesktop.appearance color-scheme >/dev/null 2>&1 && break
 	sleep 0.1
 done
+# fl-notifyd starts in parallel and takes its name a little later
+for i in $(seq 1 50); do
+	gdbus call --session -d org.freedesktop.DBus -o /org/freedesktop/DBus -m org.freedesktop.DBus.GetNameOwner \
+		org.freedesktop.Notifications >/dev/null 2>&1 && break
+	sleep 0.1
+done
 v=$(P org.freedesktop.impl.portal.Settings.Read org.freedesktop.appearance color-scheme) || fail "no portal"
 [ "$v" = "(<uint32 1>,)" ] || fail "color-scheme: $v"
 v=$(P org.freedesktop.impl.portal.Settings.ReadAll '["org.freedesktop.appearance"]')

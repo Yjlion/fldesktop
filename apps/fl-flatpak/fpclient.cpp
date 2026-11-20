@@ -1,6 +1,9 @@
 #include "fpclient.h"
 
 #include <appstream.h>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 #include <flatpak.h>
 
 #include <algorithm>
@@ -257,7 +260,7 @@ Job run_tx(const std::string &installation, ProgressFn progress, Done done,
 
 } // namespace
 
-void load_catalog(bool refresh, std::function<void(const Catalog &)> done, ProgressFn progress) {
+void load_catalog(bool refresh, std::function<void(Catalog &)> done, ProgressFn progress) {
   run_bg([refresh, done, progress] {
     Catalog cat;
     std::map<std::string, App> apps;
@@ -403,7 +406,15 @@ void load_catalog(bool refresh, std::function<void(const Catalog &)> done, Progr
     for (auto &r : runtimes) cat.apps.push_back(r);
     std::sort(cat.apps.begin(), cat.apps.end(),
               [](const App &a, const App &b) { return fld::lower(a.name) < fld::lower(b.name); });
-    fld::ui_call([done, cat] { done(cat); });
+    apps.clear();
+    installed.clear();
+#ifdef __GLIBC__
+    // Reading Flathub's AppStream data takes a few hundred MB that glibc
+    // would otherwise keep for this process after it is freed.
+    malloc_trim(0);
+#endif
+    auto shared = std::make_shared<Catalog>(std::move(cat));
+    fld::ui_call([done, shared] { done(*shared); });
   });
 }
 

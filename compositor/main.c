@@ -256,6 +256,7 @@ int main(int argc, char *argv[]) {
 
 	output_init(&server);
 	view_init(&server);
+	workspace_init(&server);
 	layer_init(&server);
 	input_init(&server);
 	xwayland_init(&server); /* sets DISPLAY for the programs we start */
@@ -301,6 +302,7 @@ int main(int argc, char *argv[]) {
 	wl_event_source_remove(sig_usr2);
 	lock_finish(&server);
 	xwayland_finish(&server);
+	workspace_finish(&server);
 	wl_display_destroy_clients(server.wl_display);
 
 	/* wlroots asserts that no listeners remain when objects are destroyed */

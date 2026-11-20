@@ -122,6 +122,9 @@ static void mgr_finished(void *, zwlr_foreign_toplevel_manager_v1 *) { g_ftl_mgr
 static const zwlr_foreign_toplevel_manager_v1_listener kMgrListener = {mgr_toplevel, mgr_finished};
 
 static void reg_global(void *, wl_registry *reg, uint32_t name, const char *iface, uint32_t version) {
+#ifdef FLD_HAVE_PAGER
+  if (pager_bind(reg, name, iface, version)) return;
+#endif
   if (!strcmp(iface, zwlr_foreign_toplevel_manager_v1_interface.name)) {
     g_ftl_mgr = (zwlr_foreign_toplevel_manager_v1 *)wl_registry_bind(
         reg, name, &zwlr_foreign_toplevel_manager_v1_interface, std::min<uint32_t>(version, 3));
@@ -339,6 +342,7 @@ struct Panel {
   Fl_Double_Window *win = nullptr;
   fld::FlatButton *menu_btn = nullptr;
   Fl_Group *quick = nullptr;
+  Fl_Widget *pager = nullptr;
   Fl_Group *tasks = nullptr;
   fld::FlatButton *volume = nullptr;
   fld::FlatButton *keyboard = nullptr;
@@ -393,7 +397,9 @@ static void relayout_tasks() {
       x += bw;
     }
   }
-  P.tasks->redraw();
+  // the task area has no box: redraw the window so a removed button's pixels go
+  if (P.win) P.win->redraw();
+  else P.tasks->redraw();
 }
 
 static void tick(void *);
@@ -758,6 +764,10 @@ void relayout() {
   int qx = x;
   for (int i = 0; i < P.quick->children(); i++) P.quick->child(i)->resize(qx + i * 36, 2, 34, H - 4);
   x += P.quick->w() + 8;
+  if (P.pager && P.pager->visible()) {
+    P.pager->resize(x, 2, P.pager->w(), H - 4);
+    x += P.pager->w() + 8;
+  }
   // right side, right to left
   int r = W - 4;
   P.power->resize(r - 34, 2, 34, H - 4);
@@ -973,6 +983,10 @@ int main(int argc, char **argv) {
     quick_entries.push_back(std::move(e));
   }
   P.quick->end();
+#ifdef FLD_HAVE_PAGER
+  // the workspace pager: Pager=auto (when fl-wm has several workspaces) | never
+  if (fld::lower(cfg.get("Panel", "Pager", "auto")) != "never") P.pager = pager_create();
+#endif
 
   P.tasks = new Fl_Group(0, 0, 10, PANEL_H);
   P.tasks->end();

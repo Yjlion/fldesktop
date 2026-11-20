@@ -16,6 +16,16 @@ window (restoring it when minimized), Escape or a click outside closes the panel
 \fBswitcher=false\fR in the \fB[behaviour]\fR section of \fIwm.ini\fR each Alt+Tab raises the next
 window directly instead. Application icons come from the windows' desktop files and the icon theme
 (SVG icons need librsvg).
+.SH WORKSPACES
+There are four workspaces by default (\fBworkspaces=\fR1 to 9 in the \fB[behaviour]\fR section of
+\fIwm.ini\fR); all outputs switch together. Super+1 to Super+9 go to a workspace and
+Super+Ctrl+Left/Right to the previous or next one; Super+Shift+1 to Super+Shift+9 send the focused
+window to a workspace, Super+Ctrl+Shift+Left/Right take it along to the previous or next one. The
+\fBsticky\fR action (unbound by default) shows a window on every workspace. New windows open on the
+current workspace. The panel's window list and Alt+Tab show the windows of the current workspace;
+activating a window of another workspace (a notification, another program asking for it) goes
+there. With wlroots 0.20 the workspaces are published through ext-workspace-v1, which the panel's
+pager uses.
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

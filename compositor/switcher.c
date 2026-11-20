@@ -416,7 +416,7 @@ bool switcher_step(struct flwm_server *server, int dir) {
 		s->n = 0;
 		struct flwm_view *v;
 		wl_list_for_each(v, &server->views, link)
-			if (v->mapped && v->role == FLWM_ROLE_NORMAL && !v->no_taskbar && s->n < FLWM_SWITCHER_MAX) s->views[s->n++] = v;
+			if (view_is_cyclable(v) && s->n < FLWM_SWITCHER_MAX) s->views[s->n++] = v;
 		if (s->n < 2) return false;
 		s->output = output_at(server, server->cursor->x, server->cursor->y);
 		if (!s->output) s->output = output_primary(server);

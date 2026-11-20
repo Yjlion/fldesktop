@@ -66,6 +66,11 @@ public:
 fld::FlatButton *notify_indicator_create();     // panel_notify.cpp
 fld::FlatButton *printer_indicator_create();    // panel_printers.cpp
 fld::FlatButton *bluetooth_indicator_create();  // panel_bluetooth.cpp
+// panel_pager.cpp: the workspace pager (hidden until fl-wm offers workspaces);
+// pager_bind takes the ext_workspace_manager_v1 global from the registry
+struct wl_registry;
+Fl_Widget *pager_create();
+bool pager_bind(wl_registry *reg, uint32_t name, const char *iface, uint32_t version);
 
 // panel_power.cpp: drives the battery button from UPower (also power modes and
 // low battery warnings). While UPower is not running the panel reads /sys.

@@ -23,7 +23,7 @@
 
 #include "compat.h"
 
-#define FLWM_MAX_BINDINGS 64
+#define FLWM_MAX_BINDINGS 96
 #define FLWM_MAX_AUTOSTART 32
 
 enum flwm_cursor_mode {
@@ -70,6 +70,9 @@ enum flwm_view_type {
 };
 
 struct wlr_xwayland;
+struct wlr_ext_workspace_manager_v1;
+struct wlr_ext_workspace_group_handle_v1;
+struct wlr_ext_workspace_handle_v1;
 struct wlr_xwayland_surface;
 
 struct flwm_node_desc {
@@ -95,7 +98,16 @@ enum flwm_action_type {
 	FLWM_ACTION_RELOAD,
 	FLWM_ACTION_SHOW_DESKTOP,
 	FLWM_ACTION_LOCK,
+	FLWM_ACTION_WORKSPACE,          /* arg: 1..N */
+	FLWM_ACTION_WORKSPACE_NEXT,
+	FLWM_ACTION_WORKSPACE_PREV,
+	FLWM_ACTION_MOVE_TO_WORKSPACE,  /* arg: 1..N */
+	FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT,
+	FLWM_ACTION_MOVE_TO_WORKSPACE_PREV,
+	FLWM_ACTION_STICKY,
 };
+
+#define FLWM_MAX_WORKSPACES 9
 
 struct flwm_binding {
 	uint32_t modifiers; /* WLR_MODIFIER_* */
@@ -143,6 +155,7 @@ struct flwm_config {
 	char *launcher_cmd;
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
+	int workspaces; /* number of workspaces, 1..FLWM_MAX_WORKSPACES */
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
 	char *lock_cmd;        /* default "fl-lock --locker" */
@@ -203,6 +216,14 @@ struct flwm_server {
 	struct wl_listener new_toplevel_decoration;
 
 	struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_mgr;
+
+	/* workspaces (workspace.c): one set shared by all outputs, 0-based */
+	int cur_workspace;
+	struct wlr_ext_workspace_manager_v1 *workspace_mgr; /* NULL before wlroots 0.20 */
+	struct wlr_ext_workspace_group_handle_v1 *workspace_group;
+	struct wlr_ext_workspace_handle_v1 *workspace_handles[FLWM_MAX_WORKSPACES];
+	int nworkspace_handles;
+	struct wl_listener workspace_commit;
 
 	struct wlr_xdg_activation_v1 *xdg_activation;
 	struct wl_listener request_activate;
@@ -329,6 +350,8 @@ struct flwm_view {
 	bool placed;       /* initial position chosen */
 	bool hidden_by_show_desktop;
 	bool no_taskbar;   /* not in the panel's window list (X11 menus, splash screens) */
+	int workspace;     /* 0-based; see view_on_current() */
+	bool sticky;       /* shown on every workspace */
 	int requested_w, requested_h; /* last size we asked a shell client for */
 	int committed_w, committed_h; /* last committed size of a shell client */
 	enum flwm_role role;
@@ -472,6 +495,22 @@ bool view_is_normal(struct flwm_view *view);
 void views_reconfigure_maximized(struct flwm_server *server);
 void views_show_desktop(struct flwm_server *server);
 void view_popup_create(struct wlr_xdg_popup *xdg_popup, struct wlr_scene_tree *parent_tree);
+/* the panel's window list handle (destroyed while the view's workspace is hidden) */
+void view_ftl_create(struct flwm_view *view);
+void view_ftl_destroy(struct flwm_view *view);
+
+/* workspace.c */
+void workspace_init(struct flwm_server *server);
+void workspace_finish(struct flwm_server *server);
+void workspace_apply_config(struct flwm_server *server); /* after a reload */
+void workspace_output_added(struct flwm_server *server, struct wlr_output *output);
+void workspace_output_removed(struct flwm_server *server, struct wlr_output *output);
+bool view_on_current(struct flwm_view *view);
+/* a window Alt+Tab, the panel and focus-next may pick */
+bool view_is_cyclable(struct flwm_view *view);
+void workspace_switch(struct flwm_server *server, int n); /* 0-based */
+void view_move_to_workspace(struct flwm_view *view, int n);
+void view_set_sticky(struct flwm_view *view, bool sticky);
 
 /* decor.c */
 void decor_create(struct flwm_view *view);

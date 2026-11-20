@@ -167,6 +167,23 @@ if(VPTR_WL_FOUND)
   set_target_properties(fl-vptr PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endif()
 
+# test helper: lists and switches workspaces (ext-workspace-v1), installed nowhere
+set(_ws_xml ${WAYLAND_PROTOCOLS_DIR}/staging/ext-workspace/ext-workspace-v1.xml)
+if(VPTR_WL_FOUND AND EXISTS ${_ws_xml})
+  set(WS_PROTO)
+  fld_wayland_protocol(WS_PROTO ${_ws_xml} client)
+  fld_wayland_protocol(WS_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-foreign-toplevel-management-unstable-v1.xml client)
+  add_executable(fl-workspaces tools/fl-workspaces.c ${WS_PROTO})
+  target_include_directories(fl-workspaces PRIVATE ${FLD_PROTO_OUT})
+  target_link_libraries(fl-workspaces PRIVATE PkgConfig::VPTR_WL)
+  set_target_properties(fl-workspaces PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  if(FLD_BUILD_WM AND FLD_BUILD_CALC)
+    add_test(NAME workspaces-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/workspaces-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-workspaces>)
+    set_tests_properties(workspaces-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+  endif()
+endif()
+
 # test helper: an X11 client for the Xwayland tests (installed nowhere)
 pkg_check_modules(XCLIENT_XCB IMPORTED_TARGET xcb)
 if(XCLIENT_XCB_FOUND)

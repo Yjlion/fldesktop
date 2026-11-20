@@ -170,6 +170,7 @@ Description: fldesktop task manager
 Package: fldesktop-web
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: www-browser
 Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils
 Description: fldesktop web browser
  fl-web is a web browser built with FLTK and WPE WebKit: tabs, an address
@@ -190,6 +191,7 @@ Description: fldesktop video player
 Package: fldesktop-docs
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: pdf-viewer
 Recommends: poppler-data
 Description: fldesktop PDF viewer
  fl-docs shows PDF documents in a continuously scrolling view with page

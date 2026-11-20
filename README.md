@@ -263,7 +263,7 @@ dialogs.
 | File | Used by |
 |------|---------|
 | `~/.config/fldesktop/wm.ini` | compositor: appearance, keys, input, outputs, autostart, `[lock] idle_minutes`, `[environment]` variables for new programs |
-| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts; `[Desktop]` wallpaper; `[General]` icon theme, terminal; `[Lock]` lock screen; `[Proxy]` proxy settings |
+| `~/.config/fldesktop/desktop.ini` | `[Appearance]` theme (light/dark), accent, fonts, `Contrast=high`, `TextScale=1.25`; `[Desktop]` wallpaper; `[General]` icon theme, terminal; `[Lock]` lock screen; `[Proxy]` proxy settings |
 | `~/.config/fldesktop/panel.ini` | `[Panel] QuickLaunch=`, `KeyboardButton=auto\|always\|never`; `[Clock] Format=` |
 | `~/.config/fldesktop/environment` | `LANG`, `LC_*` and other variables for the session |
 | `~/.config/fldesktop/osk.ini` | `[Keyboard] Layout=us\|de\|fr`, `Height`, `MaxWidth`, `KeyPreview=true\|false` |

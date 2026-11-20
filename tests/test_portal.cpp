@@ -64,14 +64,36 @@ int main() {
   g_free(s);
   g_variant_unref(all);
   all = g_variant_ref_sink(settings_read_all(a, {"org.gnome.*"}));
-  CHECK(g_variant_n_children(all) == 1);
+  CHECK(g_variant_n_children(all) == 2); // desktop.interface and desktop.a11y.interface
   g_variant_unref(all);
   all = g_variant_ref_sink(settings_read_all(a, {}));
-  CHECK(g_variant_n_children(all) == 2);
+  CHECK(g_variant_n_children(all) == 3);
   g_variant_unref(all);
   GVariant *font = g_variant_ref_sink(settings_read(a, "org.gnome.desktop.interface", "font-name"));
   CHECK_EQ(std::string(g_variant_get_string(font, nullptr)), std::string("Cantarell 12"));
   g_variant_unref(font);
   CHECK(settings_read(a, "org.example", "nothing") == nullptr);
+  // accessibility: contrast and text size
+  {
+    fld::Ini hc;
+    hc.parse("[Appearance]\nContrast=high\nTextScale=1.5\n");
+    Appearance h = read_appearance(hc);
+    CHECK(h.high_contrast);
+    GVariant *c = g_variant_ref_sink(settings_read(h, "org.freedesktop.appearance", "contrast"));
+    CHECK_EQ(g_variant_get_uint32(c), 1u);
+    g_variant_unref(c);
+    GVariant *t = g_variant_ref_sink(settings_read(h, "org.gnome.desktop.interface", "text-scaling-factor"));
+    CHECK(std::fabs(g_variant_get_double(t) - 1.5) < 1e-9);
+    g_variant_unref(t);
+    GVariant *b = g_variant_ref_sink(settings_read(h, "org.gnome.desktop.a11y.interface", "high-contrast"));
+    CHECK(g_variant_get_boolean(b));
+    g_variant_unref(b);
+    GVariant *g = g_variant_ref_sink(settings_read(h, "org.gnome.desktop.interface", "gtk-theme"));
+    CHECK_EQ(std::string(g_variant_get_string(g, nullptr)), std::string("HighContrast"));
+    g_variant_unref(g);
+    fld::Ini bad;
+    bad.parse("[Appearance]\nTextScale=9\n");
+    CHECK(read_appearance(bad).text_scale == 1.0);
+  }
   return test_result("portal");
 }

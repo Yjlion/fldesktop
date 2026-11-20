@@ -62,6 +62,8 @@ struct Appearance {
   double accent_r = 0.21, accent_g = 0.52, accent_b = 0.89;
   std::string icon_theme = "Adwaita", font = "Sans", mono_font = "Monospace";
   int font_size = 14, mono_size = 14; // FLTK pixels
+  bool high_contrast = false;
+  double text_scale = 1.0;
 };
 Appearance read_appearance(const fld::Ini &desktop_ini);
 // all known settings as namespace -> key -> value, filtered by the

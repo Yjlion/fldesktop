@@ -116,6 +116,9 @@ Appearance read_appearance(const fld::Ini &ini) {
   a.mono_font = ini.get("Appearance", "MonoFont", "Monospace");
   a.font_size = ini.get_int("Appearance", "FontSize", 14);
   a.mono_size = ini.get_int("Appearance", "MonoFontSize", 14);
+  a.high_contrast = fld::lower(ini.get("Appearance", "Contrast", "normal")) == "high";
+  a.text_scale = ini.get_double("Appearance", "TextScale", 1.0);
+  if (a.text_scale < 1.0 || a.text_scale > 2.0) a.text_scale = 1.0;
   return a;
 }
 
@@ -133,6 +136,8 @@ const Setting kSettings[] = {
     {"org.gnome.desktop.interface", "icon-theme"},
     {"org.gnome.desktop.interface", "font-name"},
     {"org.gnome.desktop.interface", "monospace-font-name"},
+    {"org.gnome.desktop.interface", "text-scaling-factor"},
+    {"org.gnome.desktop.a11y.interface", "high-contrast"},
 };
 
 // FLTK sizes are pixels; GTK font names use points (96 dpi)
@@ -156,13 +161,18 @@ GVariant *settings_read(const Appearance &a, const std::string &ns, const std::s
   if (ns == "org.freedesktop.appearance") {
     if (key == "color-scheme") return g_variant_new_uint32(a.dark ? 1 : 0);
     if (key == "accent-color") return g_variant_new("(ddd)", a.accent_r, a.accent_g, a.accent_b);
-    if (key == "contrast") return g_variant_new_uint32(0);
+    if (key == "contrast") return g_variant_new_uint32(a.high_contrast ? 1 : 0);
   } else if (ns == "org.gnome.desktop.interface") {
     if (key == "color-scheme") return g_variant_new_string(a.dark ? "prefer-dark" : "default");
-    if (key == "gtk-theme") return g_variant_new_string(a.dark ? "Adwaita-dark" : "Adwaita");
+    if (key == "gtk-theme")
+      return g_variant_new_string(a.high_contrast ? (a.dark ? "HighContrastInverse" : "HighContrast")
+                                                  : (a.dark ? "Adwaita-dark" : "Adwaita"));
     if (key == "icon-theme") return g_variant_new_string(a.icon_theme.c_str());
     if (key == "font-name") return g_variant_new_string(font_name(a.font, a.font_size).c_str());
     if (key == "monospace-font-name") return g_variant_new_string(font_name(a.mono_font, a.mono_size).c_str());
+    if (key == "text-scaling-factor") return g_variant_new_double(a.text_scale);
+  } else if (ns == "org.gnome.desktop.a11y.interface") {
+    if (key == "high-contrast") return g_variant_new_boolean(a.high_contrast);
   }
   return nullptr;
 }

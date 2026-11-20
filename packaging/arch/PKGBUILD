@@ -7,7 +7,7 @@ pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
-         fldesktop-lock fldesktop-icon-theme fldesktop-keyring)
+         fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
@@ -81,7 +81,9 @@ package_fldesktop() {
               'fldesktop-webcam: camera app'
               'fldesktop-archive: archive manager'
               'fldesktop-web: web browser'
-              'fldesktop-docs: PDF viewer')
+              'fldesktop-docs: PDF viewer'
+              'plymouth: boot splash'
+              'fldesktop-plymouth-theme: the fldesktop boot splash')
   arch=(any)
 }
 
@@ -141,6 +143,15 @@ package_fldesktop-lock() {
   backup=(etc/pam.d/fl-lock)
   _stage
   _install_files usr/bin/fl-lock etc/pam.d/fl-lock etc/xdg/autostart/fl-lock-daemon.desktop usr/share/man/man1/fl-lock.1
+}
+
+package_fldesktop-plymouth-theme() {
+  pkgdesc="fldesktop boot splash theme for Plymouth"
+  arch=(any)
+  depends=(plymouth)
+  install=fldesktop-plymouth-theme.install
+  _stage
+  _install_files usr/share/plymouth/themes/fldesktop
 }
 
 package_fldesktop-icon-theme() {

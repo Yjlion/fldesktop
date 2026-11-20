@@ -130,6 +130,9 @@ the FLTK applications for use under another compositor.
   `fldesktop-mixer`, …) from the checkout.
 * **Debian/Ubuntu:** `cp -r packaging/debian debian && dpkg-buildpackage -b -us -uc`
   produces the same set of `.deb` packages.
+* **Boot splash:** `fldesktop-plymouth-theme` installs a Plymouth theme
+  (`data/plymouth/fldesktop`) without selecting it; enable it with
+  `sudo plymouth-set-default-theme -R fldesktop`.
 
 CI (`.github/workflows/ci.yml`) builds and tests on Arch (wlroots 0.20) and
 Debian trixie (wlroots 0.18). `.github/workflows/repo.yml` builds the packages

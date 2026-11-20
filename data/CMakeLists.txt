@@ -35,3 +35,10 @@ file(COPY wayland-sessions/fldesktop.desktop DESTINATION ${_out}/wayland-session
 
 file(GLOB _man ${CMAKE_SOURCE_DIR}/doc/man/*.1)
 install(FILES ${_man} DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+
+# the Plymouth boot splash (fldesktop-plymouth-theme); the images are made by
+# tools/artwork/plymouth.py
+option(FLD_INSTALL_PLYMOUTH "Install the fldesktop Plymouth boot splash theme" ON)
+if(FLD_INSTALL_PLYMOUTH)
+  install(DIRECTORY plymouth/fldesktop DESTINATION ${FLD_SHARE}/plymouth/themes)
+endif()

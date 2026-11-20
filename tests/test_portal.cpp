@@ -73,5 +73,37 @@ int main() {
   CHECK_EQ(std::string(g_variant_get_string(font, nullptr)), std::string("Cantarell 12"));
   g_variant_unref(font);
   CHECK(settings_read(a, "org.example", "nothing") == nullptr);
+
+  // ScreenCast restore data
+  std::vector<CastSource> chosen = {{CAST_MONITOR, "DP-1", "Dell", ""}, {CAST_WINDOW, "x1", "Notes - fl-edit", "fl-edit"}};
+  GVariant *rd = g_variant_ref_sink(cast_restore_to_variant(chosen));
+  auto restored = cast_parse_restore(rd);
+  g_variant_unref(rd);
+  CHECK_EQ(restored.size(), (size_t)2);
+  CHECK_EQ(restored[0].id, std::string("DP-1"));
+  CHECK_EQ(restored[1].id, std::string("")); // window identifiers do not survive a session
+  CHECK_EQ(restored[1].app_id, std::string("fl-edit"));
+  GVariant *other = parse("(suv)", "('wlr', 1, <@a(usss) []>)");
+  CHECK(cast_parse_restore(other).empty());
+  g_variant_unref(other);
+  GVariant *badver = parse("(suv)", "('fl', 2, <@a(usss) [(1, 'DP-1', '', '')]>)");
+  CHECK(cast_parse_restore(badver).empty());
+  g_variant_unref(badver);
+  std::vector<CastSource> avail = {{CAST_MONITOR, "HDMI-A-1", "", ""},
+                                   {CAST_MONITOR, "DP-1", "", ""},
+                                   {CAST_WINDOW, "a", "Other - fl-edit", "fl-edit"},
+                                   {CAST_WINDOW, "b", "Notes - fl-edit", "fl-edit"}};
+  auto idx = cast_match_restore(restored, avail);
+  CHECK_EQ(idx.size(), (size_t)2);
+  CHECK_EQ(idx[0], 1);
+  CHECK_EQ(idx[1], 3); // the same title wins over the first window of the program
+  std::vector<CastSource> gone = {{CAST_MONITOR, "eDP-1", "", ""}};
+  CHECK(cast_match_restore(gone, avail).empty());
+  std::vector<CastSource> two_same = {{CAST_WINDOW, "", "x", "fl-edit"}, {CAST_WINDOW, "", "y", "fl-edit"}};
+  auto idx2 = cast_match_restore(two_same, avail);
+  CHECK_EQ(idx2.size(), (size_t)2);
+  CHECK(idx2[0] != idx2[1]);
+  CHECK(cast_embed_cursor(CAST_CURSOR_EMBEDDED));
+  CHECK(!cast_embed_cursor(CAST_CURSOR_HIDDEN));
   return test_result("portal");
 }

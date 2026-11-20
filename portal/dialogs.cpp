@@ -29,14 +29,14 @@
 
 namespace portal {
 
-namespace {
-
 std::string app_name(const std::string &app_id) {
   if (app_id.empty()) return "An application";
   fld::DesktopEntry e;
   if (fld::find_application(app_id, e) && !e.name.empty()) return e.name;
   return app_id;
 }
+
+namespace {
 
 // A small question dialog: icon, heading, text, optional choices, two buttons.
 class AskWindow : public Fl_Double_Window {

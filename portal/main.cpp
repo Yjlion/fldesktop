@@ -1,8 +1,8 @@
 // xdg-desktop-portal-fl: the fldesktop backend for xdg-desktop-portal
 //
 // Owns org.freedesktop.impl.portal.desktop.fl and implements FileChooser,
-// AppChooser, Settings, Screenshot, Access, Account, Notification and
-// Wallpaper at /org/freedesktop/portal/desktop. xdg-desktop-portal picks it
+// AppChooser, Settings, Screenshot, Access, Account, Notification,
+// Wallpaper and ScreenCast at /org/freedesktop/portal/desktop. xdg-desktop-portal picks it
 // for XDG_CURRENT_DESKTOP=fldesktop (see fldesktop-portals.conf).
 #include <FL/Fl.H>
 
@@ -108,6 +108,27 @@ const char *kXml = R"XML(
     </signal>
     <property name="SupportedOptions" type="a{sv}" access="read"/>
   </interface>
+  <interface name="org.freedesktop.impl.portal.ScreenCast">
+    <method name="CreateSession">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="SelectSources">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="Start">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="s" name="parent_window" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <property name="AvailableSourceTypes" type="u" access="read"/>
+    <property name="AvailableCursorModes" type="u" access="read"/>
+    <property name="version" type="u" access="read"/>
+  </interface>
   <interface name="org.freedesktop.impl.portal.Wallpaper">
     <method name="SetWallpaperURI">
       <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
@@ -151,12 +172,14 @@ void method_call(GDBusConnection *, const char *, const char *, const char *ifac
   else if (i == p + "Account") account_call(m, params, inv);
   else if (i == p + "Notification") notification_call(m, params, inv);
   else if (i == p + "Wallpaper") wallpaper_call(m, params, inv);
+  else if (i == p + "ScreenCast") screencast_call(m, params, inv);
   else g_dbus_method_invocation_return_dbus_error(inv, "org.freedesktop.DBus.Error.UnknownInterface", iface);
 }
 
 GVariant *get_property(GDBusConnection *, const char *, const char *, const char *iface, const char *prop, GError **,
                        gpointer) {
   std::string i = iface, p = prop;
+  if (i == "org.freedesktop.impl.portal.ScreenCast") return screencast_property(p);
   if (p == "version") return g_variant_new_uint32(i.find("Settings") != std::string::npos ? 2 : 2);
   if (p == "SupportedOptions") return g_variant_new("a{sv}", nullptr);
   return nullptr;

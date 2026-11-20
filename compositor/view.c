@@ -749,6 +749,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 	}
 	if (!view->placed) place_new_view(view);
 	view_ftl_create(view);
+	capture_view_map(view);
 	decor_update(view);
 	if (maximized) view_set_maximized(view, true);
 	if (fullscreen) view_set_fullscreen(view, true);
@@ -778,6 +779,7 @@ void view_handle_unmap(struct flwm_view *view) {
 		wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
 		view->ftl = NULL;
 	}
+	capture_view_unmap(view);
 	if (view->role == FLWM_ROLE_PANEL || view->role == FLWM_ROLE_OSK) arrange_all(server);
 	if (was_focused) {
 		wlr_seat_keyboard_notify_clear_focus(server->seat);
@@ -886,6 +888,7 @@ void view_free(struct flwm_view *view) {
 	if (server->hover_view == view) server->hover_view = NULL;
 	if (server->last_click_view == view) server->last_click_view = NULL;
 	if (view->ftl) wlr_foreign_toplevel_handle_v1_destroy(view->ftl);
+	capture_view_unmap(view);
 	wl_list_remove(&view->destroy.link);
 	wl_list_remove(&view->request_move.link);
 	wl_list_remove(&view->request_resize.link);
@@ -944,6 +947,7 @@ static void view_set_title(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = wl_container_of(listener, view, set_title);
 	if (view->ftl && view_title(view))
 		wlr_foreign_toplevel_handle_v1_set_title(view->ftl, view_title(view));
+	capture_view_update(view);
 	if (view->mapped) decor_update(view);
 }
 
@@ -951,6 +955,7 @@ static void view_set_app_id(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = wl_container_of(listener, view, set_app_id);
 	if (view->ftl && view_app_id(view))
 		wlr_foreign_toplevel_handle_v1_set_app_id(view->ftl, view_app_id(view));
+	capture_view_update(view);
 }
 
 struct flwm_view *view_new(struct flwm_server *server, enum flwm_view_type type) {

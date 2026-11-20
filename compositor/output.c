@@ -15,7 +15,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
 	struct flwm_output *output = wl_container_of(listener, output, frame);
 	struct wlr_scene_output *scene_output = output->scene_output;
 	if (!scene_output) return;
-	wlr_scene_output_commit(scene_output, NULL);
+	if (!zoom_output_frame(output)) wlr_scene_output_commit(scene_output, NULL);
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	wlr_scene_output_send_frame_done(scene_output, &now);
@@ -33,6 +33,7 @@ static void output_destroy(struct wl_listener *listener, void *data) {
 	struct flwm_output *output = wl_container_of(listener, output, destroy);
 	struct flwm_server *server = output->server;
 	switcher_output_gone(server, output);
+	zoom_output_gone(output);
 	for (int i = 0; i < 4; i++) {
 		struct flwm_layer_surface *ls, *tmp;
 		wl_list_for_each_safe(ls, tmp, &output->layers[i], link) {

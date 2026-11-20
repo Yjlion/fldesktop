@@ -183,6 +183,15 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	case FLWM_ACTION_STICKY:
 		if (v) view_set_sticky(v, !v->sticky);
 		return true;
+	case FLWM_ACTION_ZOOM_IN:
+		zoom_step(server, 1);
+		return true;
+	case FLWM_ACTION_ZOOM_OUT:
+		zoom_step(server, -1);
+		return true;
+	case FLWM_ACTION_ZOOM_RESET:
+		zoom_step(server, 0);
+		return true;
 	default:
 		return false;
 	}
@@ -216,10 +225,8 @@ static bool handle_binding(struct flwm_server *server, uint32_t mods, xkb_keysym
 	return false;
 }
 
-static void keyboard_handle_key(struct wl_listener *listener, void *data) {
-	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+static void handle_key(struct flwm_keyboard *keyboard, struct wlr_keyboard_key_event *event) {
 	struct flwm_server *server = keyboard->server;
-	struct wlr_keyboard_key_event *event = data;
 	struct wlr_seat *seat = server->seat;
 	uint32_t keycode = event->keycode + 8;
 	lock_activity(server);
@@ -279,6 +286,15 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode, event->state);
 	}
+}
+
+static void keyboard_handle_key(struct wl_listener *listener, void *data) {
+	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+	struct wlr_keyboard_key_event *event = data;
+	/* bounce keys drop the key; sticky keys update the modifiers after it */
+	if (a11y_key(keyboard->server, keyboard->wlr_keyboard, event)) return;
+	handle_key(keyboard, event);
+	a11y_key_done(keyboard->server, keyboard->wlr_keyboard, event);
 }
 
 /* A virtual keyboard got its keymap: use it right away if no keyboard is active */
@@ -633,6 +649,7 @@ void input_update_pointer_focus(struct flwm_server *server, uint32_t time) {
 }
 
 static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
+	zoom_cursor_moved(server);
 	if (server->drag_icon)
 		wlr_scene_node_set_position(&server->drag_icon->node, server->cursor->x, server->cursor->y);
 	switch (server->cursor_mode) {

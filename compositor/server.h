@@ -105,6 +105,9 @@ enum flwm_action_type {
 	FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT,
 	FLWM_ACTION_MOVE_TO_WORKSPACE_PREV,
 	FLWM_ACTION_STICKY,
+	FLWM_ACTION_ZOOM_IN,
+	FLWM_ACTION_ZOOM_OUT,
+	FLWM_ACTION_ZOOM_RESET,
 };
 
 #define FLWM_MAX_WORKSPACES 9
@@ -156,6 +159,9 @@ struct flwm_config {
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
 	int workspaces; /* number of workspaces, 1..FLWM_MAX_WORKSPACES */
+	/* [accessibility] (a11y.c) */
+	bool sticky_keys;
+	int bounce_keys_ms;
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
 	char *lock_cmd;        /* default "fl-lock --locker" */
@@ -272,6 +278,7 @@ struct flwm_server {
 	struct flwm_layer_surface *focused_layer; /* exclusive keyboard focus */
 
 	struct wlr_scene_tree *drag_icon;
+	double zoom; /* zoom.c: the magnifier, 1 = off */
 	struct wl_listener drag_destroy;
 	struct flwm_view *hover_view;      /* view whose title buttons show hover */
 	uint32_t last_click_time;
@@ -318,6 +325,7 @@ struct flwm_output {
 	struct wl_listener frame;
 	struct wl_listener request_state;
 	struct wl_listener destroy;
+	struct wlr_buffer *zoom_buffer; /* zoom.c: the magnified frame */
 };
 
 struct flwm_decor {
@@ -577,6 +585,18 @@ void lock_finish(struct flwm_server *server);
 void lock_request(struct flwm_server *server);
 void lock_arrange(struct flwm_server *server);
 void lock_activity(struct flwm_server *server);
+
+/* zoom.c: the magnifier */
+void zoom_step(struct flwm_server *server, int dir); /* +1 in, -1 out, 0 off */
+void zoom_cursor_moved(struct flwm_server *server);
+bool zoom_output_frame(struct flwm_output *output); /* false: render normally */
+void zoom_output_gone(struct flwm_output *output);
+
+/* a11y.c: sticky and bounce keys */
+struct wlr_keyboard_key_event;
+bool a11y_key(struct flwm_server *server, struct wlr_keyboard *kb, const struct wlr_keyboard_key_event *ev); /* true: drop it */
+void a11y_key_done(struct flwm_server *server, struct wlr_keyboard *kb, const struct wlr_keyboard_key_event *ev);
+void a11y_reset(void);
 void lock_view_mapped(struct flwm_server *server, struct flwm_view *view);
 bool lock_client_is_locker(struct flwm_server *server, struct wl_client *client);
 

@@ -165,6 +165,11 @@ if(VPTR_WL_FOUND)
   target_include_directories(fl-vptr PRIVATE ${FLD_PROTO_OUT})
   target_link_libraries(fl-vptr PRIVATE PkgConfig::VPTR_WL)
   set_target_properties(fl-vptr PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  if(FLD_BUILD_WM AND FLD_BUILD_CALC AND FLD_BUILD_EDIT)
+    add_test(NAME a11y-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/a11y-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-vptr>)
+    set_tests_properties(a11y-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+  endif()
 endif()
 
 # test helper: lists and switches workspaces (ext-workspace-v1), installed nowhere

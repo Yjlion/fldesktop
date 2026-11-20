@@ -88,6 +88,8 @@ static void add_binding(struct flwm_config *c, const char *combo, const char *ac
 		{"move-to-workspace-next", FLWM_ACTION_MOVE_TO_WORKSPACE_NEXT},
 		{"move-to-workspace-prev", FLWM_ACTION_MOVE_TO_WORKSPACE_PREV},
 		{"sticky", FLWM_ACTION_STICKY},
+		{"zoom-in", FLWM_ACTION_ZOOM_IN}, {"zoom-out", FLWM_ACTION_ZOOM_OUT},
+		{"zoom-reset", FLWM_ACTION_ZOOM_RESET},
 	};
 	enum flwm_action_type type = FLWM_ACTION_NONE;
 	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
@@ -177,6 +179,12 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
 	add_binding(c, "Super+f", "fullscreen");
+	add_binding(c, "Super+equal", "zoom-in");
+	add_binding(c, "Super+plus", "zoom-in");
+	add_binding(c, "Super+KP_Add", "zoom-in");
+	add_binding(c, "Super+minus", "zoom-out");
+	add_binding(c, "Super+KP_Subtract", "zoom-out");
+	add_binding(c, "Super+0", "zoom-reset");
 	add_binding(c, "Alt+Tab", "cycle");
 	add_binding(c, "Alt+Shift+Tab", "cycle-back");
 	add_binding(c, "Super+Shift+r", "reload");
@@ -285,6 +293,12 @@ bool config_load(struct flwm_config *c, const char *path) {
 			if (!strcmp(k, "idle_minutes")) c->lock_idle_minutes = atoi(v);
 			else if (!strcmp(k, "command")) set_str(&c->lock_cmd, v);
 			else if (!strcmp(k, "color")) c->lock_color = parse_color(v, c->lock_color);
+		} else if (!strcasecmp(section, "accessibility")) {
+			if (!strcmp(k, "sticky_keys")) c->sticky_keys = parse_bool(v);
+			else if (!strcmp(k, "bounce_keys")) {
+				int ms = atoi(v);
+				c->bounce_keys_ms = ms < 0 ? 0 : ms > 2000 ? 2000 : ms;
+			}
 		} else if (!strcasecmp(section, "environment")) {
 			env_apply(k, v);
 		} else if (!strcasecmp(section, "output")) {

@@ -4,6 +4,7 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Double_Window.H>
 
+#include <cstdint>
 #include <functional>
 
 #include "fld/menus.h"
@@ -66,6 +67,7 @@ public:
 fld::FlatButton *notify_indicator_create();     // panel_notify.cpp
 fld::FlatButton *printer_indicator_create();    // panel_printers.cpp
 fld::FlatButton *bluetooth_indicator_create();  // panel_bluetooth.cpp
+fld::FlatButton *clipboard_indicator_create();  // panel_clipboard.cpp
 // panel_pager.cpp: the workspace pager (hidden until fl-wm offers workspaces);
 // pager_bind takes the ext_workspace_manager_v1 global from the registry
 struct wl_registry;

@@ -24,6 +24,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
+| **fl-cliphist** | Clipboard history: texts and images, pins, a list in the panel; password managers' copies are not kept |
 | **fl-polkit-agent** | Password dialog for polkit (administrator actions) |
 | **fl-osk** | On-screen keyboard (Wayland virtual-keyboard protocol) |
 | **fl-charmap** | Unicode character map with search by name |

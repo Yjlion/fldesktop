@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Clipboard History
+Comment=Keeps a history of what was copied
+Exec=fl-cliphist
+OnlyShowIn=fldesktop;
+NoDisplay=true
+X-GNOME-AutoRestart=true

@@ -339,9 +339,14 @@ void im_init(struct flwm_server *server) {
 	R.ti_mgr = wlr_text_input_manager_v3_create(server->wl_display);
 	R.im_mgr = wlr_input_method_manager_v2_create(server->wl_display);
 	R.new_text_input.notify = new_text_input;
-	wl_signal_add(&R.ti_mgr->events.new_text_input, &R.new_text_input);
 	R.new_input_method.notify = new_input_method;
+#if FLWM_WLR_AT_LEAST(0, 20)
+	wl_signal_add(&R.ti_mgr->events.new_text_input, &R.new_text_input);
 	wl_signal_add(&R.im_mgr->events.new_input_method, &R.new_input_method);
+#else
+	wl_signal_add(&R.ti_mgr->events.text_input, &R.new_text_input);
+	wl_signal_add(&R.im_mgr->events.input_method, &R.new_input_method);
+#endif
 	R.focus_change.notify = focus_change;
 	wl_signal_add(&server->seat->keyboard_state.events.focus_change, &R.focus_change);
 }

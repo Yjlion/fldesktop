@@ -36,6 +36,13 @@ follow the fingers), the actions for swiping up and down (\fBswipe_up=\fR,
 (\fBenabled=false\fR). Pinches, holds and swipes with other finger counts go to
 the window under the pointer (pointer-gestures-unstable-v1), for example to
 zoom in a browser or an image viewer.
+.SH SCREEN BLANKING
+After ten minutes without input (\fBblank_minutes=\fR in the \fB[power]\fR
+section of \fIwm.ini\fR, 0 = never) fl-wm turns the screens off; the next key
+press or pointer motion turns them on again. Programs that inhibit idle
+(idle-inhibit-unstable-v1, such as video players) keep them on. Clients of
+wlr-output-power-management, such as swayidle or wlopm, can turn screens off
+and on as well; a screen a client turned off stays off until it turns it on.
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

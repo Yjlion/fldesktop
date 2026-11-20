@@ -165,6 +165,7 @@ struct flwm_config {
 	struct flwm_gesture_action { enum flwm_action_type type; char *arg; } gesture_up, gesture_down;
 	/* screen lock */
 	int lock_idle_minutes; /* 0 = never */
+	int blank_ms;          /* [power] blank_minutes (may be fractional): screens off; 0 = never */
 	char *lock_cmd;        /* default "fl-lock --locker" */
 	uint32_t lock_color;
 	/* key bindings & autostart */
@@ -299,6 +300,10 @@ struct flwm_server {
 	pid_t lock_pid; /* our fl-lock --locker child */
 	long lock_started;
 	struct wl_event_source *lock_restart_timer, *idle_timer, *sigchld;
+	struct wl_event_source *blank_timer; /* [power] blank_minutes */
+	bool blanked;                        /* screens off by blank_timer */
+	struct wlr_output_power_manager_v1 *output_power;
+	struct wl_listener output_power_set_mode;
 	struct wlr_session_lock_manager_v1 *lock_mgr;
 	struct wl_listener new_ext_lock;
 	struct wlr_session_lock_v1 *ext_lock;
@@ -325,6 +330,8 @@ struct flwm_output {
 	struct wl_listener frame;
 	struct wl_listener request_state;
 	struct wl_listener destroy;
+	bool powered_off; /* display off (DPMS), still in the layout */
+	bool idle_off;    /* turned off by the idle timeout: input turns it back on */
 };
 
 struct flwm_decor {
@@ -475,6 +482,8 @@ void arrange_all(struct flwm_server *server);
 void output_apply_config(struct flwm_server *server);
 void output_manager_update(struct flwm_server *server);
 void output_finish(struct flwm_server *server);
+void output_idle_blank(struct flwm_server *server); /* screens off */
+void output_idle_wake(struct flwm_server *server);  /* the ones blank turned off on again */
 int shell_reserved_bottom(struct flwm_server *server, struct flwm_output *output);
 
 /* view.c */

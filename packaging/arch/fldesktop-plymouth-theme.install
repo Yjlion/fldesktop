@@ -1,0 +1,5 @@
+post_install() {
+  echo "The fldesktop boot splash is installed but not selected. To use it:"
+  echo "  plymouth-set-default-theme -R fldesktop"
+  echo "(add the plymouth hook to /etc/mkinitcpio.conf and \"splash\" to the kernel command line)"
+}

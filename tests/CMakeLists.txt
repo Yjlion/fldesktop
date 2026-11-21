@@ -80,6 +80,8 @@ if(TARGET fl-docs-util)
   if(TARGET fl-docs)
     add_test(NAME docs-pdf COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/docs-pdf.sh $<TARGET_FILE:fl-docs>)
     set_tests_properties(docs-pdf PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+    add_test(NAME docs-formats COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/docs-formats.sh $<TARGET_FILE:fl-docs>)
+    set_tests_properties(docs-formats PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
   endif()
 endif()
 

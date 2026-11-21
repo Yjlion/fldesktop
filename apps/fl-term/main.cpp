@@ -196,9 +196,16 @@ static void relayout() {
   }
   g.area->resize(0, y, W, std::max(1, H - y));
   for (auto &tb : g.tabs) tb.term->resize(0, y, W, std::max(1, H - y));
-  TermWidget *t = cur();
-  if (t) {
-    g.win->size_range(t->cell_w() * 10, t->cell_h() * 3 + y, 0, 0, t->cell_w(), t->cell_h());
+  // Only a minimum size: cell-sized resize steps made maximized and full
+  // screen windows round down and leave a gap. Sent again only when it changes.
+  if (TermWidget *t = cur()) {
+    static int last_w = -1, last_h = -1;
+    int mw = t->cell_w() * 10, mh = t->cell_h() * 3 + y;
+    if (mw != last_w || mh != last_h) {
+      g.win->size_range(mw, mh);
+      last_w = mw;
+      last_h = mh;
+    }
   }
   g.win->redraw();
 }
@@ -207,8 +214,10 @@ class MainWindow : public Fl_Double_Window {
 public:
   using Fl_Double_Window::Fl_Double_Window;
   void resize(int x, int y, int w, int h) override {
-    // children are placed by relayout(), not by FLTK's proportional resizing
-    Fl_Widget::resize(x, y, w, h);
+    // Fl_Double_Window::resize also resizes the Wayland surface's buffer
+    // (Fl_Widget::resize did not: a maximized window kept its old size in a
+    // corner); relayout() then places the children.
+    Fl_Double_Window::resize(x, y, w, h);
     if (g.area) relayout();
   }
   // On Wayland FLTK already draws into a back buffer that it copies as is to

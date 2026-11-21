@@ -1,11 +1,12 @@
-// fl-docs: page layout, zoom and print ranges (no poppler, no FLTK; unit tested)
+// fl-docs: page layout, zoom, print ranges and file formats (no poppler, no
+// FLTK; unit tested)
 #pragma once
 #include <string>
 #include <vector>
 
 namespace docs {
 
-// Page sizes in points (1/72 inch), as poppler reports them.
+// Page sizes in points (1/72 inch).
 struct PageSize {
   double w = 612, h = 792;
 };
@@ -44,5 +45,30 @@ Rect to_strip(const Layout &l, int page, double x, double y, double w, double h)
 // "1-3, 5, 8-" for a document of n pages: normalized for IPP page-ranges
 // ("1-3,5,8-12"); "" when the text is empty or "all"; ok=false when invalid.
 std::string page_ranges(const std::string &text, int n, bool *ok);
+
+// What a file is, from its first bytes (and its name when they do not tell).
+enum class Format {
+  Unknown,
+  Pdf,
+  Epub,
+  Odt,      // OpenDocument text (and its template)
+  OdfOther, // spreadsheets, presentations, ...: not supported
+  Zip,      // another zip: EPUB or ODF without a leading "mimetype", or a comic book
+  Archive,  // rar, 7z, tar: a comic book (.cbr, .cb7, .cbt)
+};
+Format sniff(const std::string &head, const std::string &path);
+
+// "page2.png" before "page10.png"; case-insensitive.
+bool natural_less(const std::string &a, const std::string &b);
+
+// Pixel size of a PNG, JPEG, GIF or BMP from its bytes; false when unknown.
+bool image_size(const std::string &data, int &w, int &h);
+
+// An image file name (comic book pages): png, jpg, jpeg, gif, bmp, svg.
+bool is_image_name(const std::string &name);
+
+// A CSS / ODF length ("2.5cm", "12pt", "0.5in", "10mm", "16px", "1pc") in
+// points; `fallback` for anything else.
+double parse_length(const std::string &text, double fallback);
 
 } // namespace docs

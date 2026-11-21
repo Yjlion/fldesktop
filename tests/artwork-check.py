@@ -6,6 +6,7 @@
  - no SVG uses masks, filters or clip paths (FLTK's nanosvg ignores them)
  - every directory an index.theme lists exists; no dangling symlinks
  - every cursor file parses and the cursor names fl-wm and toolkits use exist
+ - the Plymouth theme names its script and every image the script loads exists
 """
 import os
 import re
@@ -117,6 +118,39 @@ for t in ("fldesktop-cursors", "fldesktop-cursors-light"):
                 fail(f"{t}/{n}: sizes {sizes}")
         except Exception as e:  # noqa: BLE001
             fail(f"{t}/{n}: {e}")
+
+# 5. the Plymouth theme (data/plymouth/fldesktop)
+ply = os.path.join(top, "data", "plymouth", "fldesktop")
+try:
+    with open(os.path.join(ply, "fldesktop.plymouth")) as f:
+        conf = f.read()
+    if "ModuleName=script" not in conf:
+        fail("fldesktop.plymouth: not a script theme")
+    for key in ("ImageDir", "ScriptFile"):
+        m = re.search(rf"^{key}=/usr/share/plymouth/themes/fldesktop(/.*)?$", conf, re.M)
+        if not m:
+            fail(f"fldesktop.plymouth: {key} does not point into the theme directory")
+    script_name = re.search(r"^ScriptFile=.*/([^/\n]+)$", conf, re.M)
+    with open(os.path.join(ply, script_name.group(1) if script_name else "fldesktop.script")) as f:
+        script = f.read()
+    loaded = re.findall(r'Image\("([^"]+)"\)', script)
+    if not loaded:
+        fail("fldesktop.script loads no images")
+    for name in loaded:
+        if not os.path.isfile(os.path.join(ply, name)):
+            fail(f"plymouth: {name} is missing")
+    m = re.search(r'Image\("spinner-" \+ i \+ "\.png"\)', script)
+    n = re.search(r"for \(i = 0; i < (\d+); i\+\+\)\s*\n\s*spinner\.frames", script)
+    if not m or not n:
+        fail("plymouth: spinner frames not found in the script")
+    else:
+        for i in range(int(n.group(1))):
+            if not os.path.isfile(os.path.join(ply, f"spinner-{i}.png")):
+                fail(f"plymouth: spinner-{i}.png is missing")
+    if script.count("{") != script.count("}") or script.count("(") != script.count(")"):
+        fail("fldesktop.script: unbalanced braces or parentheses")
+except OSError as e:
+    fail(f"plymouth theme: {e}")
 
 for f in failures:
     print("FAIL:", f)

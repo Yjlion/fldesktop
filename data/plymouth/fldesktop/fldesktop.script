@@ -1,0 +1,120 @@
+# fldesktop boot splash (Plymouth script theme)
+#
+# The fldesktop logo with a spinner below it on #1b2a44, the colour of the
+# login screen and the default wallpaper, and a password field for encrypted
+# disks. The images are made by tools/artwork/plymouth.py.
+
+Window.SetBackgroundTopColor(0.106, 0.165, 0.267);
+Window.SetBackgroundBottomColor(0.106, 0.165, 0.267);
+
+sw = Window.GetWidth();
+sh = Window.GetHeight();
+ox = Window.GetX();
+oy = Window.GetY();
+
+# logo: a fifth of the shorter side, a little above the middle
+size = Math.Int(Math.Min(sw, sh) / 5);
+if (size < 96) size = 96;
+logo.image = Image("logo.png").Scale(size, size);
+logo.sprite = Sprite(logo.image);
+logo.x = ox + Math.Int((sw - size) / 2);
+logo.y = oy + Math.Int(sh / 2 - size * 0.75);
+logo.sprite.SetPosition(logo.x, logo.y, 10);
+
+# spinner below the logo
+spin_size = Math.Int(size / 4);
+if (spin_size < 32) spin_size = 32;
+for (i = 0; i < 12; i++)
+  spinner.frames[i] = Image("spinner-" + i + ".png").Scale(spin_size, spin_size);
+spinner.sprite = Sprite(spinner.frames[0]);
+spinner.x = ox + Math.Int((sw - spin_size) / 2);
+spinner.y = logo.y + size + Math.Int(size * 0.3);
+spinner.sprite.SetPosition(spinner.x, spinner.y, 10);
+spinner.tick = 0;
+
+fun refresh_callback() {
+  spinner.tick++;
+  # 50 calls a second: a step every 4 calls, once round per second
+  spinner.sprite.SetImage(spinner.frames[Math.Int(spinner.tick / 4) % 12]);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# password and question prompts (encrypted disks)
+entry.image = Image("entry.png");
+bullet.image = Image("bullet.png");
+entry.sprite = Sprite();
+entry.x = ox + Math.Int((sw - entry.image.GetWidth()) / 2);
+entry.y = spinner.y;
+prompt.sprite = Sprite();
+answer.sprite = Sprite();
+
+fun hide_dialog() {
+  entry.sprite.SetOpacity(0);
+  prompt.sprite.SetOpacity(0);
+  answer.sprite.SetOpacity(0);
+  for (i = 0; bullets.sprites[i]; i++)
+    bullets.sprites[i].SetOpacity(0);
+  spinner.sprite.SetOpacity(1);
+}
+
+fun show_prompt(text) {
+  spinner.sprite.SetOpacity(0);
+  entry.sprite.SetImage(entry.image);
+  entry.sprite.SetPosition(entry.x, entry.y, 20);
+  entry.sprite.SetOpacity(1);
+  prompt.image = Image.Text(text, 0.87, 0.89, 0.92, 1, "Sans 12");
+  prompt.sprite.SetImage(prompt.image);
+  prompt.sprite.SetPosition(ox + Math.Int((sw - prompt.image.GetWidth()) / 2),
+                            entry.y - prompt.image.GetHeight() - 10, 20);
+  prompt.sprite.SetOpacity(1);
+}
+
+fun display_password_callback(text, count) {
+  if (!text) text = "Password";
+  show_prompt(text);
+  answer.sprite.SetOpacity(0);
+  bw = bullet.image.GetWidth();
+  limit = Math.Int((entry.image.GetWidth() - 32) / (bw + 6));
+  shown = count;
+  if (shown > limit) shown = limit;
+  for (i = 0; i < shown; i++) {
+    if (!bullets.sprites[i]) bullets.sprites[i] = Sprite(bullet.image);
+    bullets.sprites[i].SetPosition(entry.x + 16 + i * (bw + 6),
+                                   entry.y + Math.Int((entry.image.GetHeight() - bw) / 2), 25);
+    bullets.sprites[i].SetOpacity(1);
+  }
+  for (i = shown; bullets.sprites[i]; i++)
+    bullets.sprites[i].SetOpacity(0);
+}
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+fun display_question_callback(text, value) {
+  show_prompt(text);
+  for (i = 0; bullets.sprites[i]; i++)
+    bullets.sprites[i].SetOpacity(0);
+  answer.image = Image.Text(value, 1, 1, 1, 1, "Sans 12");
+  answer.sprite.SetImage(answer.image);
+  answer.sprite.SetPosition(entry.x + 16, entry.y + Math.Int((entry.image.GetHeight() - answer.image.GetHeight()) / 2), 25);
+  answer.sprite.SetOpacity(1);
+}
+Plymouth.SetDisplayQuestionFunction(display_question_callback);
+
+fun display_normal_callback() {
+  hide_dialog();
+}
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+# messages (e.g. "Press Ctrl+C to cancel a disk check") near the bottom
+message.sprite = Sprite();
+fun message_callback(text) {
+  message.image = Image.Text(text, 0.87, 0.89, 0.92, 1, "Sans 11");
+  message.sprite.SetImage(message.image);
+  message.sprite.SetPosition(ox + Math.Int((sw - message.image.GetWidth()) / 2),
+                             oy + sh - message.image.GetHeight() - Math.Int(sh / 12), 30);
+}
+Plymouth.SetMessageFunction(message_callback);
+
+fun quit_callback() {
+  spinner.sprite.SetOpacity(0);
+}
+Plymouth.SetQuitFunction(quit_callback);

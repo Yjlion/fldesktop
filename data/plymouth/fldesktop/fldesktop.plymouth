@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=fldesktop
+Description=The fldesktop boot splash: the logo and a spinner on the login screen's blue
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/fldesktop
+ScriptFile=/usr/share/plymouth/themes/fldesktop/fldesktop.script

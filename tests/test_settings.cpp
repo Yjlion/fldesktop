@@ -1,4 +1,9 @@
+#include "datetime_sys.h"
 #include "fld/ini.h"
+#include "fld/util.h"
+#include <cstdlib>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "greeter_config.h"
 #include "locale_env.h"
 #include "proxy_env.h"
@@ -247,5 +252,44 @@ int main() {
     std::string mid_off = set_autologin(mid, "", "");
     CHECK_EQ(mid_off, std::string("[default_session]\nuser = \"greeter\"\n"));
   }
+  // Date & Time without timedated
+  {
+    char tmpl[] = "/tmp/fld-dt-XXXXXX";
+    std::string dir = mkdtemp(tmpl);
+    mkdir((dir + "/zoneinfo").c_str(), 0755);
+    mkdir((dir + "/zoneinfo/Europe").c_str(), 0755);
+    fld::write_file(dir + "/zoneinfo/Europe/Berlin", "TZif");
+    CHECK(dtsys::valid_zone("Europe/Berlin", dir + "/zoneinfo"));
+    CHECK(!dtsys::valid_zone("Europe/Nowhere", dir + "/zoneinfo"));
+    CHECK(!dtsys::valid_zone("../zi/Europe/Berlin", dir + "/zoneinfo"));
+    CHECK(!dtsys::valid_zone("/etc/passwd", dir + "/zoneinfo"));
+    CHECK(!dtsys::valid_zone("Europe", dir + "/zoneinfo")); // a directory
+    CHECK(!dtsys::valid_zone("Europe/Ber;lin", dir + "/zoneinfo"));
+    CHECK(dtsys::valid_time("2026-11-22 14:05:00"));
+    CHECK(dtsys::valid_time("2026-11-22 14:05"));
+    CHECK(!dtsys::valid_time("2026-13-22 14:05:00"));
+    CHECK(!dtsys::valid_time("2026-11-22 14:05:00; rm"));
+    CHECK(!dtsys::valid_time("now"));
+    CHECK_EQ(dtsys::zone_from_link("/usr/share/zoneinfo/Europe/Berlin"), std::string("Europe/Berlin"));
+    CHECK_EQ(dtsys::zone_from_link("../usr/share/zoneinfo/posix/Asia/Tokyo"), std::string("Asia/Tokyo"));
+    CHECK_EQ(dtsys::zone_from_link("/etc/foo"), std::string());
+    CHECK(symlink((dir + "/zoneinfo/Europe/Berlin").c_str(), (dir + "/localtime").c_str()) == 0);
+    CHECK_EQ(dtsys::current_zone(dir + "/localtime", dir + "/none"), std::string("Europe/Berlin"));
+    fld::write_file(dir + "/timezone", "America/New_York\n");
+    CHECK_EQ(dtsys::current_zone(dir + "/none", dir + "/timezone"), std::string("America/New_York"));
+    mkdir((dir + "/init.d").c_str(), 0755);
+    CHECK_EQ(dtsys::installed_ntp_service(dir + "/init.d"), std::string());
+    fld::write_file(dir + "/init.d/openntpd", "");
+    fld::write_file(dir + "/init.d/chronyd", "");
+    CHECK_EQ(dtsys::installed_ntp_service(dir + "/init.d"), std::string("chronyd"));
+    auto on = dtsys::service_commands(dtsys::Init::OpenRC, "chronyd", true);
+    CHECK_EQ(on.size(), 2u);
+    CHECK_EQ(on[0][0], std::string("rc-update"));
+    auto off = dtsys::service_commands(dtsys::Init::SysV, "ntpsec", false);
+    CHECK_EQ(off.back()[0], std::string("update-rc.d"));
+    CHECK_EQ(off.back()[2], std::string("disable"));
+    CHECK(system(("rm -rf '" + dir + "'").c_str()) == 0);
+  }
+
   return test_result("settings");
 }

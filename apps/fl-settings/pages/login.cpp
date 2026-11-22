@@ -63,18 +63,6 @@ void fill(Fl_Choice *c, const std::vector<std::string> &items, const std::string
   c->value(sel);
 }
 
-std::string helper_path() {
-  // next to fl-settings when running from a build tree
-  char buf[4096];
-  ssize_t n = readlink("/proc/self/exe", buf, sizeof buf - 1);
-  if (n > 0) {
-    buf[n] = 0;
-    std::string local = dirname(buf) + "/fl-settings-helper";
-    if (file_exists(local) && !starts_with(local, "/usr/")) return local;
-  }
-  return std::string(FLD_LIBEXECDIR) + "/fl-settings-helper";
-}
-
 class LoginPage : public Fl_Group {
 public:
   Ini cfg;
@@ -320,7 +308,7 @@ public:
       fl_alert("Cannot write %s", tmp.c_str());
       return;
     }
-    std::vector<std::string> cmd{"pkexec", helper_path(), "greeter-ini", tmp};
+    std::vector<std::string> cmd{"pkexec", settings_helper_path(), "greeter-ini", tmp};
     if (!custom_background.empty()) cmd.push_back(custom_background);
     apply->deactivate();
     status->copy_label("Saving… (polkit asks for an administrator password)");

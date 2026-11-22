@@ -197,7 +197,13 @@ adds packages to it (needs the `FLD_REPO_GPG_KEY` secret in CI).
   sudo cp /etc/greetd/config.toml /etc/greetd/config.toml.orig
   sudo cp /usr/share/fldesktop/config.toml /etc/greetd/config.toml
   sudo systemctl enable greetd && sudo systemctl restart greetd
+  # OpenRC (Alpine, Devuan with OpenRC): sudo rc-update add greetd default && sudo rc-service greetd restart
+  # sysvinit (Devuan): sudo update-rc.d greetd defaults && sudo service greetd restart
   ```
+
+  Without systemd, install elogind (it gives the session its seat, its
+  `XDG_RUNTIME_DIR` and the logind API that power actions and lock-on-suspend
+  use); fl-autostart starts PipeWire when nothing else does.
 
   The shipped file has the right greeter user and VT for the distribution
   (Arch: `greeter`, VT 1; Debian: `_greetd`, VT 7); elsewhere set

@@ -28,9 +28,28 @@ void log_out() {
   else exit(0);
 }
 
-void suspend() { spawn({"systemctl", "suspend"}); }
-void reboot() { spawn({"systemctl", "reboot"}); }
-void power_off() { spawn({"systemctl", "poweroff"}); }
+std::vector<std::string> power_command(const std::string &action, bool have_loginctl, bool have_systemctl) {
+  // loginctl talks to systemd-logind and elogind alike (Devuan, Alpine);
+  // systemctl is the fallback on systemd systems without loginctl in PATH
+  if (have_loginctl) return {"loginctl", action};
+  if (have_systemctl) return {"systemctl", action};
+  return {};
+}
+
+bool run_power(const std::string &action) {
+  auto argv = power_command(action, !which("loginctl").empty(), !which("systemctl").empty());
+  if (argv.empty()) {
+    fl_alert("Cannot %s: neither loginctl (elogind or systemd-logind) nor systemctl is installed.",
+             action == "poweroff" ? "shut down" : action.c_str());
+    return false;
+  }
+  spawn(argv);
+  return true;
+}
+
+void suspend() { run_power("suspend"); }
+void reboot() { run_power("reboot"); }
+void power_off() { run_power("poweroff"); }
 
 const char *power_label(PowerAction a) {
   switch (a) {

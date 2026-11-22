@@ -26,8 +26,13 @@ std::string normalize(const std::string &l) {
 static std::string describe(const std::string &name) {
   locale_t loc = newlocale(LC_ALL_MASK, name.c_str(), (locale_t)0);
   if (!loc) return name;
+#ifdef _NL_IDENTIFICATION_LANGUAGE
   std::string lang = nl_langinfo_l(_NL_IDENTIFICATION_LANGUAGE, loc);
   std::string terr = nl_langinfo_l(_NL_IDENTIFICATION_TERRITORY, loc);
+#else
+  // musl (Alpine) has no locale identification data: show the name
+  std::string lang, terr;
+#endif
   freelocale(loc);
   if (lang.empty()) return name;
   return terr.empty() || terr == "ISO" ? lang : lang + " (" + terr + ")";

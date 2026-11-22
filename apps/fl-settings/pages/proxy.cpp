@@ -1,5 +1,6 @@
 // Proxy: inherit the session's proxy variables, no proxy, or manual proxies
 #include <FL/Fl.H>
+#include <thread>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Input.H>
@@ -180,7 +181,14 @@ public:
         }
         cmd.push_back(kv.first + "=" + v);
       }
-      spawn(cmd);
+      // without systemd --user (Alpine, Devuan) --systemd fails: retry without it
+      std::thread([cmd]() mutable {
+        std::string out;
+        if (run_capture(cmd, out) != 0) {
+          cmd.erase(cmd.begin() + 1);
+          run_capture(cmd, out);
+        }
+      }).detach();
     }
     apply->deactivate();
   }

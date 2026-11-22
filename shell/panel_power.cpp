@@ -11,6 +11,7 @@
 #include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/notify.h"
+#include "fld/session.h"
 #include "fld/util.h"
 #include "panel.h"
 #include "upclient.h"
@@ -51,7 +52,7 @@ void run_action(void *) {
   PowerSettings ps = settings();
   // plugged in meanwhile?
   if (!st.on_battery || ps.action == "nothing") return;
-  fld::spawn({"systemctl", ps.action == "poweroff" ? "poweroff" : ps.action});
+  fld::run_power(ps.action == "poweroff" ? "poweroff" : ps.action);
 }
 
 void warn(up::Level level, const up::State &st) {

@@ -1,11 +1,23 @@
 #include "settings_common.h"
 
 #include <FL/Fl.H>
+#include <unistd.h>
 
 #include "fld/theme.h"
 #include "fld/util.h"
 
 namespace fld {
+
+std::string settings_helper_path() {
+  char buf[4096];
+  ssize_t n = readlink("/proc/self/exe", buf, sizeof buf - 1);
+  if (n > 0) {
+    buf[n] = 0;
+    std::string local = dirname(buf) + "/fl-settings-helper";
+    if (file_exists(local) && !starts_with(local, "/usr/")) return local;
+  }
+  return std::string(FLD_LIBEXECDIR) + "/fl-settings-helper";
+}
 
 Form::Form(Fl_Group *g, int x, int y, int w, int label_w) : g_(g), x_(x), y_(y), w_(w), label_w_(label_w) {}
 

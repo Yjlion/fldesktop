@@ -5,6 +5,7 @@
 #include <pango/pangocairo.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -63,6 +64,8 @@ struct Document::Impl {
   std::map<int, cairo_surface_t *> decoded;
   std::list<int> order; // most recently used first
   double y = 0;         // where the next piece goes on the last page
+  std::vector<Block> todo; // blocks still to lay out, from `next`
+  size_t next = 0;
 
   Impl() {
     ctx = pango_font_map_create_context(pango_cairo_font_map_get_default());
@@ -361,12 +364,35 @@ Document::Document() : d(new Impl) {}
 Document::~Document() = default;
 
 void Document::layout(const std::vector<Block> &blocks, const PageStyle &style) {
+  begin(blocks, style);
+  while (!step(1e9)) {}
+}
+
+void Document::begin(std::vector<Block> blocks, const PageStyle &style) {
   d->clear();
   d->st = style;
   d->new_page();
-  for (const Block &b : blocks) d->add(b);
-  if (d->pages.size() > 1 && d->pages.back().empty()) d->pages.pop_back();
+  d->todo = std::move(blocks);
+  d->next = 0;
 }
+
+bool Document::step(double seconds) {
+  if (done()) return true;
+  auto start = std::chrono::steady_clock::now();
+  auto budget = std::chrono::duration<double>(seconds);
+  // a block at a time (a long table or paragraph is laid out whole)
+  while (d->next < d->todo.size()) {
+    d->add(d->todo[d->next++]);
+    if (std::chrono::steady_clock::now() - start >= budget) break;
+  }
+  if (d->next < d->todo.size()) return false;
+  if (d->pages.size() > 1 && d->pages.back().empty()) d->pages.pop_back();
+  std::vector<Block>().swap(d->todo);
+  d->next = 0;
+  return true;
+}
+
+bool Document::done() const { return d->todo.empty(); }
 
 std::vector<PageSize> Document::sizes() const {
   return std::vector<PageSize>(d->pages.size(), PageSize{d->st.w, d->st.h});

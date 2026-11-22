@@ -349,6 +349,24 @@ std::string abp_url_filter(const std::string &pattern) {
   return out;
 }
 
+
+namespace {
+
+// a rule per host that undoes everything on that site's pages
+std::vector<std::string> site_allow_rules(const std::vector<std::string> &allow) {
+  std::vector<std::string> out;
+  for (const std::string &h : allow) {
+    std::string d = abp_domain(h);
+    if (d.empty()) continue;
+    Trigger t;
+    t.if_domain = {d};
+    out.push_back(rule(t, "ignore-previous-rules"));
+  }
+  return out;
+}
+
+} // namespace
+
 AdblockResult abp_to_webkit(const std::vector<std::string> &lists, const std::vector<std::string> &allow,
                             bool cosmetic, size_t max_rules) {
   AdblockResult r;
@@ -397,13 +415,7 @@ AdblockResult abp_to_webkit(const std::vector<std::string> &lists, const std::ve
   }
 
   std::vector<std::string> allow_rules = net.allow_sites;
-  for (const std::string &h : allow) {
-    std::string d = abp_domain(h);
-    if (d.empty()) continue;
-    Trigger t;
-    t.if_domain = {d};
-    allow_rules.push_back(rule(t, "ignore-previous-rules"));
-  }
+  for (std::string &s : site_allow_rules(allow)) allow_rules.push_back(std::move(s));
 
   // order: blocking, its exceptions, element hiding (after the exceptions,
   // which would otherwise undo it), then whole-site exceptions
@@ -425,6 +437,34 @@ AdblockResult abp_to_webkit(const std::vector<std::string> &lists, const std::ve
   for (auto &s : allow_rules) add(s);
   out += "]";
   return r;
+}
+
+void abp_append_allow(AdblockResult &r, const std::vector<std::string> &allow) {
+  std::vector<std::string> extra = site_allow_rules(allow);
+  if (extra.empty()) return;
+  std::string &out = r.json;
+  if (!out.empty() && out.back() == ']') out.pop_back();
+  if (out.empty()) out = "[";
+  for (auto &s : extra) {
+    if (r.rules) out += ",\n";
+    out += s;
+    r.rules++;
+  }
+  out += "]";
+}
+
+uint64_t abp_fnv1a(const std::string &s, uint64_t h) {
+  for (unsigned char c : s) h = (h ^ c) * 1099511628211ull;
+  return h;
+}
+
+std::string abp_key(const std::vector<std::string> &fields) {
+  // each field with its length first, so no two field lists hash the same text
+  uint64_t h = abp_fnv1a("");
+  for (const std::string &f : fields) h = abp_fnv1a(f, abp_fnv1a(std::to_string(f.size()) + ":", h));
+  char buf[17];
+  snprintf(buf, sizeof buf, "%016llx", (unsigned long long)h);
+  return buf;
 }
 
 } // namespace web

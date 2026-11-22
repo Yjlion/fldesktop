@@ -454,8 +454,9 @@ std::unique_ptr<Backend> open_epub(const std::string &path, std::string &err) {
     err = "The e-book has no text.";
     return nullptr;
   }
-  b->doc.layout(blocks, style);
-  b->sizes_ = b->doc.sizes();
+  // the first pages now, the rest as the viewer asks (layout_step)
+  b->doc.begin(std::move(blocks), style);
+  b->layout_step(0.1);
   return b;
 }
 

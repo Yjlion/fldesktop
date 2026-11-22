@@ -2048,6 +2048,17 @@ int main(int argc, char **argv) {
   g_settings = webkit_settings_new();
   webkit_settings_set_user_agent_with_application_details(g_settings, "fl-web", FLD_VERSION);
   webkit_settings_set_enable_developer_extras(g_settings, g_inspector_port != 0);
+  {
+    // WebKit says which parts of a frame changed, so only those are copied
+    // and drawn (a blinking caret no longer costs a whole frame)
+    WebKitFeatureList *all = webkit_settings_get_all_features();
+    for (gsize i = 0; i < webkit_feature_list_get_length(all); i++) {
+      WebKitFeature *f = webkit_feature_list_get(all, i);
+      if (!strcmp(webkit_feature_get_identifier(f), "PropagateDamagingInformation"))
+        webkit_settings_set_feature_enabled(g_settings, f, TRUE);
+    }
+    webkit_feature_list_unref(all);
+  }
   apply_settings();
   g_ucm = webkit_user_content_manager_new();
   web::adblock::init(g_ucm, data_dir(), cache + "/adblock");

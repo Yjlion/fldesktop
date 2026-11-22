@@ -171,9 +171,34 @@ GLReadback::GLReadback(EGLDisplay dpy) {
   ctx_ = ctx;
 }
 
-bool GLReadback::read(EGLImageKHR image, int width, int height, Frame &out) {
-  if (!ok() || !image || width <= 0 || height <= 0) return false;
-  CurrentContext cur(dpy_, surface_, ctx_);
+namespace {
+
+// reads x, y, w, h of the bound framebuffer as BGRA into dst (stride bytes a row)
+void read_bgra(bool bgra, int x, int y, int w, int h, uint8_t *dst, int stride, std::vector<uint8_t> &tmp) {
+  // Row 0 of the image is its top (the memory layout of buffers for a
+  // compositor), and glReadPixels returns row 0 first: no flip.
+  glPixelStorei(GL_PACK_ALIGNMENT, 4);
+  bool direct = stride == w * 4;
+  uint8_t *out = dst;
+  if (!direct) {
+    tmp.resize((size_t)w * h * 4);
+    out = tmp.data();
+  }
+  glReadPixels(x, y, w, h, bgra ? GL_BGRA_EXT : GL_RGBA, GL_UNSIGNED_BYTE, out);
+  if (!bgra) {
+    uint8_t *p = out, *end = out + (size_t)w * h * 4;
+    for (; p < end; p += 4) std::swap(p[0], p[2]);
+  }
+  if (!direct)
+    for (int row = 0; row < h; row++) memcpy(dst + (size_t)row * stride, out + (size_t)row * w * 4, (size_t)w * 4);
+}
+
+} // namespace
+
+// binds image to the framebuffer and runs fn
+template <class F> static bool with_image(EGLDisplay dpy, EGLSurface surface, EGLContext ctx, unsigned fbo,
+                                          void *image_target, EGLImageKHR image, F fn) {
+  CurrentContext cur(dpy, surface, ctx);
   if (!cur.ok) return false;
   while (glGetError() != GL_NO_ERROR) {}
   GLuint tex = 0;
@@ -181,31 +206,40 @@ bool GLReadback::read(EGLImageKHR image, int width, int height, Frame &out) {
   glBindTexture(GL_TEXTURE_2D, tex);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  ((PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)image_target_)(GL_TEXTURE_2D, (GLeglImageOES)image);
-  glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+  ((PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)image_target)(GL_TEXTURE_2D, (GLeglImageOES)image);
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
   bool ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
   if (ok) {
-    // Row 0 of the image is its top (the memory layout of buffers for a
-    // compositor), and glReadPixels returns row 0 first: no flip.
-    out.width = width;
-    out.height = height;
-    out.stride = width * 4;
-    out.pixels.resize((size_t)out.stride * (size_t)height);
-    glPixelStorei(GL_PACK_ALIGNMENT, 4);
-    if (bgra_) {
-      glReadPixels(0, 0, width, height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, out.pixels.data());
-    } else {
-      glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, out.pixels.data());
-      uint8_t *p = out.pixels.data(), *end = p + out.pixels.size();
-      for (; p < end; p += 4) std::swap(p[0], p[2]);
-    }
+    fn();
     ok = glGetError() == GL_NO_ERROR;
   }
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glDeleteTextures(1, &tex);
   return ok;
+}
+
+bool GLReadback::read(EGLImageKHR image, int width, int height, Frame &out) {
+  if (!ok() || !image || width <= 0 || height <= 0) return false;
+  return with_image(dpy_, surface_, ctx_, fbo_, image_target_, image, [&] {
+    out.width = width;
+    out.height = height;
+    out.stride = width * 4;
+    out.pixels.resize((size_t)out.stride * (size_t)height);
+    read_bgra(bgra_, 0, 0, width, height, out.pixels.data(), out.stride, scratch_);
+  });
+}
+
+bool GLReadback::read_rects(EGLImageKHR image, const std::vector<Rect> &rects, Frame &out) {
+  if (!ok() || !image || out.width <= 0 || out.height <= 0 ||
+      out.pixels.size() < (size_t)out.stride * (size_t)out.height)
+    return false;
+  return with_image(dpy_, surface_, ctx_, fbo_, image_target_, image, [&] {
+    for (const Rect &r : rects)
+      read_bgra(bgra_, r.x, r.y, r.w, r.h, out.pixels.data() + (size_t)r.y * out.stride + (size_t)r.x * 4, out.stride,
+                scratch_);
+  });
 }
 
 } // namespace web

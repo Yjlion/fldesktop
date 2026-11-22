@@ -29,6 +29,14 @@ grep -qx "title fl-docs epub test" "$T/out" || fail "epub: title"
 grep -qx "page 1 432x648" "$T/out" || fail "epub: page size"
 [ "$(grep -c '^hit ' "$T/out")" = 2 ] || fail "epub: two hits"
 
+# a long book (laid out a step at a time in the viewer): every page, and
+# hits on its first and last
+"$DOCS" --info "$T/big.epub" --find FLDESKTOP >"$T/out" 2>&1 || fail "big epub"
+set -- $(grep '^pages ' "$T/out")
+[ "$2" -gt 200 ] || fail "big epub: $2 pages"
+grep -q "^hit 1 " "$T/out" || fail "big epub: hit on page 1"
+grep -q "^hit $2 " "$T/out" || fail "big epub: hit on the last page ($2)"
+
 "$DOCS" --info "$T/test.cbz" >"$T/out" 2>&1 || fail "cbz"
 grep -qx "pages 3" "$T/out" || fail "cbz: page count"
 grep -qx "title test" "$T/out" || fail "cbz: title from the file name"

@@ -1,12 +1,24 @@
 // fl-lock --daemon: locks the session when logind asks (loginctl lock-session,
 // lid close handled by logind) and before the system suspends.
+//
+// One daemon per session: it owns org.fldesktop.LockDaemon on the session bus
+// (a second one exits), and it ends with its session: when the fl-wm that
+// started it ($FLWM_PID) exits or logind removes the session. It has no
+// Wayland connection that would end it otherwise, and user processes may
+// outlive a logout.
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>
+#include <glib-unix.h>
+
+#include <signal.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include <cstdio>
+#include <cerrno>
 #include <cstdlib>
+#include <cstring>
 #include <string>
-#include <unistd.h>
 
 #include "fld/ini.h"
 #include "fld/theme.h"
@@ -17,6 +29,12 @@ namespace {
 GDBusConnection *g_bus;
 GMainLoop *g_loop;
 int g_inhibit_fd = -1;
+std::string g_session; // our logind session's object path
+
+void quit(const char *why) {
+  fprintf(stderr, "fl-lock: daemon exits: %s\n", why);
+  if (g_loop) g_main_loop_quit(g_loop);
+}
 
 bool lock_on_suspend() {
   fld::Ini ini;
@@ -65,6 +83,10 @@ void on_signal(GDBusConnection *, const char *, const char *, const char *iface,
   std::string s = signal;
   if (s == "Lock") {
     request_lock();
+  } else if (s == "SessionRemoved") {
+    const char *id, *path;
+    g_variant_get(params, "(&s&o)", &id, &path);
+    if (!g_session.empty() && g_session == path) quit("the session ended");
   } else if (s == "PrepareForSleep") {
     gboolean start;
     g_variant_get(params, "(b)", &start);
@@ -106,6 +128,57 @@ std::string session_path() {
   return p;
 }
 
+// the fl-wm that started us ($FLWM_PID), when it is one
+pid_t compositor_pid() {
+  const char *e = getenv("FLWM_PID");
+  pid_t pid = e ? (pid_t)atoi(e) : 0;
+  if (pid <= 0) return 0;
+  std::string comm;
+  if (!fld::read_file("/proc/" + std::to_string(pid) + "/comm", comm) || fld::trim(comm) != "fl-wm") return 0;
+  return pid;
+}
+
+gboolean compositor_gone(gint, GIOCondition, gpointer) {
+  quit("the compositor exited");
+  return G_SOURCE_REMOVE;
+}
+
+gboolean compositor_check(gpointer d) {
+  if (kill((pid_t)GPOINTER_TO_INT(d), 0) == 0 || errno == EPERM) return G_SOURCE_CONTINUE;
+  quit("the compositor exited");
+  return G_SOURCE_REMOVE;
+}
+
+void watch_compositor() {
+  pid_t pid = compositor_pid();
+  if (!pid) return;
+#ifdef SYS_pidfd_open
+  // readable when the process exits: no wakeups until then
+  int fd = (int)syscall(SYS_pidfd_open, pid, 0);
+  if (fd >= 0) {
+    g_unix_fd_add(fd, G_IO_IN, compositor_gone, nullptr);
+    return;
+  }
+#endif
+  g_timeout_add_seconds(5, compositor_check, GINT_TO_POINTER((int)pid));
+}
+
+void start() {
+  g_session = session_path();
+  if (!g_session.empty()) {
+    g_dbus_connection_signal_subscribe(g_bus, "org.freedesktop.login1", "org.freedesktop.login1.Session", "Lock",
+                                       g_session.c_str(), nullptr, G_DBUS_SIGNAL_FLAGS_NONE, on_signal, nullptr,
+                                       nullptr);
+    g_dbus_connection_signal_subscribe(g_bus, "org.freedesktop.login1", "org.freedesktop.login1.Manager",
+                                       "SessionRemoved", "/org/freedesktop/login1", nullptr, G_DBUS_SIGNAL_FLAGS_NONE,
+                                       on_signal, nullptr, nullptr);
+  }
+  g_dbus_connection_signal_subscribe(g_bus, "org.freedesktop.login1", "org.freedesktop.login1.Manager",
+                                     "PrepareForSleep", "/org/freedesktop/login1", nullptr, G_DBUS_SIGNAL_FLAGS_NONE,
+                                     on_signal, nullptr, nullptr);
+  take_inhibitor();
+}
+
 }  // namespace
 
 int run_daemon() {
@@ -115,15 +188,24 @@ int run_daemon() {
     fprintf(stderr, "fl-lock: no system bus: %s\n", err->message);
     return 1;
   }
-  std::string path = session_path();
-  if (!path.empty())
-    g_dbus_connection_signal_subscribe(g_bus, "org.freedesktop.login1", "org.freedesktop.login1.Session", "Lock",
-                                       path.c_str(), nullptr, G_DBUS_SIGNAL_FLAGS_NONE, on_signal, nullptr, nullptr);
-  g_dbus_connection_signal_subscribe(g_bus, "org.freedesktop.login1", "org.freedesktop.login1.Manager",
-                                     "PrepareForSleep", "/org/freedesktop/login1", nullptr, G_DBUS_SIGNAL_FLAGS_NONE,
-                                     on_signal, nullptr, nullptr);
-  take_inhibitor();
   g_loop = g_main_loop_new(nullptr, FALSE);
+  watch_compositor();
+  // one per session: the first to own the name runs, the others leave
+  GDBusConnection *session = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &err);
+  if (session) {
+    g_bus_own_name_on_connection(
+        session, "org.fldesktop.LockDaemon", G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE,
+        [](GDBusConnection *, const char *, gpointer) { start(); },
+        [](GDBusConnection *c, const char *, gpointer) {
+          quit(c && !g_dbus_connection_is_closed(c) ? "another one runs in this session" : "the session bus closed");
+        },
+        nullptr, nullptr);
+  } else {
+    fprintf(stderr, "fl-lock: no session bus (%s): cannot tell whether another daemon runs\n", err->message);
+    g_clear_error(&err);
+    start();
+  }
   g_main_loop_run(g_loop);
+  release_inhibitor();
   return 0;
 }

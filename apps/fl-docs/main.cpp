@@ -70,6 +70,7 @@ bool load_document(const std::string &path, std::string &err, bool interactive =
     };
   std::unique_ptr<docs::Backend> b = docs::open_document(path, err, ask);
   if (!b) return false;
+  if (!interactive) b->finish_layout(); // the viewer lays out the rest while it shows the first pages
   Doc nd;
   nd.path = path;
   nd.sizes = b->sizes();
@@ -141,7 +142,7 @@ public:
       zoom = docs::fit_zoom(g_doc.sizes, std::max(0, page), fit, w() - SB, h());
     }
     lay = docs::layout(g_doc.sizes, zoom, w() - SB);
-    cache.clear();
+    clear_cache();
     update_scrollbars();
     if (keep_page && page >= 0 && page < (int)lay.y.size()) scroll_to(lay.y[page] + (int)(frac * lay.h[page]), left);
     else scroll_to(0, 0);
@@ -282,7 +283,23 @@ public:
     }
   }
 
-  void clear_cache() { cache.clear(); }
+  void clear_cache() {
+    cache.clear();
+    order.clear();
+  }
+
+  // more pages laid out (g_doc.sizes grew from `old`): the place stays, and
+  // the page that was last, which may have been only partly laid out, is
+  // drawn again
+  void pages_grew(size_t old) {
+    lay = docs::layout(g_doc.sizes, zoom, w() - SB);
+    for (size_t i = old ? old - 1 : 0; i < std::max(old, g_doc.sizes.size()); i++) {
+      cache.erase(i);
+      order.remove(i);
+    }
+    update_scrollbars();
+    redraw();
+  }
 
 private:
   int drag_x = 0, drag_y = 0;
@@ -385,10 +402,13 @@ void show_hit(int k) {
   g_found->copy_label(buf);
 }
 
+void finish_layout();
+
 void search(int dir) {
   std::string q = fld::trim(g_search->value());
   if (q != g_query) {
     g_query = q;
+    if (!q.empty()) finish_layout(); // hits on pages not shown yet
     fl_cursor(FL_CURSOR_WAIT);
     Fl::flush();
     g_hits = find_all(q);
@@ -410,9 +430,59 @@ void search(int dir) {
   if (!g_hits.empty()) show_hit(g_view->current_hit + dir);
 }
 
+// ---- laying out a long book while it is shown ---------------------------------
+
+int g_pending_page = -1; // --page N, once there are N pages
+
+void update_page_count() {
+  static char of[32];
+  bool all = !g_doc.backend || g_doc.backend->laid_out();
+  snprintf(of, sizeof of, all ? "of %d" : "of %d…", (int)g_doc.sizes.size());
+  g_page_of->label(of);
+  g_page_of->redraw();
+}
+
+void goto_page(int p);
+
+// the backend has more pages: show them
+void sync_pages() {
+  if (!g_doc.backend) return;
+  size_t old = g_doc.sizes.size();
+  g_doc.sizes = g_doc.backend->sizes();
+  g_view->pages_grew(old);
+  g_thumbs->pages_grew(old);
+  update_page_count();
+  if (g_pending_page >= 0 && (g_pending_page < (int)g_doc.sizes.size() || g_doc.backend->laid_out())) {
+    int p = g_pending_page;
+    g_pending_page = -1;
+    goto_page(p);
+  }
+}
+
+void layout_idle(void *) {
+  if (!g_doc.backend || g_doc.backend->laid_out()) {
+    Fl::remove_idle(layout_idle);
+    return;
+  }
+  // short steps, so that the window keeps answering
+  g_doc.backend->layout_step(0.03);
+  sync_pages();
+}
+
+// all of it now (to search or print it)
+void finish_layout() {
+  if (!g_doc.backend || g_doc.backend->laid_out()) return;
+  fl_cursor(FL_CURSOR_WAIT);
+  Fl::flush();
+  g_doc.backend->finish_layout();
+  fl_cursor(FL_CURSOR_DEFAULT);
+  sync_pages();
+}
+
 bool open_file(const std::string &path) {
   std::string err;
   fl_cursor(FL_CURSOR_WAIT);
+  Fl::flush();
   bool ok = load_document(path, err);
   fl_cursor(FL_CURSOR_DEFAULT);
   if (!ok) {
@@ -428,12 +498,12 @@ bool open_file(const std::string &path) {
   g_view->relayout(false);
   g_thumbs->top = 0;
   g_thumbs->relayout(false);
-  static char of[32];
-  snprintf(of, sizeof of, "of %d", (int)g_doc.sizes.size());
-  g_page_of->label(of);
+  update_page_count();
   page_changed(0);
   update_title();
   update_zoom_label();
+  g_pending_page = -1;
+  if (!g_doc.backend->laid_out() && !Fl::has_idle(layout_idle)) Fl::add_idle(layout_idle);
   return true;
 }
 
@@ -457,6 +527,7 @@ void open_dialog() {
 #ifdef FLD_HAVE_PRINTERS
 void print_dialog() {
   if (g_doc.path.empty() || !g_doc.backend) return;
+  finish_layout(); // the page ranges are of the whole book
   std::vector<prn::Printer> ps = prn::printers();
   if (ps.empty()) {
     fl_alert("No printer is set up. Add one in Printers.");
@@ -692,7 +763,12 @@ int main(int argc, char **argv) {
   if (!pdf_out.empty()) return to_pdf(file, pdf_out);
 
   fld::init_app("fl-docs", argc, argv);
-  const int TB = 40, W = 1000, H = 760;
+  // the size that fits the screen's work area (above a panel)
+  int sx, sy, sw, sh;
+  Fl::screen_work_area(sx, sy, sw, sh);
+  const int TB = 40;
+  const int W = sw > 0 ? std::max(600, std::min(1000, sw - 40)) : 1000;
+  const int H = sh > 0 ? std::max(400, std::min(760, sh - 40)) : 760;
   g_win = new DocWindow(W, H, "Documents");
   g_bar = new fld::Toolbar(0, 0, W, TB);
   g_bar->color(fld::palette().bg);
@@ -749,7 +825,18 @@ int main(int argc, char **argv) {
   fld::set_window_icon(g_win, "fl-docs");
   update_zoom_label();
   g_win->show(); // not show(argc, argv): it resets the theme colors
-  if (!file.empty() && open_file(file) && start_page > 0) goto_page(start_page);
   g_view->take_focus();
+  if (!file.empty()) {
+    // once the window is up: a long book takes a while to open
+    static std::string start_file;
+    static int start_at;
+    start_file = file;
+    start_at = start_page;
+    Fl::add_timeout(0, [](void *) {
+      if (!open_file(start_file) || start_at <= 0) return;
+      if (start_at < (int)g_doc.sizes.size() || g_doc.backend->laid_out()) goto_page(start_at);
+      else g_pending_page = start_at;
+    });
+  }
   return Fl::run();
 }

@@ -39,6 +39,8 @@ public:
   GLReadback &operator=(const GLReadback &) = delete;
   bool ok() const { return ctx_ != EGL_NO_CONTEXT; }
   bool read(EGLImageKHR image, int width, int height, Frame &out);
+  // only `rects` of the image, into out's pixels (already width x height)
+  bool read_rects(EGLImageKHR image, const std::vector<Rect> &rects, Frame &out);
 
 private:
   EGLDisplay dpy_ = EGL_NO_DISPLAY;
@@ -47,6 +49,7 @@ private:
   unsigned fbo_ = 0;
   bool bgra_ = false;
   void *image_target_ = nullptr; // glEGLImageTargetTexture2DOES
+  std::vector<uint8_t> scratch_;
 };
 
 } // namespace web

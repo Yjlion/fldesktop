@@ -9,7 +9,29 @@ command -v dbus-run-session >/dev/null 2>&1 || { echo "no dbus-run-session"; exi
 command -v gdbus >/dev/null 2>&1 || { echo "no gdbus"; exit 77; }
 [ -x "$BIN/fl-notifyd" ] || { echo "no fl-notifyd"; exit 77; }
 if [ -z "${FLD_IN_BUS:-}" ]; then
-	FLD_IN_BUS=1 exec dbus-run-session -- "$0" "$@"
+	# a bus of our own with no services to start: with fldesktop (or another
+	# notification server) installed, the first call would otherwise start
+	# that one, which would own the name before the fl-notifyd under test
+	B=$(mktemp -d)
+	mkdir -p "$B/services"
+	cat >"$B/bus.conf" <<CONF
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:dir=$B</listen>
+  <servicedir>$B/services</servicedir>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+CONF
+	FLD_IN_BUS=1 dbus-run-session --config-file="$B/bus.conf" -- "$0" "$@"
+	status=$?
+	rm -rf "$B"
+	exit $status
 fi
 T=$(mktemp -d)
 mkdir -p "$T/run" "$T/config"

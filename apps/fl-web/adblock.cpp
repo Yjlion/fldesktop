@@ -5,6 +5,7 @@
 #include <wpe/webkit.h>
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <cstdio>
 #include <ctime>
@@ -58,21 +59,39 @@ std::vector<std::string> urls(const Settings &s) {
 }
 
 std::string list_path(const std::string &url) {
-  // FNV-1a of the address
-  unsigned long long h = 1469598103934665603ull;
-  for (unsigned char c : url) h = (h ^ c) * 1099511628211ull;
   char buf[32];
-  snprintf(buf, sizeof buf, "list-%016llx.txt", h);
+  snprintf(buf, sizeof buf, "list-%016llx.txt", (unsigned long long)abp_fnv1a(url));
   return g.cache_dir + "/" + buf;
 }
 
+// the settings a compiled filter was made for; one line, so state.ini can keep it
 std::string key(const Settings &s) {
-  std::string k;
-  for (auto &u : urls(s)) k += u + "\n";
-  k += "|";
-  for (auto &a : s.allow) k += a + ",";
-  return k;
+  std::vector<std::string> f{"lists"};
+  for (auto &u : urls(s)) f.push_back(u);
+  f.push_back("allow");
+  for (auto &a : s.allow) f.push_back(a);
+  return abp_key(f);
 }
+
+// the downloaded lists as they are now: names the converted rules without
+// the allowlist, which are kept so that changing it only recompiles
+std::string base_key(const Settings &s) {
+  std::vector<std::string> f;
+  for (auto &u : urls(s)) {
+    struct stat st;
+    std::string p = list_path(u);
+    bool ok = stat(p.c_str(), &st) == 0;
+    f.push_back(u);
+    f.push_back(ok ? std::to_string((long long)st.st_mtime) + " " + std::to_string((long long)st.st_size) : "-");
+  }
+  return abp_key(f);
+}
+
+std::string base_path(const std::string &dir, const std::string &bkey, bool cosmetic) {
+  return dir + "/base-" + bkey + (cosmetic ? "-c1" : "-c0") + ".json";
+}
+
+const char *kBaseMagic = "fl-adblock-base";
 
 time_t mtime(const std::string &path) {
   struct stat st;
@@ -110,9 +129,50 @@ struct Job {
   std::vector<std::string> texts;
   std::vector<std::string> allow;
   std::string key;
+  std::string dir, bkey; // where the converted base rules are kept
   bool cosmetic = true;
   AdblockResult result;
 };
+
+bool read_base(const std::string &path, AdblockResult &r) {
+  std::string t;
+  if (!fld::read_file(path, t, 512u << 20)) return false;
+  size_t nl = t.find('\n');
+  unsigned long long rules = 0, skipped = 0;
+  char magic[32] = "";
+  if (nl == std::string::npos || sscanf(t.c_str(), "%31s %llu %llu", magic, &rules, &skipped) != 3 ||
+      std::string(magic) != kBaseMagic || t.size() < nl + 3 || t[nl + 1] != '[' || t.back() != ']')
+    return false;
+  r.json = t.substr(nl + 1);
+  r.rules = (size_t)rules;
+  r.skipped = (size_t)skipped;
+  return true;
+}
+
+void write_base(const Job *job, const AdblockResult &r) {
+  std::string path = base_path(job->dir, job->bkey, job->cosmetic);
+  std::string head = std::string(kBaseMagic) + " " + std::to_string(r.rules) + " " + std::to_string(r.skipped) + "\n";
+  if (!fld::write_file(path, head + r.json)) return;
+  // only the lists as they are now are worth keeping
+  std::string keep = "base-" + job->bkey + "-";
+  for (auto &n : fld::list_dir(job->dir))
+    if (n.rfind("base-", 0) == 0 && n.rfind(keep, 0) != 0) unlink((job->dir + "/" + n).c_str());
+}
+
+// on a worker thread: the rules for job, from the kept base rules when the
+// lists have not changed
+void prepare(Job *job) {
+  AdblockResult r;
+  if (job->cosmetic && read_base(base_path(job->dir, job->bkey, true), r)) {
+  } else if (read_base(base_path(job->dir, job->bkey, false), r)) {
+    job->cosmetic = false; // element hiding was refused before
+  } else {
+    r = abp_to_webkit(job->texts, {}, job->cosmetic);
+    write_base(job, r);
+  }
+  abp_append_allow(r, job->allow);
+  job->result = std::move(r);
+}
 
 void compile(Job *job);
 
@@ -127,9 +187,10 @@ void saved(GObject *store, GAsyncResult *res, gpointer data) {
     if (job->cosmetic) {
       // an element hiding rule WebKit refuses: block without hiding
       fprintf(stderr, "fl-web: ad blocking rules not accepted (%s), retrying without element hiding\n", msg.c_str());
+      unlink(base_path(job->dir, job->bkey, true).c_str());
       job->cosmetic = false;
       std::thread([job] {
-        job->result = abp_to_webkit(job->texts, job->allow, false);
+        prepare(job);
         Fl::awake([](void *d) { compile((Job *)d); }, job);
       }).detach();
       return;
@@ -161,7 +222,6 @@ void saved(GObject *store, GAsyncResult *res, gpointer data) {
 }
 
 void compile(Job *job) {
-  set_status("Preparing the filter lists…");
   GBytes *b = g_bytes_new(job->result.json.data(), job->result.json.size());
   webkit_user_content_filter_store_save(g.store, kId, b, nullptr, saved, job);
   g_bytes_unref(b);
@@ -189,10 +249,15 @@ void rebuild() {
   }
   job->allow = g.settings.allow;
   job->key = k;
+  job->dir = g.cache_dir;
+  job->bkey = base_key(g.settings);
   g.building_key = k;
-  set_status("Preparing the filter lists…");
+  // the filter in use stays until the new one is ready
+  bool kept = fld::file_exists(base_path(job->dir, job->bkey, true)) ||
+              fld::file_exists(base_path(job->dir, job->bkey, false));
+  set_status(kept ? "Updating the filter…" : "Preparing the filter lists…");
   std::thread([job] {
-    job->result = abp_to_webkit(job->texts, job->allow, true);
+    prepare(job);
     Fl::awake([](void *d) { compile((Job *)d); }, job);
   }).detach();
 }

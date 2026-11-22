@@ -3,6 +3,7 @@
 
 #include "adblock_rules.h"
 #include "browser_util.h"
+#include "fld/ini.h"
 #include "fld/json.h"
 #include "fld/util.h"
 #include "test.h"
@@ -160,5 +161,31 @@ int main() {
   std::string many;
   for (int k = 0; k < 250; k++) many += "##.ad-" + std::to_string(k) + "\n";
   CHECK_EQ(abp_to_webkit({many}, {}).rules, (size_t)3);
+  // the allowlist added to kept base rules gives the same list
+  std::vector<std::string> sites{"mine.example", "", "other.example"};
+  AdblockResult base = abp_to_webkit({list}, {});
+  AdblockResult whole = abp_to_webkit({list}, sites);
+  abp_append_allow(base, sites);
+  CHECK_EQ(base.json, whole.json);
+  CHECK_EQ(base.rules, whole.rules);
+  AdblockResult none;
+  none.json = "[]";
+  abp_append_allow(none, {"mine.example"});
+  fld::Json one;
+  CHECK(fld::Json::parse(none.json, one));
+  CHECK_EQ(one.items().size(), (size_t)1);
+  CHECK_EQ(none.rules, (size_t)1);
+  // cache keys: one line that an ini file keeps, different for other fields
+  std::string k = abp_key({"lists", "https://a.example/1.txt", "https://b.example/2.txt", "allow", "x.example"});
+  CHECK_EQ(k.size(), (size_t)16);
+  CHECK(k.find_first_not_of("0123456789abcdef") == std::string::npos);
+  fld::Ini ini;
+  ini.set("Adblock", "Key", k);
+  fld::Ini back;
+  back.parse(ini.to_string());
+  CHECK_EQ(back.get("Adblock", "Key"), k);
+  CHECK(abp_key({"lists", "https://a.example/1.txt", "https://b.example/2.txt", "allow"}) != k);
+  CHECK(abp_key({"ab", "c"}) != abp_key({"a", "bc"}));
+  CHECK(abp_fnv1a("a") != abp_fnv1a("b"));
   return test_result("web");
 }

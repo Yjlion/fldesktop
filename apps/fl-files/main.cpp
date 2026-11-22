@@ -3439,6 +3439,11 @@ int main(int argc, char **argv) {
   const int W = 980, H = 640, TB = TOOLBAR_H, ST = STATUS_H;
   const fld::Palette &p = fld::palette();
   g_win = new FilesWindow(W, H, "Files");
+  // the close button and Ctrl+Q close the window; Escape (FLTK's default) does not
+  g_win->callback([](Fl_Widget *w, void *) {
+    if (Fl::event() == FL_SHORTCUT && Fl::event_key() == FL_Escape) return;
+    w->hide();
+  });
 
   g_menubar = new FilesMenuBar(0, 0, W, MENUBAR_H);
   g_menubar->box(FL_FLAT_BOX);

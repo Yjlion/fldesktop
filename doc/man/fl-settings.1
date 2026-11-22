@@ -15,7 +15,7 @@ time they start.
 Pages: \fBappearance\fR, \fBlock\fR, \fBpanel\fR, \fBlanguage\fR,
 \fBdefaultapps\fR, \fBkeyboard\fR, \fBshortcuts\fR, \fBmouse\fR,
 \fBdisplays\fR, \fBsound\fR, \fBnetwork\fR, \fBproxy\fR, \fBdatetime\fR,
-\fBlogin\fR and \fBabout\fR (Sound and Network are only
+\fBusers\fR, \fBlogin\fR and \fBabout\fR (Sound and Network are only
 present when built with PipeWire and libnm). Other programs whose desktop
 entry has \fBCategories=Settings\fR or \fBX\-FLDesktop\-Settings=true\fR are
 listed under \fBMore\fR.
@@ -33,6 +33,19 @@ programs started from then on, through the [environment] section of
 \fIwm.ini\fR. Login Screen edits \fI/etc/fldesktop/greeter.ini\fR for
 \fBfl-greet\fR(1); saving it runs \fBfl-settings-helper\fR through pkexec,
 which asks for an administrator password.
+.PP
+Users adds, removes and changes the accounts of people (user IDs 1000 to
+59999 with a login shell): full name, account type (an administrator is a
+member of \fBwheel\fR, or \fBsudo\fR where there is no wheel group),
+password, picture, groups such as \fBlp\fR, \fBuucp\fR or \fBdocker\fR,
+and automatic login with greetd (the \fB[initial_session]\fR of
+\fI/etc/greetd/config.toml\fR). The changes are made by
+\fBfl-users-helper\fR through pkexec with \fBuseradd\fR, \fBusermod\fR,
+\fBuserdel\fR, \fBgpasswd\fR and \fBchpasswd\fR; passwords are passed on
+its standard input. It refuses to remove your own account, a user who is
+logged in, or the last administrator. Pictures are kept in
+\fI/var/lib/AccountsService/icons\fR, where \fBfl-lock\fR(1) and
+\fBfl-greet\fR(1) find them.
 .SH OPTIONS
 .TP
 \fIPAGE\fR
@@ -44,4 +57,5 @@ Print the page ids and titles.
 \fI~/.config/fldesktop/wm.ini\fR, \fIdesktop.ini\fR, \fIpanel.ini\fR,
 \fIenvironment\fR, \fI~/.config/mimeapps.list\fR
 .SH SEE ALSO
-\fBfl-wm\fR(1), \fBfl-panel\fR(1), \fBfl-lock\fR(1), \fBfl-greet\fR(1), \fBfl-mixer\fR(1), \fBfl-network\fR(1)
+\fBfl-wm\fR(1), \fBfl-panel\fR(1), \fBfl-lock\fR(1), \fBfl-greet\fR(1), \fBfl-mixer\fR(1), \fBfl-network\fR(1),
+\fBfl-disks\fR(1)

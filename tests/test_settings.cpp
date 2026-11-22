@@ -3,6 +3,7 @@
 #include "locale_env.h"
 #include "proxy_env.h"
 #include "test.h"
+#include "users_model.h"
 #include "xkb_rules.h"
 
 int main() {
@@ -156,6 +157,95 @@ int main() {
     CHECK_EQ(ime.get("XMODIFIERS"), std::string(""));
     CHECK_EQ(locale_env::input_method_command("fcitx5"), std::string("fcitx5 -d --replace"));
     CHECK_EQ(locale_env::input_method_command(""), std::string(""));
+  }
+  // ---- users ------------------------------------------------------------
+  {
+    using namespace fld::users;
+    std::string passwd = "root:x:0:0:root:/root:/bin/bash\n"
+                         "daemon:x:2:2::/:/usr/bin/nologin\n"
+                         "zoe:x:1001:1001:Zoe Smith,,,:/home/zoe:/bin/zsh\n"
+                         "ana:x:1000:1000:Ana López:/home/ana:/bin/bash\n"
+                         "svc:x:1002:1002::/srv:/usr/sbin/nologin\n"
+                         "nobody:x:65534:65534:Nobody:/:/usr/bin/nologin\n";
+    std::string group = "root:x:0:root\n"
+                        "wheel:x:998:ana\n"
+                        "audio:x:995:ana,zoe\n"
+                        "uucp:x:987:\n"
+                        "ana:x:1000:\n"
+                        "zoe:x:1001:\n"
+                        "devs:x:1500:zoe\n"
+                        "systemd-journal:x:190:\n";
+    auto groups = parse_group(group);
+    CHECK_EQ(groups.size(), 8u);
+    CHECK_EQ(groups[2].members.size(), 2u);
+    CHECK_EQ(admin_group(groups), std::string("wheel"));
+    CHECK_EQ(admin_group(parse_group("sudo:x:27:a\n")), std::string("sudo"));
+    CHECK_EQ(admin_group(parse_group("users:x:100:\n")), std::string(""));
+    auto acc = parse_passwd(passwd);
+    CHECK_EQ(acc.size(), 2u);
+    CHECK_EQ(acc[0].name, std::string("ana"));
+    CHECK_EQ(acc[1].real_name, std::string("Zoe Smith"));
+    attach_groups(acc, groups, "wheel");
+    CHECK(acc[0].admin);
+    CHECK(!acc[1].admin);
+    CHECK(acc[1].in("devs"));
+    CHECK_EQ(admin_count(acc), 1);
+    auto ed = editable_groups(groups, acc, "wheel");
+    // audio, uucp (known) and devs (gid >= 1000); not wheel, the user groups or system ones
+    CHECK_EQ(ed.size(), 3u);
+    CHECK_EQ(ed[0], std::string("audio"));
+    CHECK_EQ(ed[1], std::string("devs"));
+    CHECK_EQ(ed[2], std::string("uucp"));
+
+    std::string err;
+    CHECK(valid_user_name("ana", err));
+    CHECK(valid_user_name("_build-2", err));
+    CHECK(!valid_user_name("", err));
+    CHECK(!valid_user_name("Ana", err));
+    CHECK(!valid_user_name("1ana", err));
+    CHECK(!valid_user_name("an a", err));
+    CHECK(!valid_user_name("-ana", err));
+    CHECK(!valid_user_name("root", err));
+    CHECK(!valid_user_name(std::string(33, 'a'), err));
+    CHECK(valid_full_name("Ana María López", err));
+    CHECK(valid_full_name("", err));
+    CHECK(!valid_full_name("a:b", err));
+    CHECK(!valid_full_name("a,b", err));
+    CHECK(!valid_full_name("a\nb", err));
+    CHECK(valid_password("pässwörd with spaces:", err));
+    CHECK(!valid_password("", err));
+    CHECK(!valid_password("a\nb", err));
+    CHECK_EQ(suggest_user_name("Ana María López"), std::string("ana"));
+    CHECK_EQ(suggest_user_name("  Zoe "), std::string("zoe"));
+    CHECK_EQ(suggest_user_name("Élise"), std::string("lise"));
+    CHECK_EQ(suggest_user_name("42"), std::string(""));
+    CHECK_EQ(password_strength("abc"), 0);
+    CHECK_EQ(password_strength("abcdefgh"), 1);
+    CHECK_EQ(password_strength("abcDEF12"), 2);
+    CHECK_EQ(password_strength("correct horse battery"), 3);
+    CHECK_EQ(picture_path("ana"), std::string("/var/lib/AccountsService/icons/ana"));
+
+    std::string toml = "# greetd\n[terminal]\nvt = 1\n\n[default_session]\ncommand = \"fl-greet-session\"\nuser = \"greeter\"\n";
+    CHECK_EQ(autologin_user(toml), std::string(""));
+    std::string on = set_autologin(toml, "ana", "fl-session");
+    CHECK_EQ(autologin_user(on), std::string("ana"));
+    CHECK(on.find("# greetd\n[terminal]") == 0);
+    CHECK(on.find("user = \"greeter\"") != std::string::npos);
+    CHECK(on.find("[initial_session]\ncommand = \"fl-session\"\nuser = \"ana\"\n") != std::string::npos);
+    std::string again = set_autologin(on, "zoe", "fl-session");
+    CHECK_EQ(autologin_user(again), std::string("zoe"));
+    CHECK_EQ(again.find("[initial_session]"), again.rfind("[initial_session]"));
+    std::string off = set_autologin(again, "", "");
+    CHECK_EQ(autologin_user(off), std::string(""));
+    CHECK(off.find("initial_session") == std::string::npos);
+    CHECK(off.find("Settings > Users") == std::string::npos);  // our comment went with it
+    CHECK_EQ(off, toml);
+    CHECK(off.find("[default_session]") != std::string::npos);
+    // a section in the middle, single quotes, a comment after the value
+    std::string mid = "[initial_session]\nuser = 'bob' # auto\ncommand = \"x\"\n[default_session]\nuser = \"greeter\"\n";
+    CHECK_EQ(autologin_user(mid), std::string("bob"));
+    std::string mid_off = set_autologin(mid, "", "");
+    CHECK_EQ(mid_off, std::string("[default_session]\nuser = \"greeter\"\n"));
   }
   return test_result("settings");
 }

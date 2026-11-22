@@ -50,6 +50,12 @@ if(TARGET fld-udisks)
   add_test(NAME udisks COMMAND test_udisks)
 endif()
 
+if(TARGET fl-sysinfo-info)
+  add_executable(test_sysinfo test_sysinfo.cpp)
+  target_link_libraries(test_sysinfo PRIVATE fl-sysinfo-info)
+  add_test(NAME sysinfo COMMAND test_sysinfo)
+endif()
+
 if(TARGET fld-gvfs)
   add_executable(test_gvfs test_gvfs.cpp)
   target_link_libraries(test_gvfs PRIVATE fld-gvfs)

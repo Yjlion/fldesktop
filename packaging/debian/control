@@ -59,6 +59,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-edit (>= ${source:Version}),
          fldesktop-calc (>= ${source:Version}),
          fldesktop-taskmgr (>= ${source:Version}),
+         fldesktop-sysinfo (>= ${source:Version}),
          fldesktop-view (>= ${source:Version}),
          fldesktop-settings (>= ${source:Version}),
          fldesktop-mixer (>= ${source:Version}),
@@ -172,6 +173,15 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: fldesktop calculator
  fl-calc is a basic and scientific calculator with history and memory.
+
+Package: fldesktop-sysinfo
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: hwdata | pci.ids
+Description: fldesktop system information
+ fl-sysinfo shows the computer's processor, memory, graphics, disks,
+ network interfaces, PCI and USB devices, batteries and temperatures,
+ and saves them as a report.
 
 Package: fldesktop-taskmgr
 Architecture: any

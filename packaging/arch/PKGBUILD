@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-sysinfo fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -67,7 +67,7 @@ _stage() {
 package_fldesktop() {
   pkgdesc="Lightweight Wayland desktop built with FLTK (meta package)"
   depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
-           fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-taskmgr
+           fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-taskmgr fldesktop-sysinfo
            fldesktop-mixer fldesktop-polkit-agent fldesktop-network fldesktop-notifyd
            xdg-desktop-portal-fl fldesktop-lock fldesktop-icon-theme)
   optdepends=('fldesktop-greeter: graphical login with greetd'
@@ -173,6 +173,7 @@ _app() {
 
 package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); optdepends=("openssh: SSH connections" "sshfs: browse remote files"); _app term; }
 package_fldesktop-taskmgr() { pkgdesc="fldesktop task manager"; depends=(fltk); optdepends=("polkit: manage other users' processes"); _app taskmgr; }
+package_fldesktop-sysinfo() { pkgdesc="fldesktop system information"; depends=(fltk); optdepends=("hwdata: names of PCI and USB devices"); _app sysinfo; }
 package_fldesktop-archive() { pkgdesc="fldesktop archive manager"; depends=(fltk libarchive); _app archive; }
 
 package_fldesktop-webcam() {

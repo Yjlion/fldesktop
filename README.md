@@ -23,6 +23,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-snip** | Snipping tool: a rectangle, a freeform shape, a window or the whole screen, chosen on a frozen picture of the screen with a magnifier; an editor with pen, highlighter, arrows, shapes, text, pixelate and crop; copy, save, print; quick snips for the Print keys; screen recording to WebM through the ScreenCast portal |
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
+| **fl-sysinfo** | System information: computer and firmware, processor (cores, speeds, caches, mitigations), memory, graphics and outputs, disks and file systems, network interfaces, PCI and USB devices, batteries, temperatures and fans; copy or save it as a report |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
 | **fl-cliphist** | Clipboard history: texts and images, pins, a list in the panel; password managers' copies are not kept |

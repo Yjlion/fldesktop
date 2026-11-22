@@ -1,0 +1,49 @@
+.TH FL-SYSINFO 1 "November 2026" "fldesktop 0.1.0" "fldesktop"
+.SH NAME
+fl-sysinfo \- system information
+.SH SYNOPSIS
+\fBfl-sysinfo\fR [\fB\-\-page\fR \fIPAGE\fR] [\fB\-\-report\fR]
+.SH DESCRIPTION
+Shows what the computer is made of and how it is doing, read from \fI/proc\fR, \fI/sys\fR and
+\fI/etc/os-release\fR (no administrator rights needed). The pages:
+.TP
+\fBOverview\fR (overview)
+The computer's model, the operating system, kernel, desktop and session, how long it has been
+running, a summary of the hardware, and the firmware (BIOS or UEFI, mainboard).
+.TP
+\fBProcessor\fR (processor)
+Name, vendor, sockets, cores and threads, virtualization, the speed range and the current speed of
+every CPU, the frequency governor, the caches and the state of the CPU vulnerability mitigations.
+.TP
+\fBMemory\fR (memory)
+Memory in use and available, swap (also zram) and huge pages.
+.TP
+\fBGraphics\fR (graphics)
+Graphics cards with their driver, PCI slot and video memory, and the state and mode of every output.
+.TP
+\fBStorage\fR (storage)
+Disks (kind, size, serial number, firmware) and the mounted file systems with their free space.
+.TP
+\fBNetwork\fR (network)
+Network interfaces: kind, state, speed, hardware address, driver and IP addresses.
+.TP
+\fBDevices\fR (devices)
+PCI and USB devices (named from the \fIpci.ids\fR and \fIusb.ids\fR databases of hwdata when
+installed), input devices and sound cards.
+.TP
+\fBPower & Sensors\fR (power)
+Batteries (charge, health, charge cycles), the power supply, and temperatures and fan speeds;
+read again every 2 seconds while the page is shown.
+.PP
+Select a row and press Ctrl+C (or right-click it) to copy it; a heading copies its group.
+\fBCopy All\fR copies the whole report, \fBSave Report\fR (Ctrl+S) saves it as a text file.
+F5 reads the page again, Ctrl+1 to Ctrl+8 go to a page.
+.SH OPTIONS
+.TP
+\fB\-\-page\fR \fIPAGE\fR
+Opens that page (the names in parentheses above).
+.TP
+\fB\-\-report\fR
+Prints the whole report as text and quits.
+.SH SEE ALSO
+\fBfl-taskmgr\fR(1), \fBfl-settings\fR(1)

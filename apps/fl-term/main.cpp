@@ -1,3 +1,4 @@
+#include "fld/json.h" // first: X11 headers define Bool
 // fl-term: terminal emulator for fldesktop
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
@@ -31,6 +32,7 @@
 #include "ssh_ui.h"
 #include "fld/menus.h"
 #include "fld/tab_bar.h"
+#include "fld/tab_move.h"
 #include "term_settings.h"
 #include "term_widget.h"
 
@@ -702,6 +704,65 @@ static void tab_to_window(int i) {
   close_tab(i);
 }
 
+// ---- moving tabs to other fl-term windows: the new window starts the same
+// command in the same folder (a running program cannot move along)
+
+static std::string export_tab(int i) {
+  if (i < 0 || i >= (int)g.tabs.size()) return "";
+  Tab &tb = g.tabs[(size_t)i];
+  fld::Json j = fld::Json::object();
+  fld::Json cmd = fld::Json::array();
+  for (auto &a : tb.spec.cmd) cmd.push(a);
+  j.set("cmd", cmd);
+  std::string dir = tb.term->current_dir();
+  j.set("cwd", dir.empty() ? tb.spec.cwd : dir);
+  j.set("title", tb.spec.title);
+  j.set("scheme", tb.spec.scheme);
+  j.set("hold", tb.spec.hold);
+  j.set("hold_on_error", tb.spec.hold_on_error);
+  j.set("custom", tb.custom);
+  return j.dump();
+}
+
+static bool spec_from_state(const std::string &state, TabSpec &spec, std::string &custom) {
+  fld::Json j;
+  if (!fld::Json::parse(state, j) || !j.is_object()) return false;
+  for (auto &a : j["cmd"].items()) spec.cmd.push_back(a.as_string());
+  spec.cwd = j["cwd"].as_string();
+  spec.title = j["title"].as_string();
+  spec.scheme = j["scheme"].as_string();
+  spec.hold = j["hold"].as_bool();
+  spec.hold_on_error = j["hold_on_error"].as_bool();
+  custom = j["custom"].as_string();
+  return true;
+}
+
+static bool import_tab(const std::string &state, int at) {
+  TabSpec spec;
+  std::string custom;
+  if (!spec_from_state(state, spec, custom)) return false;
+  TermWidget *t = add_tab(spec);
+  if (!t) return false;
+  int i = index_of(t);
+  g.tabs[(size_t)i].custom = custom;
+  int to = std::max(0, std::min((int)g.tabs.size() - 1, at));
+  if (to != i) reorder_tab(i, to);
+  select_tab(index_of(t));
+  g.win->show();
+  return true;
+}
+
+// the tab now runs in another window: close it here (ask first when a
+// program still runs in it)
+static void tab_moved_away(int i) {
+  if (i < 0 || i >= (int)g.tabs.size()) return;
+  if (g.tabs[(size_t)i].term->has_children() &&
+      fl_choice("The tab was opened in the other window. A program is still running in this one; close it?",
+                "Keep It", "Close", nullptr) != 1)
+    return;
+  close_tab(i);
+}
+
 static void close_others(int keep) {
   if (keep < 0 || keep >= (int)g.tabs.size()) return;
   TermWidget *k = g.tabs[(size_t)keep].term;
@@ -781,7 +842,7 @@ static void close_cb(Fl_Widget *w, void *) { w->hide(); }
 int main(int argc, char **argv) {
   fld::init_app("fl-term", argc, argv);
   std::vector<std::string> cmd;
-  std::string workdir, title, ssh_arg, scheme_arg;
+  std::string workdir, title, ssh_arg, scheme_arg, adopted_name;
   int cols = 90, rows = 26;
   bool hold = false, hold_on_error = false;
   for (int i = 1; i < argc; i++) {
@@ -805,6 +866,18 @@ int main(int argc, char **argv) {
       ssh_arg = a.substr(6);
     } else if (a == "--scheme" && i + 1 < argc) {
       scheme_arg = argv[++i];
+    } else if (a == "--adopt-tab" && i + 1 < argc) {
+      // a tab dragged out of another window
+      std::string state;
+      TabSpec spec;
+      if (fld::claim_tab_file(argv[++i], "fl-term", state) && spec_from_state(state, spec, adopted_name)) {
+        cmd = spec.cmd;
+        workdir = spec.cwd;
+        title = spec.title;
+        scheme_arg = spec.scheme;
+        hold = spec.hold;
+        hold_on_error = spec.hold_on_error;
+      }
     } else if (a == "--hold-on-error") {
       hold_on_error = true;
     } else if (a == "--hold") {
@@ -851,6 +924,24 @@ int main(int argc, char **argv) {
   g.tabbar->on_move = [](int from, int to) { reorder_tab(from, to); };
   g.tabbar->on_menu = [](int i) { tab_menu(i); };
   g.tabbar->on_detach = [](int i) { Fl::add_timeout(0, [](void *v) { tab_to_window((int)(long)v); }, (void *)(long)i); };
+  g.tabbar->app_id = "fl-term";
+  g.tabbar->on_export = [](int i) { return export_tab(i); };
+  g.tabbar->on_import = [](const std::string &state, int at, bool) { return import_tab(state, at); };
+  g.tabbar->on_moved_away = [](int i) {
+    Fl::add_timeout(0, [](void *v) { tab_moved_away((int)(long)v); }, (void *)(long)i);
+  };
+  g.tabbar->on_tear_off = [](int i, const std::string &file) {
+    // same as Move to New Window, with the tab's state
+    if (i >= 0 && i < (int)g.tabs.size() && g.tabs[(size_t)i].term->has_children() &&
+        fl_choice("A program is still running in this tab. It ends when the tab moves to a new window.",
+                  "Cancel", "Move", nullptr) != 1) {
+      fld::discard_tab_file(file);
+      return;
+    }
+    if (fld::spawn({fld::self_program("fl-term"), "--adopt-tab", file}))
+      Fl::add_timeout(0, [](void *v) { close_tab((int)(long)v); }, (void *)(long)i);
+    else fld::discard_tab_file(file);
+  };
   g.area = new Fl_Group(0, 0, 800, 500);
   g.area->box(FL_NO_BOX);
   g.area->end();
@@ -879,7 +970,7 @@ int main(int argc, char **argv) {
   t->on_title = on_title;
   t->on_exit = on_exit;
   t->on_menu = show_menu;
-  g.tabs.push_back({t, !scheme_override.empty(), first, ""});
+  g.tabs.push_back({t, !scheme_override.empty(), first, adopted_name});
   g.current = 0;
 
   int ww, wh;

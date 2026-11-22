@@ -19,10 +19,13 @@ add_library(fld STATIC
   menus.cpp
   session.cpp
   tab_bar.cpp
+  drag.cpp
+  tab_move.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Threads REQUIRED)
-target_link_libraries(fld PUBLIC fltk::images fltk::fltk Threads::Threads)
+pkg_check_modules(FLD_CAIRO REQUIRED IMPORTED_TARGET cairo)
+target_link_libraries(fld PUBLIC fltk::images fltk::fltk Threads::Threads PkgConfig::FLD_CAIRO PkgConfig::WAYLAND_CLIENT)
 
 # GLib main loop bridge (only for programs using GObject libraries)
 pkg_check_modules(FLD_GLIB IMPORTED_TARGET glib-2.0 gio-2.0)

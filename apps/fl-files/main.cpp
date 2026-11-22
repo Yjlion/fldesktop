@@ -1,3 +1,4 @@
+#include "fld/json.h" // first: X11 headers define Bool
 // fl-files: file manager for fldesktop
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
@@ -20,6 +21,8 @@
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 #include <FL/fl_utf8.h>
+#include "fld/drag.h"
+#include "fld/tab_move.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -357,6 +360,8 @@ static Fl_Group *g_views; // holds the tabs' views (one shown)
 static Tab *cur_tab() { return g_cur >= 0 && g_cur < (int)g_tabs.size() ? g_tabs[(size_t)g_cur].get() : nullptr; }
 static void new_tab(const std::string &path, bool activate = true);
 static void close_tab(int i);
+static std::string export_tab(int i);
+static bool import_tab(const std::string &state, int at);
 static void activate_tab(int i);
 static void update_tabbar();
 static void open_dir_elsewhere(const std::string &path); // middle click: a new tab or window
@@ -405,12 +410,31 @@ public:
   struct timespec loaded_mtime{}; // of the folder when it was read
   bool dropping = false;      // the next FL_PASTE is a drop
   int press_x = 0, press_y = 0;
+  // a press on a selected item changes the selection on release, so the
+  // whole selection can be dragged (Ctrl+drag copies it)
+  int pending_toggle = -1; // Ctrl+press on a selected item: deselect it on release
+  int pending_single = -1; // press on one of several selected items: select only it
+  // drag and drop effects
+  float ghost_w = 0.4f;    // how much of the icon a dragged item keeps
+  int fade_step = 0;       // a cancelled drag: the faded items come back
+  std::string pulse_path;  // the folder files were just dropped into flashes
+  int pulse_step = 0;
+  int spring_item = -1;    // a folder hovered while dragging opens after a moment
+  int scroll_dir = 0;      // dragging near the top (-1) or bottom (1) edge scrolls
+  int drag_count = 0;      // how many items are being dragged from here
   int resizing_col = -1, resize_x0 = 0, resize_w0 = 0;
   std::string type_ahead;
 
   static const int HEADER_H = 26, COMPACT_W = 240;
 
+  static std::set<FileView *> &live() {
+    static std::set<FileView *> v;
+    return v;
+  }
+
   FileView(int x, int y, int w, int h) : Fl_Group(x, y, w, h) {
+    live().insert(this);
+    fld::drag_setup_later();
     sb = new Fl_Scrollbar(x + w - 14, y, 14, h);
     sb->type(FL_VERTICAL);
     sb->callback([](Fl_Widget *s, void *d) {
@@ -421,7 +445,15 @@ public:
     end();
     box(FL_FLAT_BOX);
   }
-  ~FileView() override { clear_thumbs(); clear_ghosts(); }
+  ~FileView() override {
+    live().erase(this);
+    Fl::remove_timeout(fade_cb, this);
+    Fl::remove_timeout(pulse_cb, this);
+    Fl::remove_timeout(spring_cb, this);
+    Fl::remove_timeout(autoscroll_cb, this);
+    clear_thumbs();
+    clear_ghosts();
+  }
 
   void clear_ghosts() {
     for (auto &g : ghosts) delete g.second;
@@ -433,18 +465,93 @@ public:
     if (it != ghosts.end()) return it->second;
     Fl_Image *g = ic->copy();
     if (g) {
-      g->color_average(fld::palette().bg2, 0.4f);
+      g->color_average(fld::palette().bg2, ghost_w);
       g->scale(ic->w(), ic->h(), 0, 1);
     }
     return ghosts[ic] = g;
   }
   // the drag of files from this view ended (dropped anywhere or cancelled)
   void end_drag() {
+    stop_drop_effects();
     if (!dragging_files) return;
     dragging_files = false;
     clear_ghosts();
     redraw();
     update_status();
+  }
+  // the drag is over (reported by the drag itself): a cancelled one fades
+  // the items back in
+  void drag_over(fld::DragEnd e) {
+    press_item = -1;
+    if (!dragging_files) return;
+    if (e == fld::DragEnd::Cancelled) {
+      dragging_files = false;
+      fade_step = 3;
+      Fl::remove_timeout(fade_cb, this);
+      Fl::add_timeout(0.05, fade_cb, this);
+      update_status();
+    } else end_drag();
+  }
+  static void fade_cb(void *d) {
+    FileView *v = (FileView *)d;
+    v->fade_step--;
+    v->ghost_w = v->fade_step > 0 ? 0.4f + 0.6f * (3 - v->fade_step) / 3.0f : 0.4f;
+    v->clear_ghosts();
+    v->redraw();
+    if (v->fade_step > 0) Fl::repeat_timeout(0.05, fade_cb, d);
+  }
+  // the folder files were dropped into flashes twice
+  void pulse(const std::string &path) {
+    pulse_path = path;
+    pulse_step = 5;
+    Fl::remove_timeout(pulse_cb, this);
+    Fl::add_timeout(0.07, pulse_cb, this);
+    redraw();
+  }
+  static void pulse_cb(void *d) {
+    FileView *v = (FileView *)d;
+    if (--v->pulse_step > 0) Fl::repeat_timeout(0.07, pulse_cb, d);
+    v->redraw();
+  }
+  bool pulsing(const Entry &e) const { return pulse_step > 0 && pulse_step % 2 == 1 && e.path == pulse_path; }
+  // spring-loaded folders: hovering one with a drag opens it
+  void spring(int i) {
+    if (i == spring_item) return;
+    Fl::remove_timeout(spring_cb, this);
+    spring_item = i;
+    if (i >= 0) Fl::add_timeout(1.2, spring_cb, this);
+  }
+  static void spring_cb(void *d) {
+    FileView *v = (FileView *)d;
+    int i = v->spring_item;
+    v->spring_item = -1;
+    if (i < 0 || i >= (int)v->items.size() || i != v->drop_item || !v->entry(i).is_dir) return;
+    std::string path = v->entry(i).path;
+    v->drop_item = -1;
+    navigate(path);
+  }
+  // auto-scroll while a drag is near the top or bottom edge
+  void set_scroll_dir(int d) {
+    if (d == scroll_dir) return;
+    scroll_dir = d;
+    Fl::remove_timeout(autoscroll_cb, this);
+    if (d) Fl::add_timeout(0.04, autoscroll_cb, this);
+  }
+  static void autoscroll_cb(void *d) {
+    FileView *v = (FileView *)d;
+    if (!v->scroll_dir) return;
+    int max_top = std::max(0, v->content_height() - v->view_h());
+    int nt = std::max(0, std::min(max_top, v->top + v->scroll_dir * std::max(8, v->row_h() / 2)));
+    if (nt != v->top) {
+      v->top = nt;
+      v->update_scrollbar();
+      v->redraw();
+    }
+    Fl::repeat_timeout(0.04, autoscroll_cb, d);
+  }
+  void stop_drop_effects() {
+    spring(-1);
+    set_scroll_dir(0);
   }
 
   void clear_thumbs() {
@@ -865,10 +972,10 @@ public:
       item_rect(i, ix, iy, iw, ih);
       if (iy > y() + h()) break;
       Entry &e = entry(i);
-      bool drop = i == drop_item;
+      bool drop = i == drop_item || pulsing(e);
       bool s = sel.count(i) > 0 && !drop;
       bool hov = i == hover_item && !s && !drop && !banding;
-      bool ghosted = dragging_files && sel.count(i) > 0; // being dragged
+      bool ghosted = (dragging_files || fade_step > 0) && sel.count(i) > 0; // being dragged
       bool cut = g_clip.cut && std::find(g_clip.paths.begin(), g_clip.paths.end(), e.path) != g_clip.paths.end();
       Fl_Color sel_bg = focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.55f);
       Fl_Color hover_bg = fl_color_average(p.selection, p.bg2, 0.12f);
@@ -888,7 +995,7 @@ public:
       };
       // a folder that takes the drop shows open
       Fl_Image *open_icon = nullptr;
-      if (drop) open_icon = fld::icon_first({"folder-open"}, V.view == VIEW_ICONS ? B : SM);
+      if (i == drop_item) open_icon = fld::icon_first({"folder-open"}, V.view == VIEW_ICONS ? B : SM);
       if (V.view == VIEW_DETAILS) {
         if (drop) drop_frame(ix, iy, iw, ih, 3);
         else if (s) {
@@ -1514,11 +1621,13 @@ int FileView::handle(int e) {
       press_item = i;
       press_x = ex;
       press_y = ey;
+      pending_toggle = pending_single = -1;
       end_drag();
       if (hover_item != -1) hover_item = -1;
       if (i >= 0) {
         if (st & FL_CTRL) {
-          if (sel.count(i)) sel.erase(i); else sel.insert(i);
+          // a selected item is deselected on release (unless it is dragged)
+          if (sel.count(i)) pending_toggle = i; else sel.insert(i);
           focus = anchor = i;
         } else if (st & FL_SHIFT && anchor >= 0) {
           sel.clear();
@@ -1527,7 +1636,10 @@ int FileView::handle(int e) {
         } else if (!sel.count(i)) {
           sel = {i};
           focus = anchor = i;
-        } else focus = i;
+        } else {
+          focus = i;
+          if (sel.size() > 1) pending_single = i;
+        }
         if (Fl::event_clicks() && !(st & (FL_CTRL | FL_SHIFT)) && !S.single_click) {
           Fl::event_clicks(0);
           open_entry(entry(i));
@@ -1568,15 +1680,37 @@ int FileView::handle(int e) {
         return 1;
       }
       if (press_item >= 0 && !dragging_files && !in_trash() && !in_network() &&
-          (std::abs(ex - press_x) > 6 || std::abs(ey - press_y) > 6)) {
-        // start a drag with file URIs; the dragged items fade until it ends
+          (Fl::event_state() & FL_BUTTON1) && (std::abs(ex - press_x) > 6 || std::abs(ey - press_y) > 6)) {
+        if (pending_toggle >= 0) { sel.insert(pending_toggle); pending_toggle = -1; }
+        pending_single = -1;
+        auto paths = selected_paths();
+        if (paths.empty()) return 1;
+        // start a drag with file URIs and their icons; the dragged items
+        // fade until it ends
+        fade_step = 0;
+        ghost_w = 0.4f;
+        clear_ghosts();
         dragging_files = true;
         drop_item = hover_item = -1;
         redraw();
         update_status();
-        std::string text = fld::make_uri_list(selected_paths());
-        Fl::copy(text.c_str(), (int)text.size(), 0);
-        Fl::dnd();
+        fld::DragImage img;
+        img.size = std::max(32, std::min(64, big()));
+        std::vector<int> order;
+        if (sel.count(press_item)) order.push_back(press_item);
+        for (int k : sel)
+          if (k != press_item && order.size() < 3) order.push_back(k);
+        for (int k : order)
+          if (Fl_Image *ic = icon_for(entry(k), true)) img.icons.push_back(ic);
+        img.count = drag_count = (int)paths.size();
+        std::string text = fld::make_uri_list(paths);
+        FileView *self = this;
+        if (!fld::start_drag(window(), text, true, img, [self](fld::DragEnd e) {
+              if (live().count(self)) self->drag_over(e);
+            })) {
+          Fl::copy(text.c_str(), (int)text.size(), 0);
+          Fl::dnd();
+        }
       }
       return 1;
     }
@@ -1590,6 +1724,21 @@ int FileView::handle(int e) {
         banding = false;
         redraw();
       }
+      // a click (no drag) on a selected item: Ctrl deselects it, a plain
+      // click selects only it
+      if (!dragging_files && press_item >= 0 && press_item < (int)items.size()) {
+        if (pending_toggle == press_item) {
+          sel.erase(press_item);
+          redraw();
+          update_status();
+        } else if (pending_single == press_item && !(Fl::event_state() & (FL_CTRL | FL_SHIFT))) {
+          sel = {press_item};
+          anchor = press_item;
+          redraw();
+          update_status();
+        }
+      }
+      pending_toggle = pending_single = -1;
       // single-click mode opens on release (not after a drag or with modifiers)
       if (S.single_click && Fl::event_button() == FL_LEFT_MOUSE && press_item >= 0 && !dragging_files &&
           !(Fl::event_state() & (FL_CTRL | FL_SHIFT)) && press_item == item_at(Fl::event_x(), Fl::event_y()) &&
@@ -1621,18 +1770,25 @@ int FileView::handle(int e) {
     case FL_DND_ENTER: case FL_DND_DRAG: {
       if (in_trash() || in_network()) return 0;
       // highlight the folder the files would go into
-      int i = item_at(Fl::event_x(), Fl::event_y());
+      int ey = Fl::event_y();
+      int i = item_at(Fl::event_x(), ey);
       if (i >= 0 && !entry(i).is_dir) i = -1;
       if (i >= 0 && dragging_files && sel.count(i)) i = -1; // not onto itself
       if (i != drop_item) { drop_item = i; redraw(); }
+      spring(i);
+      set_scroll_dir(ey < view_top() + 24 ? -1 : ey > y() + h() - 24 ? 1 : 0);
+      if (dragging_files) update_status();
       return 1;
     }
     case FL_DND_RELEASE:
+      stop_drop_effects();
       if (in_trash() || in_network()) return 0;
       dropping = true;
       return 1;
     case FL_DND_LEAVE:
+      stop_drop_effects();
       if (drop_item != -1) { drop_item = -1; redraw(); }
+      if (dragging_files) update_status();
       return 1;
     case FL_PASTE: {
       // dropped or pasted file URIs: into the folder under the pointer (drops)
@@ -1651,6 +1807,7 @@ int FileView::handle(int e) {
                                : fld::drop_action(paths, dest, FL_CTRL); // a paste copies
       end_drag();
       if (!drop && a == fld::DROP_NONE) return 1;
+      if (drop && a != fld::DROP_NONE && dest != g_cwd) pulse(dest);
       fld::run_drop(a, paths, dest, [](FileOp *) { refresh(); });
       return 1;
     }
@@ -2039,13 +2196,18 @@ public:
         if (line != drop_line) {
           drop_line = line;
           value(line > 0 ? line : saved_line);
+          // spring-loaded: hovering a place opens it in the view
+          Fl::remove_timeout(spring_cb, this);
+          if (line > 0 && g_place_list[(size_t)line - 1].path != TRASH_URI) Fl::add_timeout(1.2, spring_cb, this);
         }
         return 1;
       }
       case FL_DND_LEAVE:
+        Fl::remove_timeout(spring_cb, this);
         value(saved_line);
         return 1;
       case FL_DND_RELEASE:
+        Fl::remove_timeout(spring_cb, this);
         dropping = true;
         return 1;
       case FL_PASTE: {
@@ -2091,6 +2253,15 @@ private:
   static bool drop_target(int line) {
     const std::string &p = g_place_list[(size_t)line - 1].path;
     return p == TRASH_URI || (!p.empty() && fld::is_dir(p) && access(p.c_str(), W_OK) == 0);
+  }
+  ~PlacesBrowser() override { Fl::remove_timeout(spring_cb, this); }
+  static void spring_cb(void *d) {
+    PlacesBrowser *b = (PlacesBrowser *)d;
+    int line = b->drop_line;
+    if (line <= 0 || line > (int)g_place_list.size()) return;
+    std::string path = g_place_list[(size_t)line - 1].path;
+    if (path != g_cwd) navigate(path);
+    b->saved_line = b->value();
   }
 };
 
@@ -2405,9 +2576,19 @@ static void refresh() {
 static void update_status() {
   if (!g_status) return;
   if (g_view->dragging_files) {
-    size_t n = g_view->sel.size();
-    std::string s = "Dragging " + std::to_string(n) + (n == 1 ? " item" : " items") +
-                    " — drop onto a folder to move or copy it there (Ctrl copies, Shift moves)";
+    size_t n = (size_t)g_view->drag_count;
+    std::string what = std::to_string(n) + (n == 1 ? " item" : " items");
+    int st = Fl::event_state();
+    std::string s;
+    int t = g_view->drop_item;
+    if (t >= 0 && t < (int)g_view->items.size() && !g_view->sel.empty()) {
+      fld::DropAction a = fld::drop_action(g_view->selected_paths(), g_view->entry(t).path, st);
+      const char *verb = a == fld::DROP_COPY ? "Copy " : a == fld::DROP_MOVE ? "Move " : nullptr;
+      s = verb ? std::string(verb) + what + " to “" + g_view->entry(t).name + "”" +
+                     (a == fld::DROP_COPY ? "" : " (Ctrl copies)")
+               : "Cannot drop here";
+    } else
+      s = "Dragging " + what + " — drop onto a folder to move or copy it there (Ctrl copies, Shift moves)";
     g_status->copy_label(fld::escape_at(s).c_str());
     return;
   }
@@ -3082,8 +3263,65 @@ static fld::TabBar *make_tabbar(int W) {
     fld::spawn({"fl-files", d == TRASH_URI ? std::string(TRASH_URI) : d});
     close_tab(i);
   };
+  // tabs move to other fl-files windows with their history
+  tb->app_id = "fl-files";
+  tb->on_export = [](int i) { return export_tab(i); };
+  tb->on_import = [](const std::string &state, int at, bool) { return import_tab(state, at); };
+  tb->on_moved_away = [](int i) { close_tab(i); };
+  tb->on_tear_off = [](int i, const std::string &file) {
+    if (fld::spawn({fld::self_program("fl-files"), "--adopt-tab", file})) close_tab(i);
+    else fld::discard_tab_file(file); // the tab stays here
+  };
   tb->hide();
   return tb;
+}
+
+// a tab's folder and history, for moving it to another window
+static std::string export_tab(int i) {
+  if (i < 0 || i >= (int)g_tabs.size()) return "";
+  bool cur = i == g_cur;
+  Tab *t = g_tabs[(size_t)i].get();
+  fld::Json j = fld::Json::object();
+  j.set("cwd", cur ? g_cwd : t->cwd);
+  fld::Json back = fld::Json::array(), fwd = fld::Json::array();
+  for (auto &b : cur ? g_hist_back : t->back) back.push(b);
+  for (auto &f : cur ? g_hist_fwd : t->fwd) fwd.push(f);
+  j.set("back", back);
+  j.set("fwd", fwd);
+  j.set("filter", cur ? std::string(g_filter->value()) : t->filter);
+  return j.dump();
+}
+
+// opens a tab from export_tab() at index `at` (and shows it)
+static bool import_tab(const std::string &state, int at) {
+  fld::Json j;
+  if (!fld::Json::parse(state, j)) return false;
+  std::string cwd = j["cwd"].as_string();
+  if (cwd != TRASH_URI && cwd != NETWORK_URI && !fld::is_dir(cwd)) return false;
+  size_t before = g_tabs.size();
+  new_tab(cwd);
+  if (g_tabs.size() == before) return false;
+  g_hist_back.clear();
+  g_hist_fwd.clear();
+  for (auto &b : j["back"].items()) g_hist_back.push_back(b.as_string());
+  for (auto &f : j["fwd"].items()) g_hist_fwd.push_back(f.as_string());
+  std::string filter = j["filter"].as_string();
+  if (!filter.empty()) {
+    g_filter->value(filter.c_str());
+    g_view->apply_filter_sort();
+  }
+  int to = std::max(0, std::min((int)g_tabs.size() - 1, at));
+  if (to != g_cur) {
+    save_tab();
+    int from = g_cur;
+    fld::move_element(g_tabs, from, to);
+    g_cur = to;
+    activate_tab_(g_cur, false);
+  }
+  update_nav_buttons();
+  update_status();
+  g_win->show(); // raise it: the tab arrived here
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -3416,7 +3654,7 @@ int main(int argc, char **argv) {
   fld::init_app("fl-files", argc, argv);
   Fl::lock(); // enable Fl::awake from worker threads
   load_settings();
-  std::string start = fld::home_dir(), start_uri;
+  std::string start = fld::home_dir(), start_uri, adopt_file;
   bool connect = false;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
@@ -3425,6 +3663,7 @@ int main(int argc, char **argv) {
       return 0;
     }
     if (a == "--connect") { connect = true; continue; }
+    if (a == "--adopt-tab" && i + 1 < argc) { adopt_file = argv[++i]; continue; }
     if (a[0] == '-') continue;
     if (a == NETWORK_URI || a == "network:") { start = NETWORK_URI; continue; }
 #ifdef FLD_HAVE_GVFS
@@ -3616,7 +3855,10 @@ int main(int argc, char **argv) {
 #endif
   fill_places();
   update_view_button();
-  new_tab(start);
+  // a tab dragged out of another window: its state, else the folder asked for
+  std::string adopted;
+  if (!adopt_file.empty() && fld::claim_tab_file(adopt_file, "fl-files", adopted) && import_tab(adopted, 0)) {
+  } else new_tab(start);
   if (g_tabs.empty()) new_tab(fld::home_dir()); // the folder could not be opened
   if (S.show_tree) show_tree(true);
   g_win->show(); // not show(argc, argv): it resets the theme colors

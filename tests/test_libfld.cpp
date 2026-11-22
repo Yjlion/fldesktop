@@ -10,6 +10,12 @@
 #include "fld/styles.h"
 #include "fld/tab_bar.h"
 #include "fld/menus.h"
+#include "fld/session.h"
+#include "fld/drag.h"
+#include "fld/fileops.h"
+#include "fld/tab_move.h"
+#include <FL/Fl_RGB_Image.H>
+#include <sys/stat.h>
 #include "fld/trash.h"
 #include "fld/util.h"
 #include "test.h"
@@ -283,5 +289,67 @@ int main() {
     CHECK(next > 0 && next <= 60);
     CHECK_NEAR(fld::strftime_next_change("%H:%M:%S", 1000000.25), 0.75);
   }
+  // power actions: loginctl (logind, elogind), then systemctl
+  CHECK_EQ(fld::power_command("poweroff", true, true)[0], std::string("loginctl"));
+  CHECK_EQ(fld::power_command("suspend", false, true)[0], std::string("systemctl"));
+  CHECK_EQ(fld::power_command("suspend", false, true)[1], std::string("suspend"));
+  CHECK(fld::power_command("reboot", false, false).empty());
+
+  // moving tabs: payloads, one claimer wins, a refused tab goes back
+  {
+    char tmpl[] = "/tmp/fld-tabs-XXXXXX";
+    std::string rt = mkdtemp(tmpl);
+    setenv("XDG_RUNTIME_DIR", rt.c_str(), 1);
+    std::string file = fld::write_tab_file("fl-files", "{\"cwd\":\"/tmp\"}", "tmp");
+    CHECK(!file.empty());
+    struct stat st;
+    CHECK(stat(file.c_str(), &st) == 0 && (st.st_mode & 0777) == 0600);
+    std::string f;
+    CHECK(fld::parse_tab_payload(std::string(fld::kTabPayloadPrefix) + file, f));
+    CHECK_EQ(f, file);
+    CHECK(!fld::parse_tab_payload("file:///etc/passwd", f));
+    CHECK(!fld::parse_tab_payload(std::string(fld::kTabPayloadPrefix) + "/etc/passwd", f));
+    CHECK(!fld::parse_tab_payload(std::string(fld::kTabPayloadPrefix) + fld::tab_dir() + "/../x", f));
+    std::string state;
+    int pid = 0;
+    CHECK(!fld::claim_tab_file(file, "fl-edit", state)); // another program's tab
+    CHECK(fld::claim_tab_file(file, "fl-files", state, &pid));
+    CHECK_EQ(state, std::string("{\"cwd\":\"/tmp\"}"));
+    CHECK_EQ(pid, (int)getpid());
+    CHECK(!fld::claim_tab_file(file, "fl-files", state)); // only once
+    CHECK(fld::restore_tab_file(file, "fl-files", state, pid));
+    CHECK(fld::claim_tab_file(file, "fl-files", state));
+    // the payload is no file list: dropped on the desktop it moves nothing
+    CHECK(fld::parse_uri_list(std::string(fld::kTabPayloadPrefix) + file).empty());
+    CHECK(system(("rm -rf '" + rt + "'").c_str()) == 0);
+  }
+
+  // drag images: a chip for a tab, stacked icons with a count badge
+  {
+    fld::DragImage chip;
+    chip.label = "Documents";
+    fld::DragPixels a = fld::render_drag_image(chip, 1, false);
+    CHECK(a.w > 60 && a.h >= 28);
+    CHECK_EQ(a.argb.size(), (size_t)a.w * a.h);
+    CHECK(a.argb[(size_t)(a.h / 2) * a.w + a.w / 2] >> 24 > 0); // the chip is drawn
+    CHECK_EQ(a.argb[0] >> 24, 0u); // its corner stays clear
+    fld::DragPixels a2 = fld::render_drag_image(chip, 2, false);
+    CHECK_EQ(a2.w, a.w * 2);
+    static uchar px[16 * 16 * 4];
+    for (int i = 0; i < 16 * 16; i++) { px[i * 4] = 200; px[i * 4 + 1] = 40; px[i * 4 + 2] = 40; px[i * 4 + 3] = 255; }
+    Fl_RGB_Image icon(px, 16, 16, 4);
+    fld::DragImage many;
+    many.icons = {&icon, &icon, &icon, &icon};
+    many.count = 12;
+    many.size = 32;
+    fld::DragPixels b = fld::render_drag_image(many, 1, false);
+    CHECK(b.w > 32 && b.h > 32);
+    CHECK(b.hot_x > 0 && b.hot_y > 0 && b.hot_x < b.w && b.hot_y < b.h);
+    uint32_t front = b.argb[(size_t)(b.h - 3) * b.w + 3]; // inside the front icon
+    CHECK((front >> 24) > 150 && ((front >> 16) & 0xff) > ((front >> 8) & 0xff));
+    fld::DragPixels c = fld::render_drag_image(many, 1, true);
+    CHECK(c.argb != b.argb); // the copy badge
+  }
+
   return test_result("libfld");
 }

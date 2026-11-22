@@ -290,6 +290,8 @@ void remove_context_menu(Fl_Widget *w) {
     }
 }
 
+static Fl_Event_Dispatch g_prev_dispatch = nullptr;
+
 static int dispatch(int e, Fl_Window *win) {
   if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE && win && !Fl::grab() && !context_menus().empty()) {
     // the nearest widget (or parent) with a context menu
@@ -334,13 +336,14 @@ static int dispatch(int e, Fl_Window *win) {
       return 1;
     }
   }
-  return Fl::handle_(e, win);
+  return g_prev_dispatch ? g_prev_dispatch(e, win) : Fl::handle_(e, win);
 }
 
 void install_edit_menu() {
   static bool done = false;
   if (done) return;
   done = true;
+  g_prev_dispatch = Fl::event_dispatch();
   Fl::event_dispatch(dispatch);
 }
 

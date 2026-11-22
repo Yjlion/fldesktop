@@ -1,3 +1,4 @@
+#include "fld/json.h" // first: X11 headers define Bool
 // fl-web: a web browser built with FLTK and WPE WebKit
 //
 // Tabs, an address bar that searches, bookmarks, history, downloads, find in
@@ -20,6 +21,8 @@
 #include <FL/fl_draw.H>
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <arpa/inet.h>
@@ -39,6 +42,7 @@
 #include "fld/mime.h"
 #include "fld/notify.h"
 #include "fld/tab_bar.h"
+#include "fld/tab_move.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -279,6 +283,21 @@ public:
     };
     tabbar->on_menu = [this](int i) { tab_menu(i); };
     tabbar->on_detach = [this](int i) { later_detach(i); };
+    // tabs move to other windows: live within this program, by address to
+    // another fl-web; private tabs only into private windows of this program
+    tabbar->app_id = "fl-web";
+    tabbar->on_export = [this](int i) { return export_tab(i); };
+    tabbar->on_import = [this](const std::string &state, int at, bool same) { return import_tab(state, at, same); };
+    tabbar->on_moved_away = [this](int i) {
+      // a live move already took it out of this window; else close it here
+      Tab *t = exported;
+      exported = nullptr;
+      if (t && index_of(t) == i) later_close(i);
+    };
+    tabbar->on_tear_off = [this](int i, const std::string &file) {
+      fld::discard_tab_file(file);
+      later_detach(i);
+    };
     bar = new fld::Toolbar(0, TAB_H, W, TB);
     bar->color(p.bg2);
     back = bar->add_button("go-previous", "Back (Alt+Left)", [](Fl_Widget *, void *d) { ((Browser *)d)->go(-1); }, this);
@@ -459,6 +478,49 @@ public:
       for (auto *w : std::vector<Browser *>(g_windows))
         if (w->index_of(t) >= 0) { w->tab_to_new_window(t); break; }
     }, t);
+  }
+
+  Tab *exported = nullptr; // the tab being dragged to another window
+  std::string export_tab(int i) {
+    if (i < 0 || i >= (int)tabs.size()) return "";
+    Tab *t = tabs[(size_t)i];
+    exported = t;
+    fld::Json j = fld::Json::object();
+    j.set("uri", t->uri);
+    j.set("private", priv);
+    j.set("tab", std::to_string((uintptr_t)t));
+    return j.dump();
+  }
+  bool import_tab(const std::string &state, int at, bool same_process) {
+    fld::Json j;
+    if (!fld::Json::parse(state, j)) return false;
+    if (j["private"].as_bool() != priv) return false; // private and normal tabs do not mix
+    if (same_process) {
+      // the live tab, page and history included
+      uintptr_t id = (uintptr_t)strtoull(j["tab"].as_string().c_str(), nullptr, 10);
+      for (auto *w : g_windows) {
+        if (w == this) continue;
+        for (int k = 0; k < (int)w->tabs.size(); k++) {
+          Tab *t = w->tabs[(size_t)k];
+          if ((uintptr_t)t != id) continue;
+          w->detach(k);
+          if (w->tabs.empty()) w->win->hide(); // its last tab left: the window goes
+          adopt(t);
+          int to = std::max(0, std::min((int)tabs.size() - 1, at));
+          fld::move_element(tabs, (int)tabs.size() - 1, to);
+          cur = -1;
+          select(to);
+          win->show();
+          return true;
+        }
+      }
+      return false;
+    }
+    if (priv) return false;
+    std::string uri = j["uri"].as_string();
+    new_tab(uri, true, nullptr, std::max(0, std::min((int)tabs.size(), at)));
+    win->show();
+    return true;
   }
 
   // moves a tab (its page stays loaded) into a new window

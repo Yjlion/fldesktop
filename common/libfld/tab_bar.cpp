@@ -1,14 +1,33 @@
 #include "fld/tab_bar.h"
+#include "fld/drag.h"
+#include "fld/tab_move.h"
 #include "fld/theme.h"
+#include "fld/util.h"
 
 #include <FL/Fl.H>
+#include <FL/Fl_Group.H>
 #include <FL/Fl_Tooltip.H>
+#include <FL/Fl_Window.H>
 #include <FL/fl_draw.H>
 
 #include <algorithm>
 #include <cstdlib>
+#include <unistd.h>
 
 namespace fld {
+
+static std::vector<TabBar *> &bars() {
+  static std::vector<TabBar *> v;
+  return v;
+}
+static bool alive(TabBar *b) { return std::find(bars().begin(), bars().end(), b) != bars().end(); }
+
+// the tab being dragged to another window, from this process
+static struct Outgoing {
+  TabBar *bar = nullptr;
+  int index = -1;
+  bool local = false; // dropped back on its own strip and moved there
+} g_out;
 
 static const int PLUS_W = 32, ARROW_W = 22, MIN_W = 100, MAX_W = 240, DRAG_START = 6;
 
@@ -30,6 +49,174 @@ int TabBar::drop_index(int from, int drag_x, int tw, int n) {
 TabBar::TabBar(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
   box(FL_FLAT_BOX);
   clear_visible_focus();
+  bars().push_back(this);
+  drag_setup_later(); // a tab drag needs the press that starts it
+}
+
+TabBar::~TabBar() {
+  bars().erase(std::remove(bars().begin(), bars().end(), this), bars().end());
+  if (g_out.bar == this) g_out = Outgoing();
+}
+
+TabBar *TabBar::in_window(Fl_Window *w, const std::string &app) {
+  if (!w) return nullptr;
+  w = w->top_window();
+  for (auto *b : bars())
+    if (b->window() && b->window()->top_window() == w && (app.empty() || b->app_id == app)) return b;
+  return nullptr;
+}
+
+int TabBar::insert_index(int ex) const {
+  int n = (int)tabs_.size();
+  int tw = tab_width();
+  if (n == 0 || tw <= 0) return 0;
+  int c = ex - first_x() + tw / 2;
+  return std::max(0, std::min(n, c / tw));
+}
+
+bool TabBar::take_drop(const std::string &file, int ex, int ey) {
+  if (g_out.bar == this) {
+    // our own tab: onto the strip moves it there, elsewhere it tears off
+    if (!over(ey)) return false;
+    discard_tab_file(file);
+    g_out.local = true;
+    int n = (int)tabs_.size(), from = g_out.index, at = insert_index(ex);
+    int to = std::max(0, std::min(n - 1, at > from ? at - 1 : at));
+    if (to != from && from >= 0 && from < n && on_move) on_move(from, to);
+    return true;
+  }
+  if (!on_import) return false;
+  std::string state;
+  int pid = 0;
+  if (!claim_tab_file(file, app_id, state, &pid)) return false;
+  int at = over(ey) ? insert_index(ex) : (int)tabs_.size();
+  if (!on_import(state, at, pid == (int)getpid())) {
+    restore_tab_file(file, app_id, state, pid);
+    return false;
+  }
+  return true;
+}
+
+bool TabBar::start_tab_drag(int i) {
+  if (!on_export || app_id.empty() || i < 0 || i >= (int)tabs_.size() || !window()) return false;
+  std::string state = on_export(i);
+  if (state.empty()) return false;
+  std::string label = tabs_[(size_t)i].label.empty() ? empty_label : tabs_[(size_t)i].label;
+  std::string file = write_tab_file(app_id, state, label);
+  if (file.empty()) return false;
+  DragImage img;
+  img.label = label;
+  TabBar *self = this;
+  int n_before = (int)tabs_.size();
+  bool ok = start_drag(window(), kTabPayloadPrefix + file, false, img, [self, i, file, n_before](DragEnd) {
+    bool local = g_out.local && g_out.bar == self;
+    if (g_out.bar == self) g_out = Outgoing();
+    if (!alive(self)) { discard_tab_file(file); return; }
+    self->out_ = -1;
+    self->redraw();
+    if (local) return;
+    if (i >= self->count()) { discard_tab_file(file); return; } // the tabs changed meanwhile
+    if (!file_exists(file)) { // another window took it
+      if (self->on_moved_away) self->on_moved_away(i);
+      return;
+    }
+    if (n_before < 2) { discard_tab_file(file); return; } // the only tab stays
+    if (self->on_tear_off) self->on_tear_off(i, file);
+    else {
+      discard_tab_file(file);
+      if (self->on_detach) self->on_detach(i);
+    }
+  });
+  if (!ok) {
+    discard_tab_file(file);
+    return false;
+  }
+  g_out.bar = this;
+  g_out.index = i;
+  g_out.local = false;
+  out_ = i;
+  press_ = -1;
+  dragging_ = outside_ = false;
+  redraw();
+  return true;
+}
+
+// ---- the drop hook: a dropped tab payload goes to the window's strip, not
+// to the widget under the pointer (FLTK pastes a drop into Fl::belowmouse())
+
+namespace {
+
+class Catcher : public Fl_Widget {
+public:
+  Fl_Widget *real = nullptr;
+  Fl_Window *win = nullptr;
+  Catcher() : Fl_Widget(0, 0, 0, 0) {}
+  void draw() override {}
+  int handle(int e) override {
+    Fl_Widget *r = real;
+    Fl_Window *w = win;
+    real = nullptr;
+    win = nullptr;
+    if (Fl::belowmouse_ == this) Fl::belowmouse_ = r;
+    if (e == FL_PASTE) {
+      std::string file;
+      if (parse_tab_payload(std::string(Fl::event_text() ? Fl::event_text() : "", Fl::event_length()), file)) {
+        if (w)
+          for (auto *b : std::vector<TabBar *>(bars()))
+            if (alive(b) && b->window() && b->window()->top_window() == w &&
+                b->take_drop(file, Fl::event_x(), Fl::event_y()))
+              break;
+        return 1;
+      }
+    }
+    return r ? r->handle(e) : 0;
+  }
+};
+
+Catcher *catcher() {
+  static Catcher *c = nullptr;
+  if (!c) {
+    Fl_Group *cur = Fl_Group::current();
+    Fl_Group::current(nullptr);
+    c = new Catcher;
+    Fl_Group::current(cur);
+  }
+  return c;
+}
+
+Fl_Event_Dispatch g_prev_dispatch = nullptr;
+
+bool takes_tabs(Fl_Window *top) {
+  for (auto *b : bars())
+    if (b->window() && b->window()->top_window() == top && (b->on_import || g_out.bar == b)) return true;
+  return false;
+}
+
+int tab_dispatch(int e, Fl_Window *w) {
+  int r = g_prev_dispatch ? g_prev_dispatch(e, w) : Fl::handle_(e, w);
+  if (w && (e == FL_DND_ENTER || e == FL_DND_DRAG || e == FL_DND_RELEASE)) {
+    Fl_Window *top = w->top_window();
+    if (takes_tabs(top)) {
+      r = 1; // anywhere in a window with tabs: a tab may be dropped
+      if (e == FL_DND_RELEASE) {
+        Catcher *c = catcher();
+        c->real = Fl::belowmouse() == c ? nullptr : Fl::belowmouse();
+        c->win = top;
+        Fl::belowmouse_ = c;
+      }
+    }
+  }
+  return r;
+}
+
+} // namespace
+
+void install_tab_drop_hook() {
+  static bool done = false;
+  if (done) return;
+  done = true;
+  g_prev_dispatch = Fl::event_dispatch();
+  Fl::event_dispatch(tab_dispatch);
 }
 
 int TabBar::preferred_height() { return std::max(28, ui_font_size() * 2 + 4); }
@@ -133,7 +320,8 @@ static std::string fit(std::string s, int maxw) {
 void TabBar::draw_tab(int i, int tx, int tw, Fl_Color bar, bool lifted) {
   const Palette &p = palette();
   const TabInfo &t = tabs_[(size_t)i];
-  bool act = i == active_;
+  bool ghost = i == out_; // being dragged to another window
+  bool act = i == active_ && !ghost;
   if (act || i == hover_ || lifted) {
     fl_color(act || lifted ? p.bg : fl_color_average(p.bg, bar, 0.5f));
     fl_rectf(tx, y(), tw, h());
@@ -167,7 +355,7 @@ void TabBar::draw_tab(int i, int tx, int tw, Fl_Color bar, bool lifted) {
   fl_font(act ? FL_HELVETICA_BOLD : FL_HELVETICA, fs);
   // on a tinted strip the other tabs' labels need a light color
   Fl_Color dim = tint ? fl_color_average(FL_WHITE, tint, 0.75f) : p.fg_dim;
-  fl_color(act || lifted ? p.fg : (i == hover_ ? p.fg : dim));
+  fl_color(ghost ? p.border : act || lifted ? p.fg : (i == hover_ ? p.fg : dim));
   std::string lab = fit(t.label.empty() ? empty_label : t.label, cx - lx - 4);
   // '@' would start a symbol
   std::string esc;
@@ -219,6 +407,12 @@ void TabBar::draw() {
       if (dragging_ && i == press_) continue; // dragged out of the strip
       draw_tab(i, tx, w2, bar, false);
     }
+  }
+  if (dnd_insert_ >= 0) {
+    // where a tab dragged here would land
+    int cx = first_x() + dnd_insert_ * tw;
+    fl_color(p.accent);
+    fl_rectf(std::max(x(), cx - 2), y() + 3, 4, h() - 6);
   }
   fl_pop_clip();
   if (overflow()) {
@@ -317,7 +511,10 @@ int TabBar::handle(int e) {
       if (!dragging_ && (on_move || on_detach)) dragging_ = true;
       if (!dragging_) return 1;
       drag_x_ = ex - grab_dx_ - first_x();
-      outside_ = on_detach && (int)tabs_.size() > 1 && (ey < y() - 40 || ey > y() + h() + 40);
+      bool far = ey < y() - 40 || ey > y() + h() + 40;
+      // out of the strip: a real drag, which other windows can take
+      if (far && on_export && start_tab_drag(press_)) return 1;
+      outside_ = on_detach && (int)tabs_.size() > 1 && far;
       redraw();
       return 1;
     }
@@ -337,6 +534,19 @@ int TabBar::handle(int e) {
       }
       return 1;
     }
+    case FL_DND_ENTER:
+    case FL_DND_DRAG: {
+      if (!on_import && g_out.bar != this) return 0;
+      int at = insert_index(ex);
+      if (at != dnd_insert_) { dnd_insert_ = at; redraw(); }
+      return 1;
+    }
+    case FL_DND_LEAVE:
+    case FL_DND_RELEASE:
+      if (dnd_insert_ != -1) { dnd_insert_ = -1; redraw(); }
+      return 1;
+    case FL_PASTE:
+      return 1; // a tab payload went to the drop hook; text is not for the strip
     case FL_MOUSEWHEEL: {
       int n = (int)tabs_.size();
       if (n < 2) return 1;

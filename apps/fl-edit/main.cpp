@@ -1,3 +1,4 @@
+#include "fld/json.h" // first: X11 headers define Bool
 // fl-edit: text editor for fldesktop
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
@@ -24,6 +25,7 @@
 #include "fld/ini.h"
 #include "fld/menus.h"
 #include "fld/tab_bar.h"
+#include "fld/tab_move.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -831,6 +833,82 @@ static void doc_to_window(Doc *d) {
   if (fld::spawn({"fl-edit", d->path})) close_doc(d);
 }
 
+// ---- moving tabs to other fl-edit windows (the text goes along, saved or not)
+
+static std::string export_doc(int i) {
+  if (i < 0 || i >= (int)g_docs.size()) return "";
+  Doc *d = g_docs[(size_t)i];
+  fld::Json j = fld::Json::object();
+  j.set("path", d->path);
+  j.set("modified", d->modified);
+  if (d->modified || d->path.empty()) {
+    char *t = d->buf->text();
+    j.set("text", std::string(t));
+    free(t);
+  }
+  j.set("cursor", d->ed->insert_position());
+  if (d->lang_forced) j.set("lang", (int)d->lang);
+  return j.dump();
+}
+
+// opens an exported tab at index at
+static bool import_doc(const std::string &state, int at) {
+  fld::Json j;
+  if (!fld::Json::parse(state, j)) return false;
+  std::string path = j["path"].as_string();
+  bool modified = j["modified"].as_bool();
+  Doc *d = nullptr;
+  if (!path.empty() && !modified && (d = find_doc(path))) {
+    show_doc(d); // already open here
+  } else {
+    Doc *cur = current();
+    d = (cur && cur->path.empty() && !cur->modified && cur->buf->length() == 0) ? cur : new_doc();
+    if (j.has("text")) {
+      std::string text = j["text"].as_string();
+      d->loading = true;
+      d->buf->text(text.c_str());
+      d->loading = false;
+      d->buf->canUndo(0);
+      d->buf->canUndo(1);
+      d->path = path.empty() ? "" : fld::abs_path(path);
+      if (j.has("lang")) {
+        d->lang = (syntax::Language)(int)j["lang"].as_number();
+        d->lang_forced = true;
+      } else d->lang = syntax::detect(d->path, text.substr(0, text.find('\n')));
+      d->modified = modified;
+      d->apply_settings();
+      update_tab_label(d);
+    } else if (!d->load(path)) {
+      return false;
+    }
+    show_doc(d);
+  }
+  int cursor = (int)j["cursor"].as_number();
+  if (cursor >= 0 && cursor <= d->buf->length()) {
+    d->ed->insert_position(cursor);
+    d->ed->show_insert_position();
+  }
+  int from = doc_index(d);
+  int to = std::max(0, std::min((int)g_docs.size() - 1, at));
+  if (from >= 0 && from != to) fld::move_element(g_docs, from, to);
+  refresh_tabbar();
+  g_win->show();
+  return true;
+}
+
+// the tab's text went to another window: close it without asking
+static void doc_moved_away(int i) {
+  if (i < 0 || i >= (int)g_docs.size()) return;
+  Doc *d = g_docs[(size_t)i];
+  d->modified = false;
+  if (g_docs.size() == 1) {
+    save_settings();
+    g_win->hide();
+    return;
+  }
+  close_doc(d);
+}
+
 static void reload_doc(Doc *d) {
   if (d && !d->path.empty() &&
       (!d->modified || fl_choice("Discard your changes and reload?", "Cancel", "Reload", nullptr) == 1))
@@ -989,6 +1067,14 @@ int main(int argc, char **argv) {
     if (i >= 0 && i < (int)g_docs.size()) later([d = g_docs[(size_t)i]] { doc_to_window(d); });
   };
   g_tabbar->on_menu = [](int i) { tab_menu(i); };
+  g_tabbar->app_id = "fl-edit";
+  g_tabbar->on_export = [](int i) { return export_doc(i); };
+  g_tabbar->on_import = [](const std::string &state, int at, bool) { return import_doc(state, at); };
+  g_tabbar->on_moved_away = [](int i) { later([i] { doc_moved_away(i); }); };
+  g_tabbar->on_tear_off = [](int i, const std::string &file) {
+    if (fld::spawn({fld::self_program("fl-edit"), "--adopt-tab", file})) later([i] { doc_moved_away(i); });
+    else fld::discard_tab_file(file);
+  };
   g_area = new Fl_Group(0, MH + TH, W, H - MH - TH - SH);
   g_area->box(FL_NO_BOX);
   g_area->end();
@@ -1010,6 +1096,12 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") { printf("Usage: fl-edit [files...]\n"); return 0; }
+    if (a == "--adopt-tab" && i + 1 < argc) {
+      // a tab dragged out of another window
+      std::string state;
+      if (fld::claim_tab_file(argv[++i], "fl-edit", state) && import_doc(state, (int)g_docs.size())) opened++;
+      continue;
+    }
     if (a[0] == '-') continue;
     if (fld::starts_with(a, "file://")) a = fld::uri_decode(a.substr(7));
     if (opened == 0 && g_docs.empty()) new_doc();

@@ -352,6 +352,7 @@ public:
   enum { EXPLORE = 1, INSTALLED, UPDATES, RUNTIMES, FIRST_CATEGORY } ;
   // detail tabs
   Fl_Tabs *tabs;
+  Fl_Box *empty;
   Fl_Group *tab_about, *tab_files, *tab_deps, *tab_used;
   Fl_Input *files_filter;
   Fl_Browser *files_list, *deps_list, *used_list;
@@ -458,6 +459,10 @@ public:
     tabs->end();
     tabs->resizable(tab_about);
     tabs->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->tab_changed(); }, this);
+    // in place of the details while no app is chosen
+    empty = new Fl_Box(dx, 50, dw, H - 90, "Select an app to see its details.");
+    empty->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER | FL_ALIGN_WRAP);
+    empty->labelcolor(fld::palette().fg_dim);
     status = new Fl_Box(12, H - 32, W - 24, 28);
     status->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
     status->labelcolor(fld::palette().fg_dim);
@@ -630,6 +635,8 @@ public:
       for (Fl_Browser *b : {files_list, deps_list, used_list}) b->add("Shown once it is installed.");
     }
     tab_changed();
+    a ? tabs->show() : tabs->hide();
+    a ? empty->hide() : empty->show();
     if (!a) {
       icon->image(nullptr);
       title->label("");

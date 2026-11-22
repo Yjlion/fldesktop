@@ -294,6 +294,7 @@ public:
   Fl_Box *upd_summary;
   Fl_Check_Browser *upd_list;
   Fl_Text_Display *upd_detail;
+  Fl_Box *upd_none; // in place of the list and details when there is nothing to update
   Fl_Text_Buffer *upd_buf;
   Fl_Button *upd_check, *upd_install;
   std::vector<pk::Package> updates;
@@ -350,6 +351,10 @@ public:
     upd_buf = new Fl_Text_Buffer;
     upd_detail->buffer(upd_buf);
     upd_detail->wrap_mode(Fl_Text_Display::WRAP_AT_BOUNDS, 0);
+    upd_none = new Fl_Box(20, 84, W - 40, H - 126, "There are no updates to install.");
+    upd_none->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER | FL_ALIGN_WRAP);
+    upd_none->labelcolor(fld::palette().fg_dim);
+    upd_none->hide();
     upd_tab->resizable(upd_detail);
     upd_tab->end();
     // --- software
@@ -537,6 +542,7 @@ public:
     upd_check->deactivate();
     upd_install->deactivate();
     upd_summary->label("Checking for updates…");
+    show_update_list(true);
     auto get = [this] {
       pk::get_updates([this](const std::vector<pk::Package> &list, const pk::Error &e) {
         upd_check->activate();
@@ -554,6 +560,11 @@ public:
         get();
       }, [this](const pk::Progress &p) { set_status(p.status + (p.percent >= 0 ? " " + std::to_string(p.percent) + "%" : "")); });
     else get();
+  }
+
+  void show_update_list(bool on) {
+    for (Fl_Widget *w : {(Fl_Widget *)upd_list, (Fl_Widget *)upd_detail}) on ? w->show() : w->hide();
+    on ? upd_none->hide() : upd_none->show();
   }
 
   void set_updates(const std::vector<pk::Package> &list) {
@@ -580,6 +591,7 @@ public:
                                           (security ? ", " + std::to_string(security) + " for security" : "");
     upd_summary->copy_label(s.c_str());
     updates.empty() ? upd_install->deactivate() : upd_install->activate();
+    show_update_list(!updates.empty());
     upd_buf->text("");
     set_status("");
     redraw();

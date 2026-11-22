@@ -11,6 +11,7 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Progress.H>
 #include <FL/Fl_Return_Button.H>
@@ -43,16 +44,54 @@
 #ifdef FLD_HAVE_UDISKS
 #include "udclient.h"
 #endif
+#ifdef FLD_HAVE_GVFS
+#include "gvclient.h"
+#include "gvfs_ui.h"
+#endif
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/menus.h"
 #include "fld/mime.h"
+#include "fld/tab_bar.h"
 #include "fld/theme.h"
 #include "fld/trash.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
 
 static const char *TRASH_URI = "trash:///";
+// the network neighbourhood (GVfs): servers and shares to connect to
+static const char *NETWORK_URI = "network:///";
+
+// ---- GVfs locations (through gvfs-fuse) ----
+// a folder of a GVfs mount (a network share, a phone)
+static bool is_remote(const std::string &path) {
+#ifdef FLD_HAVE_GVFS
+  return gv::is_fuse_path(path) || gv::Client::get().state().mount_for_path(path);
+#else
+  (void)path;
+  return false;
+#endif
+}
+// the location a folder of a GVfs mount stands for ("" for other folders)
+static std::string remote_uri(const std::string &path) {
+#ifdef FLD_HAVE_GVFS
+  return gv::uri_for_path(gv::Client::get().state(), path);
+#else
+  (void)path;
+  return "";
+#endif
+}
+// the name of the GVfs mount whose root path is ("" for other folders)
+static std::string remote_mount_name(const std::string &path) {
+#ifdef FLD_HAVE_GVFS
+  const gv::Mount *m = gv::Client::get().state().mount_for_path(path);
+  if (m && m->path == path) return m->name;
+#else
+  (void)path;
+#endif
+  return "";
+}
 
 // ---------------------------------------------------------------------------
 // Model
@@ -70,6 +109,8 @@ struct Entry {
   Fl_Image *thumb = nullptr;  // image preview (owned)
   bool thumb_tried = false;
   fld::TrashItem trash;       // in the trash view
+  std::string target;         // in the network view: the location it opens
+  std::string icon_name;      // its own icon (network view)
   const std::string &get_mime() {
     if (mime.empty()) mime = is_dir ? "inode/directory" : fld::mime_type(path);
     return mime;
@@ -125,6 +166,10 @@ struct Settings {
   bool col_visible[NUM_COLS] = {true, true, true, false, false, true};
   int col_w[NUM_COLS] = {90, 160, 150, 100, 100, 260};
   int sidebar_w = 190;
+  bool always_tabs = false;    // the tab bar also with one tab
+  bool middle_tab = true;      // middle click opens folders in a new tab (else a window)
+  bool menubar = false;        // a menu bar above the toolbar
+  bool remote_thumbs = false;  // thumbnails of files on network locations (slow)
 } S;
 
 static std::string settings_path() { return fld::fld_config_dir() + "/files.ini"; }
@@ -148,6 +193,10 @@ static void save_settings() {
   c.set_int("Files", "ThumbnailMaxMiB", S.thumb_max_mb);
   c.set_int("Files", "DateFormat", S.date_fmt);
   c.set_bool("Files", "FolderTree", S.show_tree);
+  c.set_bool("Files", "AlwaysShowTabs", S.always_tabs);
+  c.set_bool("Files", "MiddleClickNewTab", S.middle_tab);
+  c.set_bool("Files", "ShowMenuBar", S.menubar);
+  c.set_bool("Files", "RemoteThumbnails", S.remote_thumbs);
   std::string vis, wid;
   for (int i = 0; i < NUM_COLS; i++) {
     vis += (i ? "," : "") + std::string(S.col_visible[i] ? "1" : "0");
@@ -176,6 +225,10 @@ static void load_settings() {
   S.thumb_max_mb = std::max(1, std::min(1024, c.get_int("Files", "ThumbnailMaxMiB", 20)));
   S.date_fmt = std::max(0, std::min(5, c.get_int("Files", "DateFormat", 0)));
   S.show_tree = c.get_bool("Files", "FolderTree", false);
+  S.always_tabs = c.get_bool("Files", "AlwaysShowTabs", false);
+  S.middle_tab = c.get_bool("Files", "MiddleClickNewTab", true);
+  S.menubar = c.get_bool("Files", "ShowMenuBar", false);
+  S.remote_thumbs = c.get_bool("Files", "RemoteThumbnails", false);
   auto vis = fld::split(c.get("Files", "Columns", ""), ',');
   auto wid = fld::split(c.get("Files", "ColumnWidths", ""), ',');
   for (int i = 0; i < NUM_COLS; i++) {
@@ -279,9 +332,35 @@ struct Clip {
   bool cut = false;
 } g_clip;
 
-static search::Search g_search;
+static search::Search *g_search;  // the current tab's
 static std::string g_search_desc; // e.g. "*.txt" for the title and status
-static bool g_search_running() { return g_search.running(); }
+static bool g_search_running() { return g_search->running(); }
+
+// Tabs: each has its own view, folder, history, view settings and search.
+// The globals above (g_view, g_cwd, g_hist_*, g_searching, g_search*, V) are
+// the current tab's; activate_tab() stores them and loads another tab's.
+struct Tab {
+  FileView *view = nullptr;
+  std::string cwd;
+  std::deque<std::string> back, fwd;
+  bool searching = false;
+  std::unique_ptr<search::Search> search{new search::Search};
+  std::string search_desc;
+  ViewState v;
+  std::string filter;
+  bool find_bar = false;
+};
+static std::vector<std::unique_ptr<Tab>> g_tabs;
+static int g_cur = -1;
+static fld::TabBar *g_tabbar;
+static Fl_Group *g_views; // holds the tabs' views (one shown)
+static Tab *cur_tab() { return g_cur >= 0 && g_cur < (int)g_tabs.size() ? g_tabs[(size_t)g_cur].get() : nullptr; }
+static void new_tab(const std::string &path, bool activate = true);
+static void close_tab(int i);
+static void activate_tab(int i);
+static void update_tabbar();
+static void open_dir_elsewhere(const std::string &path); // middle click: a new tab or window
+static void leave_folder(const std::string &dir); // tabs in dir (or below) go home
 
 static void navigate(const std::string &path, bool record = true);
 static void fill_places();
@@ -293,6 +372,12 @@ static void open_entry(Entry &e);
 static void run_op(FileOp::Kind k, const std::vector<std::string> &src, const std::string &dest);
 
 static bool in_trash() { return g_cwd == TRASH_URI && !g_searching; }
+static bool in_network() { return g_cwd == NETWORK_URI && !g_searching; }
+// the network view: what it lists, and why it may be empty
+static std::vector<Entry> g_net_entries;
+static bool g_net_listing = false;
+static std::string g_net_error;
+static void mount_and_go(const std::string &uri, int where = 0); // where: 0 here, 1 window, 2 tab
 static bool in_search() { return g_searching; }
 static bool g_search_running();
 
@@ -312,6 +397,12 @@ public:
   int press_item = -1;
   bool dragging_files = false;
   int drop_item = -1;         // folder highlighted as the drop target
+  int hover_item = -1;        // item under the pointer
+  std::map<Fl_Image *, Fl_Image *> ghosts; // faded icons of the items being dragged
+  // while the view is in a background tab (in_search() etc. are the current tab's)
+  bool bg_search = false, bg_trash = false;
+  std::string bg_filter;
+  struct timespec loaded_mtime{}; // of the folder when it was read
   bool dropping = false;      // the next FL_PASTE is a drop
   int press_x = 0, press_y = 0;
   int resizing_col = -1, resize_x0 = 0, resize_w0 = 0;
@@ -330,7 +421,31 @@ public:
     end();
     box(FL_FLAT_BOX);
   }
-  ~FileView() override { clear_thumbs(); }
+  ~FileView() override { clear_thumbs(); clear_ghosts(); }
+
+  void clear_ghosts() {
+    for (auto &g : ghosts) delete g.second;
+    ghosts.clear();
+  }
+  // a faded copy of an icon, for the items being dragged
+  Fl_Image *ghost(Fl_Image *ic) {
+    auto it = ghosts.find(ic);
+    if (it != ghosts.end()) return it->second;
+    Fl_Image *g = ic->copy();
+    if (g) {
+      g->color_average(fld::palette().bg2, 0.4f);
+      g->scale(ic->w(), ic->h(), 0, 1);
+    }
+    return ghosts[ic] = g;
+  }
+  // the drag of files from this view ended (dropped anywhere or cancelled)
+  void end_drag() {
+    if (!dragging_files) return;
+    dragging_files = false;
+    clear_ghosts();
+    redraw();
+    update_status();
+  }
 
   void clear_thumbs() {
     for (auto &e : all) { delete e.thumb; e.thumb = nullptr; e.thumb_tried = false; }
@@ -469,11 +584,13 @@ public:
   }
 
   void apply_filter_sort() {
-    std::string f = fld::lower(g_filter ? g_filter->value() : "");
+    bool cur = this == g_view;
+    std::string f = fld::lower(cur ? (g_filter ? g_filter->value() : "") : bg_filter.c_str());
+    bool trash = cur ? in_trash() : bg_trash, search = cur ? in_search() : bg_search;
     items.clear();
     for (int i = 0; i < (int)all.size(); i++) {
       const Entry &e = all[i];
-      if (!S.show_hidden && !in_trash() && !in_search() && e.name[0] == '.') continue;
+      if (!S.show_hidden && !trash && !search && e.name[0] == '.') continue;
       if (!f.empty() && fld::lower(e.name).find(f) == std::string::npos) continue;
       items.push_back(i);
     }
@@ -535,7 +652,12 @@ public:
   void load(const std::string &dir, const std::string &select_name = "") {
     clear_thumbs();
     all.clear();
-    if (dir == TRASH_URI) {
+    struct stat dst;
+    loaded_mtime = stat(dir == TRASH_URI ? (fld::trash_dir() + "/files").c_str() : dir.c_str(), &dst) == 0
+                       ? dst.st_mtim : timespec{};
+    if (dir == NETWORK_URI) {
+      all = g_net_entries;
+    } else if (dir == TRASH_URI) {
       for (auto &t : fld::trash_list()) {
         Entry e;
         e.trash = t;
@@ -591,6 +713,7 @@ public:
     if (slot) return slot;
     int size = big_icon ? big() : small();
     std::vector<std::string> names;
+    if (!e.icon_name.empty()) names.push_back(e.icon_name);
     if (e.is_dir) {
       std::string p = e.path;
       if (p == fld::home_dir()) names.push_back("user-home");
@@ -613,6 +736,7 @@ public:
   void make_thumb(Entry &e) {
     e.thumb_tried = true;
     if (!S.thumbnails || e.is_dir || e.size > ((unsigned long long)S.thumb_max_mb << 20)) return;
+    if (!S.remote_thumbs && is_remote(e.path)) return; // reading every image over the network is slow
     if (!fld::starts_with(e.get_mime(), "image/")) return;
     std::unique_ptr<Fl_Image> img(fld::load_image(e.path));
     if (!img) return;
@@ -716,12 +840,20 @@ public:
     fl_rectf(x(), y(), w(), h());
     if (details()) draw_header();
     fl_push_clip(x(), view_top(), content_w(), view_h());
+    if (banding) { // the rubber band's fill goes under the items, its border over them
+      fl_color(fl_color_average(p.accent, p.bg2, 0.15f));
+      fl_rectf(std::min(bx0, bx1), std::min(by0, by1) - top, std::abs(bx1 - bx0), std::abs(by1 - by0));
+    }
     bool focused = Fl::focus() == this;
     bool any_missing_thumb = false;
     if (items.empty()) {
       fl_font(FL_HELVETICA, 14);
       fl_color(p.fg_dim);
+      std::string net = g_net_listing ? "Looking for computers and shares…"
+                        : !g_net_error.empty() ? "Could not browse the network: " + g_net_error
+                                               : "No computers or shares found. Use Connect to Server… to open one.";
       const char *msg = in_search() ? (g_search_running() ? "Searching…" : "No files found")
+                        : in_network() ? net.c_str()
                         : in_trash() ? "Trash is empty"
                         : (*g_filter->value() ? "No matching files" : "Folder is empty");
       fl_draw(msg, x(), view_top(), content_w(), view_h(), FL_ALIGN_CENTER);
@@ -733,20 +865,46 @@ public:
       item_rect(i, ix, iy, iw, ih);
       if (iy > y() + h()) break;
       Entry &e = entry(i);
-      bool s = sel.count(i) > 0 || i == drop_item;
+      bool drop = i == drop_item;
+      bool s = sel.count(i) > 0 && !drop;
+      bool hov = i == hover_item && !s && !drop && !banding;
+      bool ghosted = dragging_files && sel.count(i) > 0; // being dragged
       bool cut = g_clip.cut && std::find(g_clip.paths.begin(), g_clip.paths.end(), e.path) != g_clip.paths.end();
+      Fl_Color sel_bg = focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.55f);
+      Fl_Color hover_bg = fl_color_average(p.selection, p.bg2, 0.12f);
+      Fl_Color drop_bg = fl_color_average(p.accent, p.bg2, 0.22f);
+      // the drop target: a light accent fill with an accent border
+      auto drop_frame = [&](int fx, int fy, int fw, int fh, int r) {
+        fl_color(drop_bg);
+        fl_rounded_rectf(fx, fy, fw, fh, r);
+        fl_color(p.accent);
+        fl_line_style(FL_SOLID, 2);
+        fl_rounded_rect(fx + 1, fy + 1, fw - 2, fh - 2, r);
+        fl_line_style(0);
+      };
+      auto draw_icon = [&](Fl_Image *ic, int dx, int dy) {
+        if (ghosted) ic = ghost(ic);
+        if (ic) ic->draw(dx, dy);
+      };
+      // a folder that takes the drop shows open
+      Fl_Image *open_icon = nullptr;
+      if (drop) open_icon = fld::icon_first({"folder-open"}, V.view == VIEW_ICONS ? B : SM);
       if (V.view == VIEW_DETAILS) {
-        if (s) {
-          fl_color(focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.4f));
+        if (drop) drop_frame(ix, iy, iw, ih, 3);
+        else if (s) {
+          fl_color(sel_bg);
+          fl_rectf(ix, iy, iw, ih);
+        } else if (hov) {
+          fl_color(hover_bg);
           fl_rectf(ix, iy, iw, ih);
         } else if (i % 2) {
           fl_color(fl_color_average(p.bg2, p.bg, 0.6f));
           fl_rectf(ix, iy, iw, ih);
         }
         Fl_Color fg = s ? p.accent_fg : p.fg;
-        if (Fl_Image *ic = icon_for(e, false)) ic->draw(ix + 8, iy + (ih - SM) / 2);
+        if (Fl_Image *ic = open_icon ? open_icon : icon_for(e, false)) draw_icon(ic, ix + 8, iy + (ih - SM) / 2);
         fl_font(FL_HELVETICA, 13);
-        fl_color(cut ? p.fg_dim : fg);
+        fl_color(cut || ghosted ? (s ? fl_color_average(fg, sel_bg, 0.6f) : p.fg_dim) : fg);
         int cx = ix + 8;
         int nw = name_col_w();
         fl_draw(fld::escape_at(e.name).c_str(), cx + SM + 8, iy, nw - SM - 16, ih, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
@@ -762,24 +920,33 @@ public:
           cx += cw;
         }
       } else if (V.view == VIEW_COMPACT) {
-        if (s) {
-          fl_color(focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.4f));
+        if (drop) drop_frame(ix, iy, iw - 6, ih, 4);
+        else if (s || hov) {
+          fl_color(s ? sel_bg : hover_bg);
           fl_rounded_rectf(ix, iy, iw - 6, ih, 4);
         }
-        if (Fl_Image *ic = icon_for(e, false)) ic->draw(ix + 4, iy + (ih - SM) / 2);
+        if (Fl_Image *ic = open_icon ? open_icon : icon_for(e, false)) draw_icon(ic, ix + 4, iy + (ih - SM) / 2);
         fl_font(FL_HELVETICA, 13);
-        fl_color(s ? p.accent_fg : cut ? p.fg_dim : p.fg);
+        fl_color(s ? (ghosted ? fl_color_average(p.accent_fg, sel_bg, 0.6f) : p.accent_fg) : cut || ghosted ? p.fg_dim : p.fg);
         fl_draw(fld::escape_at(e.name).c_str(), ix + SM + 10, iy, iw - SM - 20, ih, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
       } else {
-        if (s) {
-          fl_color(focused ? fl_color_average(p.selection, p.bg2, 0.35f) : fl_color_average(p.selection, p.bg2, 0.18f));
+        // icons: the cell gets a light tint and an accent border, the name
+        // a solid selection pill
+        if (drop) drop_frame(ix + 4, iy, iw - 8, ih - 4, 8);
+        else if (s) {
+          fl_color(focused ? fl_color_average(p.selection, p.bg2, 0.28f) : fl_color_average(p.selection, p.bg2, 0.16f));
+          fl_rounded_rectf(ix + 4, iy, iw - 8, ih - 4, 8);
+          fl_color(focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.5f));
+          fl_rounded_rect(ix + 4, iy, iw - 8, ih - 4, 8);
+        } else if (hov) {
+          fl_color(hover_bg);
           fl_rounded_rectf(ix + 4, iy, iw - 8, ih - 4, 8);
         }
-        Fl_Image *ic = e.thumb ? e.thumb : icon_for(e, true);
+        Fl_Image *ic = open_icon ? open_icon : e.thumb ? e.thumb : icon_for(e, true);
         if (!e.thumb_tried && S.thumbnails && !e.is_dir) any_missing_thumb = true;
         if (ic) {
           int icx = ix + (iw - ic->w()) / 2, icy = iy + 4 + (B - ic->h()) / 2;
-          ic->draw(icx, icy);
+          draw_icon(ic, icx, icy);
           if (e.thumb) {
             fl_color(p.border);
             fl_rect(icx - 1, icy - 1, ic->w() + 2, ic->h() + 2);
@@ -789,9 +956,16 @@ public:
           if (Fl_Image *em = fld::icon("emblem-symbolic-link", 16)) em->draw(ix + iw / 2 + B / 4, iy + B - 12);
         }
         fl_font(FL_HELVETICA, 12);
-        fl_color(cut ? p.fg_dim : p.fg);
-        auto lines = wrap_name(e.name, iw - 12, s ? 3 : 2);
+        auto lines = wrap_name(e.name, iw - 16, s ? 3 : 2);
         int ly = iy + B + 8;
+        if (s && !lines.empty()) {
+          int pw = 0;
+          for (auto &l : lines) pw = std::max(pw, (int)fl_width(l.c_str()));
+          fl_color(sel_bg);
+          fl_rounded_rectf(ix + (iw - pw) / 2 - 4, ly - 1, pw + 8, (int)lines.size() * 15 + 4, 4);
+        }
+        fl_color(s ? (ghosted ? fl_color_average(p.accent_fg, sel_bg, 0.6f) : p.accent_fg)
+                   : cut || ghosted ? p.fg_dim : p.fg);
         for (auto &l : lines) {
           int lw = (int)fl_width(l.c_str());
           fl_draw(l.c_str(), (int)l.size(), ix + (iw - lw) / 2, ly + 12);
@@ -806,8 +980,9 @@ public:
       }
     }
     if (banding) {
+      int rx = std::min(bx0, bx1), ry = std::min(by0, by1) - top, rw = std::abs(bx1 - bx0), rh = std::abs(by1 - by0);
       fl_color(p.accent);
-      fl_rect(std::min(bx0, bx1), std::min(by0, by1) - top, std::abs(bx1 - bx0), std::abs(by1 - by0));
+      fl_rect(rx, ry, rw, rh);
     }
     fl_pop_clip();
     if (sb->visible()) draw_child(*sb);
@@ -865,7 +1040,7 @@ static void copy_to_clipboard(bool cut) {
 }
 
 static void paste_into(const std::string &dir) {
-  if (in_trash() || dir == TRASH_URI || (in_search() && dir == g_cwd)) return;
+  if (in_trash() || in_network() || dir == TRASH_URI || (in_search() && dir == g_cwd)) return;
   if (g_clip.paths.empty()) {
     Fl::paste(*g_view, 1); // maybe file URIs from another program
     return;
@@ -874,8 +1049,22 @@ static void paste_into(const std::string &dir) {
 }
 
 static void trash_selected(bool permanent) {
+  if (in_network()) return;
   auto paths = g_view->selected_paths();
   if (paths.empty()) return;
+  // network locations have no trash (moving there would copy everything home)
+  if (!in_trash() && !permanent) {
+    bool remote = false;
+    for (auto &p : paths) remote = remote || is_remote(p);
+    if (remote) {
+      std::string what = paths.size() == 1 ? "\"" + fld::basename(paths[0]) + "\"" : std::to_string(paths.size()) + " items";
+      if (fl_choice("Files on a network location cannot be moved to the Trash.\nDelete %s permanently?", "Cancel",
+                    "Delete", nullptr, fld::escape_at(what).c_str()) != 1)
+        return;
+      run_op(FileOp::DELETE, paths, "");
+      return;
+    }
+  }
   if (!in_trash() && !permanent && S.confirm_trash) {
     std::string what = paths.size() == 1 ? "\"" + fld::basename(paths[0]) + "\"" : std::to_string(paths.size()) + " items";
     if (fl_choice("Move %s to the Trash?", "Cancel", "Move to Trash", nullptr, fld::escape_at(what).c_str()) != 1) return;
@@ -903,7 +1092,7 @@ static void restore_selected() {
 }
 
 static void new_item(bool folder) {
-  if (in_trash() || in_search()) return;
+  if (in_trash() || in_search() || in_network()) return;
   const char *n = fl_input(folder ? "Folder name:" : "File name:", folder ? "New Folder" : "New File");
   if (!n || !*n) return;
   if (strchr(n, '/')) { fl_alert("Names cannot contain '/'."); return; }
@@ -915,7 +1104,7 @@ static void new_item(bool folder) {
 }
 
 void FileView::start_rename(int i) {
-  if (i < 0 || in_trash()) return;
+  if (i < 0 || in_trash() || in_network()) return;
   Entry &e = entry(i);
   const char *n = fl_input("Rename to:", e.name.c_str());
   if (!n || !*n || e.name == n) return;
@@ -1054,6 +1243,10 @@ static void open_with_dialog(const std::vector<std::string> &files) {
 }
 
 static void open_entry(Entry &e) {
+  if (!e.target.empty()) { // network view: a computer or share
+    mount_and_go(e.target);
+    return;
+  }
   if (in_trash()) return;
   if (e.is_dir) {
     navigate(e.path);
@@ -1082,6 +1275,19 @@ static void tree_follow(const std::string &path);
 void FileView::context_menu(int i) {
   if (!sel.count(i)) select_only(i);
   Entry &e = entry(i);
+  if (!e.target.empty()) {
+    std::string t = e.target;
+    fld::Menu m;
+    m.item("Open", [t] { mount_and_go(t); });
+    m.item("Open in New Tab", [t] { mount_and_go(t, 2); });
+    m.item("Open in New Window", [t] { fld::spawn({"fl-files", t}); }, FL_MENU_DIVIDER);
+    m.item("Copy Address", [t] {
+      Fl::copy(t.c_str(), (int)t.size(), 1);
+      Fl::copy(t.c_str(), (int)t.size(), 0);
+    });
+    m.popup();
+    return;
+  }
   std::vector<std::string> paths = selected_paths();
   bool many = paths.size() > 1;
   std::vector<fld::DesktopEntry> apps;
@@ -1099,6 +1305,7 @@ void FileView::context_menu(int i) {
   } else {
     m.push_back({"Open", 0, nullptr, (void *)OPEN});
     if (in_search() && !many) m.push_back({"Open Containing Folder", 0, nullptr, (void *)CONTAINING});
+    if (e.is_dir) m.push_back({"Open in New Tab", 0, nullptr, (void *)OPEN_TAB});
     if (e.is_dir) m.push_back({"Open in New Window", 0, nullptr, (void *)NEW_WINDOW});
     if (e.is_dir) m.push_back({"Open in Terminal", 0, nullptr, (void *)OPEN_TERM});
     if (e.is_dir && !many) m.push_back({"Add to Bookmarks", 0, nullptr, (void *)BOOKMARK});
@@ -1134,6 +1341,10 @@ void FileView::context_menu(int i) {
       break;
     case OPEN_TERM: fld::spawn(fld::shell_split(fld::terminal_command()), e.path); break;
     case NEW_WINDOW: fld::spawn({"fl-files", e.path}); break;
+    case OPEN_TAB:
+      for (int k : std::set<int>(sel))
+        if (entry(k).is_dir) new_tab(entry(k).path, false);
+      break;
     case CONTAINING: open_containing(e.path); break;
     case BOOKMARK: add_bookmark(e.path); break;
     case OPEN_WITH_OTHER: open_with_dialog(paths); break;
@@ -1173,10 +1384,19 @@ static void zoom(int delta);
 static void show_preferences();
 static void columns_menu(int x, int y);
 
+static void connect_to_server();
+
 void FileView::background_menu() {
   sel.clear();
   redraw();
   update_status();
+  if (in_network()) {
+    fld::Menu m;
+    m.item("Connect to Server…", [] { connect_to_server(); });
+    m.item("Reload", [] { refresh(); }, 0, FL_F + 5);
+    m.popup();
+    return;
+  }
   if (in_trash()) {
     Fl_Menu_Item m[] = {{"Empty Trash", 0, nullptr, (void *)1}, {nullptr}};
     const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
@@ -1288,13 +1508,14 @@ int FileView::handle(int e) {
         return 1;
       }
       if (Fl::event_button() == FL_MIDDLE_MOUSE) {
-        if (i >= 0 && entry(i).is_dir) fld::spawn({"fl-files", entry(i).path});
+        if (i >= 0 && entry(i).is_dir) open_dir_elsewhere(entry(i).path);
         return 1;
       }
       press_item = i;
       press_x = ex;
       press_y = ey;
-      dragging_files = false;
+      end_drag();
+      if (hover_item != -1) hover_item = -1;
       if (i >= 0) {
         if (st & FL_CTRL) {
           if (sel.count(i)) sel.erase(i); else sel.insert(i);
@@ -1346,15 +1567,16 @@ int FileView::handle(int e) {
         update_status();
         return 1;
       }
-      if (press_item >= 0 && !dragging_files && !in_trash() &&
+      if (press_item >= 0 && !dragging_files && !in_trash() && !in_network() &&
           (std::abs(ex - press_x) > 6 || std::abs(ey - press_y) > 6)) {
-        // start a drag with file URIs
+        // start a drag with file URIs; the dragged items fade until it ends
         dragging_files = true;
+        drop_item = hover_item = -1;
+        redraw();
+        update_status();
         std::string text = fld::make_uri_list(selected_paths());
         Fl::copy(text.c_str(), (int)text.size(), 0);
         Fl::dnd();
-        drop_item = -1;
-        redraw();
       }
       return 1;
     }
@@ -1377,18 +1599,27 @@ int FileView::handle(int e) {
         open_entry(entry(i));
       }
       return 1;
-    case FL_MOVE:
+    case FL_ENTER:
+      end_drag(); // pointer events come back once a drag is over
+      return 1;
+    case FL_MOVE: {
+      // the pointer is not grabbed while files are dragged: a drag is over
+      end_drag();
+      int hi = item_at(Fl::event_x(), Fl::event_y());
+      if (hi != hover_item) { hover_item = hi; redraw(); }
       if (details() && Fl::event_y() < y() + HEADER_H) {
         bool border;
         int c = header_hit(Fl::event_x(), border);
         window()->cursor(border && c >= 0 ? FL_CURSOR_WE : FL_CURSOR_DEFAULT);
       } else window()->cursor(FL_CURSOR_DEFAULT);
       return 1;
+    }
     case FL_LEAVE:
+      if (hover_item != -1) { hover_item = -1; redraw(); }
       if (window()) window()->cursor(FL_CURSOR_DEFAULT);
       return 1;
     case FL_DND_ENTER: case FL_DND_DRAG: {
-      if (in_trash()) return 0;
+      if (in_trash() || in_network()) return 0;
       // highlight the folder the files would go into
       int i = item_at(Fl::event_x(), Fl::event_y());
       if (i >= 0 && !entry(i).is_dir) i = -1;
@@ -1397,7 +1628,7 @@ int FileView::handle(int e) {
       return 1;
     }
     case FL_DND_RELEASE:
-      if (in_trash()) return 0;
+      if (in_trash() || in_network()) return 0;
       dropping = true;
       return 1;
     case FL_DND_LEAVE:
@@ -1410,15 +1641,15 @@ int FileView::handle(int e) {
       dropping = false;
       int target = drop_item;
       if (drop_item != -1) { drop_item = -1; redraw(); }
-      if (in_trash()) return 1;
+      if (in_trash() || in_network()) return 1;
       auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
-      if (paths.empty()) { dragging_files = false; return 1; }
+      if (paths.empty()) { end_drag(); return 1; }
       std::string dest = g_cwd;
       if (drop && target >= 0 && target < (int)items.size() && entry(target).is_dir) dest = entry(target).path;
-      else if (in_search()) { dragging_files = false; return 1; }
+      else if (in_search()) { end_drag(); return 1; }
       fld::DropAction a = drop ? fld::drop_action(paths, dest, Fl::event_state())
                                : fld::drop_action(paths, dest, FL_CTRL); // a paste copies
-      dragging_files = false;
+      end_drag();
       if (!drop && a == fld::DROP_NONE) return 1;
       fld::run_drop(a, paths, dest, [](FileOp *) { refresh(); });
       return 1;
@@ -1429,6 +1660,12 @@ int FileView::handle(int e) {
       bool shift = st & FL_SHIFT, ctrl = st & FL_CTRL;
       int cols = columns();
       int page = std::max(1, view_h() / (details() ? row_h() : cell_h())) * cols;
+      // tabs: Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+Page Up/Down
+      if (ctrl && (k == FL_Tab || k == FL_Page_Up || k == FL_Page_Down) && g_tabs.size() > 1) {
+        int n = (int)g_tabs.size(), d = (k == FL_Page_Up || (k == FL_Tab && shift)) ? -1 : 1;
+        activate_tab((g_cur + d + n) % n);
+        return 1;
+      }
       switch (k) {
         case FL_Up: move_focus(-cols, shift); return 1;
         case FL_Down: move_focus(cols, shift); return 1;
@@ -1442,8 +1679,8 @@ int FileView::handle(int e) {
           if (st & FL_ALT) { properties(selected_paths()); return 1; }
           for (int i : std::set<int>(sel)) open_entry(entry(i));
           return 1;
-        case FL_Delete: trash_selected(shift); return 1;
-        case FL_F + 2: if (focus >= 0) start_rename(focus); return 1;
+        case FL_Delete: if (!in_network()) trash_selected(shift); return 1;
+        case FL_F + 2: if (focus >= 0 && !in_network()) start_rename(focus); return 1;
         case ' ':
           if (focus >= 0 && ctrl) { if (sel.count(focus)) sel.erase(focus); else sel.insert(focus); redraw(); return 1; }
           break;
@@ -1474,6 +1711,9 @@ struct Place {
   bool bookmark = false;
   std::string volume;      // UDisks2 volume ("" for other places); path is "" while unmounted
   bool can_eject = false;  // shows the eject button
+  std::string uri;         // a network location (bookmark or mount); path is "" while not mounted
+  std::string gvfs_mount;  // the root URI of a GVfs mount (to unmount it)
+  std::string gvfs_volume; // a GVfs volume to mount (a phone, a camera)
 };
 static std::vector<Place> g_place_list;
 
@@ -1494,6 +1734,24 @@ static void fill_places() {
   std::string bm;
   if (fld::read_file(fld::config_home() + "/gtk-3.0/bookmarks", bm)) {
     for (auto &line : fld::split(bm, '\n')) {
+#ifdef FLD_HAVE_GVFS
+      if (gv::looks_like_uri(line)) { // a network location
+        size_t sp = line.find(' ');
+        std::string uri = line.substr(0, sp);
+        Place p{sp == std::string::npos ? gv::display_name_for_uri(uri) : line.substr(sp + 1), "", "folder-remote"};
+        p.uri = uri;
+        p.bookmark = true;
+        // mounted: its folder
+        for (auto &m : gv::Client::get().state().mounts)
+          if (!m.path.empty() && (fld::starts_with(uri, m.uri) || fld::starts_with(uri + "/", m.uri))) {
+            std::string rest = uri.size() > m.uri.size() ? fld::uri_decode(uri.substr(m.uri.size())) : "";
+            p.path = fld::path_join(m.path, rest);
+            if (!rest.empty() && !fld::is_dir(p.path)) p.path.clear();
+          }
+        g_place_list.push_back(p);
+        continue;
+      }
+#endif
       if (!fld::starts_with(line, "file://")) continue;
       size_t sp = line.find(' ');
       std::string p = fld::uri_decode(line.substr(7, sp == std::string::npos ? std::string::npos : sp - 7));
@@ -1513,6 +1771,28 @@ static void fill_places() {
       Place p{v.label, v.mount_point, v.icon};
       p.volume = v.path;
       p.can_eject = v.can_eject || v.mounted();
+      g_place_list.push_back(p);
+    }
+  }
+#endif
+#ifdef FLD_HAVE_GVFS
+  // network locations, phones and cameras (GVfs)
+  {
+    const gv::State &gs = gv::Client::get().state();
+    if (gs.running) {
+      Place net{"Network", NETWORK_URI, "network-workgroup"};
+      g_place_list.push_back(net);
+    }
+    for (auto &m : gs.mounts) {
+      Place p{m.name, m.path, m.icon};
+      p.uri = m.uri;
+      p.gvfs_mount = m.uri;
+      p.can_eject = m.can_unmount || m.can_eject;
+      g_place_list.push_back(p);
+    }
+    for (auto &v : gs.volumes) {
+      Place p{v.name, "", v.icon};
+      p.gvfs_volume = v.id;
       g_place_list.push_back(p);
     }
   }
@@ -1542,22 +1822,35 @@ static void fill_places() {
 
 static std::string bookmarks_path() { return fld::config_home() + "/gtk-3.0/bookmarks"; }
 
-static void add_bookmark(const std::string &path) {
-  if (path.empty() || path == TRASH_URI) return;
-  std::string bm, uri = "file://" + fld::uri_encode_path(path);
+// a bookmark's URI: file://..., or the network location of a remote folder
+static std::string bookmark_uri(const std::string &path) {
+  std::string r = remote_uri(path);
+  return r.empty() ? "file://" + fld::uri_encode_path(path) : r;
+}
+static std::string bookmark_uri(const Place &p) { return p.uri.empty() ? bookmark_uri(p.path) : p.uri; }
+
+static void add_bookmark_uri(const std::string &uri, const std::string &label = "") {
+  std::string bm;
   fld::read_file(bookmarks_path(), bm);
   for (auto &line : fld::split(bm, '\n'))
     if (line == uri || fld::starts_with(line, uri + " ")) return; // already there
   if (!bm.empty() && bm.back() != '\n') bm += '\n';
-  bm += uri + "\n";
+  bm += uri + (label.empty() ? "" : " " + label) + "\n";
   fld::mkdir_p(fld::dirname(bookmarks_path()));
   if (!fld::write_file(bookmarks_path(), bm)) fl_alert("Could not save %s", bookmarks_path().c_str());
   fill_places();
   select_place_for(g_cwd);
 }
 
-static void remove_bookmark(const std::string &path) {
-  std::string bm, out, uri = "file://" + fld::uri_encode_path(path);
+static void add_bookmark(const std::string &path) {
+  if (path.empty() || path == TRASH_URI || path == NETWORK_URI) return;
+  // a network share is named after its location, not the gvfs-fuse folder
+  std::string name = remote_mount_name(path);
+  add_bookmark_uri(bookmark_uri(path), name);
+}
+
+static void remove_bookmark(const std::string &uri) {
+  std::string bm, out;
   if (!fld::read_file(bookmarks_path(), bm)) return;
   for (auto &line : fld::split(bm, '\n'))
     if (line != uri && !fld::starts_with(line, uri + " ")) out += line + "\n";
@@ -1566,10 +1859,10 @@ static void remove_bookmark(const std::string &path) {
   select_place_for(g_cwd);
 }
 
-static void rename_bookmark(const std::string &path, const std::string &old_label) {
+static void rename_bookmark(const std::string &uri, const std::string &old_label) {
   const char *n = fl_input("Bookmark name:", old_label.c_str());
   if (!n) return;
-  std::string bm, out, uri = "file://" + fld::uri_encode_path(path);
+  std::string bm, out;
   if (!fld::read_file(bookmarks_path(), bm)) return;
   for (auto &line : fld::split(bm, '\n')) {
     if (line == uri || fld::starts_with(line, uri + " ")) out += uri + (*n ? " " + std::string(n) : "") + "\n";
@@ -1582,12 +1875,35 @@ static void rename_bookmark(const std::string &path, const std::string &old_labe
 
 // ---- drives (UDisks2)
 
-// Opens a place: drives are mounted (and unlocked) first
-static void open_place(const Place &p, bool new_window = false) {
-  auto go = [new_window](const std::string &path) {
-    if (new_window) fld::spawn({"fl-files", path});
+// Opens a place here, in a new window or in a new tab: drives are mounted
+// (and unlocked) first
+enum PlaceWhere { PLACE_HERE, PLACE_WINDOW, PLACE_TAB };
+static void open_place(const Place &p, PlaceWhere where = PLACE_HERE) {
+  auto go = [where](const std::string &path) {
+    if (where == PLACE_WINDOW) fld::spawn({"fl-files", path});
+    else if (where == PLACE_TAB) new_tab(path);
     else navigate(path);
   };
+#ifdef FLD_HAVE_GVFS
+  if (!p.gvfs_volume.empty()) { // a phone or camera
+    std::string label = p.label;
+    g_status->copy_label("Mounting…");
+    gv::Client::get().mount_volume(p.gvfs_volume, [go, label](const std::string &err, const std::string &path) {
+      update_status();
+      if (err == gv::kCancelled) return;
+      if (!err.empty()) {
+        fl_alert("Could not open \"%s\":\n%s", fld::escape_at(label).c_str(), fld::escape_at(err).c_str());
+        return;
+      }
+      go(path);
+    });
+    return;
+  }
+  if (p.path.empty() && !p.uri.empty()) { // a network location that is not mounted
+    mount_and_go(p.uri, where);
+    return;
+  }
+#endif
   if (!p.path.empty() || p.volume.empty()) { go(p.path); return; }
 #ifdef FLD_HAVE_UDISKS
   ud::Client &c = ud::Client::get();
@@ -1619,10 +1935,23 @@ static void open_place(const Place &p, bool new_window = false) {
 }
 
 static void unmount_place(const Place &p, bool eject) {
+#ifdef FLD_HAVE_GVFS
+  if (!p.gvfs_mount.empty()) {
+    if (!p.path.empty()) leave_folder(p.path);
+    std::string label = p.label;
+    g_status->copy_label("Disconnecting…");
+    gv::Client::get().unmount(p.gvfs_mount, eject, [label](const std::string &err) {
+      update_status();
+      if (!err.empty() && err != gv::kCancelled)
+        fl_alert("Could not disconnect \"%s\":\n%s", fld::escape_at(label).c_str(), fld::escape_at(err).c_str());
+    });
+    return;
+  }
+#endif
 #ifdef FLD_HAVE_UDISKS
   if (p.volume.empty()) return;
   // leave the drive first, or it is busy
-  if (!p.path.empty() && (g_cwd == p.path || fld::starts_with(g_cwd, p.path + "/"))) navigate(fld::home_dir());
+  if (!p.path.empty()) leave_folder(p.path);
   std::string label = p.label;
   auto done = [label, eject](const std::string &err) {
     update_status();
@@ -1650,8 +1979,14 @@ public:
       Place p = g_place_list[(size_t)line - 1];
       bool vol = !p.volume.empty(), mounted = !p.path.empty();
       std::vector<Fl_Menu_Item> m = {{"Open", 0, nullptr, (void *)1},
+                                     {"Open in New Tab", 0, nullptr, (void *)8},
                                      {"Open in New Window", 0, nullptr, (void *)2, FL_MENU_DIVIDER}};
-      if (vol) {
+      if (!p.gvfs_mount.empty()) { // a network location or a phone
+        m.push_back({"Add Bookmark", 0, nullptr, (void *)10});
+        m.push_back({"Disconnect", 0, nullptr, (void *)6, FL_MENU_DIVIDER});
+      } else if (!p.gvfs_volume.empty()) {
+        m.push_back({"Mount", 0, nullptr, (void *)5, FL_MENU_DIVIDER});
+      } else if (vol) {
         if (!mounted) m.push_back({"Mount", 0, nullptr, (void *)5});
         else m.push_back({"Unmount", 0, nullptr, (void *)6});
         m.push_back({"Eject", 0, nullptr, (void *)7, (p.can_eject ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER});
@@ -1659,17 +1994,29 @@ public:
         m.push_back({"Rename Bookmark…", 0, nullptr, (void *)3, p.bookmark ? 0 : FL_MENU_INACTIVE});
         m.push_back({"Remove Bookmark", 0, nullptr, (void *)4, p.bookmark ? 0 : FL_MENU_INACTIVE});
       }
+#ifdef FLD_HAVE_GVFS
+      m.back().flags |= FL_MENU_DIVIDER;
+      m.push_back({"Connect to Server…", 0, nullptr, (void *)9});
+#endif
       m.push_back({nullptr});
       const Fl_Menu_Item *r = m[0].popup(Fl::event_x(), Fl::event_y());
       if (!r) return 1;
       switch ((long)r->user_data()) {
         case 1: case 5: open_place(p); break;
-        case 2: open_place(p, true); break;
-        case 3: rename_bookmark(p.path, p.label); break;
-        case 4: remove_bookmark(p.path); break;
+        case 2: open_place(p, PLACE_WINDOW); break;
+        case 8: open_place(p, PLACE_TAB); break;
+        case 3: rename_bookmark(bookmark_uri(p), p.label); break;
+        case 4: remove_bookmark(bookmark_uri(p)); break;
         case 6: unmount_place(p, false); break;
         case 7: unmount_place(p, true); break;
+        case 9: connect_to_server(); break;
+        case 10: add_bookmark_uri(p.gvfs_mount, p.label); break;
       }
+      return 1;
+    }
+    if (e == FL_PUSH && Fl::event_button() == FL_MIDDLE_MOUSE) {
+      int line = line_at(Fl::event_y());
+      if (line > 0) open_place(g_place_list[(size_t)line - 1], S.middle_tab ? PLACE_TAB : PLACE_WINDOW);
       return 1;
     }
     // the eject button at the right of a drive
@@ -1706,7 +2053,7 @@ public:
         dropping = false;
         int line = line_at(Fl::event_y());
         value(saved_line);
-        g_view->dragging_files = false;
+        g_view->end_drag();
         auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
         if (paths.empty()) return 1;
         if (line <= 0) {
@@ -1798,7 +2145,7 @@ public:
         dropping = false;
         clear_hover();
         Fl_Tree_Item *it = item_at();
-        g_view->dragging_files = false;
+        g_view->end_drag();
         auto f = it ? g_tree_paths.find(it) : g_tree_paths.end();
         if (f == g_tree_paths.end()) return 1;
         auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
@@ -1846,7 +2193,7 @@ static void tree_build() {
 
 // opens the tree down to `path` and selects it
 static void tree_follow(const std::string &path) {
-  if (!g_tree || !g_tree->visible() || path == TRASH_URI || in_search()) return;
+  if (!g_tree || !g_tree->visible() || path == TRASH_URI || path == NETWORK_URI || in_search()) return;
   Fl_Tree_Item *base = nullptr;
   std::string rest;
   std::string home = fld::home_dir();
@@ -1928,13 +2275,70 @@ static void watch_dir(const std::string &dir) {
 static void update_nav_buttons() {
   if (g_hist_back.empty() && !in_search()) g_back->deactivate(); else g_back->activate();
   if (g_hist_fwd.empty()) g_fwd->deactivate(); else g_fwd->activate();
-  if (g_cwd == "/" || in_trash()) g_up->deactivate(); else g_up->activate();
+  if (g_cwd == "/" || in_trash() || in_network()) g_up->deactivate(); else g_up->activate();
   if (in_trash()) g_empty_trash->show(); else g_empty_trash->hide();
 }
 
+// The name of a tab's folder (or search) for the title and the tab
+static std::string location_name(const std::string &cwd, bool searching, const std::string &desc) {
+  if (searching) return "Search: " + desc;
+  if (cwd == TRASH_URI) return "Trash";
+  if (cwd == NETWORK_URI) return "Network";
+  std::string mount = remote_mount_name(cwd);
+  if (!mount.empty()) return mount;
+  if (cwd == "/" || cwd.empty()) return "/";
+  return fld::basename(cwd);
+}
+
+// The path field, window title and selected place for the current tab
+static void show_location() {
+  // network folders show their location (sftp://host/dir), not the gvfs-fuse path
+  std::string uri = remote_uri(g_cwd);
+  g_path->value(g_cwd == TRASH_URI ? "Trash" : g_cwd == NETWORK_URI ? "Network" : !uri.empty() ? uri.c_str() : g_cwd.c_str());
+  g_win->copy_label((location_name(g_cwd, g_searching, g_search_desc) + " – Files").c_str());
+  if (g_searching) {
+    g_places->value(0);
+    if (g_tree) g_tree->deselect_all(nullptr, 0);
+  } else select_place_for(g_cwd);
+}
+
+// Lists the network neighbourhood again; the network view shows it when done
+static void network_relist() {
+#ifdef FLD_HAVE_GVFS
+  if (g_net_listing) return;
+  g_net_listing = true;
+  g_net_error.clear();
+  gv::Client::get().list(NETWORK_URI, [](const std::string &err, std::vector<gv::NetEntry> list) {
+    g_net_listing = false;
+    g_net_error = err == gv::kCancelled ? "" : err;
+    g_net_entries.clear();
+    for (auto &n : list) {
+      Entry e;
+      e.name = n.name;
+      e.path = e.target = n.target;
+      e.icon_name = n.icon;
+      e.is_dir = true;
+      e.mime = "inode/directory";
+      g_net_entries.push_back(e);
+    }
+    // the tabs that show the network
+    for (auto &t : g_tabs) {
+      bool cur = t.get() == cur_tab();
+      if ((cur ? g_cwd : t->cwd) != NETWORK_URI || (cur ? g_searching : t->searching)) continue;
+      t->view->load(NETWORK_URI);
+      if (cur) update_status();
+    }
+  });
+  if (g_view) g_view->redraw();
+#else
+  g_net_error = "fl-files was built without GVfs support";
+#endif
+}
+
 static void navigate(const std::string &path_in, bool record) {
-  std::string path = path_in == TRASH_URI ? path_in : fld::abs_path(path_in);
-  if (path != TRASH_URI) {
+  std::string path = path_in == TRASH_URI || path_in == NETWORK_URI ? path_in : fld::abs_path(path_in);
+  if (path == NETWORK_URI) network_relist();
+  else if (path != TRASH_URI) {
     if (!fld::is_dir(path)) {
       fl_alert("\"%s\" is not a folder.", path.c_str());
       return;
@@ -1946,7 +2350,7 @@ static void navigate(const std::string &path_in, bool record) {
   }
   bool was_search = in_search();
   if (was_search) {
-    g_search.cancel();
+    g_search->cancel();
     g_searching = false;
   }
   std::string prev = was_search ? "" : g_cwd;
@@ -1966,14 +2370,12 @@ static void navigate(const std::string &path_in, bool record) {
   std::string select;
   if (!prev.empty() && prev != TRASH_URI && fld::dirname(prev) == path) select = fld::basename(prev);
   g_view->load(path, select);
-  g_path->value(path == TRASH_URI ? "Trash" : path.c_str());
-  std::string title = (path == TRASH_URI ? std::string("Trash") : (path == "/" ? "/" : fld::basename(path))) + " – Files";
-  g_win->copy_label(title.c_str());
-  select_place_for(path);
+  show_location();
   tree_follow(path);
   watch_dir(path);
   update_nav_buttons();
   update_status();
+  update_tabbar();
   g_view->take_focus();
 }
 
@@ -1983,6 +2385,10 @@ static void refresh() {
     update_status();
     return;
   }
+  if (in_network()) network_relist();
+#ifdef FLD_HAVE_GVFS
+  else if (is_remote(g_cwd)) gv::Client::get().refresh(); // a share may have gone
+#endif
   std::set<std::string> selected;
   for (int i : g_view->sel) selected.insert(g_view->entry(i).name);
   int top = g_view->top;
@@ -1998,15 +2404,22 @@ static void refresh() {
 
 static void update_status() {
   if (!g_status) return;
+  if (g_view->dragging_files) {
+    size_t n = g_view->sel.size();
+    std::string s = "Dragging " + std::to_string(n) + (n == 1 ? " item" : " items") +
+                    " — drop onto a folder to move or copy it there (Ctrl copies, Shift moves)";
+    g_status->copy_label(fld::escape_at(s).c_str());
+    return;
+  }
   std::string s = std::to_string(g_view->items.size()) + " item" + (g_view->items.size() == 1 ? "" : "s");
   if (in_search()) {
     size_t n = g_view->items.size();
-    if (g_search.running())
-      s = "Searching " + fld::tilde(g_search.current_dir()) + "…    " + std::to_string(n) + " found";
+    if (g_search->running())
+      s = "Searching " + fld::tilde(g_search->current_dir()) + "…    " + std::to_string(n) + " found";
     else
       s = std::to_string(n) + (n == 1 ? " match" : " matches") + " in " + fld::tilde(g_cwd) +
-          (g_search.truncated() ? " (stopped at the result limit)" : "") + "    " +
-          std::to_string(g_search.scanned()) + " items searched";
+          (g_search->truncated() ? " (stopped at the result limit)" : "") + "    " +
+          std::to_string(g_search->scanned()) + " items searched";
   }
   if (!g_view->sel.empty()) {
     unsigned long long bytes = 0;
@@ -2025,7 +2438,7 @@ static void update_status() {
     s += "    " + std::to_string(g_clip.paths.size()) + (g_clip.cut ? " cut" : " copied");
   if (!in_trash()) {
     struct statvfs vf;
-    if (statvfs(g_cwd.c_str(), &vf) == 0)
+    if (statvfs(g_cwd.c_str(), &vf) == 0 && vf.f_blocks) // FTP and some shares have no sizes
       s += "    Free: " + fld::human_size((unsigned long long)vf.f_bavail * vf.f_frsize);
   }
   g_status->copy_label(fld::escape_at(s).c_str());
@@ -2050,7 +2463,9 @@ static void go_forward() {
 
 static void go_up() {
   if (in_search()) { navigate(g_cwd, false); return; }
-  if (in_trash() || g_cwd == "/") return;
+  if (in_trash() || in_network() || g_cwd == "/") return;
+  // up from a network location's top folder: the network
+  if (!remote_mount_name(g_cwd).empty()) { navigate(NETWORK_URI); return; }
   navigate(fld::dirname(g_cwd));
 }
 
@@ -2077,36 +2492,39 @@ static Fl_Tile *g_tile;
 static bool g_s_case = false, g_s_regex = false, g_s_links = false;
 static const int SBAR_H = 42;
 
-static void search_poll(void *) {
+// takes the results found so far into the view of the tab that searches
+static void search_poll(void *d) {
+  Tab *t = (Tab *)d;
+  bool cur = t == cur_tab();
   std::vector<std::string> paths;
-  g_search.take(paths);
-  if (!paths.empty()) g_view->add_paths(paths);
-  update_status();
-  g_view->redraw();
-  if (g_search.running()) Fl::repeat_timeout(0.15, search_poll);
+  t->search->take(paths);
+  if (!paths.empty()) t->view->add_paths(paths);
+  if (cur) update_status();
+  t->view->redraw();
+  if (t->search->running()) Fl::repeat_timeout(0.15, search_poll, d);
   else {
-    g_s_go->label("Search");
+    if (cur) g_s_go->label("Search");
     // the last batch
     paths.clear();
-    g_search.take(paths);
-    if (!paths.empty()) g_view->add_paths(paths);
-    update_status();
+    t->search->take(paths);
+    if (!paths.empty()) t->view->add_paths(paths);
+    if (cur) update_status();
   }
 }
 
 static void stop_search() {
-  g_search.cancel();
-  Fl::remove_timeout(search_poll);
-  search_poll(nullptr);
+  g_search->cancel();
+  Fl::remove_timeout(search_poll, cur_tab());
+  search_poll(cur_tab());
 }
 
 static void start_search() {
-  if (g_search.running()) {
+  if (g_search->running()) {
     stop_search();
     return;
   }
   search::Query q;
-  q.root = g_cwd == TRASH_URI ? fld::home_dir() : g_cwd;
+  q.root = g_cwd == TRASH_URI || g_cwd == NETWORK_URI ? fld::home_dir() : g_cwd;
   q.name = fld::trim(g_s_name->value());
   q.content = g_s_text->value();
   q.kind = (search::Query::Kind)std::max(0, g_s_kind->value());
@@ -2136,12 +2554,12 @@ static void start_search() {
     g_s_name->take_focus();
     return;
   }
-  if (!g_search.start(q)) {
+  if (!g_search->start(q)) {
     fl_alert("The regular expression is not valid.");
     return;
   }
   if (!in_search()) {
-    if (g_cwd == TRASH_URI) g_cwd = q.root;
+    if (g_cwd == TRASH_URI || g_cwd == NETWORK_URI) g_cwd = q.root;
     g_searching = true;
   }
   g_search_desc = q.name.empty() ? (q.content.empty() ? "files" : "\"" + q.content + "\"") : q.name;
@@ -2149,37 +2567,64 @@ static void start_search() {
   g_view->all.clear();
   g_filter->value("");
   g_view->apply_filter_sort();
-  std::string title = "Search: " + g_search_desc + " – Files";
-  g_win->copy_label(title.c_str());
-  g_places->value(0);
-  if (g_tree) g_tree->deselect_all(nullptr, 0);
+  show_location();
   g_s_go->label("Stop");
   update_nav_buttons();
-  Fl::remove_timeout(search_poll);
-  Fl::add_timeout(0.1, search_poll);
+  Fl::remove_timeout(search_poll, cur_tab());
+  Fl::add_timeout(0.1, search_poll, cur_tab());
   update_status();
+  update_tabbar();
+}
+
+// Places the bars above the views: the toolbar, the tab bar (with more
+// than one tab, or always), the find bar
+static fld::Toolbar *g_toolbar;
+static Fl_Menu_Bar *g_menubar;
+static void rebuild_menubar(); // its menu titles, before it shows
+static const int TOOLBAR_H = 42, STATUS_H = 24, MENUBAR_H = 26;
+static void relayout() {
+  int W = g_win->w(), H = g_win->h(), y = 0;
+  if (S.menubar) {
+    if (!g_menubar->visible()) rebuild_menubar();
+    g_menubar->resize(0, 0, W, MENUBAR_H);
+    g_menubar->show();
+    y += MENUBAR_H;
+  } else g_menubar->hide();
+  g_toolbar->resize(0, y, W, TOOLBAR_H);
+  y += TOOLBAR_H;
+  bool tabs = g_tabs.size() > 1 || S.always_tabs;
+  if (tabs) {
+    int th = fld::TabBar::preferred_height();
+    g_tabbar->resize(0, y, W, th);
+    g_tabbar->show();
+    y += th;
+  } else g_tabbar->hide();
+  if (g_sbar->visible()) {
+    g_sbar->resize(0, y, W, SBAR_H);
+    y += SBAR_H;
+  }
+  g_tile->resize(0, y, W, H - y - STATUS_H);
+  g_tile->init_sizes();
+  g_win->init_sizes();
+  g_win->redraw();
 }
 
 static void show_search_bar(bool on) {
-  int W = g_win->w(), TB = 42, ST = 24, H = g_win->h();
-  if (on == g_sbar->visible()) {
+  if (on == (bool)g_sbar->visible()) {
     if (on) g_s_name->take_focus();
     return;
   }
   if (on) {
-    g_sbar->resize(0, TB, W, SBAR_H);
     g_sbar->show();
-    g_tile->resize(0, TB + SBAR_H, W, H - TB - ST - SBAR_H);
+    relayout();
     g_s_name->take_focus();
     g_s_name->insert_position(0, g_s_name->size());
   } else {
     if (in_search()) navigate(g_cwd, false);
     g_sbar->hide();
-    g_tile->resize(0, TB, W, H - TB - ST);
+    relayout();
     g_view->take_focus();
   }
-  g_tile->init_sizes();
-  g_win->redraw();
 }
 
 static void open_containing(const std::string &path) {
@@ -2204,7 +2649,7 @@ public:
         return 1;
       }
       if (k == FL_Escape && contains(Fl::focus())) {
-        if (g_search.running()) stop_search();
+        if (g_search->running()) stop_search();
         else show_search_bar(false);
         return 1;
       }
@@ -2334,7 +2779,7 @@ static void columns_menu(int x, int y) {
 }
 
 static void show_preferences() {
-  Fl_Double_Window *w = new Fl_Double_Window(460, 430, "Files Preferences");
+  Fl_Double_Window *w = new Fl_Double_Window(500, 430, "Files Preferences");
   int y = 14;
   auto heading = [&](const char *t) {
     Fl_Box *b = new Fl_Box(16, y, 428, 22, t);
@@ -2368,9 +2813,12 @@ static void show_preferences() {
   heading("Behavior");
   Fl_Check_Button *one = check("Open items with a single click", S.single_click);
   Fl_Check_Button *conf = check("Ask before moving items to the Trash", S.confirm_trash);
+  Fl_Check_Button *mtab = check("Middle click opens folders in a new tab (else in a new window)", S.middle_tab);
+  Fl_Check_Button *atabs = check("Always show the tab bar", S.always_tabs);
   y += 6;
   heading("Thumbnails");
   Fl_Check_Button *th = check("Show image thumbnails", S.thumbnails);
+  Fl_Check_Button *rth = check("Also for files on network locations (slower)", S.remote_thumbs);
   Fl_Spinner *tmax = new Fl_Spinner(200, y, 80, 26, "Only for files up to:");
   tmax->range(1, 1024);
   tmax->value(S.thumb_max_mb);
@@ -2385,13 +2833,14 @@ static void show_preferences() {
   });
   Fl_Return_Button *ok = new Fl_Return_Button(344, y, 100, 30, "Close");
   ok->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
-  w->size(460, y + 44);
+  w->size(500, y + 44);
   w->end();
   w->set_modal();
   w->show();
   while (w->shown()) Fl::wait();
   bool reload = S.show_hidden != (bool)hid->value() || S.folders_first != (bool)ff->value() ||
-                S.thumbnails != (bool)th->value() || S.thumb_max_mb != (int)tmax->value();
+                S.thumbnails != (bool)th->value() || S.thumb_max_mb != (int)tmax->value() ||
+                S.remote_thumbs != (bool)rth->value();
   bool view_changed = S.def.view != (ViewMode)view->value();
   S.def.view = (ViewMode)view->value();
   S.date_fmt = date->value();
@@ -2400,13 +2849,18 @@ static void show_preferences() {
   S.show_hidden = hid->value();
   S.single_click = one->value();
   S.confirm_trash = conf->value();
+  S.middle_tab = mtab->value();
+  bool tabs_changed = S.always_tabs != (bool)atabs->value();
+  S.always_tabs = atabs->value();
   S.thumbnails = th->value();
+  S.remote_thumbs = rth->value();
   S.thumb_max_mb = (int)tmax->value();
   save_settings();
   Fl::delete_widget(w);
   if (view_changed && !S.per_folder) set_view(S.def.view);
   else if (view_changed && !in_search() && folder_view(g_cwd).view == S.def.view) set_view(S.def.view);
   if (reload) refresh();
+  if (tabs_changed) relayout();
   g_view->redraw();
 }
 
@@ -2418,6 +2872,290 @@ static void inotify_cb(int fd, void *) {
   Fl::remove_timeout(refresh_later);
   Fl::add_timeout(0.25, refresh_later);
 }
+
+// ---------------------------------------------------------------------------
+// Tabs
+
+// stores the current tab's state (the globals) in its Tab
+static void save_tab() {
+  Tab *t = cur_tab();
+  if (!t) return;
+  t->cwd = g_cwd;
+  t->back = std::move(g_hist_back);
+  t->fwd = std::move(g_hist_fwd);
+  t->searching = g_searching;
+  t->search_desc = g_search_desc;
+  t->v = V;
+  t->filter = g_filter->value();
+  t->find_bar = g_sbar->visible();
+  t->view->bg_search = g_searching;
+  t->view->bg_trash = in_trash();
+  t->view->bg_filter = t->filter;
+  g_hist_back.clear();
+  g_hist_fwd.clear();
+}
+
+static void activate_tab_(int i, bool save) {
+  if (i < 0 || i >= (int)g_tabs.size()) return;
+  if (save) {
+    if (i == g_cur) return;
+    save_tab();
+  }
+  if (g_view) {
+    g_view->hide();
+    Fl::remove_idle(FileView::thumb_idle, g_view);
+  }
+  g_cur = i;
+  Tab *t = cur_tab();
+  g_view = t->view;
+  g_cwd = t->cwd;
+  g_hist_back = std::move(t->back);
+  g_hist_fwd = std::move(t->fwd);
+  g_searching = t->searching;
+  g_search = t->search.get();
+  g_search_desc = t->search_desc;
+  V = t->v;
+  g_filter->value(t->filter.c_str());
+  g_view->resize(g_views->x(), g_views->y(), g_views->w(), g_views->h());
+  g_view->show();
+  if (t->find_bar != (bool)g_sbar->visible()) {
+    if (t->find_bar) g_sbar->show(); else g_sbar->hide();
+  }
+  g_s_go->label(g_search->running() ? "Stop" : "Search");
+  update_view_button();
+  update_zoom_slider();
+  show_location();
+  tree_follow(g_cwd);
+  watch_dir(g_cwd);
+  update_nav_buttons();
+  // the folder may have changed while the tab was in the background
+  if (!g_searching && !g_cwd.empty()) {
+    struct stat st;
+    std::string d = g_cwd == TRASH_URI ? fld::trash_dir() + "/files" : g_cwd;
+    if (stat(d.c_str(), &st) == 0 && (st.st_mtim.tv_sec != g_view->loaded_mtime.tv_sec ||
+                                      st.st_mtim.tv_nsec != g_view->loaded_mtime.tv_nsec))
+      refresh();
+  }
+  update_status();
+  update_tabbar();
+  relayout();
+  g_view->take_focus();
+}
+
+static void activate_tab(int i) { activate_tab_(i, true); }
+
+static void update_tabbar() {
+  if (!g_tabbar) return;
+  std::vector<fld::TabInfo> tabs;
+  for (size_t k = 0; k < g_tabs.size(); k++) {
+    Tab *t = g_tabs[k].get();
+    bool cur = (int)k == g_cur;
+    const std::string &cwd = cur ? g_cwd : t->cwd;
+    bool searching = cur ? g_searching : t->searching;
+    fld::TabInfo ti;
+    ti.label = location_name(cwd, searching, cur ? g_search_desc : t->search_desc);
+    std::string ru = remote_uri(cwd);
+    ti.tooltip = cwd == TRASH_URI ? "Trash" : cwd == NETWORK_URI ? "Network" : !ru.empty() ? ru : fld::tilde(cwd);
+    ti.busy = t->search->running();
+    tabs.push_back(ti);
+  }
+  g_tabbar->set_tabs(tabs, g_cur);
+  bool want = g_tabs.size() > 1 || S.always_tabs;
+  if (want != (bool)g_tabbar->visible()) relayout();
+}
+
+static void new_tab(const std::string &path, bool activate) {
+  if (path != TRASH_URI && path != NETWORK_URI && !fld::is_dir(path)) return;
+  auto t = std::make_unique<Tab>();
+  Fl_Group::current(nullptr);
+  t->view = new FileView(g_views->x(), g_views->y(), g_views->w(), g_views->h());
+  t->view->hide();
+  g_views->add(t->view);
+  t->v = folder_view(path);
+  int at = g_cur + 1; // after the current tab
+  g_tabs.insert(g_tabs.begin() + at, std::move(t));
+  if (g_cur >= at) g_cur++;
+  if (activate || g_cur < 0) {
+    activate_tab_(at, g_cur >= 0);
+    navigate(path, false);
+  } else {
+    // loads in the background
+    Tab *bt = g_tabs[(size_t)at].get();
+    bt->cwd = path;
+    bt->view->bg_trash = path == TRASH_URI;
+    bt->view->load(path);
+    update_tabbar();
+  }
+}
+
+static void close_tab(int i) {
+  if (i < 0 || i >= (int)g_tabs.size()) return;
+  if (g_tabs.size() == 1) {
+    g_win->hide();
+    return;
+  }
+  if (i != g_cur) save_tab();
+  Tab *t = g_tabs[(size_t)i].get();
+  t->search->cancel();
+  Fl::remove_timeout(search_poll, t);
+  Fl::remove_idle(FileView::thumb_idle, t->view);
+  g_views->remove(t->view);
+  Fl::delete_widget(t->view);
+  if (g_view == t->view) g_view = nullptr;
+  bool was_cur = i == g_cur;
+  g_tabs.erase(g_tabs.begin() + i);
+  if (was_cur) {
+    g_cur = -1;
+    activate_tab_(std::min(i, (int)g_tabs.size() - 1), false);
+  } else {
+    if (i < g_cur) g_cur--;
+    activate_tab_(g_cur, false);
+  }
+}
+
+static void open_dir_elsewhere(const std::string &path) {
+  if (S.middle_tab) new_tab(path, false);
+  else fld::spawn({"fl-files", path});
+}
+
+static void leave_folder(const std::string &dir) {
+  auto inside = [&](const std::string &p) { return p == dir || fld::starts_with(p, dir + "/"); };
+  int was = g_cur;
+  for (int k = 0; k < (int)g_tabs.size(); k++) {
+    bool cur = k == g_cur;
+    if (!inside(cur ? g_cwd : g_tabs[(size_t)k]->cwd)) continue;
+    if (!cur) activate_tab(k);
+    if (g_searching) { g_search->cancel(); g_searching = false; }
+    navigate(fld::home_dir());
+  }
+  if (was != g_cur) activate_tab(was);
+}
+
+static void tab_menu(int i) {
+  bool on_tab = i >= 0;
+  int n = (int)g_tabs.size();
+  Fl_Menu_Item m[] = {{"New Tab", FL_CTRL + 't', nullptr, (void *)1},
+                      {"Duplicate Tab", 0, nullptr, (void *)2, on_tab ? 0 : FL_MENU_INACTIVE},
+                      {"Open in New Window", 0, nullptr, (void *)3, (on_tab ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER},
+                      {"Close Other Tabs", 0, nullptr, (void *)4, on_tab && n > 1 ? 0 : FL_MENU_INACTIVE},
+                      {"Close Tabs to the Right", 0, nullptr, (void *)5, on_tab && i < n - 1 ? 0 : FL_MENU_INACTIVE},
+                      {"Close Tab", FL_CTRL + 'w', nullptr, (void *)6, on_tab ? 0 : FL_MENU_INACTIVE},
+                      {nullptr}};
+  const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
+  if (!r) return;
+  auto cwd_of = [](int k) { return k == g_cur ? g_cwd : g_tabs[(size_t)k]->cwd; };
+  switch ((long)r->user_data()) {
+    case 1: new_tab(in_trash() || g_cwd.empty() ? fld::home_dir() : g_cwd); break;
+    case 2: activate_tab(i); new_tab(g_cwd); break;
+    case 3: {
+      std::string d = cwd_of(i);
+      fld::spawn({"fl-files", d});
+      close_tab(i);
+      break;
+    }
+    case 4:
+      activate_tab(i);
+      while (g_tabs.size() > 1) close_tab(g_cur == 0 ? 1 : 0);
+      break;
+    case 5:
+      activate_tab(i);
+      while ((int)g_tabs.size() > i + 1) close_tab(i + 1);
+      break;
+    case 6: close_tab(i); break;
+  }
+}
+
+static fld::TabBar *make_tabbar(int W) {
+  fld::TabBar *tb = new fld::TabBar(0, 0, W, fld::TabBar::preferred_height());
+  tb->on_select = [](int i) { activate_tab(i); };
+  tb->on_close = [](int i) { close_tab(i); };
+  tb->on_new = [] { new_tab(in_trash() || g_cwd.empty() ? fld::home_dir() : g_cwd); };
+  tb->on_menu = [](int i) { tab_menu(i); };
+  tb->on_move = [](int from, int to) {
+    save_tab();
+    fld::move_element(g_tabs, from, to);
+    g_cur = fld::moved_index(g_cur, from, to);
+    activate_tab_(g_cur, false);
+  };
+  tb->on_detach = [](int i) {
+    std::string d = i == g_cur ? g_cwd : g_tabs[(size_t)i]->cwd;
+    fld::spawn({"fl-files", d == TRASH_URI ? std::string(TRASH_URI) : d});
+    close_tab(i);
+  };
+  tb->hide();
+  return tb;
+}
+
+// ---------------------------------------------------------------------------
+// Network locations (GVfs)
+
+// Mounts a location (smb://server/share...) and opens its folder here, in a
+// new window or in a new tab
+static void mount_and_go(const std::string &uri, int where) {
+#ifdef FLD_HAVE_GVFS
+  if (gv::uri_scheme(uri) == "network") {
+    if (where == 2) new_tab(NETWORK_URI);
+    else if (where == 1) fld::spawn({"fl-files", NETWORK_URI});
+    else navigate(NETWORK_URI);
+    return;
+  }
+  if (where == 1) {
+    fld::spawn({"fl-files", uri});
+    return;
+  }
+  std::string name = gv::display_name_for_uri(uri);
+  g_status->copy_label(fld::escape_at("Connecting to " + name + "…").c_str());
+  gv::Client::get().mount_uri(uri, [uri, name, where](const std::string &err, const std::string &path) {
+    update_status();
+    if (err == gv::kCancelled) return;
+    if (!err.empty()) {
+      fl_alert("Could not open %s:\n%s", fld::escape_at(uri).c_str(), fld::escape_at(err).c_str());
+      return;
+    }
+    gv::Client::get().refresh();
+    if (where == 2) new_tab(path);
+    else navigate(path);
+  });
+#else
+  (void)where;
+  fl_alert("fl-files was built without GVfs: it cannot open %s.", fld::escape_at(uri).c_str());
+#endif
+}
+
+static void connect_to_server() {
+#ifdef FLD_HAVE_GVFS
+  fld::Ini c;
+  c.load(settings_path());
+  std::vector<std::string> recent;
+  for (int i = 0; i < 10; i++) {
+    std::string r = c.get("Servers", "Recent" + std::to_string(i), "");
+    if (!r.empty()) recent.push_back(r);
+  }
+  bool bookmark = false;
+  std::string uri = connect_dialog(recent, bookmark);
+  if (!uri.empty() && !gv::looks_like_uri(uri)) {
+    fl_alert("\"%s\" is not a server address.\nIt starts with the kind of server, for example smb://, sftp:// or ftp://.",
+             fld::escape_at(uri).c_str());
+    uri.clear();
+  }
+  if (!uri.empty()) {
+    recent.erase(std::remove(recent.begin(), recent.end(), uri), recent.end());
+    recent.insert(recent.begin(), uri);
+  }
+  c.remove_group("Servers");
+  for (size_t i = 0; i < recent.size() && i < 10; i++) c.set("Servers", "Recent" + std::to_string(i), recent[i]);
+  c.save(settings_path());
+  if (uri.empty()) return;
+  if (bookmark) add_bookmark_uri(uri, gv::display_name_for_uri(uri));
+  mount_and_go(uri);
+#else
+  fl_alert("fl-files was built without GVfs support.");
+#endif
+}
+
+static void edit_location();
+static void toggle_menubar();
+static void select_all();
 
 static int global_keys(int e) {
   if (e != FL_SHORTCUT) return 0;
@@ -2433,9 +3171,21 @@ static int global_keys(int e) {
   if (k == FL_Escape && in_search() && Fl::focus() == g_view) { show_search_bar(false); return 1; }
   if (k == FL_BackSpace && Fl::focus() == g_view) { go_up(); return 1; }
   if (k == FL_F + 5) { refresh(); return 1; }
+  // tabs: Alt+1..9, Ctrl+Tab, Ctrl+Page Up/Down
+  if (alt && !ctrl && k >= '1' && k <= '9') {
+    int i = k == '9' ? (int)g_tabs.size() - 1 : k - '1';
+    if (i < (int)g_tabs.size()) activate_tab(i);
+    return 1;
+  }
+  if (ctrl && (k == FL_Tab || k == FL_Page_Up || k == FL_Page_Down) && g_tabs.size() > 1) {
+    int n = (int)g_tabs.size(), d = (k == FL_Page_Up || (k == FL_Tab && shift)) ? -1 : 1;
+    activate_tab((g_cur + d + n) % n);
+    return 1;
+  }
   if (!ctrl) return 0;
   switch (k) {
-    case 'l': g_path->value(in_trash() ? "trash:///" : g_cwd.c_str()); g_path->take_focus(); g_path->insert_position(0, g_path->size()); return 1;
+    case 'l': edit_location(); return 1;
+    case 'm': toggle_menubar(); return 1;
     case 'f': g_filter->take_focus(); return 1;
     case 'h': toggle_hidden(); return 1;
     case 'd': if (!in_search()) add_bookmark(g_cwd); return 1;
@@ -2444,7 +3194,9 @@ static int global_keys(int e) {
       if (shift) new_item(true);
       else fld::spawn({"fl-files", in_trash() ? fld::home_dir() : g_cwd});
       return 1;
-    case 'w': case 'q': g_win->hide(); return 1;
+    case 't': new_tab(in_trash() || in_search() ? fld::home_dir() : g_cwd); return 1;
+    case 'w': close_tab(g_cur); return 1;
+    case 'q': g_win->hide(); return 1;
     case '1': set_view(VIEW_ICONS); return 1;
     case '2': set_view(VIEW_COMPACT); return 1;
     case '3': set_view(VIEW_DETAILS); return 1;
@@ -2454,13 +3206,198 @@ static int global_keys(int e) {
   }
   if (Fl::focus() != g_view) return 0;
   switch (k) {
-    case 'a': for (int i = 0; i < (int)g_view->items.size(); i++) g_view->sel.insert(i); g_view->redraw(); update_status(); return 1;
+    case 'a': select_all(); return 1;
     case 'c': copy_to_clipboard(false); return 1;
     case 'x': copy_to_clipboard(true); return 1;
     case 'v': if (!in_search()) paste_into(g_cwd); return 1;
   }
   return 0;
 }
+
+// ---------------------------------------------------------------------------
+// Menus: the toolbar's menu button and the menu bar (View > Show Menu Bar)
+
+static void toggle_menubar() {
+  S.menubar = !S.menubar;
+  save_settings();
+  relayout();
+}
+
+static void select_all() {
+  for (int i = 0; i < (int)g_view->items.size(); i++) g_view->sel.insert(i);
+  g_view->redraw();
+  update_status();
+}
+
+static void edit_location() {
+  g_path->value(in_trash() ? "trash:///" : g_cwd.c_str());
+  g_path->take_focus();
+  g_path->insert_position(0, g_path->size());
+}
+
+static std::string new_tab_dir() { return in_trash() || in_search() || g_cwd.empty() ? fld::home_dir() : g_cwd; }
+
+static void view_items(fld::Menu &m) {
+  m.radio("&Icons", V.view == VIEW_ICONS, [] { set_view(VIEW_ICONS); });
+  m.radio("&Compact", V.view == VIEW_COMPACT, [] { set_view(VIEW_COMPACT); });
+  m.radio("&Details", V.view == VIEW_DETAILS, [] { set_view(VIEW_DETAILS); }, FL_MENU_DIVIDER);
+  m.item("Zoom &In", [] { zoom(1); }, V.zoom >= kZoomMax ? FL_MENU_INACTIVE : 0, FL_CTRL + '=');
+  m.item("Zoom &Out", [] { zoom(-1); }, V.zoom <= 0 ? FL_MENU_INACTIVE : 0, FL_CTRL + '-');
+  m.item("&Normal Size", [] { zoom(0); }, FL_MENU_DIVIDER, FL_CTRL + '0');
+  m.item("C&olumns…", [] { columns_menu(Fl::event_x(), Fl::event_y()); });
+}
+
+// for_bar: the menu bar's menus, else the menu button's menu
+static void build_menu(fld::Menu &m, bool for_bar) {
+  // the trash and the network view take no new files
+  bool trash = in_trash() || in_network(), search = in_search(), have_sel = g_view && !g_view->sel.empty();
+  auto toggles = [&] {
+    m.toggle("Folder &Tree", S.show_tree, [] { show_tree(!S.show_tree); });
+    m.toggle("Show &Hidden Files", S.show_hidden, [] { toggle_hidden(); });
+    m.toggle("Show T&humbnails", S.thumbnails, [] {
+      S.thumbnails = !S.thumbnails;
+      save_settings();
+      g_view->clear_thumbs();
+      refresh();
+    });
+    m.toggle("Show &Menu Bar", S.menubar, [] { toggle_menubar(); });
+  };
+  if (!for_bar) {
+    m.item("New &Tab", [] { new_tab(new_tab_dir()); }, 0, FL_CTRL + 't');
+    m.item("New &Window", [] { fld::spawn({"fl-files", new_tab_dir()}); }, 0, FL_CTRL + 'n');
+    m.item("New &Folder…", [] { new_item(true); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + FL_SHIFT + 'n');
+    m.divider();
+    m.item("&Find Files…", [] { show_search_bar(true); }, 0, FL_CTRL + FL_SHIFT + 'f');
+    m.item("&Bookmark This Folder", [] { add_bookmark(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'd');
+#ifdef FLD_HAVE_GVFS
+    m.item("Connect to &Server…", [] { connect_to_server(); });
+#endif
+    m.divider();
+    m.submenu("&View");
+    view_items(m);
+    m.end_submenu();
+    toggles();
+    m.divider();
+    m.item("Open Terminal &Here", [] { fld::spawn(fld::shell_split(fld::terminal_command()), g_cwd); },
+           trash || search ? FL_MENU_INACTIVE : 0);
+    m.divider();
+    m.item("&Preferences…", [] { show_preferences(); }, 0, FL_CTRL + ',');
+    m.item("&About", [] { fld::about_dialog("Files", "fl-files", "A file manager built with FLTK."); });
+    m.item("&Quit", [] { g_win->hide(); }, 0, FL_CTRL + 'q');
+    return;
+  }
+  m.submenu("&File");
+  m.item("New &Tab", [] { new_tab(new_tab_dir()); }, 0, FL_CTRL + 't');
+  m.item("New &Window", [] { fld::spawn({"fl-files", new_tab_dir()}); }, 0, FL_CTRL + 'n');
+  m.item("New &Folder…", [] { new_item(true); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + FL_SHIFT + 'n');
+  m.item("New &Empty File…", [] { new_item(false); }, trash || search ? FL_MENU_INACTIVE : 0);
+  m.divider();
+#ifdef FLD_HAVE_GVFS
+  m.item("Connect to &Server…", [] { connect_to_server(); }, FL_MENU_DIVIDER);
+#endif
+  m.item("Open Terminal &Here", [] { fld::spawn(fld::shell_split(fld::terminal_command()), g_cwd); },
+         (trash || search ? FL_MENU_INACTIVE : 0) | FL_MENU_DIVIDER);
+  m.item("P&roperties", [] { properties(g_view->sel.empty() ? std::vector<std::string>{g_cwd} : g_view->selected_paths()); },
+         trash ? FL_MENU_INACTIVE : 0, FL_ALT + FL_Enter);
+  m.divider();
+  m.item("&Close Tab", [] { close_tab(g_cur); }, 0, FL_CTRL + 'w');
+  m.item("&Quit", [] { g_win->hide(); }, 0, FL_CTRL + 'q');
+  m.end_submenu();
+
+  m.submenu("&Edit");
+  m.item("Cu&t", [] { copy_to_clipboard(true); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
+  m.item("&Copy", [] { copy_to_clipboard(false); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
+  m.item("&Paste", [] { paste_into(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'v');
+  m.item("Select &All", [] { select_all(); }, FL_MENU_DIVIDER, FL_CTRL + 'a');
+  m.item("&Rename…", [] { if (g_view->focus >= 0) g_view->start_rename(g_view->focus); },
+         have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_F + 2);
+  m.item("Move to &Trash", [] { trash_selected(false); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_Delete);
+  m.item("&Delete Permanently", [] { trash_selected(true); }, (have_sel ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER,
+         FL_SHIFT + FL_Delete);
+  m.item("&Find Files…", [] { show_search_bar(true); }, 0, FL_CTRL + FL_SHIFT + 'f');
+  m.item("Fi&lter…", [] { g_filter->take_focus(); }, FL_MENU_DIVIDER, FL_CTRL + 'f');
+  m.item("Pr&eferences…", [] { show_preferences(); }, 0, FL_CTRL + ',');
+  m.end_submenu();
+
+  m.submenu("&View");
+  view_items(m);
+  m.divider();
+  toggles();
+  m.divider();
+  m.item("&Reload", [] { refresh(); }, 0, FL_F + 5);
+  m.end_submenu();
+
+  m.submenu("&Go");
+  m.item("&Back", [] { go_back(); }, g_back->active() ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Left);
+  m.item("&Forward", [] { go_forward(); }, g_fwd->active() ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Right);
+  m.item("&Up", [] { go_up(); }, g_up->active() ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Up);
+  m.divider();
+  m.item("&Home", [] { navigate(fld::home_dir()); }, 0, FL_ALT + FL_Home);
+  m.item("&Trash", [] { navigate(TRASH_URI); });
+#ifdef FLD_HAVE_GVFS
+  m.item("&Network", [] { navigate(NETWORK_URI); });
+#endif
+  m.item("File &System", [] { navigate("/"); }, FL_MENU_DIVIDER);
+  m.item("&Location…", [] { edit_location(); }, 0, FL_CTRL + 'l');
+  m.end_submenu();
+
+  m.submenu("&Bookmarks");
+  m.item("&Bookmark This Folder", [] { add_bookmark(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'd');
+  bool first = true;
+  for (auto &p : g_place_list) {
+    if (!p.bookmark) continue;
+    if (first) m.divider();
+    first = false;
+    std::string path = p.path;
+    m.item(fld::Menu::text(p.label), [path] { navigate(path); });
+  }
+  m.end_submenu();
+
+  m.submenu("&Help");
+  m.item("&About Files", [] { fld::about_dialog("Files", "fl-files", "A file manager built with FLTK."); });
+  m.end_submenu();
+}
+
+// The menu bar is built again each time it opens (selection, toggles, bookmarks)
+class FilesMenuBar : public Fl_Menu_Bar {
+public:
+  fld::Menu menu;
+  // rebuild() fills it, once the window is built
+  using Fl_Menu_Bar::Fl_Menu_Bar;
+  void rebuild() {
+    menu = fld::Menu();
+    build_menu(menu, true);
+    const Fl_Menu_Item *mi = menu.items();
+    items_.assign(mi, mi + count_items(mi));
+    for (auto &it : items_)
+      if (it.text && !(it.flags & FL_SUBMENU)) it.callback_ = cb;
+    Fl_Menu_Bar::menu(items_.data());
+  }
+  int handle(int e) override {
+    if (e == FL_PUSH) rebuild();
+    // the shortcuts are the window's (they also work with the bar hidden)
+    if (e == FL_SHORTCUT) return 0;
+    return Fl_Menu_Bar::handle(e);
+  }
+
+private:
+  std::vector<Fl_Menu_Item> items_;
+  static int count_items(const Fl_Menu_Item *m) {
+    int n = 0, depth = 0;
+    for (;; n++) {
+      if (!m[n].text) {
+        if (depth == 0) break;
+        depth--;
+        continue;
+      }
+      if (m[n].flags & FL_SUBMENU) depth++;
+    }
+    return n + 1;
+  }
+  static void cb(Fl_Widget *w, void *d) { ((FilesMenuBar *)w)->menu.run((long)d); }
+};
+
+static void rebuild_menubar() { ((FilesMenuBar *)g_menubar)->rebuild(); }
 
 class FilesWindow : public Fl_Double_Window {
 public:
@@ -2479,22 +3416,39 @@ int main(int argc, char **argv) {
   fld::init_app("fl-files", argc, argv);
   Fl::lock(); // enable Fl::awake from worker threads
   load_settings();
-  std::string start = fld::home_dir();
+  std::string start = fld::home_dir(), start_uri;
+  bool connect = false;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
-    if (a == "-h" || a == "--help") { printf("Usage: fl-files [folder|trash:///]\n"); return 0; }
+    if (a == "-h" || a == "--help") {
+      printf("Usage: fl-files [--connect] [folder|trash:///|network:///|smb://server/share|sftp://host/...]\n");
+      return 0;
+    }
+    if (a == "--connect") { connect = true; continue; }
     if (a[0] == '-') continue;
+    if (a == NETWORK_URI || a == "network:") { start = NETWORK_URI; continue; }
+#ifdef FLD_HAVE_GVFS
+    if (gv::looks_like_uri(a)) { start_uri = a; continue; }
+#endif
     if (a == TRASH_URI || a == "trash:") start = TRASH_URI;
     else if (fld::starts_with(a, "file://")) start = fld::uri_decode(a.substr(7));
     else start = a;
-    if (start != TRASH_URI && !fld::is_dir(start)) start = fld::dirname(fld::abs_path(start));
+    if (start != TRASH_URI && start != NETWORK_URI && !fld::is_dir(start)) start = fld::dirname(fld::abs_path(start));
   }
 
-  const int W = 980, H = 640, TB = 42, ST = 24;
+  const int W = 980, H = 640, TB = TOOLBAR_H, ST = STATUS_H;
   const fld::Palette &p = fld::palette();
   g_win = new FilesWindow(W, H, "Files");
+  // the close button and Ctrl+Q close the window; Escape (FLTK's default) does not
+  g_win->callback([](Fl_Widget *w, void *) {
+    if (Fl::event() == FL_SHORTCUT && Fl::event_key() == FL_Escape) return;
+    w->hide();
+  });
 
-  fld::Toolbar *bar = new fld::Toolbar(0, 0, W, TB);
+  g_menubar = new FilesMenuBar(0, 0, W, MENUBAR_H);
+  g_menubar->box(FL_FLAT_BOX);
+  g_menubar->hide();
+  fld::Toolbar *bar = g_toolbar = new fld::Toolbar(0, 0, W, TB);
   bar->color(p.bg);
   g_back = bar->add_button("go-previous", "Back (Alt+Left)", [](Fl_Widget *, void *) { go_back(); }, nullptr);
   g_fwd = bar->add_button("go-next", "Forward (Alt+Right)", [](Fl_Widget *, void *) { go_forward(); }, nullptr);
@@ -2507,6 +3461,11 @@ int main(int argc, char **argv) {
   g_path->callback([](Fl_Widget *w, void *) {
     std::string v = fld::trim(((Fl_Input *)w)->value());
     if (v == "Trash" || v == "trash:///" || v == "trash:") navigate(TRASH_URI);
+    else if (v == "Network" || v == "network:///" || v == "network:") navigate(NETWORK_URI);
+#ifdef FLD_HAVE_GVFS
+    else if (gv::looks_like_uri(v)) mount_and_go(v);
+#endif
+    else if (fld::starts_with(v, "file://")) navigate(fld::uri_decode(v.substr(7)));
     else navigate(fld::expand_tilde(v));
   });
   g_path->tooltip("Location (Ctrl+L)");
@@ -2540,54 +3499,17 @@ int main(int argc, char **argv) {
   if (!fld::icon("open-menu", 20)) menu_btn->icon_name("preferences-system", 20);
   menu_btn->tooltip("Menu");
   menu_btn->callback([](Fl_Widget *, void *) {
-    Fl_Menu_Item m[] = {
-        {"New Window", FL_CTRL + 'n', nullptr, (void *)1},
-        {"New Folder…", FL_CTRL + FL_SHIFT + 'n', nullptr, (void *)2, FL_MENU_DIVIDER},
-        {"Find Files…", FL_CTRL + FL_SHIFT + 'f', nullptr, (void *)8},
-        {"Bookmark This Folder", FL_CTRL + 'd', nullptr, (void *)9, FL_MENU_DIVIDER},
-        {"View", 0, nullptr, nullptr, FL_SUBMENU},
-          {"Icons", FL_CTRL + '1', nullptr, (void *)20, FL_MENU_RADIO | (V.view == VIEW_ICONS ? FL_MENU_VALUE : 0)},
-          {"Compact", FL_CTRL + '2', nullptr, (void *)21, FL_MENU_RADIO | (V.view == VIEW_COMPACT ? FL_MENU_VALUE : 0)},
-          {"Details", FL_CTRL + '3', nullptr, (void *)22, FL_MENU_RADIO | (V.view == VIEW_DETAILS ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER},
-          {"Zoom In", FL_CTRL + '=', nullptr, (void *)23},
-          {"Zoom Out", FL_CTRL + '-', nullptr, (void *)24},
-          {"Normal Size", FL_CTRL + '0', nullptr, (void *)25, FL_MENU_DIVIDER},
-          {"Columns…", 0, nullptr, (void *)26},
-          {nullptr},
-        {"Folder Tree", FL_F + 9, nullptr, (void *)10, FL_MENU_TOGGLE | (S.show_tree ? FL_MENU_VALUE : 0)},
-        {"Show Hidden Files", FL_CTRL + 'h', nullptr, (void *)3, FL_MENU_TOGGLE | (S.show_hidden ? FL_MENU_VALUE : 0)},
-        {"Show Thumbnails", 0, nullptr, (void *)4, FL_MENU_TOGGLE | (S.thumbnails ? FL_MENU_VALUE : 0), 0, 0, 0, 0},
-        {"Open Terminal Here", 0, nullptr, (void *)5, FL_MENU_DIVIDER},
-        {"Preferences…", FL_CTRL + ',', nullptr, (void *)11},
-        {"About", 0, nullptr, (void *)6},
-        {"Quit", FL_CTRL + 'q', nullptr, (void *)7},
-        {nullptr}};
-    const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
-    if (!r) return;
-    switch ((long)r->user_data()) {
-      case 1: fld::spawn({"fl-files", in_trash() ? fld::home_dir() : g_cwd}); break;
-      case 2: new_item(true); break;
-      case 3: toggle_hidden(); break;
-      case 4: S.thumbnails = !S.thumbnails; save_settings(); g_view->clear_thumbs(); refresh(); break;
-      case 8: show_search_bar(true); break;
-      case 9: if (!in_search()) add_bookmark(g_cwd); break;
-      case 10: show_tree(!S.show_tree); break;
-      case 11: show_preferences(); break;
-      case 20: set_view(VIEW_ICONS); break;
-      case 21: set_view(VIEW_COMPACT); break;
-      case 22: set_view(VIEW_DETAILS); break;
-      case 23: zoom(1); break;
-      case 24: zoom(-1); break;
-      case 25: zoom(0); break;
-      case 26: columns_menu(Fl::event_x(), Fl::event_y()); break;
-      case 5: if (!in_trash()) fld::spawn(fld::shell_split(fld::terminal_command()), g_cwd); break;
-      case 6: fld::about_dialog("Files", "fl-files", "A file manager built with FLTK."); break;
-      case 7: g_win->hide(); break;
-    }
+    fld::Menu m;
+    build_menu(m, false);
+    m.popup();
   });
   bar->add(menu_btn);
   bar->resizable(g_path);
+  bar->end();
 
+  g_tabbar = make_tabbar(W);
+  g_win->add(g_tabbar);
+  Fl_Group::current(g_win);
   build_search_bar(W, TB);
   Fl_Tile *tile = g_tile = new Fl_Tile(0, TB, W, H - TB - ST);
   Fl_Group *side = new Fl_Group(0, TB, S.sidebar_w, H - TB - ST);
@@ -2631,9 +3553,10 @@ int main(int argc, char **argv) {
   side->end();
   g_empty_trash->parent()->remove(g_empty_trash);
   side->add(g_empty_trash);
-  g_view = new FileView(S.sidebar_w, TB, W - S.sidebar_w, H - TB - ST);
+  g_views = new Fl_Group(S.sidebar_w, TB, W - S.sidebar_w, H - TB - ST);
+  g_views->end(); // the tabs' views are added by new_tab()
   tile->end();
-  tile->resizable(g_view);
+  tile->resizable(g_views);
   tile->size_range(side, 120, 120, 400, 10000);
   // status bar: text, then the zoom slider
   const int ZW = 170;
@@ -2679,11 +3602,26 @@ int main(int argc, char **argv) {
   };
   ud::Client::get().start();
 #endif
+#ifdef FLD_HAVE_GVFS
+  gv::Client &gc = gv::Client::get();
+  gc.ask_password = gvfs_password_dialog;
+  gc.ask_question = gvfs_question_dialog;
+  gc.on_changed = [] {
+    fill_places();
+    select_place_for(g_cwd);
+    show_location(); // a mount's name and location
+    update_tabbar();
+  };
+  gc.start();
+#endif
   fill_places();
   update_view_button();
+  new_tab(start);
+  if (g_tabs.empty()) new_tab(fld::home_dir()); // the folder could not be opened
   if (S.show_tree) show_tree(true);
-  navigate(start, false);
   g_win->show(); // not show(argc, argv): it resets the theme colors
   g_view->take_focus();
+  if (!start_uri.empty()) mount_and_go(start_uri);
+  if (connect) Fl::add_timeout(0.2, [](void *) { connect_to_server(); });
   return Fl::run();
 }

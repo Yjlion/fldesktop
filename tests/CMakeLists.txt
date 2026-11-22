@@ -50,6 +50,18 @@ if(TARGET fld-udisks)
   add_test(NAME udisks COMMAND test_udisks)
 endif()
 
+if(TARGET fl-sysinfo-info)
+  add_executable(test_sysinfo test_sysinfo.cpp)
+  target_link_libraries(test_sysinfo PRIVATE fl-sysinfo-info)
+  add_test(NAME sysinfo COMMAND test_sysinfo)
+endif()
+
+if(TARGET fld-gvfs)
+  add_executable(test_gvfs test_gvfs.cpp)
+  target_link_libraries(test_gvfs PRIVATE fld-gvfs)
+  add_test(NAME gvfs COMMAND test_gvfs)
+endif()
+
 if(TARGET fld-pk)
   add_executable(test_packages test_packages.cpp)
   target_compile_definitions(test_packages PRIVATE I_KNOW_THE_PACKAGEKIT_GLIB2_API_IS_SUBJECT_TO_CHANGE)

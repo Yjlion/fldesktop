@@ -3,6 +3,7 @@
 
 #include "fld/accents.h"
 #include "fld/desktop_entry.h"
+#include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/json.h"
 #include "fld/mime.h"
@@ -239,6 +240,19 @@ static void test_tabs() {
   CHECK_EQ(fld::Menu::text("a & b @ c"), std::string("a && b @@ c"));
 }
 
+static void test_symbolic_recolor() {
+  const std::string W = "#eeeeee";
+  CHECK_EQ(fld::recolor_symbolic_svg("<path fill=\"#2e3436\"/>", W), "<path fill=\"#eeeeee\"/>");
+  CHECK_EQ(fld::recolor_symbolic_svg("<path style=\"fill:#bebebe;stroke:#474747\"/>", W),
+           "<path style=\"fill:#eeeeee;stroke:#eeeeee\"/>");
+  CHECK_EQ(fld::recolor_symbolic_svg("<g fill=\"#333\" fill-opacity=\"0.4\"/>", W), "<g fill=\"#eeeeee\" fill-opacity=\"0.4\"/>");
+  CHECK_EQ(fld::recolor_symbolic_svg("<g color=\"currentColor\"/>", W), "<g color=\"#eeeeee\"/>");
+  // colors, white and references stay
+  CHECK_EQ(fld::recolor_symbolic_svg("<path fill=\"#e01b24\"/>", W), "<path fill=\"#e01b24\"/>");
+  CHECK_EQ(fld::recolor_symbolic_svg("<path fill=\"#ffffff\"/>", W), "<path fill=\"#ffffff\"/>");
+  CHECK_EQ(fld::recolor_symbolic_svg("<use href=\"#abc\" fill=\"url(#aaa)\"/>", W).find("url(#aaa)") != std::string::npos, true);
+}
+
 int main() {
   char tmpl[] = "/tmp/fld-test-XXXXXX";
   g_tmp = mkdtemp(tmpl);
@@ -252,6 +266,7 @@ int main() {
   test_accents();
   test_session_env();
   test_tabs();
+  test_symbolic_recolor();
   fld::remove_recursive(g_tmp);
   // clock formats: seconds or not
   CHECK(!fld::strftime_has_seconds("%a %d %b  %H:%M"));

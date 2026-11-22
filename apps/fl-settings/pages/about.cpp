@@ -116,6 +116,12 @@ public:
       AboutPage *p = (AboutPage *)d;
       Fl::copy(p->info.c_str(), (int)p->info.size(), 1);
     }, this);
+    // the full details: fl-sysinfo, when it is installed
+    if (!which("fl-sysinfo").empty()) {
+      Fl_Button *more = new Fl_Button(wx + 190, wy, 200, 30, "System Information…");
+      more->tooltip("Processor, memory, graphics, disks, devices, batteries and temperatures in detail");
+      more->callback([](Fl_Widget *, void *) { spawn({"fl-sysinfo"}); });
+    }
     g->end();
     end();
   }

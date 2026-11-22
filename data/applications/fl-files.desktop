@@ -6,6 +6,6 @@ Comment=Browse and organize files and folders
 Exec=fl-files %U
 Icon=fl-files
 Categories=System;FileManager;
-MimeType=inode/directory;
+MimeType=inode/directory;x-scheme-handler/smb;x-scheme-handler/sftp;x-scheme-handler/ftp;x-scheme-handler/dav;x-scheme-handler/davs;
 Keywords=folder;manager;explore;disk;filesystem;
 StartupWMClass=fl-files

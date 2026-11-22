@@ -2,7 +2,7 @@
 .SH NAME
 fl-files \- file manager
 .SH SYNOPSIS
-\fBfl-files\fR [\fIFOLDER\fR|\fBtrash:///\fR]
+\fBfl-files\fR [\fB\-\-connect\fR] [\fIFOLDER\fR|\fBtrash:///\fR|\fBnetwork:///\fR|\fILOCATION\fR]
 .SH DESCRIPTION
 Browse and manage files: thumbnails, copy/move in the background, the XDG trash, open with,
 properties and permissions, bookmarks, a folder tree and file search.
@@ -15,6 +15,30 @@ remembers its own view, sort order and icon size.
 .PP
 F9 shows a folder tree instead of the places list. Ctrl+D bookmarks the current folder;
 right-click a bookmark to rename or remove it (bookmarks are shared with GTK applications).
+.SS Tabs
+Ctrl+T opens a tab at the current folder, Ctrl+W closes it (and the window with the last tab).
+Ctrl+Tab and Ctrl+Shift+Tab (or Ctrl+Page Down/Up) go to the next and previous tab, Alt+1 to Alt+9
+to a tab by its place. A middle click on a folder, a place or a bookmark opens it in a new tab
+behind the current one (or in a new window, see the preferences). Each tab has its own folder,
+history, view and search. Tabs can be dragged to another place, or out of the strip into a
+window of their own; right-click a tab to duplicate it or to close other tabs. The tab bar shows
+with two or more tabs, or always.
+.SS Network locations
+With GVfs (\fBgvfs\fR, \fBgvfs-fuse\fR and the backends such as \fBgvfs-smb\fR, \fBgvfs-mtp\fR)
+fl-files opens network shares, phones and cameras. Type a location into the location field
+(\fBsmb://server/share\fR, \fBsftp://user@host/path\fR, \fBftp://host\fR,
+\fBdavs://host/path\fR, \fBnfs://host/export\fR), give it on the command line, or use
+\fBConnect to Server\fR (in the menus; \fB\-\-connect\fR opens it at start), which keeps recent
+servers and can bookmark them. A password is asked for when the server wants one, and can be
+remembered for the session or in the keyring. The sidebar lists \fBNetwork\fR (the computers
+and shares found nearby), every connected location with a button to disconnect it, phones and
+cameras to mount, and bookmarks of network locations.
+.PP
+The files are reached through gvfs-fuse (\fI$XDG_RUNTIME_DIR/gvfs\fR), so they can be copied,
+moved, opened and searched like local ones; the location field shows the location rather than
+that folder. Network locations have no trash: deleting asks to delete for good. Thumbnails of
+remote files are off unless the preferences turn them on, and their folders are not watched for
+changes (F5 reloads).
 .SS Finding files
 Ctrl+Shift+F (or F3, or the search button) opens the find bar. It searches the current folder and
 its subfolders by name (a part of the name, or a pattern with \fB*\fR and \fB?\fR), by text inside
@@ -26,12 +50,13 @@ search, then closes the find bar.
 .SS Keys
 Alt+arrows navigate, Ctrl+L edits the location, Ctrl+F filters the current folder, Ctrl+H toggles
 hidden files, F2 renames, Delete moves to the trash, Shift+Delete deletes, F5 reloads,
-Ctrl+comma opens the preferences.
+Ctrl+M shows or hides the menu bar (File, Edit, View, Go, Bookmarks, Help; hidden by default,
+the menu button has the same commands), Ctrl+comma opens the preferences.
 .SH FILES
 .TP
 \fI~/.config/fldesktop/files.ini\fR
 Preferences: default view, date format, single-click opening, trash confirmation, thumbnails,
-columns.
+columns, tabs, the menu bar.
 .TP
 \fI~/.config/fldesktop/files-folders.ini\fR
 Remembered views of individual folders.

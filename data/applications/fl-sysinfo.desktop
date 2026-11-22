@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=System Information
+GenericName=System Information
+Comment=See the computer's processor, memory, graphics, disks, network, devices, batteries and temperatures
+Exec=fl-sysinfo
+Icon=fl-sysinfo
+Categories=System;Monitor;
+Keywords=hardware;cpu;processor;memory;ram;gpu;graphics;disk;pci;usb;battery;temperature;sensors;about;specs;
+StartupWMClass=fl-sysinfo

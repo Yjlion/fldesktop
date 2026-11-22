@@ -76,6 +76,14 @@ if command -v ffmpeg >/dev/null 2>&1 && [ -x "$BUILD/bin/fl-video" ]; then
 else
 	echo "no ffmpeg or fl-video: skipping the video screenshot" >&2
 fi
+# tabs, the menu bar and a selection; then the other settings again (the menu bar is off by default)
+NAME=files-tabs; session "fl-panel & fl-files $HOME/Pictures & sleep 1.5; wtype -M ctrl t -m ctrl; sleep 0.4; \
+	wtype -M ctrl l -m ctrl; wtype '$HOME/Documents'; wtype -k Return; sleep 0.4; wtype -M ctrl t -m ctrl; sleep 0.4; \
+	wtype -M alt 1 -m alt; sleep 0.3; wtype -M ctrl m -m ctrl; sleep 0.3; wtype -M ctrl a -m ctrl" 5.5 x
+rm -f "$HOME/.config/fldesktop/files.ini"
+NAME=files-connect; session "fl-panel & fl-files --connect" 4 x
+# not the overview page: it shows the computer's name
+NAME=sysinfo-devices; session "fl-panel & fl-sysinfo --page devices" 3.5 x
 # the launcher needs a key press (Super+Space) from wtype
 "$BUILD/bin/fl-wm" -s "fl-desktop & fl-panel" >"$LOG" 2>&1 &
 WM=$!

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
 
 #include "fld/menus.h"
 #include "fld/theme.h"
@@ -23,6 +24,11 @@ void relayout();
 void panel_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill);
 // Items most panel menus end with (Panel Settings…)
 void panel_menu_items(fld::Menu &m);
+
+// Sets a panel button's icon: the symbolic icon in the panel's text color
+// (status icons in full color are drawn for light backgrounds), else the full
+// color icon, else `fallback`.
+void panel_icon(fld::FlatButton *b, const std::string &name, const char *fallback = nullptr);
 
 // A flat panel button with a theme icon.
 fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Callback *cb);

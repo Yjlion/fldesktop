@@ -12,7 +12,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard; its look and user list are set in Settings > Login Screen |
 | **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, power, removable drives, network, proxy, firewall, date & time, software updates, login screen |
 | **fl-term** | Terminal emulator (libvterm): tabs (drag to reorder or into a new window, right-click to rename, duplicate, close others), optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
-| **fl-files** | File manager: icon, compact and details views with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, drag and drop (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), and a search for files and folders by name, text, date and size |
+| **fl-files** | File manager: icon, compact and details views with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, tabs, an optional menu bar, drag and drop (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), network shares, phones and cameras through GVfs (SMB, SFTP, FTP, WebDAV, NFS, MTP; Connect to Server, network browsing), and a search for files and folders by name, text, date and size |
 | **fl-edit** | Tabbed text editor (tabs you can drag and right-click) with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
@@ -23,6 +23,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-snip** | Snipping tool: a rectangle, a freeform shape, a window or the whole screen, chosen on a frozen picture of the screen with a magnifier; an editor with pen, highlighter, arrows, shapes, text, pixelate and crop; copy, save, print; quick snips for the Print keys; screen recording to WebM through the ScreenCast portal |
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
+| **fl-sysinfo** | System information: computer and firmware, processor (cores, speeds, caches, mitigations), memory, graphics and outputs, disks and file systems, network interfaces, PCI and USB devices, batteries, temperatures and fans; copy or save it as a report |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
 | **fl-cliphist** | Clipboard history: texts and images, pins, a list in the panel; password managers' copies are not kept |
@@ -58,6 +59,8 @@ Select All, and the lists, tables and pictures of the programs have the commands
 | ![performance](screenshots/taskmgr-performance.png) | ![widget styles](screenshots/styles.png) |
 | ![lock screen](screenshots/lock.png) | ![accent colors](screenshots/appearance.png) |
 | ![login screen settings](screenshots/login-screen.png) | ![proxy](screenshots/proxy.png) |
+| ![file manager tabs and menu bar](screenshots/files-tabs.png) | ![connect to server](screenshots/files-connect.png) |
+| ![system information: devices](screenshots/sysinfo-devices.png) | |
 | ![package files](screenshots/packages-files.png) | ![flatpak runtimes](screenshots/flatpak-runtimes.png) |
 
 ### Icons, cursors and wallpapers

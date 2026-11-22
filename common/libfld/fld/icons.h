@@ -19,6 +19,9 @@ Fl_Image *icon(const std::string &name, int size);
 // Loads "<name>-symbolic" (or name if it already ends so) recolored to
 // `color`, falling back to the full color icon `name`. Cached; never delete.
 Fl_Image *symbolic_icon(const std::string &name, int size, Fl_Color color);
+// Replaces the neutral grays (and currentColor) of a symbolic SVG icon with
+// `hex` ("#rrggbb"); opacities and colored parts are kept.
+std::string recolor_symbolic_svg(const std::string &svg, const std::string &hex);
 // Tries several names in order.
 Fl_Image *icon_first(const std::vector<std::string> &names, int size);
 

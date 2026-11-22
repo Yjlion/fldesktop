@@ -59,6 +59,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-edit (>= ${source:Version}),
          fldesktop-calc (>= ${source:Version}),
          fldesktop-taskmgr (>= ${source:Version}),
+         fldesktop-sysinfo (>= ${source:Version}),
          fldesktop-view (>= ${source:Version}),
          fldesktop-settings (>= ${source:Version}),
          fldesktop-mixer (>= ${source:Version}),
@@ -173,6 +174,15 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: fldesktop calculator
  fl-calc is a basic and scientific calculator with history and memory.
 
+Package: fldesktop-sysinfo
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: hwdata | pci.ids
+Description: fldesktop system information
+ fl-sysinfo shows the computer's processor, memory, graphics, disks,
+ network interfaces, PCI and USB devices, batteries and temperatures,
+ and saves them as a report.
+
 Package: fldesktop-taskmgr
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -236,11 +246,14 @@ Description: fldesktop image viewer
 Package: fldesktop-files
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, shared-mime-info
-Recommends: xdg-utils, udisks2
+Recommends: xdg-utils, udisks2, gvfs, gvfs-fuse
+Suggests: gvfs-backends
 Description: fldesktop file manager
- fl-files is a file manager with icon and list views, thumbnails, the XDG
- trash, background copy and move, drag and drop and "open with". With
- udisks2 it lists drives and mounts, unmounts and ejects them.
+ fl-files is a file manager with tabs, icon and list views, thumbnails, the
+ XDG trash, background copy and move, drag and drop and "open with". With
+ udisks2 it lists drives and mounts, unmounts and ejects them; with gvfs,
+ gvfs-fuse and gvfs-backends it opens network shares (SMB, SFTP, FTP,
+ WebDAV, NFS), phones and cameras.
 
 Package: fldesktop-edit
 Architecture: any

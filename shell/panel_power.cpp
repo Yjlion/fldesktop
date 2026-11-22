@@ -92,7 +92,7 @@ void update() {
   bool vis = st.running && st.has_battery;
   if (vis) {
     const up::Device &d = st.display;
-    g_btn->icon_name(up::icon_for(d.percentage, d.state, st.on_battery).c_str(), 18);
+    panel_icon(g_btn, up::icon_for(d.percentage, d.state, st.on_battery), "battery");
     PowerSettings ps = settings();
     char buf[16];
     snprintf(buf, sizeof buf, "%d%%", (int)std::lround(d.percentage));

@@ -37,6 +37,7 @@ fld_settings_page(power      pages/power.cpp REQUIRES fld-power)
 fld_settings_page(drives     pages/drives.cpp)
 fld_settings_page(datetime   pages/datetime.cpp)
 fld_settings_page(updates    pages/updates.cpp)
+fld_settings_page(users      pages/users.cpp)
 fld_settings_page(login      pages/login.cpp)
 fld_settings_page(about      pages/about.cpp)
 
@@ -64,7 +65,7 @@ configure_file(${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp.in ${CMAKE_CURRENT
 set(DISPLAYS_PROTO)
 fld_wayland_protocol(DISPLAYS_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-management-unstable-v1.xml client)
 
-add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp)
+add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp users_model.cpp)
 target_include_directories(fl-settings-xkb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-settings-xkb PUBLIC fld)
 
@@ -76,8 +77,11 @@ target_compile_definitions(fl-settings PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_F
 install(TARGETS fl-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # the root part of the Login Screen page, run through pkexec
-add_executable(fl-settings-helper helper.cpp)
+add_executable(fl-settings-helper helper.cpp helper_util.cpp)
 target_link_libraries(fl-settings-helper PRIVATE fl-settings-xkb fld)
-install(TARGETS fl-settings-helper RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/fldesktop)
+# the root part of the Users page (useradd, usermod, ...), run through pkexec
+add_executable(fl-users-helper users_helper.cpp helper_util.cpp)
+target_link_libraries(fl-users-helper PRIVATE fl-settings-xkb fld)
+install(TARGETS fl-settings-helper fl-users-helper RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/fldesktop)
 configure_file(org.fldesktop.settings.policy.in ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.settings.policy @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.settings.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)

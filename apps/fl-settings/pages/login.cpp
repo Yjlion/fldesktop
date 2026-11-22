@@ -362,7 +362,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new LoginPage(x, y, w, h);
 }  // namespace
 
 PageInfo page_login() {
-  return {"login", "Login Screen", "system-users", "System",
+  return {"login", "Login Screen", "preferences-desktop-display", "System",
           "login screen greeter greetd fl-greet users background display manager", create};
 }
 

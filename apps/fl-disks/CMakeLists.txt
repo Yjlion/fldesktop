@@ -1,0 +1,20 @@
+# fl-disks: disks and partitions (lsblk to look, parted and mkfs.* through
+# pkexec fl-disks-helper to change)
+add_library(fl-disks-core STATIC disks.cpp)
+target_include_directories(fl-disks-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-disks-core PUBLIC fld)
+
+add_executable(fl-disks main.cpp layout_bar.cpp)
+target_link_libraries(fl-disks PRIVATE fl-disks-core fld)
+if(TARGET fld-udisks)
+  target_link_libraries(fl-disks PRIVATE fld-udisks)
+  target_compile_definitions(fl-disks PRIVATE FLD_HAVE_UDISKS=1)
+endif()
+target_compile_definitions(fl-disks PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}/fldesktop")
+install(TARGETS fl-disks RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_executable(fl-disks-helper helper.cpp)
+target_link_libraries(fl-disks-helper PRIVATE fl-disks-core fld)
+install(TARGETS fl-disks-helper RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/fldesktop)
+configure_file(org.fldesktop.disks.policy.in ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.disks.policy @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.disks.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)

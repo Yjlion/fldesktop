@@ -33,7 +33,7 @@
 using fld::Json;
 
 struct User {
-  std::string name, real_name, home;
+  std::string name, real_name, home, picture;
 };
 
 struct Session {
@@ -77,6 +77,9 @@ static void load_users(int min_uid, const std::vector<std::string> &hidden) {
     std::string gecos = pw->pw_gecos ? pw->pw_gecos : "";
     u.real_name = gecos.substr(0, gecos.find(','));
     u.home = pw->pw_dir ? pw->pw_dir : "";
+    // set in Settings > Users; the greeter cannot read the home folders
+    std::string pic = "/var/lib/AccountsService/icons/" + u.name;
+    if (fld::file_exists(pic) && !fld::is_dir(pic)) u.picture = pic;
     g_users.push_back(u);
   }
   endpwent();
@@ -275,12 +278,30 @@ public:
 class Card : public Fl_Group {
 public:
   Card(int x, int y, int w, int h) : Fl_Group(x, y, w, h) {}
+  std::string pic_path_;
+  std::unique_ptr<Fl_Image> pic_;
   void draw() override {
     fl_color(fl_rgb_color(0x10, 0x16, 0x22));
     fl_rounded_rectf(x(), y(), w(), h(), 14);
     // avatar circle with the user's initial
     std::string u = selected_user();
     int cx = x() + w() / 2, cy = y() + 56;
+    std::string pic;
+    for (auto &usr : g_users)
+      if (usr.name == u) pic = usr.picture;
+    if (pic != pic_path_) {
+      pic_path_ = pic;
+      pic_.reset();
+      if (!pic.empty()) {
+        std::unique_ptr<Fl_Image> full(fld::load_image(pic));
+        if (full && full->w() > 0 && full->h() > 0) pic_.reset(full->copy(72, 72));
+      }
+    }
+    if (pic_) {
+      pic_->draw(cx - 36, cy - 36);
+      draw_children();
+      return;
+    }
     fl_color(fld::palette().accent);
     fl_pie(cx - 36, cy - 36, 72, 72, 0, 360);
     std::string init = u.empty() ? "?" : std::string(1, (char)toupper((unsigned char)u[0]));

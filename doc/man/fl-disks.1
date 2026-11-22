@@ -1,0 +1,56 @@
+.TH FL-DISKS 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-disks \- disk and partition manager
+.SH SYNOPSIS
+\fBfl-disks\fR [\fB\-\-list\fR]
+.SH DESCRIPTION
+Shows the disks, their partition tables and partitions, and changes them:
+new partition tables (GPT or MBR), new partitions, deleting, formatting,
+resizing and moving partitions, partition names and flags, mounting and
+unmounting, backing a whole disk up to an image file and writing an image
+(.img or .iso) to a disk, such as a USB stick.
+.PP
+.B Disks is an advanced tool.
+Creating, deleting, resizing or formatting partitions can erase all the data
+on a drive, and a mistake with the drive the system runs from can leave the
+computer unable to start. Back up first. fl-disks says so when it starts
+(until "Don't show this again" is chosen), and every change that loses data
+asks again and waits for "I understand" to be ticked.
+.PP
+The layout is read with \fBlsblk\fR(8), without administrator rights. The bar
+above the list shows each partition by size, colored by file system, with
+the used part of mounted file systems; click a partition or free space to
+select it. Drive health comes from the SMART data UDisks reads (ATA and
+NVMe); a drive that reports it is failing is shown in red.
+.PP
+Changes are made by \fBfl-disks-helper\fR, run through pkexec (it asks for
+an administrator password), with \fBparted\fR(8) for the partition table and
+\fBmkfs.ext4\fR, \fBmkfs.btrfs\fR, \fBmkfs.xfs\fR, \fBmkfs.fat\fR,
+\fBmkfs.exfat\fR, \fBmkfs.ntfs\fR or \fBmkswap\fR for file systems (the ones
+not installed are greyed out). Partitions are placed on 1 MiB boundaries.
+Nothing that is mounted, used as swap or held by another device (LUKS, LVM,
+RAID) is changed: unmount it first.
+.PP
+Resizing: ext4 (unmounted, with \fBe2fsck\fR and \fBresize2fs\fR) and NTFS
+(\fBntfsresize\fR) grow and shrink, Btrfs grows and shrinks through a
+temporary mount, XFS only grows; FAT, exFAT and swap cannot be resized.
+Shrinking shrinks the file system first, growing grows the partition first.
+Only a partition without a file system can be moved; to move one with files,
+back it up, delete it and create it again where it should be.
+.PP
+Images are read and written by the helper with the rights of the user who
+started fl-disks, so it cannot read or overwrite other people's files.
+.SH OPTIONS
+.TP
+\fB\-\-list\fR
+Prints the disks, partitions and free space and quits.
+.SH ENVIRONMENT
+.TP
+\fBFLD_DISKS_SHOW_LOOP\fR=1
+Also show loop devices (for trying fl-disks on an image file attached with
+\fBlosetup \-P\fR). The helper changes loop devices only when run directly as
+root with \fBFLD_DISKS_ALLOW_LOOP\fR=1, never through pkexec.
+.SH FILES
+\fI~/.config/fldesktop/disks.ini\fR: [General] HideWarning
+.SH SEE ALSO
+\fBparted\fR(8), \fBlsblk\fR(8), \fBudisksctl\fR(1), \fBfl-files\fR(1), \fBfl-settings\fR(1)

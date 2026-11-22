@@ -30,5 +30,33 @@ int main() {
   s.volumes = {v};
   CHECK(s.volume("/a") && s.by_mount_point("/run/media/me/X"));
   CHECK(!s.volume("/b") && !s.by_mount_point(""));
+  {
+    Drive d;
+    CHECK_EQ(health_text(d), std::string(""));
+    d.smart_supported = true;
+    CHECK_EQ(health_text(d), std::string("SMART is turned off"));
+    d.smart_enabled = true;
+    CHECK(d.healthy());
+    CHECK_EQ(health_text(d), std::string("Healthy"));
+    d.temperature_c = 34.4;
+    d.power_on_seconds = 3600 * 10;
+    CHECK_EQ(health_text(d), std::string("Healthy · 34 °C · powered on 10 hours"));
+    d.power_on_seconds = 3600ull * 24 * 400;
+    CHECK_EQ(health_text(d), std::string("Healthy · 34 °C · powered on 1.1 years"));
+    d.bad_sectors = 3;
+    CHECK(!d.healthy());
+    CHECK(health_text(d).find("3 bad sectors") == 0);
+    d.smart_failing = true;
+    CHECK(health_text(d).find("FAILING") == 0);
+    Drive n;
+    n.nvme = n.smart_supported = n.smart_enabled = true;
+    n.nvme_warnings = {"spare", "temperature"};
+    CHECK_EQ(health_text(n), std::string("Warning: spare, temperature. Back up its data."));
+    State st;
+    st.drives.push_back(n);
+    st.drives[0].device = "/dev/nvme0n1";
+    CHECK(st.drive_for_device("/dev/nvme0n1") != nullptr);
+    CHECK(st.drive_for_device("") == nullptr);
+  }
   return test_result("udisks");
 }

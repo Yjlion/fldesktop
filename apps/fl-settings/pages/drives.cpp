@@ -1,6 +1,7 @@
 // Removable Drives: what happens when a drive is plugged in ([Drives] in
 // desktop.ini, used by fl-panel)
 #include <FL/Fl.H>
+#include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
 
 #include "fld/theme.h"
@@ -36,6 +37,14 @@ public:
     f.note("Otherwise a notification offers to open it. Encrypted drives ask for their passphrase in Files.", 2);
     f.space(12);
     f.note("Drives are listed in the sidebar of Files: click one to mount it, the eject button to remove it safely.", 2);
+    if (!which("fl-disks").empty()) {
+      f.heading("Disks and Partitions");
+      f.row("", 30, wx, wy, ww);
+      Fl_Button *disks = new Fl_Button(wx, wy, 160, 30, "Open Disks…");
+      disks->tooltip("Partition, format and resize drives, back them up to images, check their health");
+      disks->callback([](Fl_Widget *, void *) { spawn({"fl-disks"}); });
+      f.note("Disks is an advanced tool: changing partitions can erase the data on a drive.", 1);
+    }
     g->end();
     end();
     update();

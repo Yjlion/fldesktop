@@ -497,6 +497,105 @@ int run_capture(const std::vector<std::string> &argv, std::string &out) {
   return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
+int run_capture_input(const std::vector<std::string> &argv, const std::string &input, std::string &out,
+                      bool merge_stderr) {
+  if (argv.empty()) return -1;
+  int po[2], pi[2];
+  if (pipe(po) < 0) return -1;
+  if (pipe(pi) < 0) {
+    close(po[0]);
+    close(po[1]);
+    return -1;
+  }
+  pid_t pid = fork();
+  if (pid < 0) {
+    close(po[0]); close(po[1]); close(pi[0]); close(pi[1]);
+    return -1;
+  }
+  if (pid == 0) {
+    dup2(pi[0], 0);
+    dup2(po[1], 1);
+    if (merge_stderr) dup2(po[1], 2);
+    else {
+      int devnull = open("/dev/null", O_RDWR);
+      if (devnull >= 0) { dup2(devnull, 2); close(devnull); }
+    }
+    close(po[0]); close(po[1]); close(pi[0]); close(pi[1]);
+    close_fds_from(3);
+    std::vector<char *> args;
+    for (auto &a : argv) args.push_back(const_cast<char *>(a.c_str()));
+    args.push_back(nullptr);
+    execvp(args[0], args.data());
+    _exit(127);
+  }
+  close(po[1]);
+  close(pi[0]);
+  // the input is small (a password line): write it all, then close
+  void (*old)(int) = signal(SIGPIPE, SIG_IGN);
+  size_t off = 0;
+  while (off < input.size()) {
+    ssize_t n = write(pi[1], input.data() + off, input.size() - off);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) break;
+    off += (size_t)n;
+  }
+  close(pi[1]);
+  signal(SIGPIPE, old);
+  out.clear();
+  char buf[4096];
+  ssize_t n;
+  while ((n = read(po[0], buf, sizeof buf)) > 0 || (n < 0 && errno == EINTR))
+    if (n > 0) out.append(buf, n);
+  close(po[0]);
+  int status = 0;
+  while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+int run_lines(const std::vector<std::string> &argv, const std::function<void(const std::string &)> &on_line) {
+  if (argv.empty()) return -1;
+  int p[2];
+  if (pipe(p) < 0) return -1;
+  pid_t pid = fork();
+  if (pid < 0) {
+    close(p[0]);
+    close(p[1]);
+    return -1;
+  }
+  if (pid == 0) {
+    dup2(p[1], 1);
+    close(p[0]);
+    close(p[1]);
+    int devnull = open("/dev/null", O_RDWR);
+    if (devnull >= 0) { dup2(devnull, 0); dup2(devnull, 2); close(devnull); }
+    close_fds_from(3);
+    std::vector<char *> args;
+    for (auto &a : argv) args.push_back(const_cast<char *>(a.c_str()));
+    args.push_back(nullptr);
+    execvp(args[0], args.data());
+    _exit(127);
+  }
+  close(p[1]);
+  std::string pending;
+  char buf[4096];
+  ssize_t n;
+  while ((n = read(p[0], buf, sizeof buf)) > 0 || (n < 0 && errno == EINTR)) {
+    if (n <= 0) continue;
+    pending.append(buf, n);
+    size_t nl;
+    while ((nl = pending.find('\n')) != std::string::npos) {
+      std::string line = pending.substr(0, nl);
+      pending.erase(0, nl + 1);
+      if (on_line) on_line(line);
+    }
+  }
+  if (!pending.empty() && on_line) on_line(pending);
+  close(p[0]);
+  int status = 0;
+  while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
 std::string which(const std::string &prog) {
   if (prog.find('/') != std::string::npos)
     return access(prog.c_str(), X_OK) == 0 ? prog : "";

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Disks
+GenericName=Disk and Partition Manager
+Comment=Create, delete, format and resize partitions; back up a disk to an image or write one to a USB stick
+Exec=fl-disks
+Icon=fl-disks
+Categories=System;Settings;HardwareSettings;
+Keywords=disk;partition;parted;format;mkfs;resize;gpt;mbr;usb;image;iso;smart;health;drive;
+StartupWMClass=fl-disks

@@ -25,6 +25,7 @@
 
 #include "fld/config_watch.h"
 #include "fld/desktop_entry.h"
+#include "fld/drag.h"
 #include "fld/fileops.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -65,7 +66,7 @@ public:
   bool banding = false;
   int bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;
   // drag and drop
-  int press_item = -1, press_x = 0, press_y = 0;
+  int press_item = -1, press_x = 0, press_y = 0, pending_toggle = -1;
   bool dragging = false, dropping = false;
   int drop_item = -1; // folder, Home or Trash under a drag
 
@@ -444,8 +445,10 @@ public:
         press_x = Fl::event_x();
         press_y = Fl::event_y();
         dragging = false;
+        pending_toggle = -1;
         if (i >= 0) {
-          if (ctrl) { if (selected.count(i)) selected.erase(i); else selected.insert(i); }
+          // Ctrl on a selected icon deselects it on release, unless it is dragged
+          if (ctrl) { if (selected.count(i)) pending_toggle = i; else selected.insert(i); }
           else if (!selected.count(i)) { selected.clear(); selected.insert(i); }
           if (Fl::event_clicks()) { Fl::event_clicks(0); open_item(i); }
         } else {
@@ -458,14 +461,30 @@ public:
         return 1;
       }
       case FL_DRAG:
-        if (!banding && press_item >= 0 && !dragging &&
+        if (!banding && press_item >= 0 && !dragging && (Fl::event_state() & FL_BUTTON1) &&
             (std::abs(Fl::event_x() - press_x) > 6 || std::abs(Fl::event_y() - press_y) > 6)) {
+          pending_toggle = -1;
           auto paths = selected_paths();
           if (!paths.empty()) {
             dragging = true;
             std::string text = fld::make_uri_list(paths);
-            Fl::copy(text.c_str(), (int)text.size(), 0);
-            Fl::dnd();
+            // the icons under the pointer while dragging, with their number
+            fld::DragImage img;
+            img.size = ICON;
+            if (press_item < (int)items.size() && items[press_item].icon) img.icons.push_back(items[press_item].icon);
+            for (int k : selected)
+              if (k != press_item && k < (int)items.size() && items[k].icon && img.icons.size() < 3)
+                img.icons.push_back(items[k].icon);
+            img.count = (int)paths.size();
+            auto *self = this;
+            if (!fld::start_drag(window(), text, true, img, [self](fld::DragEnd) {
+                  self->dragging = false;
+                  self->press_item = -1;
+                  self->redraw();
+                })) {
+              Fl::copy(text.c_str(), (int)text.size(), 0);
+              Fl::dnd();
+            }
           }
           return 1;
         }
@@ -483,6 +502,8 @@ public:
         return 1;
       case FL_RELEASE:
         banding = false;
+        if (!dragging && pending_toggle >= 0 && pending_toggle == press_item) selected.erase(pending_toggle);
+        pending_toggle = -1;
         press_item = -1;
         redraw();
         return 1;
@@ -576,6 +597,7 @@ static void config_changed() {
 
 int main(int argc, char **argv) {
   fld::init_app("fldesktop.desktop", argc, argv);
+  fld::drag_setup_later(); // file drags show their icons
   Fl::lock(); // file operations report back with Fl::awake
   // The shell window is borderless and fl-wm knows it by its title; any other
   // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give

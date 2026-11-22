@@ -26,6 +26,7 @@
 #include "fld/ini.h"
 #include "fld/osk.h"
 #include "fld/theme.h"
+#include "fld/session.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "greetd_ipc.h"
@@ -340,8 +341,8 @@ static void tick(void *) {
 static void power(const char *what) {
   const char *q = !strcmp(what, "poweroff") ? "Shut down the computer?" : "Restart the computer?";
   if (fl_choice("%s", "Cancel", !strcmp(what, "poweroff") ? "Shut Down" : "Restart", nullptr, q) != 1) return;
-  if (g_demo) { set_message(std::string("Demo: would run systemctl ") + what, false); return; }
-  fld::spawn({"systemctl", what});
+  if (g_demo) { set_message(std::string("Demo: would ") + (!strcmp(what, "poweroff") ? "shut down" : "restart"), false); return; }
+  fld::run_power(what);
 }
 
 static void style_input(Fl_Widget *w) {

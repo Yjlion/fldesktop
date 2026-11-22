@@ -8,6 +8,9 @@
 
 namespace fld {
 
+// fl-settings-helper (next to fl-settings in a build tree, else in libexec)
+std::string settings_helper_path();
+
 // Lays out "label: widget" rows top to bottom.
 class Form {
 public:

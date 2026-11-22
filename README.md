@@ -11,8 +11,8 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder, with drag and drop and icon zoom |
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard; its look and user list are set in Settings > Login Screen |
 | **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, power, removable drives, network, proxy, firewall, date & time, software updates, users (add, remove and change accounts: account type, password, picture, groups, automatic login), login screen |
-| **fl-term** | Terminal emulator (libvterm): tabs (drag to reorder or into a new window, right-click to rename, duplicate, close others), optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
-| **fl-files** | File manager: icon, compact and details views with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, tabs, an optional menu bar, drag and drop (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), network shares, phones and cameras through GVfs (SMB, SFTP, FTP, WebDAV, NFS, MTP; Connect to Server, network browsing), and a search for files and folders by name, text, date and size |
+| **fl-term** | Terminal emulator (libvterm): tabs (drag to reorder, out into a new window or onto another fl-term window, right-click to rename, duplicate, close others), optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
+| **fl-files** | File manager: icon, compact and details views with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, tabs (drag them out into a new window or onto another Files window, history included), an optional menu bar, drag and drop with the dragged icons and their number under the pointer, folders that open when you hover them and scrolling at the edges (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), network shares, phones and cameras through GVfs (SMB, SFTP, FTP, WebDAV, NFS, MTP; Connect to Server, network browsing), and a search for files and folders by name, text, date and size |
 | **fl-edit** | Tabbed text editor (tabs you can drag and right-click) with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
 | **fl-calc** | Basic and scientific calculator with history and memory |
 | **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
@@ -197,7 +197,13 @@ adds packages to it (needs the `FLD_REPO_GPG_KEY` secret in CI).
   sudo cp /etc/greetd/config.toml /etc/greetd/config.toml.orig
   sudo cp /usr/share/fldesktop/config.toml /etc/greetd/config.toml
   sudo systemctl enable greetd && sudo systemctl restart greetd
+  # OpenRC (Alpine, Devuan with OpenRC): sudo rc-update add greetd default && sudo rc-service greetd restart
+  # sysvinit (Devuan): sudo update-rc.d greetd defaults && sudo service greetd restart
   ```
+
+  Without systemd, install elogind (it gives the session its seat, its
+  `XDG_RUNTIME_DIR` and the logind API that power actions and lock-on-suspend
+  use); fl-autostart starts PipeWire when nothing else does.
 
   The shipped file has the right greeter user and VT for the distribution
   (Arch: `greeter`, VT 1; Debian: `_greetd`, VT 7); elsewhere set

@@ -2,6 +2,9 @@
 // launcher's power buttons.
 #pragma once
 
+#include <string>
+#include <vector>
+
 namespace fld {
 
 enum class PowerAction { Lock, LogOut, Suspend, Reboot, PowerOff };
@@ -12,6 +15,12 @@ void log_out();      // ends fl-wm ($FLWM_PID), else exits this program
 void suspend();
 void reboot();
 void power_off();
+
+// "suspend", "hibernate", "reboot" or "poweroff" through loginctl (systemd-logind
+// or elogind), else systemctl; shows an error and returns false without either
+bool run_power(const std::string &action);
+// the command run_power() runs (empty: none available)
+std::vector<std::string> power_command(const std::string &action, bool have_loginctl, bool have_systemctl);
 
 // Asks first for log out, restart and shut down (Lock and Suspend just run);
 // returns true when the action was started.

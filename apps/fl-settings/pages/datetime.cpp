@@ -1,4 +1,6 @@
-// Date & Time: time zone and network time through timedatectl (polkit asks for permission)
+// Date & Time: time zone and network time through timedatectl (polkit asks for
+// permission); without systemd-timedated (Alpine, Devuan) through
+// fl-settings-helper run with pkexec
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -10,6 +12,7 @@
 #include <functional>
 #include <thread>
 
+#include "datetime_sys.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -35,6 +38,7 @@ void run_async(std::vector<std::string> argv, std::function<void(int, const std:
 
 class DateTimePage : public Fl_Group {
 public:
+  bool timedated = !which("timedatectl").empty();
   Fl_Box *now, *zone_label;
   Fl_Check_Button *ntp;
   Fl_Input *filter, *manual;
@@ -82,7 +86,7 @@ public:
     g->end();
     end();
     std::string out;
-    run_capture({"timedatectl", "list-timezones"}, out);
+    if (timedated) run_capture({"timedatectl", "list-timezones"}, out);
     all_zones = split(out, '\n');
     if (all_zones.empty()) {
       // no systemd: list /usr/share/zoneinfo regions
@@ -110,12 +114,19 @@ public:
 
   void update() {
     update_clock();
-    std::string out;
-    run_capture({"timedatectl", "show", "-p", "Timezone", "-p", "NTP", "--value"}, out);
-    auto lines = split(out, '\n');
-    zone_s = lines.size() > 0 ? lines[0] : getenv_or("TZ", "unknown");
+    bool on;
+    if (timedated) {
+      std::string out;
+      run_capture({"timedatectl", "show", "-p", "Timezone", "-p", "NTP", "--value"}, out);
+      auto lines = split(out, '\n');
+      zone_s = lines.size() > 0 ? lines[0] : getenv_or("TZ", "unknown");
+      on = lines.size() > 1 && lines[1] == "yes";
+    } else {
+      zone_s = dtsys::current_zone();
+      if (zone_s.empty()) zone_s = getenv_or("TZ", "unknown");
+      on = dtsys::ntp_running();
+    }
     zone_label->label(zone_s.c_str());
-    bool on = lines.size() > 1 && lines[1] == "yes";
     ntp->value(on);
     if (on) { manual->deactivate(); set_manual->deactivate(); }
     else { manual->activate(); set_manual->activate(); }
@@ -141,17 +152,31 @@ public:
     update();
   }
 
+  // timedatectl, else the same change through the root helper
+  void change(const char *what, std::vector<std::string> timedatectl, std::vector<std::string> helper) {
+    std::vector<std::string> cmd;
+    if (timedated) cmd = timedatectl;
+    else if (which("pkexec").empty()) {
+      fl_alert("%s needs timedatectl (systemd) or pkexec (polkit).", what);
+      update();
+      return;
+    } else {
+      cmd = {"pkexec", settings_helper_path()};
+      cmd.insert(cmd.end(), helper.begin(), helper.end());
+    }
+    std::string w = what;
+    run_async(cmd, [this, w](int c, const std::string &o) { result(w.c_str(), c, o); });
+  }
+
   void set_ntp() {
-    run_async({"timedatectl", "set-ntp", ntp->value() ? "true" : "false"},
-              [this](int c, const std::string &o) { result("Changing network time", c, o); });
+    bool on = ntp->value();
+    change("Changing network time", {"timedatectl", "set-ntp", on ? "true" : "false"}, {"ntp", on ? "on" : "off"});
   }
   void set_time() {
-    run_async({"timedatectl", "set-time", manual->value()},
-              [this](int c, const std::string &o) { result("Setting the time", c, o); });
+    change("Setting the time", {"timedatectl", "set-time", manual->value()}, {"set-time", manual->value()});
   }
   void set_zone(const std::string &z) {
-    run_async({"timedatectl", "set-timezone", z},
-              [this](int c, const std::string &o) { result("Changing the time zone", c, o); });
+    change("Changing the time zone", {"timedatectl", "set-timezone", z}, {"timezone", z});
   }
 };
 

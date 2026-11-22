@@ -6,6 +6,8 @@
            a page break, a table and "Second page FLDESKTOP"   -> 2 pages
  test.epub EPUB 3: title "fl-docs epub test", two spine documents (each
            starts a page), "FLDESKTOP" in both                -> 2 pages
+ big.epub  one long chapter, "FLDESKTOP" in its first and last paragraphs
+           -> several hundred pages (laid out while shown)
  test.cbz  three PNGs named 1, 2 and 10 (natural order), sizes 300x400,
            320x400 and 340x400, inside a folder, plus a __MACOSX file
  nobook.zip a zip of text files (not a document)
@@ -108,6 +110,31 @@ def epub(path):
         z.writestr("OEBPS/images/dot.png", png(40, 30, (200, 30, 30)))
 
 
+def big_epub(path):
+    container = '''<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+ <rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>'''
+    opf = '''<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+ <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>fl-docs big book</dc:title>
+  <dc:identifier id="id">big</dc:identifier></metadata>
+ <manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/></manifest>
+ <spine><itemref idref="c"/></spine>
+</package>'''
+    text = "All work and no play makes a dull book, line after line. " * 12
+    paras = ["<p>%d %s</p>" % (i, text) for i in range(3000)]
+    paras[0] = "<p>FLDESKTOP first</p>"
+    paras[-1] = "<p>FLDESKTOP last</p>"
+    ch = ('<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+          + "".join(paras) + "</body></html>")
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        stored_first(z, "mimetype", "application/epub+zip")
+        z.writestr("META-INF/container.xml", container)
+        z.writestr("content.opf", opf)
+        z.writestr("c.xhtml", ch)
+
+
 def cbz(path):
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("__MACOSX/comic/._1.png", b"junk")
@@ -122,6 +149,7 @@ def main():
     os.makedirs(out, exist_ok=True)
     odt(os.path.join(out, "test.odt"))
     epub(os.path.join(out, "test.epub"))
+    big_epub(os.path.join(out, "big.epub"))
     cbz(os.path.join(out, "test.cbz"))
     with zipfile.ZipFile(os.path.join(out, "nobook.zip"), "w") as z:
         z.writestr("a.txt", "a")

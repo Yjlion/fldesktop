@@ -598,8 +598,8 @@ std::unique_ptr<Backend> open_odt(const std::string &path, std::string &err) {
     e.markup = " ";
     odt.blocks.push_back(e);
   }
-  b->doc.layout(odt.blocks, odt.page);
-  b->sizes_ = b->doc.sizes();
+  b->doc.begin(std::move(odt.blocks), odt.page);
+  b->layout_step(0.1);
   return b;
 }
 

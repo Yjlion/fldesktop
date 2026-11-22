@@ -43,6 +43,13 @@ public:
   Document();
   ~Document();
   void layout(const std::vector<Block> &blocks, const PageStyle &style);
+  // The same a step at a time, for a long book: begin() takes the blocks,
+  // step() lays out more of them for about `seconds` and returns true once
+  // all are. Until then the pages so far are there to show; the last of them
+  // may still grow.
+  void begin(std::vector<Block> blocks, const PageStyle &style);
+  bool step(double seconds);
+  bool done() const;
   std::vector<PageSize> sizes() const;
   bool render(size_t page, double scale, Bitmap &out);
   std::vector<Hit> find(const std::string &text) const;
@@ -53,13 +60,24 @@ private:
   std::unique_ptr<Impl> d;
 };
 
-// a Backend over a laid out Document
+// a Backend over a Document, laid out a step at a time
 class FlowBackend : public Backend {
 public:
   Document doc;
   bool render(size_t page, double scale, Bitmap &out) override { return doc.render(page, scale, out); }
-  std::vector<Hit> find(const std::string &text) override { return doc.find(text); }
+  bool layout_step(double seconds) override {
+    bool all = doc.step(seconds);
+    sizes_ = doc.sizes();
+    return all;
+  }
+  bool laid_out() const override { return doc.done(); }
+  // searching and printing need all the pages
+  std::vector<Hit> find(const std::string &text) override {
+    finish_layout();
+    return doc.find(text);
+  }
   bool print_pdf(std::string &path, bool &temporary, std::string &err) override {
+    finish_layout();
     path = temp_pdf_path();
     temporary = true;
     return doc.write_pdf(path, title_, err);

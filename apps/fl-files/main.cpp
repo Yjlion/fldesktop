@@ -2438,7 +2438,7 @@ static void update_status() {
     s += "    " + std::to_string(g_clip.paths.size()) + (g_clip.cut ? " cut" : " copied");
   if (!in_trash()) {
     struct statvfs vf;
-    if (statvfs(g_cwd.c_str(), &vf) == 0)
+    if (statvfs(g_cwd.c_str(), &vf) == 0 && vf.f_blocks) // FTP and some shares have no sizes
       s += "    Free: " + fld::human_size((unsigned long long)vf.f_bavail * vf.f_frsize);
   }
   g_status->copy_label(fld::escape_at(s).c_str());
@@ -2965,7 +2965,7 @@ static void update_tabbar() {
 }
 
 static void new_tab(const std::string &path, bool activate) {
-  if (path != TRASH_URI && !fld::is_dir(path)) return;
+  if (path != TRASH_URI && path != NETWORK_URI && !fld::is_dir(path)) return;
   auto t = std::make_unique<Tab>();
   Fl_Group::current(nullptr);
   t->view = new FileView(g_views->x(), g_views->y(), g_views->w(), g_views->h());
@@ -3617,6 +3617,7 @@ int main(int argc, char **argv) {
   fill_places();
   update_view_button();
   new_tab(start);
+  if (g_tabs.empty()) new_tab(fld::home_dir()); // the folder could not be opened
   if (S.show_tree) show_tree(true);
   g_win->show(); // not show(argc, argv): it resets the theme colors
   g_view->take_focus();

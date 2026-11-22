@@ -160,6 +160,9 @@ void on_ask_password(GMountOperation *op, const char *message, const char *user,
   q.need_password = flags & G_ASK_PASSWORD_NEED_PASSWORD;
   q.anonymous_ok = flags & G_ASK_PASSWORD_ANONYMOUS_SUPPORTED;
   q.can_save = flags & G_ASK_PASSWORD_SAVING_SUPPORTED;
+  // GMountOperation's own handler (it runs last) would answer "unhandled"
+  // right away; the answer comes from the dialog instead
+  g_signal_stop_emission_by_name(op, "ask-password");
   g_object_ref(op);
   fld::ui_call([op, q] {
     PasswordReply r;
@@ -171,7 +174,8 @@ void on_ask_password(GMountOperation *op, const char *message, const char *user,
   });
 }
 
-void ask(GMountOperation *op, const char *message, const char *const *choices) {
+void ask(GMountOperation *op, const char *signal, const char *message, const char *const *choices) {
+  g_signal_stop_emission_by_name(op, signal); // see on_ask_password
   std::vector<std::string> ch;
   for (int i = 0; choices && choices[i]; i++) ch.push_back(choices[i]);
   std::string msg = message ? message : "";
@@ -194,13 +198,13 @@ GMountOperation *new_operation() {
   g_signal_connect(op, "ask-password", G_CALLBACK(on_ask_password), nullptr);
   g_signal_connect(op, "ask-question",
                    G_CALLBACK(+[](GMountOperation *op, const char *msg, const char **choices, gpointer) {
-                     ask(op, msg, choices);
+                     ask(op, "ask-question", msg, choices);
                    }),
                    nullptr);
   // a busy mount: which programs use it, unmount anyway?
   g_signal_connect(op, "show-processes",
                    G_CALLBACK(+[](GMountOperation *op, const char *msg, GArray *, const char **choices, gpointer) {
-                     ask(op, msg, choices);
+                     ask(op, "show-processes", msg, choices);
                    }),
                    nullptr);
   return op;

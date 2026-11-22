@@ -312,6 +312,8 @@ public:
   int press_item = -1;
   bool dragging_files = false;
   int drop_item = -1;         // folder highlighted as the drop target
+  int hover_item = -1;        // item under the pointer
+  std::map<Fl_Image *, Fl_Image *> ghosts; // faded icons of the items being dragged
   bool dropping = false;      // the next FL_PASTE is a drop
   int press_x = 0, press_y = 0;
   int resizing_col = -1, resize_x0 = 0, resize_w0 = 0;
@@ -330,7 +332,31 @@ public:
     end();
     box(FL_FLAT_BOX);
   }
-  ~FileView() override { clear_thumbs(); }
+  ~FileView() override { clear_thumbs(); clear_ghosts(); }
+
+  void clear_ghosts() {
+    for (auto &g : ghosts) delete g.second;
+    ghosts.clear();
+  }
+  // a faded copy of an icon, for the items being dragged
+  Fl_Image *ghost(Fl_Image *ic) {
+    auto it = ghosts.find(ic);
+    if (it != ghosts.end()) return it->second;
+    Fl_Image *g = ic->copy();
+    if (g) {
+      g->color_average(fld::palette().bg2, 0.4f);
+      g->scale(ic->w(), ic->h(), 0, 1);
+    }
+    return ghosts[ic] = g;
+  }
+  // the drag of files from this view ended (dropped anywhere or cancelled)
+  void end_drag() {
+    if (!dragging_files) return;
+    dragging_files = false;
+    clear_ghosts();
+    redraw();
+    update_status();
+  }
 
   void clear_thumbs() {
     for (auto &e : all) { delete e.thumb; e.thumb = nullptr; e.thumb_tried = false; }
@@ -716,6 +742,10 @@ public:
     fl_rectf(x(), y(), w(), h());
     if (details()) draw_header();
     fl_push_clip(x(), view_top(), content_w(), view_h());
+    if (banding) { // the rubber band's fill goes under the items, its border over them
+      fl_color(fl_color_average(p.accent, p.bg2, 0.15f));
+      fl_rectf(std::min(bx0, bx1), std::min(by0, by1) - top, std::abs(bx1 - bx0), std::abs(by1 - by0));
+    }
     bool focused = Fl::focus() == this;
     bool any_missing_thumb = false;
     if (items.empty()) {
@@ -733,20 +763,46 @@ public:
       item_rect(i, ix, iy, iw, ih);
       if (iy > y() + h()) break;
       Entry &e = entry(i);
-      bool s = sel.count(i) > 0 || i == drop_item;
+      bool drop = i == drop_item;
+      bool s = sel.count(i) > 0 && !drop;
+      bool hov = i == hover_item && !s && !drop && !banding;
+      bool ghosted = dragging_files && sel.count(i) > 0; // being dragged
       bool cut = g_clip.cut && std::find(g_clip.paths.begin(), g_clip.paths.end(), e.path) != g_clip.paths.end();
+      Fl_Color sel_bg = focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.55f);
+      Fl_Color hover_bg = fl_color_average(p.selection, p.bg2, 0.12f);
+      Fl_Color drop_bg = fl_color_average(p.accent, p.bg2, 0.22f);
+      // the drop target: a light accent fill with an accent border
+      auto drop_frame = [&](int fx, int fy, int fw, int fh, int r) {
+        fl_color(drop_bg);
+        fl_rounded_rectf(fx, fy, fw, fh, r);
+        fl_color(p.accent);
+        fl_line_style(FL_SOLID, 2);
+        fl_rounded_rect(fx + 1, fy + 1, fw - 2, fh - 2, r);
+        fl_line_style(0);
+      };
+      auto draw_icon = [&](Fl_Image *ic, int dx, int dy) {
+        if (ghosted) ic = ghost(ic);
+        if (ic) ic->draw(dx, dy);
+      };
+      // a folder that takes the drop shows open
+      Fl_Image *open_icon = nullptr;
+      if (drop) open_icon = fld::icon_first({"folder-drag-accept", "folder-open"}, V.view == VIEW_ICONS ? B : SM);
       if (V.view == VIEW_DETAILS) {
-        if (s) {
-          fl_color(focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.4f));
+        if (drop) drop_frame(ix, iy, iw, ih, 3);
+        else if (s) {
+          fl_color(sel_bg);
+          fl_rectf(ix, iy, iw, ih);
+        } else if (hov) {
+          fl_color(hover_bg);
           fl_rectf(ix, iy, iw, ih);
         } else if (i % 2) {
           fl_color(fl_color_average(p.bg2, p.bg, 0.6f));
           fl_rectf(ix, iy, iw, ih);
         }
         Fl_Color fg = s ? p.accent_fg : p.fg;
-        if (Fl_Image *ic = icon_for(e, false)) ic->draw(ix + 8, iy + (ih - SM) / 2);
+        if (Fl_Image *ic = open_icon ? open_icon : icon_for(e, false)) draw_icon(ic, ix + 8, iy + (ih - SM) / 2);
         fl_font(FL_HELVETICA, 13);
-        fl_color(cut ? p.fg_dim : fg);
+        fl_color(cut || ghosted ? (s ? fl_color_average(fg, sel_bg, 0.6f) : p.fg_dim) : fg);
         int cx = ix + 8;
         int nw = name_col_w();
         fl_draw(fld::escape_at(e.name).c_str(), cx + SM + 8, iy, nw - SM - 16, ih, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
@@ -762,24 +818,33 @@ public:
           cx += cw;
         }
       } else if (V.view == VIEW_COMPACT) {
-        if (s) {
-          fl_color(focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.4f));
+        if (drop) drop_frame(ix, iy, iw - 6, ih, 4);
+        else if (s || hov) {
+          fl_color(s ? sel_bg : hover_bg);
           fl_rounded_rectf(ix, iy, iw - 6, ih, 4);
         }
-        if (Fl_Image *ic = icon_for(e, false)) ic->draw(ix + 4, iy + (ih - SM) / 2);
+        if (Fl_Image *ic = open_icon ? open_icon : icon_for(e, false)) draw_icon(ic, ix + 4, iy + (ih - SM) / 2);
         fl_font(FL_HELVETICA, 13);
-        fl_color(s ? p.accent_fg : cut ? p.fg_dim : p.fg);
+        fl_color(s ? (ghosted ? fl_color_average(p.accent_fg, sel_bg, 0.6f) : p.accent_fg) : cut || ghosted ? p.fg_dim : p.fg);
         fl_draw(fld::escape_at(e.name).c_str(), ix + SM + 10, iy, iw - SM - 20, ih, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
       } else {
-        if (s) {
-          fl_color(focused ? fl_color_average(p.selection, p.bg2, 0.35f) : fl_color_average(p.selection, p.bg2, 0.18f));
+        // icons: the cell gets a light tint and an accent border, the name
+        // a solid selection pill
+        if (drop) drop_frame(ix + 4, iy, iw - 8, ih - 4, 8);
+        else if (s) {
+          fl_color(focused ? fl_color_average(p.selection, p.bg2, 0.28f) : fl_color_average(p.selection, p.bg2, 0.16f));
+          fl_rounded_rectf(ix + 4, iy, iw - 8, ih - 4, 8);
+          fl_color(focused ? p.selection : fl_color_average(p.selection, p.bg2, 0.5f));
+          fl_rounded_rect(ix + 4, iy, iw - 8, ih - 4, 8);
+        } else if (hov) {
+          fl_color(hover_bg);
           fl_rounded_rectf(ix + 4, iy, iw - 8, ih - 4, 8);
         }
-        Fl_Image *ic = e.thumb ? e.thumb : icon_for(e, true);
+        Fl_Image *ic = open_icon ? open_icon : e.thumb ? e.thumb : icon_for(e, true);
         if (!e.thumb_tried && S.thumbnails && !e.is_dir) any_missing_thumb = true;
         if (ic) {
           int icx = ix + (iw - ic->w()) / 2, icy = iy + 4 + (B - ic->h()) / 2;
-          ic->draw(icx, icy);
+          draw_icon(ic, icx, icy);
           if (e.thumb) {
             fl_color(p.border);
             fl_rect(icx - 1, icy - 1, ic->w() + 2, ic->h() + 2);
@@ -789,9 +854,16 @@ public:
           if (Fl_Image *em = fld::icon("emblem-symbolic-link", 16)) em->draw(ix + iw / 2 + B / 4, iy + B - 12);
         }
         fl_font(FL_HELVETICA, 12);
-        fl_color(cut ? p.fg_dim : p.fg);
-        auto lines = wrap_name(e.name, iw - 12, s ? 3 : 2);
+        auto lines = wrap_name(e.name, iw - 16, s ? 3 : 2);
         int ly = iy + B + 8;
+        if (s && !lines.empty()) {
+          int pw = 0;
+          for (auto &l : lines) pw = std::max(pw, (int)fl_width(l.c_str()));
+          fl_color(sel_bg);
+          fl_rounded_rectf(ix + (iw - pw) / 2 - 4, ly - 1, pw + 8, (int)lines.size() * 15 + 4, 4);
+        }
+        fl_color(s ? (ghosted ? fl_color_average(p.accent_fg, sel_bg, 0.6f) : p.accent_fg)
+                   : cut || ghosted ? p.fg_dim : p.fg);
         for (auto &l : lines) {
           int lw = (int)fl_width(l.c_str());
           fl_draw(l.c_str(), (int)l.size(), ix + (iw - lw) / 2, ly + 12);
@@ -806,8 +878,9 @@ public:
       }
     }
     if (banding) {
+      int rx = std::min(bx0, bx1), ry = std::min(by0, by1) - top, rw = std::abs(bx1 - bx0), rh = std::abs(by1 - by0);
       fl_color(p.accent);
-      fl_rect(std::min(bx0, bx1), std::min(by0, by1) - top, std::abs(bx1 - bx0), std::abs(by1 - by0));
+      fl_rect(rx, ry, rw, rh);
     }
     fl_pop_clip();
     if (sb->visible()) draw_child(*sb);
@@ -1294,7 +1367,8 @@ int FileView::handle(int e) {
       press_item = i;
       press_x = ex;
       press_y = ey;
-      dragging_files = false;
+      end_drag();
+      if (hover_item != -1) hover_item = -1;
       if (i >= 0) {
         if (st & FL_CTRL) {
           if (sel.count(i)) sel.erase(i); else sel.insert(i);
@@ -1348,13 +1422,14 @@ int FileView::handle(int e) {
       }
       if (press_item >= 0 && !dragging_files && !in_trash() &&
           (std::abs(ex - press_x) > 6 || std::abs(ey - press_y) > 6)) {
-        // start a drag with file URIs
+        // start a drag with file URIs; the dragged items fade until it ends
         dragging_files = true;
+        drop_item = hover_item = -1;
+        redraw();
+        update_status();
         std::string text = fld::make_uri_list(selected_paths());
         Fl::copy(text.c_str(), (int)text.size(), 0);
         Fl::dnd();
-        drop_item = -1;
-        redraw();
       }
       return 1;
     }
@@ -1377,14 +1452,23 @@ int FileView::handle(int e) {
         open_entry(entry(i));
       }
       return 1;
-    case FL_MOVE:
+    case FL_ENTER:
+      end_drag(); // pointer events come back once a drag is over
+      return 1;
+    case FL_MOVE: {
+      // the pointer is not grabbed while files are dragged: a drag is over
+      end_drag();
+      int hi = item_at(Fl::event_x(), Fl::event_y());
+      if (hi != hover_item) { hover_item = hi; redraw(); }
       if (details() && Fl::event_y() < y() + HEADER_H) {
         bool border;
         int c = header_hit(Fl::event_x(), border);
         window()->cursor(border && c >= 0 ? FL_CURSOR_WE : FL_CURSOR_DEFAULT);
       } else window()->cursor(FL_CURSOR_DEFAULT);
       return 1;
+    }
     case FL_LEAVE:
+      if (hover_item != -1) { hover_item = -1; redraw(); }
       if (window()) window()->cursor(FL_CURSOR_DEFAULT);
       return 1;
     case FL_DND_ENTER: case FL_DND_DRAG: {
@@ -1412,13 +1496,13 @@ int FileView::handle(int e) {
       if (drop_item != -1) { drop_item = -1; redraw(); }
       if (in_trash()) return 1;
       auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
-      if (paths.empty()) { dragging_files = false; return 1; }
+      if (paths.empty()) { end_drag(); return 1; }
       std::string dest = g_cwd;
       if (drop && target >= 0 && target < (int)items.size() && entry(target).is_dir) dest = entry(target).path;
-      else if (in_search()) { dragging_files = false; return 1; }
+      else if (in_search()) { end_drag(); return 1; }
       fld::DropAction a = drop ? fld::drop_action(paths, dest, Fl::event_state())
                                : fld::drop_action(paths, dest, FL_CTRL); // a paste copies
-      dragging_files = false;
+      end_drag();
       if (!drop && a == fld::DROP_NONE) return 1;
       fld::run_drop(a, paths, dest, [](FileOp *) { refresh(); });
       return 1;
@@ -1706,7 +1790,7 @@ public:
         dropping = false;
         int line = line_at(Fl::event_y());
         value(saved_line);
-        g_view->dragging_files = false;
+        g_view->end_drag();
         auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
         if (paths.empty()) return 1;
         if (line <= 0) {
@@ -1798,7 +1882,7 @@ public:
         dropping = false;
         clear_hover();
         Fl_Tree_Item *it = item_at();
-        g_view->dragging_files = false;
+        g_view->end_drag();
         auto f = it ? g_tree_paths.find(it) : g_tree_paths.end();
         if (f == g_tree_paths.end()) return 1;
         auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
@@ -1998,6 +2082,13 @@ static void refresh() {
 
 static void update_status() {
   if (!g_status) return;
+  if (g_view->dragging_files) {
+    size_t n = g_view->sel.size();
+    std::string s = "Dragging " + std::to_string(n) + (n == 1 ? " item" : " items") +
+                    " — drop onto a folder to move or copy it there (Ctrl copies, Shift moves)";
+    g_status->copy_label(fld::escape_at(s).c_str());
+    return;
+  }
   std::string s = std::to_string(g_view->items.size()) + " item" + (g_view->items.size() == 1 ? "" : "s");
   if (in_search()) {
     size_t n = g_view->items.size();

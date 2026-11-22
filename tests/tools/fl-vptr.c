@@ -3,7 +3,7 @@
  *
  *   fl-vptr [-s WxH] click X Y [button]   move to X,Y (layout coordinates) and click
  *   fl-vptr [-s WxH] move X Y
- *   fl-vptr [-s WxH] drag X1 Y1 X2 Y2
+ *   fl-vptr [-s WxH] drag X1 Y1 X2 Y2 [MS]   (MS: hold the button at X2,Y2 that long)
  *   fl-vptr scroll DY
  * The screen size defaults to 1280x720 (the headless output). */
 #include <linux/input-event-codes.h>
@@ -52,7 +52,7 @@ static void button(int b, int pressed) {
 }
 
 static int usage(void) {
-	fprintf(stderr, "usage: fl-vptr [-s WxH] click X Y [left|right|middle] | hold X Y MS | move X Y | drag X1 Y1 X2 Y2 | scroll DY\n");
+	fprintf(stderr, "usage: fl-vptr [-s WxH] click X Y [left|right|middle] | hold X Y MS | move X Y | drag X1 Y1 X2 Y2 [MS] | scroll DY\n");
 	return 2;
 }
 
@@ -97,6 +97,7 @@ int main(int argc, char **argv) {
 			move_to(x1 + (x2 - x1) * s / 10, y1 + (y2 - y1) * s / 10);
 			usleep(15000);
 		}
+		if (i + 4 < argc) usleep(atoi(argv[i + 4]) * 1000);
 		button(BTN_LEFT, 0);
 	} else if (!strcmp(cmd, "scroll") && i < argc) {
 		zwlr_virtual_pointer_v1_axis(ptr, now_ms(), WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(atoi(argv[i]) * 15));

@@ -33,6 +33,7 @@
 #include "fld/theme.h"
 #include "fld/trash.h"
 #include "fld/util.h"
+#include "panel.h" // PANEL_H
 
 struct Item {
   std::string path, name, icon_name;
@@ -60,6 +61,7 @@ public:
   std::string wallpaper, mode = "fill";
   Fl_Color bg_color = fl_rgb_color(0x2d, 0x3a, 0x4f);
   bool show_icons = true;
+  bool panel_top = false; // fl-panel is at the top edge (wm.ini behaviour/panel_position)
   std::unique_ptr<Fl_Image> wp_src, wp_scaled;
   int wp_w = 0, wp_h = 0;
   // rubber band
@@ -108,6 +110,11 @@ public:
       bg_color = fl_rgb_color((v >> 16) & 255, (v >> 8) & 255, v & 255);
     }
     show_icons = cfg.get_bool("Desktop", "ShowIcons", true);
+    {
+      fld::Ini wm;
+      wm.load(fld::wm_config_path());
+      panel_top = fld::lower(wm.get("behaviour", "panel_position", "bottom")) == "top";
+    }
     int size = cfg.get_int("Desktop", "IconSize", kDefaultIcon);
     int best = kDefaultIcon;
     for (int s : kIconSizes) if (std::abs(s - size) < std::abs(best - size)) best = s;
@@ -167,11 +174,13 @@ public:
   }
 
   void layout_items() {
+    // fl-desktop covers the whole output; keep the icons off the panel's edge
+    int top = panel_top ? PANEL_H : 0, bottom = panel_top ? 0 : PANEL_H;
     int col = 0, row = 0;
-    int rows = std::max(1, (h() - 16) / CELL_H);
+    int rows = std::max(1, (h() - top - bottom - 16) / CELL_H);
     for (auto &it : items) {
       it.x = x() + 8 + col * CELL_W;
-      it.y = y() + 8 + row * CELL_H;
+      it.y = y() + top + 8 + row * CELL_H;
       if (++row >= rows) { row = 0; col++; }
     }
   }
@@ -623,6 +632,7 @@ int main(int argc, char **argv) {
     Fl::add_fd(g_inotify, FL_READ, inotify_cb);
   }
   static fld::ConfigWatcher config_watch(fld::desktop_config_path(), config_changed);
+  static fld::ConfigWatcher wm_watch(fld::wm_config_path(), config_changed); // panel position
   win->size(Fl::w(), Fl::h());
   Fl::add_handler([](int e) -> int {
     if (e == FL_SCREEN_CONFIGURATION_CHANGED && g_view->window()) g_view->window()->size(Fl::w(), Fl::h());

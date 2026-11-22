@@ -60,7 +60,7 @@ Select All, and the lists, tables and pictures of the programs have the commands
 | ![lock screen](screenshots/lock.png) | ![accent colors](screenshots/appearance.png) |
 | ![login screen settings](screenshots/login-screen.png) | ![proxy](screenshots/proxy.png) |
 | ![file manager tabs and menu bar](screenshots/files-tabs.png) | ![connect to server](screenshots/files-connect.png) |
-| ![system information](screenshots/sysinfo.png) | ![system information: devices](screenshots/sysinfo-devices.png) |
+| ![system information: devices](screenshots/sysinfo-devices.png) | |
 | ![package files](screenshots/packages-files.png) | ![flatpak runtimes](screenshots/flatpak-runtimes.png) |
 
 ### Icons, cursors and wallpapers

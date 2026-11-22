@@ -82,7 +82,7 @@ NAME=files-tabs; session "fl-panel & fl-files $HOME/Pictures & sleep 1.5; wtype 
 	wtype -M alt 1 -m alt; sleep 0.3; wtype -M ctrl m -m ctrl; sleep 0.3; wtype -M ctrl a -m ctrl" 5.5 x
 rm -f "$HOME/.config/fldesktop/files.ini"
 NAME=files-connect; session "fl-panel & fl-files --connect" 4 x
-NAME=sysinfo; session "fl-panel & fl-sysinfo" 3.5 x
+# not the overview page: it shows the computer's name
 NAME=sysinfo-devices; session "fl-panel & fl-sysinfo --page devices" 3.5 x
 # the launcher needs a key press (Super+Space) from wtype
 "$BUILD/bin/fl-wm" -s "fl-desktop & fl-panel" >"$LOG" 2>&1 &

@@ -141,26 +141,54 @@ public:
   }
 
   // from the view
-  gboolean render(WPEBuffer *buffer, GError **error) {
-    auto f = std::make_shared<Frame>();
-    f->width = wpe_buffer_get_width(buffer);
-    f->height = wpe_buffer_get_height(buffer);
+  // damage: what changed since the last buffer (n == 0: not known)
+  gboolean render(WPEBuffer *buffer, const WPERectangle *rects, guint n, GError **error) {
+    int w = wpe_buffer_get_width(buffer), h = wpe_buffer_get_height(buffer);
+    // one Frame, updated where the page changed: copying all of a frame for
+    // a blinking caret costs a slow machine a good part of a core
+    bool same = frame_ && frame_->width == w && frame_->height == h && !frame_->pixels.empty();
+    bool all = true;
+    std::vector<Rect> dmg;
+    if (same) {
+      std::vector<Rect> in;
+      for (guint i = 0; i < n; i++) in.push_back({rects[i].x, rects[i].y, rects[i].width, rects[i].height});
+      dmg = clip_damage(in.data(), n, w, h, all);
+    }
+    if (!frame_) frame_ = std::make_shared<Frame>();
+    Frame *f = frame_.get();
     if (WPE_IS_BUFFER_DMA_BUF(buffer) && gpu_display() != EGL_NO_DISPLAY) {
       // rendered by the GPU: copy it back with GL
       auto image = (EGLImageKHR)wpe_buffer_import_to_egl_image(buffer, error);
       if (!image) return FALSE;
-      if (!GLReadback::get().read(image, f->width, f->height, *f)) {
+      bool ok = all ? GLReadback::get().read(image, w, h, *f) : GLReadback::get().read_rects(image, dmg, *f);
+      if (!ok) {
+        frame_.reset();
         g_set_error_literal(error, WPE_VIEW_ERROR, WPE_VIEW_ERROR_RENDER_FAILED, "fl-web: could not read the frame back");
         return FALSE;
       }
     } else if (WPE_IS_BUFFER_SHM(buffer)) {
       WPEBufferSHM *shm = WPE_BUFFER_SHM(buffer);
       GBytes *data = wpe_buffer_shm_get_data(shm);
-      f->stride = (int)wpe_buffer_shm_get_stride(shm);
+      int stride = (int)wpe_buffer_shm_get_stride(shm);
       gsize len = 0;
       const uint8_t *p = (const uint8_t *)g_bytes_get_data(data, &len);
-      f->pixels.assign(p, p + len);
+      if (!all && stride == f->stride && len == f->pixels.size()) {
+        for (const Rect &r : dmg)
+          for (int row = r.y; row < r.y + r.h; row++) {
+            size_t off = (size_t)row * stride + (size_t)r.x * 4;
+            memcpy(f->pixels.data() + off, p + off, (size_t)r.w * 4);
+          }
+      } else {
+        all = true;
+        f->width = w;
+        f->height = h;
+        f->stride = stride;
+        f->pixels.assign(p, p + len);
+      }
     } else {
+      all = true;
+      f->width = w;
+      f->height = h;
       GBytes *data = wpe_buffer_import_to_pixels(buffer, error);
       if (!data) return FALSE;
       gsize len = 0;
@@ -168,6 +196,8 @@ public:
       f->stride = f->height ? (int)(len / (gsize)f->height) : 0;
       f->pixels.assign(p, p + len);
     }
+    f->all = all;
+    f->damage = all ? std::vector<Rect>{} : std::move(dmg);
     // one buffer at a time: WebKit renders the next after frame_shown()
     if (view_->pending) {
       wpe_view_buffer_rendered(WPE_VIEW(view_), view_->pending);
@@ -175,7 +205,7 @@ public:
       g_object_unref(view_->pending);
     }
     view_->pending = WPE_BUFFER(g_object_ref(buffer));
-    if (on_frame) on_frame(f);
+    if (on_frame) on_frame(frame_);
     return TRUE;
   }
   void cursor(const char *name) {
@@ -185,6 +215,7 @@ public:
 private:
   FldWpeView *view_ = nullptr;
   WPEToplevel *toplevel_ = nullptr;
+  std::shared_ptr<Frame> frame_;
   double last_x_ = 0, last_y_ = 0;
 };
 
@@ -337,14 +368,15 @@ static void fld_wpe_display_class_init(FldWpeDisplayClass *k) {
 }
 static void fld_wpe_display_init(FldWpeDisplay *) {}
 
-static gboolean view_render_buffer(WPEView *v, WPEBuffer *buffer, const WPERectangle *, guint, GError **error) {
+static gboolean view_render_buffer(WPEView *v, WPEBuffer *buffer, const WPERectangle *damage, guint n_damage,
+                                   GError **error) {
   FldWpeView *self = FLD_WPE_VIEW(v);
   if (!self->backend) {
     wpe_view_buffer_rendered(v, buffer);
     wpe_view_buffer_released(v, buffer);
     return TRUE;
   }
-  return self->backend->render(buffer, error);
+  return self->backend->render(buffer, damage, n_damage, error);
 }
 static void view_set_cursor_from_name(WPEView *v, const char *name) {
   FldWpeView *self = FLD_WPE_VIEW(v);

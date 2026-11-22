@@ -57,8 +57,29 @@ WebView::WebView(int x, int y, int w, int h, WebKitWebView *related, WebKitSetti
   backend_ = Backend::create();
   backend_->on_frame = [this](std::shared_ptr<const Frame> f) {
     frame_ = f;
-    frame_pending_ = true;
-    redraw();
+    if (f->all) {
+      convert_all_ = true;
+      changed_.clear();
+      frame_pending_ = true;
+      redraw();
+      return;
+    }
+    // only where the page changed
+    for (const Rect &r : f->damage) {
+      if (!convert_all_) changed_.push_back(r);
+      damage(FL_DAMAGE_USER1, this->x() + r.x, this->y() + r.y, r.w, r.h);
+    }
+    if (changed_.size() > 16) {
+      // many frames before a draw (a hidden tab): convert it all once
+      convert_all_ = true;
+      changed_.clear();
+    }
+    if (!f->damage.empty() && visible_r()) {
+      frame_pending_ = true;
+    } else if (!frame_pending_) {
+      // nothing to show: WebKit may go on at once
+      Fl::add_timeout(0, frame_done_cb, this);
+    }
   };
   backend_->on_cursor = [this](const std::string &c) {
     if (window() && active_ && Fl::belowmouse() == this) window()->cursor(css_cursor(c));
@@ -92,6 +113,20 @@ void WebView::frame_done_cb(void *d) {
   glib_loop_poke();
 }
 
+// premultiplied BGRA -> RGB (pages are opaque), r within rgb_w_ x rgb_h_
+void WebView::convert(const Rect &r) {
+  const Frame *f = frame_.get();
+  for (int row = r.y; row < r.y + r.h; row++) {
+    const uint8_t *s = f->pixels.data() + (size_t)row * f->stride + (size_t)r.x * 4;
+    unsigned char *d = rgb_.data() + ((size_t)row * rgb_w_ + r.x) * 3;
+    for (int col = 0; col < r.w; col++, s += 4, d += 3) {
+      d[0] = s[2];
+      d[1] = s[1];
+      d[2] = s[0];
+    }
+  }
+}
+
 void WebView::draw() {
   fl_push_clip(x(), y(), w(), h());
   const Frame *f = frame_.get();
@@ -100,21 +135,32 @@ void WebView::draw() {
     fl_rectf(x(), y(), w(), h());
   } else {
     int fw = std::min(f->width, w()), fh = std::min(f->height, h());
-    // premultiplied BGRA -> RGB (pages are opaque)
-    rgb_.resize((size_t)fw * fh * 3);
-    for (int row = 0; row < fh; row++) {
-      const uint8_t *s = f->pixels.data() + (size_t)row * f->stride;
-      unsigned char *d = rgb_.data() + (size_t)row * fw * 3;
-      for (int col = 0; col < fw; col++, s += 4, d += 3) {
-        d[0] = s[2];
-        d[1] = s[1];
-        d[2] = s[0];
-      }
+    if (fw != rgb_w_ || fh != rgb_h_) {
+      rgb_w_ = fw;
+      rgb_h_ = fh;
+      rgb_.assign((size_t)fw * fh * 3, 0);
+      convert_all_ = true;
     }
-    fl_draw_image(rgb_.data(), x(), y(), fw, fh, 3);
-    fl_color(FL_WHITE);
-    if (fw < w()) fl_rectf(x() + fw, y(), w() - fw, h());
-    if (fh < h()) fl_rectf(x(), y() + fh, fw, h() - fh);
+    // the parts that changed, within what is shown
+    std::vector<Rect> parts;
+    for (const Rect &r : changed_) {
+      int x1 = std::min(r.x + r.w, fw), y1 = std::min(r.y + r.h, fh);
+      if (x1 > r.x && y1 > r.y) parts.push_back({r.x, r.y, x1 - r.x, y1 - r.y});
+    }
+    if (convert_all_) convert({0, 0, fw, fh});
+    else
+      for (const Rect &r : parts) convert(r);
+    if (damage() == FL_DAMAGE_USER1 && !convert_all_) {
+      for (const Rect &r : parts)
+        fl_draw_image(rgb_.data() + ((size_t)r.y * fw + r.x) * 3, x() + r.x, y() + r.y, r.w, r.h, 3, fw * 3);
+    } else {
+      fl_draw_image(rgb_.data(), x(), y(), fw, fh, 3);
+      fl_color(FL_WHITE);
+      if (fw < w()) fl_rectf(x() + fw, y(), w() - fw, h());
+      if (fh < h()) fl_rectf(x(), y() + fh, fw, h() - fh);
+    }
+    convert_all_ = false;
+    changed_.clear();
   }
   fl_pop_clip();
   if (frame_pending_) {

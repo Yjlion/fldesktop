@@ -3,6 +3,7 @@
 
 #include "adblock_rules.h"
 #include "browser_util.h"
+#include "damage.h"
 #include "fld/ini.h"
 #include "fld/json.h"
 #include "fld/util.h"
@@ -187,5 +188,29 @@ int main() {
   CHECK(abp_key({"lists", "https://a.example/1.txt", "https://b.example/2.txt", "allow"}) != k);
   CHECK(abp_key({"ab", "c"}) != abp_key({"a", "bc"}));
   CHECK(abp_fnv1a("a") != abp_fnv1a("b"));
+  // frame damage: clipped, empty parts dropped, many merged, all = whole frame
+  bool all = false;
+  CHECK(clip_damage(nullptr, 0, 100, 50, all).empty());
+  CHECK(all);
+  Rect caret[] = {{10, 10, 2, 16}, {-5, 40, 20, 20}, {30, 30, 0, 5}};
+  std::vector<Rect> d = clip_damage(caret, 3, 100, 50, all);
+  CHECK(!all);
+  CHECK_EQ(d.size(), (size_t)2);
+  CHECK_EQ(d[1].x, 0);
+  CHECK_EQ(d[1].w, 15);
+  CHECK_EQ(d[1].h, 10);
+  Rect outside[] = {{200, 200, 5, 5}};
+  CHECK(clip_damage(outside, 1, 100, 50, all).empty());
+  CHECK(!all);
+  Rect full_frame[] = {{-1, -1, 200, 200}};
+  CHECK(clip_damage(full_frame, 1, 100, 50, all).empty());
+  CHECK(all);
+  std::vector<Rect> rects;
+  for (int k = 0; k < 10; k++) rects.push_back({k * 5, k, 2, 2});
+  d = clip_damage(rects.data(), (unsigned)rects.size(), 100, 50, all, 8);
+  CHECK_EQ(d.size(), (size_t)1);
+  CHECK_EQ(d[0].x, 0);
+  CHECK_EQ(d[0].w, 47);
+  CHECK_EQ(d[0].h, 11);
   return test_result("web");
 }

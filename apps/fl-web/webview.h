@@ -38,7 +38,11 @@ private:
   std::unique_ptr<Backend> backend_;
   WebKitWebView *view_ = nullptr;
   std::shared_ptr<const Frame> frame_;
-  std::vector<unsigned char> rgb_;
+  std::vector<unsigned char> rgb_; // frame_ as RGB, rgb_w_ x rgb_h_
+  int rgb_w_ = 0, rgb_h_ = 0;
+  bool convert_all_ = true;  // rgb_ is out of date
+  std::vector<Rect> changed_; // parts of rgb_ out of date (and to draw)
+  void convert(const Rect &r);
   bool active_ = false;
   bool frame_pending_ = false;
   int paste_key_ = 0; // Ctrl+V waiting for the clipboard

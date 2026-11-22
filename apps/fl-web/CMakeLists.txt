@@ -1,6 +1,6 @@
 # fl-web needs WPE WebKit: with the WPE Platform API (WebKit >= 2.46 built
 # with it, e.g. Arch) or with libwpe and WPEBackend-fdo (e.g. Debian 13).
-add_library(fl-web-util STATIC browser_util.cpp adblock_rules.cpp)   # testable logic, linked by tests
+add_library(fl-web-util STATIC browser_util.cpp adblock_rules.cpp damage.cpp)   # testable logic, linked by tests
 target_include_directories(fl-web-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-web-util PUBLIC fld)
 

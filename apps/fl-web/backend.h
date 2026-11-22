@@ -12,13 +12,20 @@
 
 #include <wpe/webkit.h>
 
+#include "damage.h"
+
 namespace web {
 
 // premultiplied BGRA (little endian ARGB8888) rows
 struct Frame {
   int width = 0, height = 0, stride = 0;
   std::vector<uint8_t> pixels;
+  // what changed since the frame before (a backend may update one Frame in
+  // place): all of it, or the damage rectangles (none: nothing changed)
+  bool all = true;
+  std::vector<Rect> damage;
 };
+
 
 enum Mods { MOD_CTRL = 1, MOD_SHIFT = 2, MOD_ALT = 4, MOD_META = 8, MOD_BUTTON1 = 16, MOD_BUTTON2 = 32, MOD_BUTTON3 = 64 };
 

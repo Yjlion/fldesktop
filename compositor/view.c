@@ -767,6 +767,22 @@ static void place_new_view(struct flwm_view *view) {
 	struct flwm_output *o = parent ? output_for_view(parent)
 		: output_at(server, server->cursor->x, server->cursor->y);
 	struct wlr_box ua = o ? o->usable_area : (struct wlr_box){0, 0, 1280, 720};
+	/* a window larger than the work area (a panel takes some of the screen,
+	 * which FLTK cannot know): ask it to fit, unless its size is fixed */
+	if (!is_x11(view) && !parent && !view->xdg_toplevel->requested.maximized &&
+			!view->xdg_toplevel->requested.fullscreen) {
+		struct wlr_xdg_toplevel_state *cur = &view->xdg_toplevel->current;
+		int aw = ua.width - 2 * B, ah = ua.height - T - B;
+		bool fixed = cur->min_width > 0 && cur->min_width == cur->max_width &&
+			cur->min_height > 0 && cur->min_height == cur->max_height;
+		if (!fixed && aw > 0 && ah > 0 && (geo.width > aw || geo.height > ah)) {
+			int w = geo.width > aw ? (cur->min_width > aw ? cur->min_width : aw) : geo.width;
+			int h = geo.height > ah ? (cur->min_height > ah ? cur->min_height : ah) : geo.height;
+			wlr_xdg_toplevel_set_size(view->xdg_toplevel, w, h);
+			geo.width = w;
+			geo.height = h;
+		}
+	}
 	if (parent) {
 		/* dialogs: centered over the parent */
 		struct wlr_box pg;

@@ -82,7 +82,7 @@ package_fldesktop() {
               'fldesktop-archive: archive manager'
               'fldesktop-disks: disk and partition manager'
               'fldesktop-web: web browser'
-              'fldesktop-docs: document viewer (PDF, EPUB, ODT, comic books)'
+              'fldesktop-docs: document viewer (PDF, EPUB, ODT, Markdown, comic books)'
               'plymouth: boot splash'
               'fldesktop-plymouth-theme: the fldesktop boot splash')
   arch=(any)
@@ -194,7 +194,7 @@ package_fldesktop-webcam() {
 }
 
 package_fldesktop-docs() {
-  pkgdesc="fldesktop document viewer: PDF (poppler), EPUB, OpenDocument text and comic books"
+  pkgdesc="fldesktop document viewer: PDF (poppler), EPUB, OpenDocument text, Markdown and comic books"
   depends=(fltk poppler wayland libxml2 libarchive pango cairo)
   optdepends=("libcups: printing" "poppler-data: documents in CJK and other encodings")
   _app docs

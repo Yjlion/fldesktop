@@ -1,9 +1,9 @@
 // fl-docs: a document format behind one interface
 //
 // The viewer only needs the page sizes, a page as pixels, the places a text
-// appears and a PDF to print. PDF goes through poppler; EPUB and OpenDocument
-// text are laid out into pages with Pango (flow.h); comic books are a page per
-// image.
+// appears and a PDF to print. PDF goes through poppler; EPUB, OpenDocument
+// text and Markdown are laid out into pages with Pango (flow.h); comic books
+// are a page per image.
 #pragma once
 #include <functional>
 #include <memory>
@@ -54,8 +54,8 @@ public:
 // Asks for a password (false: cancelled).
 using PasswordFn = std::function<bool(std::string &password)>;
 
-// Opens a PDF, EPUB, OpenDocument text or comic book (.cbz; .cbr, .cb7 and
-// .cbt too). `password` is asked when a PDF is locked; null: fail instead.
+// Opens a PDF, EPUB, OpenDocument text, Markdown or comic book (.cbz; .cbr,
+// .cb7 and .cbt too). `password` is asked when a PDF is locked; null: fail instead.
 std::unique_ptr<Backend> open_document(const std::string &path, std::string &err, const PasswordFn &password);
 
 // the backends (backend_*.cpp)
@@ -63,6 +63,7 @@ std::unique_ptr<Backend> open_pdf(const std::string &path, std::string &err, con
 std::unique_ptr<Backend> open_comic(const std::string &path, std::string &err);
 std::unique_ptr<Backend> open_epub(const std::string &path, std::string &err);
 std::unique_ptr<Backend> open_odt(const std::string &path, std::string &err);
+std::unique_ptr<Backend> open_markdown(const std::string &path, std::string &err);
 
 // a temporary file name for print_pdf
 std::string temp_pdf_path();

@@ -1,6 +1,6 @@
 .TH FL-DOCS 1 "November 2026" "fldesktop" "fldesktop"
 .SH NAME
-fl-docs \- document viewer for PDF, EPUB, OpenDocument text and comic books
+fl-docs \- document viewer for PDF, EPUB, OpenDocument text, Markdown and comic books
 .SH SYNOPSIS
 \fBfl-docs\fR [\fB\-\-page\fR \fIN\fR] [\fIFILE\fR]
 .br
@@ -9,7 +9,7 @@ fl-docs \- document viewer for PDF, EPUB, OpenDocument text and comic books
 \fBfl-docs \-\-to\-pdf\fR \fIFILE\fR \fIOUT.pdf\fR
 .SH DESCRIPTION
 Shows PDF documents (through poppler), EPUB e-books, OpenDocument text
-documents (.odt, .ott) and comic books (.cbz, also .cbr, .cb7 and .cbt) in one
+documents (.odt, .ott), Markdown (.md, .markdown) and comic books (.cbz, also .cbr, .cb7 and .cbt) in one
 continuously scrolling strip of pages, with page thumbnails on the left.
 .PP
 E-books and OpenDocument text are laid out into pages by fl-docs itself:
@@ -18,13 +18,17 @@ like, lists, simple tables, images and page breaks are kept; style sheets,
 fonts embedded in the document and floating frames are not, so lines and
 pages break differently than in the program that wrote the document. E-books
 use 6 x 9 inch pages and start every chapter on a new page; OpenDocument text
-uses the document's page size and margins. E-books protected by DRM cannot
+uses the document's page size and margins. Markdown (CommonMark, with
+GitHub's tables, strike-through and task lists) is laid out on A4 pages; its
+title is the front matter's title or the first heading, and its images are
+read from the disk next to the file (images on the web are left out).
+E-books protected by DRM cannot
 be shown. Comic books show their pictures (PNG, JPEG, GIF, BMP, SVG) in the
 natural order of their names, one per page. The zoom fits the width (of the
 widest page) or the whole page, or is set from 10% to 800%. Search finds a
 text on all pages, without regard to case, and highlights every match.
 Printing goes to a CUPS printer with copies, a page range and two-sided
-printing; e-books, OpenDocument text and comic books are printed as fl-docs
+printing; e-books, OpenDocument text, Markdown and comic books are printed as fl-docs
 lays them out. PDF documents protected by a password ask for it. A document
 dropped onto the window opens.
 .SH KEYS

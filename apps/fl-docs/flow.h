@@ -1,10 +1,11 @@
-// fl-docs: flowing text laid out into pages (EPUB, OpenDocument text)
+// fl-docs: flowing text laid out into pages (EPUB, OpenDocument text, Markdown)
 //
 // The formats are read into a list of blocks: paragraphs as Pango markup,
 // images, rules, tables and page breaks. layout() breaks them into pages of a
 // fixed size with Pango, line by line; the pages are drawn with cairo for the
 // screen and into a PDF for printing, and searched in their text.
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,6 +35,12 @@ struct PageStyle {
   std::string family = "Serif";
   double size = 12;
 };
+
+// The bytes of an image an HTML document refers to (false: none).
+using ImageFn = std::function<bool(const std::string &src, std::string &data)>;
+// An (X)HTML document's body to blocks, with `size` as the text's size
+// (backend_epub.cpp; EPUB chapters and Markdown).
+std::vector<Block> html_blocks(const std::string &html, const ImageFn &image, double size);
 
 // Escapes text for Pango markup.
 std::string escape(const std::string &text);

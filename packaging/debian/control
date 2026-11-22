@@ -231,9 +231,9 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: pdf-viewer
 Recommends: poppler-data
-Description: fldesktop document viewer: PDF, EPUB, OpenDocument text, comics
- fl-docs shows PDF documents, EPUB e-books, OpenDocument text documents and
- comic books (.cbz, .cbr, .cb7) in a continuously scrolling view with page
+Description: fldesktop document viewer: PDF, EPUB, ODT, Markdown, comics
+ fl-docs shows PDF documents, EPUB e-books, OpenDocument text documents,
+ Markdown files and comic books (.cbz, .cbr, .cb7) in a continuously scrolling view with page
  thumbnails, fits the width or the page or zooms in steps, finds text on all
  pages and prints through CUPS with copies, page ranges and two-sided
  printing. Password protected PDF documents ask for the password.

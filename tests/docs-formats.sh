@@ -1,5 +1,5 @@
 #!/bin/sh
-# fl-docs --info on generated OpenDocument text, EPUB and comic book files:
+# fl-docs --info on generated OpenDocument text, EPUB, Markdown and comic book files:
 # page counts and sizes, titles, comic page order and search hits.
 # usage: docs-formats.sh <fl-docs>
 set -u
@@ -45,10 +45,23 @@ grep -qx "page 1 225x300" "$T/out" || fail "cbz: page 1"
 grep -qx "page 2 240x300" "$T/out" || fail "cbz: page 2"
 grep -qx "page 3 255x300" "$T/out" || fail "cbz: page 3"
 
+"$DOCS" --info "$T/test.md" --find fldesktop >"$T/out" 2>&1 || fail "md"
+grep -qx "title fl-docs markdown test" "$T/out" || fail "md: title from the front matter"
+grep -qx "page 1 595x842" "$T/out" || fail "md: A4 pages"
+set -- $(grep '^pages ' "$T/out")
+[ "$2" -ge 2 ] || fail "md: $2 pages (the long code block)"
+[ "$(grep -c '^hit 1 ' "$T/out")" = 2 ] || fail "md: two hits on page 1 (paragraph, table)"
+# the image beside the file pushes the table down
+set -- $(grep '^hit 1 ' "$T/out" | sed -n 2p)
+with=$4
+"$DOCS" --info "$T/noimg.md" --find fldesktop >"$T/out" 2>&1 || fail "md without the image"
+set -- $(grep '^hit 1 ' "$T/out" | sed -n 2p)
+[ "$with" -gt "$4" ] || fail "md: the image did not load ($with <= $4)"
+
 "$DOCS" --info "$T/nobook.zip" >"$T/out" 2>&1 && fail "a zip of text files opened"
 
 # printing: the PDFs fl-docs makes for the printer have the same pages
-for f in odt epub cbz; do
+for f in odt epub md cbz; do
 	"$DOCS" --to-pdf "$T/test.$f" "$T/$f.pdf" >"$T/out" 2>&1 || fail "$f: --to-pdf"
 	"$DOCS" --info "$T/$f.pdf" --find fldesktop >"$T/info" 2>&1 || { cat "$T/info" >>"$T/out"; fail "$f: the PDF does not open"; }
 	"$DOCS" --info "$T/test.$f" --find fldesktop >"$T/orig" 2>&1

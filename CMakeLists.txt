@@ -198,7 +198,7 @@ if(FLD_BUILD_WEB)
 endif()
 if(FLD_BUILD_DOCS)
   pkg_check_modules(POPPLER_CPP QUIET IMPORTED_TARGET poppler-cpp)
-  # EPUB, OpenDocument text and comic books
+  # EPUB, OpenDocument text, Markdown and comic books
   pkg_check_modules(DOCS_REFLOW QUIET IMPORTED_TARGET libxml-2.0 libarchive pangocairo cairo-pdf)
   if(POPPLER_CPP_FOUND)
     if(NOT DOCS_REFLOW_FOUND)

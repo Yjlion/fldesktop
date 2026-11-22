@@ -93,11 +93,10 @@ const double kHeading[] = {1.9, 1.55, 1.3, 1.15, 1.05, 1.0};
 // One spine document to blocks.
 class Walker {
 public:
-  const std::map<std::string, std::string> &files;
-  std::string base; // the document's member name, for relative links
+  const flow::ImageFn &load; // an <img src>'s bytes
   std::vector<Block> blocks;
 
-  Walker(const std::map<std::string, std::string> &f, const std::string &b) : files(f), base(b) {}
+  explicit Walker(const flow::ImageFn &l) : load(l) {}
 
   void walk_children(xmlNode *n) {
     for (xmlNode *c = n->children; c; c = c->next) walk(c);
@@ -177,13 +176,12 @@ public:
   }
 
   void image(const std::string &href) {
-    std::string m = resolve_member(base, href);
-    auto it = files.find(m);
-    if (it == files.end()) return;
+    std::string data;
+    if (href.empty() || !load(href, data) || data.empty()) return;
     flush();
     Block b;
     b.kind = Block::Image;
-    b.image = it->second;
+    b.image = std::move(data);
     blocks.push_back(b);
   }
 
@@ -217,7 +215,8 @@ public:
         if (c->type != XML_ELEMENT_NODE) continue;
         std::string nm = lname(c);
         if (nm != "td" && nm != "th") continue;
-        Walker w(files, base);
+        Walker w(load);
+        w.base_size = base_size;
         if (nm == "th") w.cur.markup = "<b>", w.open.push_back("b");
         w.walk_children(c);
         w.flush();
@@ -321,6 +320,8 @@ public:
     } else if (nm == "pre") {
       pre = true;
       cur.family = "Monospace";
+      cur.space_before = 4;
+      cur.space_after = 8;
       cur.size = base_size * 0.85;
       walk_children(n);
     } else {
@@ -351,6 +352,18 @@ private:
 };
 
 } // namespace
+
+std::vector<Block> flow::html_blocks(const std::string &html, const ImageFn &image, double size) {
+  xmlDoc *h = parse_html(html);
+  if (!h) return {};
+  Walker w(image);
+  w.base_size = size;
+  xmlNode *body = find(xmlDocGetRootElement(h), "body");
+  if (body) w.walk_children(body);
+  w.flush();
+  xmlFreeDoc(h);
+  return std::move(w.blocks);
+}
 
 std::unique_ptr<Backend> open_epub(const std::string &path, std::string &err) {
   std::map<std::string, std::string> files;
@@ -434,21 +447,20 @@ std::unique_ptr<Backend> open_epub(const std::string &path, std::string &err) {
   for (const std::string &doc : spine) {
     auto it = files.find(doc);
     if (it == files.end()) continue;
-    xmlDoc *h = parse_html(it->second);
-    if (!h) continue;
-    Walker w(files, doc);
-    w.base_size = style.size;
-    xmlNode *body = find(xmlDocGetRootElement(h), "body");
-    if (body) w.walk_children(body);
-    w.flush();
-    xmlFreeDoc(h);
-    if (w.blocks.empty()) continue;
+    flow::ImageFn image = [&](const std::string &href, std::string &data) {
+      auto f = files.find(resolve_member(doc, href));
+      if (f == files.end()) return false;
+      data = f->second;
+      return true;
+    };
+    std::vector<Block> doc_blocks = flow::html_blocks(it->second, image, style.size);
+    if (doc_blocks.empty()) continue;
     if (!blocks.empty()) {
       Block br;
       br.kind = Block::PageBreak;
       blocks.push_back(br);
     }
-    blocks.insert(blocks.end(), w.blocks.begin(), w.blocks.end());
+    blocks.insert(blocks.end(), doc_blocks.begin(), doc_blocks.end());
   }
   if (blocks.empty()) {
     err = "The e-book has no text.";

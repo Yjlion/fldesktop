@@ -187,6 +187,7 @@ Format sniff(const std::string &head, const std::string &path) {
   // PDF allows a little junk before its header
   if (head.find("%PDF-") != std::string::npos && head.find("%PDF-") < 1024) return Format::Pdf;
   if (ext == "pdf") return Format::Pdf; // let poppler say what is wrong
+  if (is_markdown_name(path)) return Format::Markdown;
   return Format::Unknown;
 }
 

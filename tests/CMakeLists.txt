@@ -99,7 +99,7 @@ if(TARGET fl-docs-util)
     set(_docs ${CMAKE_SOURCE_DIR}/apps/fl-docs)
     add_executable(test_flow test_flow.cpp ${_docs}/flow.cpp ${_docs}/images.cpp ${_docs}/backend.cpp
                    ${_docs}/archive_reader.cpp ${_docs}/backend_epub.cpp ${_docs}/backend_odt.cpp
-                   ${_docs}/backend_comic.cpp ${_docs}/backend_pdf.cpp)
+                   ${_docs}/backend_comic.cpp ${_docs}/backend_markdown.cpp ${_docs}/backend_pdf.cpp)
     target_compile_definitions(test_flow PRIVATE FLD_DOCS_REFLOW=1)
     target_link_libraries(test_flow PRIVATE fl-docs-util fld PkgConfig::DOCS_REFLOW PkgConfig::POPPLER_CPP)
     add_test(NAME flow COMMAND test_flow)

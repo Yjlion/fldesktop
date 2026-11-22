@@ -47,6 +47,7 @@
 #include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/mime.h"
+#include "fld/tab_bar.h"
 #include "fld/theme.h"
 #include "fld/trash.h"
 #include "fld/util.h"
@@ -125,6 +126,8 @@ struct Settings {
   bool col_visible[NUM_COLS] = {true, true, true, false, false, true};
   int col_w[NUM_COLS] = {90, 160, 150, 100, 100, 260};
   int sidebar_w = 190;
+  bool always_tabs = false;    // the tab bar also with one tab
+  bool middle_tab = true;      // middle click opens folders in a new tab (else a window)
 } S;
 
 static std::string settings_path() { return fld::fld_config_dir() + "/files.ini"; }
@@ -148,6 +151,8 @@ static void save_settings() {
   c.set_int("Files", "ThumbnailMaxMiB", S.thumb_max_mb);
   c.set_int("Files", "DateFormat", S.date_fmt);
   c.set_bool("Files", "FolderTree", S.show_tree);
+  c.set_bool("Files", "AlwaysShowTabs", S.always_tabs);
+  c.set_bool("Files", "MiddleClickNewTab", S.middle_tab);
   std::string vis, wid;
   for (int i = 0; i < NUM_COLS; i++) {
     vis += (i ? "," : "") + std::string(S.col_visible[i] ? "1" : "0");
@@ -176,6 +181,8 @@ static void load_settings() {
   S.thumb_max_mb = std::max(1, std::min(1024, c.get_int("Files", "ThumbnailMaxMiB", 20)));
   S.date_fmt = std::max(0, std::min(5, c.get_int("Files", "DateFormat", 0)));
   S.show_tree = c.get_bool("Files", "FolderTree", false);
+  S.always_tabs = c.get_bool("Files", "AlwaysShowTabs", false);
+  S.middle_tab = c.get_bool("Files", "MiddleClickNewTab", true);
   auto vis = fld::split(c.get("Files", "Columns", ""), ',');
   auto wid = fld::split(c.get("Files", "ColumnWidths", ""), ',');
   for (int i = 0; i < NUM_COLS; i++) {
@@ -279,9 +286,35 @@ struct Clip {
   bool cut = false;
 } g_clip;
 
-static search::Search g_search;
+static search::Search *g_search;  // the current tab's
 static std::string g_search_desc; // e.g. "*.txt" for the title and status
-static bool g_search_running() { return g_search.running(); }
+static bool g_search_running() { return g_search->running(); }
+
+// Tabs: each has its own view, folder, history, view settings and search.
+// The globals above (g_view, g_cwd, g_hist_*, g_searching, g_search*, V) are
+// the current tab's; activate_tab() stores them and loads another tab's.
+struct Tab {
+  FileView *view = nullptr;
+  std::string cwd;
+  std::deque<std::string> back, fwd;
+  bool searching = false;
+  std::unique_ptr<search::Search> search{new search::Search};
+  std::string search_desc;
+  ViewState v;
+  std::string filter;
+  bool find_bar = false;
+};
+static std::vector<std::unique_ptr<Tab>> g_tabs;
+static int g_cur = -1;
+static fld::TabBar *g_tabbar;
+static Fl_Group *g_views; // holds the tabs' views (one shown)
+static Tab *cur_tab() { return g_cur >= 0 && g_cur < (int)g_tabs.size() ? g_tabs[(size_t)g_cur].get() : nullptr; }
+static void new_tab(const std::string &path, bool activate = true);
+static void close_tab(int i);
+static void activate_tab(int i);
+static void update_tabbar();
+static void open_dir_elsewhere(const std::string &path); // middle click: a new tab or window
+static void leave_folder(const std::string &dir); // tabs in dir (or below) go home
 
 static void navigate(const std::string &path, bool record = true);
 static void fill_places();
@@ -314,6 +347,10 @@ public:
   int drop_item = -1;         // folder highlighted as the drop target
   int hover_item = -1;        // item under the pointer
   std::map<Fl_Image *, Fl_Image *> ghosts; // faded icons of the items being dragged
+  // while the view is in a background tab (in_search() etc. are the current tab's)
+  bool bg_search = false, bg_trash = false;
+  std::string bg_filter;
+  struct timespec loaded_mtime{}; // of the folder when it was read
   bool dropping = false;      // the next FL_PASTE is a drop
   int press_x = 0, press_y = 0;
   int resizing_col = -1, resize_x0 = 0, resize_w0 = 0;
@@ -495,11 +532,13 @@ public:
   }
 
   void apply_filter_sort() {
-    std::string f = fld::lower(g_filter ? g_filter->value() : "");
+    bool cur = this == g_view;
+    std::string f = fld::lower(cur ? (g_filter ? g_filter->value() : "") : bg_filter.c_str());
+    bool trash = cur ? in_trash() : bg_trash, search = cur ? in_search() : bg_search;
     items.clear();
     for (int i = 0; i < (int)all.size(); i++) {
       const Entry &e = all[i];
-      if (!S.show_hidden && !in_trash() && !in_search() && e.name[0] == '.') continue;
+      if (!S.show_hidden && !trash && !search && e.name[0] == '.') continue;
       if (!f.empty() && fld::lower(e.name).find(f) == std::string::npos) continue;
       items.push_back(i);
     }
@@ -561,6 +600,9 @@ public:
   void load(const std::string &dir, const std::string &select_name = "") {
     clear_thumbs();
     all.clear();
+    struct stat dst;
+    loaded_mtime = stat(dir == TRASH_URI ? (fld::trash_dir() + "/files").c_str() : dir.c_str(), &dst) == 0
+                       ? dst.st_mtim : timespec{};
     if (dir == TRASH_URI) {
       for (auto &t : fld::trash_list()) {
         Entry e;
@@ -1172,6 +1214,7 @@ void FileView::context_menu(int i) {
   } else {
     m.push_back({"Open", 0, nullptr, (void *)OPEN});
     if (in_search() && !many) m.push_back({"Open Containing Folder", 0, nullptr, (void *)CONTAINING});
+    if (e.is_dir) m.push_back({"Open in New Tab", 0, nullptr, (void *)OPEN_TAB});
     if (e.is_dir) m.push_back({"Open in New Window", 0, nullptr, (void *)NEW_WINDOW});
     if (e.is_dir) m.push_back({"Open in Terminal", 0, nullptr, (void *)OPEN_TERM});
     if (e.is_dir && !many) m.push_back({"Add to Bookmarks", 0, nullptr, (void *)BOOKMARK});
@@ -1207,6 +1250,10 @@ void FileView::context_menu(int i) {
       break;
     case OPEN_TERM: fld::spawn(fld::shell_split(fld::terminal_command()), e.path); break;
     case NEW_WINDOW: fld::spawn({"fl-files", e.path}); break;
+    case OPEN_TAB:
+      for (int k : std::set<int>(sel))
+        if (entry(k).is_dir) new_tab(entry(k).path, false);
+      break;
     case CONTAINING: open_containing(e.path); break;
     case BOOKMARK: add_bookmark(e.path); break;
     case OPEN_WITH_OTHER: open_with_dialog(paths); break;
@@ -1361,7 +1408,7 @@ int FileView::handle(int e) {
         return 1;
       }
       if (Fl::event_button() == FL_MIDDLE_MOUSE) {
-        if (i >= 0 && entry(i).is_dir) fld::spawn({"fl-files", entry(i).path});
+        if (i >= 0 && entry(i).is_dir) open_dir_elsewhere(entry(i).path);
         return 1;
       }
       press_item = i;
@@ -1513,6 +1560,12 @@ int FileView::handle(int e) {
       bool shift = st & FL_SHIFT, ctrl = st & FL_CTRL;
       int cols = columns();
       int page = std::max(1, view_h() / (details() ? row_h() : cell_h())) * cols;
+      // tabs: Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+Page Up/Down
+      if (ctrl && (k == FL_Tab || k == FL_Page_Up || k == FL_Page_Down) && g_tabs.size() > 1) {
+        int n = (int)g_tabs.size(), d = (k == FL_Page_Up || (k == FL_Tab && shift)) ? -1 : 1;
+        activate_tab((g_cur + d + n) % n);
+        return 1;
+      }
       switch (k) {
         case FL_Up: move_focus(-cols, shift); return 1;
         case FL_Down: move_focus(cols, shift); return 1;
@@ -1666,10 +1719,13 @@ static void rename_bookmark(const std::string &path, const std::string &old_labe
 
 // ---- drives (UDisks2)
 
-// Opens a place: drives are mounted (and unlocked) first
-static void open_place(const Place &p, bool new_window = false) {
-  auto go = [new_window](const std::string &path) {
-    if (new_window) fld::spawn({"fl-files", path});
+// Opens a place here, in a new window or in a new tab: drives are mounted
+// (and unlocked) first
+enum PlaceWhere { PLACE_HERE, PLACE_WINDOW, PLACE_TAB };
+static void open_place(const Place &p, PlaceWhere where = PLACE_HERE) {
+  auto go = [where](const std::string &path) {
+    if (where == PLACE_WINDOW) fld::spawn({"fl-files", path});
+    else if (where == PLACE_TAB) new_tab(path);
     else navigate(path);
   };
   if (!p.path.empty() || p.volume.empty()) { go(p.path); return; }
@@ -1706,7 +1762,7 @@ static void unmount_place(const Place &p, bool eject) {
 #ifdef FLD_HAVE_UDISKS
   if (p.volume.empty()) return;
   // leave the drive first, or it is busy
-  if (!p.path.empty() && (g_cwd == p.path || fld::starts_with(g_cwd, p.path + "/"))) navigate(fld::home_dir());
+  if (!p.path.empty()) leave_folder(p.path);
   std::string label = p.label;
   auto done = [label, eject](const std::string &err) {
     update_status();
@@ -1734,6 +1790,7 @@ public:
       Place p = g_place_list[(size_t)line - 1];
       bool vol = !p.volume.empty(), mounted = !p.path.empty();
       std::vector<Fl_Menu_Item> m = {{"Open", 0, nullptr, (void *)1},
+                                     {"Open in New Tab", 0, nullptr, (void *)8},
                                      {"Open in New Window", 0, nullptr, (void *)2, FL_MENU_DIVIDER}};
       if (vol) {
         if (!mounted) m.push_back({"Mount", 0, nullptr, (void *)5});
@@ -1748,12 +1805,18 @@ public:
       if (!r) return 1;
       switch ((long)r->user_data()) {
         case 1: case 5: open_place(p); break;
-        case 2: open_place(p, true); break;
+        case 2: open_place(p, PLACE_WINDOW); break;
+        case 8: open_place(p, PLACE_TAB); break;
         case 3: rename_bookmark(p.path, p.label); break;
         case 4: remove_bookmark(p.path); break;
         case 6: unmount_place(p, false); break;
         case 7: unmount_place(p, true); break;
       }
+      return 1;
+    }
+    if (e == FL_PUSH && Fl::event_button() == FL_MIDDLE_MOUSE) {
+      int line = line_at(Fl::event_y());
+      if (line > 0) open_place(g_place_list[(size_t)line - 1], S.middle_tab ? PLACE_TAB : PLACE_WINDOW);
       return 1;
     }
     // the eject button at the right of a drive
@@ -2016,6 +2079,24 @@ static void update_nav_buttons() {
   if (in_trash()) g_empty_trash->show(); else g_empty_trash->hide();
 }
 
+// The name of a tab's folder (or search) for the title and the tab
+static std::string location_name(const std::string &cwd, bool searching, const std::string &desc) {
+  if (searching) return "Search: " + desc;
+  if (cwd == TRASH_URI) return "Trash";
+  if (cwd == "/" || cwd.empty()) return "/";
+  return fld::basename(cwd);
+}
+
+// The path field, window title and selected place for the current tab
+static void show_location() {
+  g_path->value(g_cwd == TRASH_URI ? "Trash" : g_cwd.c_str());
+  g_win->copy_label((location_name(g_cwd, g_searching, g_search_desc) + " – Files").c_str());
+  if (g_searching) {
+    g_places->value(0);
+    if (g_tree) g_tree->deselect_all(nullptr, 0);
+  } else select_place_for(g_cwd);
+}
+
 static void navigate(const std::string &path_in, bool record) {
   std::string path = path_in == TRASH_URI ? path_in : fld::abs_path(path_in);
   if (path != TRASH_URI) {
@@ -2030,7 +2111,7 @@ static void navigate(const std::string &path_in, bool record) {
   }
   bool was_search = in_search();
   if (was_search) {
-    g_search.cancel();
+    g_search->cancel();
     g_searching = false;
   }
   std::string prev = was_search ? "" : g_cwd;
@@ -2050,14 +2131,12 @@ static void navigate(const std::string &path_in, bool record) {
   std::string select;
   if (!prev.empty() && prev != TRASH_URI && fld::dirname(prev) == path) select = fld::basename(prev);
   g_view->load(path, select);
-  g_path->value(path == TRASH_URI ? "Trash" : path.c_str());
-  std::string title = (path == TRASH_URI ? std::string("Trash") : (path == "/" ? "/" : fld::basename(path))) + " – Files";
-  g_win->copy_label(title.c_str());
-  select_place_for(path);
+  show_location();
   tree_follow(path);
   watch_dir(path);
   update_nav_buttons();
   update_status();
+  update_tabbar();
   g_view->take_focus();
 }
 
@@ -2092,12 +2171,12 @@ static void update_status() {
   std::string s = std::to_string(g_view->items.size()) + " item" + (g_view->items.size() == 1 ? "" : "s");
   if (in_search()) {
     size_t n = g_view->items.size();
-    if (g_search.running())
-      s = "Searching " + fld::tilde(g_search.current_dir()) + "…    " + std::to_string(n) + " found";
+    if (g_search->running())
+      s = "Searching " + fld::tilde(g_search->current_dir()) + "…    " + std::to_string(n) + " found";
     else
       s = std::to_string(n) + (n == 1 ? " match" : " matches") + " in " + fld::tilde(g_cwd) +
-          (g_search.truncated() ? " (stopped at the result limit)" : "") + "    " +
-          std::to_string(g_search.scanned()) + " items searched";
+          (g_search->truncated() ? " (stopped at the result limit)" : "") + "    " +
+          std::to_string(g_search->scanned()) + " items searched";
   }
   if (!g_view->sel.empty()) {
     unsigned long long bytes = 0;
@@ -2168,31 +2247,34 @@ static Fl_Tile *g_tile;
 static bool g_s_case = false, g_s_regex = false, g_s_links = false;
 static const int SBAR_H = 42;
 
-static void search_poll(void *) {
+// takes the results found so far into the view of the tab that searches
+static void search_poll(void *d) {
+  Tab *t = (Tab *)d;
+  bool cur = t == cur_tab();
   std::vector<std::string> paths;
-  g_search.take(paths);
-  if (!paths.empty()) g_view->add_paths(paths);
-  update_status();
-  g_view->redraw();
-  if (g_search.running()) Fl::repeat_timeout(0.15, search_poll);
+  t->search->take(paths);
+  if (!paths.empty()) t->view->add_paths(paths);
+  if (cur) update_status();
+  t->view->redraw();
+  if (t->search->running()) Fl::repeat_timeout(0.15, search_poll, d);
   else {
-    g_s_go->label("Search");
+    if (cur) g_s_go->label("Search");
     // the last batch
     paths.clear();
-    g_search.take(paths);
-    if (!paths.empty()) g_view->add_paths(paths);
-    update_status();
+    t->search->take(paths);
+    if (!paths.empty()) t->view->add_paths(paths);
+    if (cur) update_status();
   }
 }
 
 static void stop_search() {
-  g_search.cancel();
-  Fl::remove_timeout(search_poll);
-  search_poll(nullptr);
+  g_search->cancel();
+  Fl::remove_timeout(search_poll, cur_tab());
+  search_poll(cur_tab());
 }
 
 static void start_search() {
-  if (g_search.running()) {
+  if (g_search->running()) {
     stop_search();
     return;
   }
@@ -2227,7 +2309,7 @@ static void start_search() {
     g_s_name->take_focus();
     return;
   }
-  if (!g_search.start(q)) {
+  if (!g_search->start(q)) {
     fl_alert("The regular expression is not valid.");
     return;
   }
@@ -2240,37 +2322,56 @@ static void start_search() {
   g_view->all.clear();
   g_filter->value("");
   g_view->apply_filter_sort();
-  std::string title = "Search: " + g_search_desc + " – Files";
-  g_win->copy_label(title.c_str());
-  g_places->value(0);
-  if (g_tree) g_tree->deselect_all(nullptr, 0);
+  show_location();
   g_s_go->label("Stop");
   update_nav_buttons();
-  Fl::remove_timeout(search_poll);
-  Fl::add_timeout(0.1, search_poll);
+  Fl::remove_timeout(search_poll, cur_tab());
+  Fl::add_timeout(0.1, search_poll, cur_tab());
   update_status();
+  update_tabbar();
+}
+
+// Places the bars above the views: the toolbar, the tab bar (with more
+// than one tab, or always), the find bar
+static fld::Toolbar *g_toolbar;
+static const int TOOLBAR_H = 42, STATUS_H = 24;
+static void relayout() {
+  int W = g_win->w(), H = g_win->h(), y = 0;
+  g_toolbar->resize(0, y, W, TOOLBAR_H);
+  y += TOOLBAR_H;
+  bool tabs = g_tabs.size() > 1 || S.always_tabs;
+  if (tabs) {
+    int th = fld::TabBar::preferred_height();
+    g_tabbar->resize(0, y, W, th);
+    g_tabbar->show();
+    y += th;
+  } else g_tabbar->hide();
+  if (g_sbar->visible()) {
+    g_sbar->resize(0, y, W, SBAR_H);
+    y += SBAR_H;
+  }
+  g_tile->resize(0, y, W, H - y - STATUS_H);
+  g_tile->init_sizes();
+  g_win->init_sizes();
+  g_win->redraw();
 }
 
 static void show_search_bar(bool on) {
-  int W = g_win->w(), TB = 42, ST = 24, H = g_win->h();
-  if (on == g_sbar->visible()) {
+  if (on == (bool)g_sbar->visible()) {
     if (on) g_s_name->take_focus();
     return;
   }
   if (on) {
-    g_sbar->resize(0, TB, W, SBAR_H);
     g_sbar->show();
-    g_tile->resize(0, TB + SBAR_H, W, H - TB - ST - SBAR_H);
+    relayout();
     g_s_name->take_focus();
     g_s_name->insert_position(0, g_s_name->size());
   } else {
     if (in_search()) navigate(g_cwd, false);
     g_sbar->hide();
-    g_tile->resize(0, TB, W, H - TB - ST);
+    relayout();
     g_view->take_focus();
   }
-  g_tile->init_sizes();
-  g_win->redraw();
 }
 
 static void open_containing(const std::string &path) {
@@ -2295,7 +2396,7 @@ public:
         return 1;
       }
       if (k == FL_Escape && contains(Fl::focus())) {
-        if (g_search.running()) stop_search();
+        if (g_search->running()) stop_search();
         else show_search_bar(false);
         return 1;
       }
@@ -2425,7 +2526,7 @@ static void columns_menu(int x, int y) {
 }
 
 static void show_preferences() {
-  Fl_Double_Window *w = new Fl_Double_Window(460, 430, "Files Preferences");
+  Fl_Double_Window *w = new Fl_Double_Window(500, 430, "Files Preferences");
   int y = 14;
   auto heading = [&](const char *t) {
     Fl_Box *b = new Fl_Box(16, y, 428, 22, t);
@@ -2459,6 +2560,8 @@ static void show_preferences() {
   heading("Behavior");
   Fl_Check_Button *one = check("Open items with a single click", S.single_click);
   Fl_Check_Button *conf = check("Ask before moving items to the Trash", S.confirm_trash);
+  Fl_Check_Button *mtab = check("Middle click opens folders in a new tab (else in a new window)", S.middle_tab);
+  Fl_Check_Button *atabs = check("Always show the tab bar", S.always_tabs);
   y += 6;
   heading("Thumbnails");
   Fl_Check_Button *th = check("Show image thumbnails", S.thumbnails);
@@ -2476,7 +2579,7 @@ static void show_preferences() {
   });
   Fl_Return_Button *ok = new Fl_Return_Button(344, y, 100, 30, "Close");
   ok->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
-  w->size(460, y + 44);
+  w->size(500, y + 44);
   w->end();
   w->set_modal();
   w->show();
@@ -2491,6 +2594,9 @@ static void show_preferences() {
   S.show_hidden = hid->value();
   S.single_click = one->value();
   S.confirm_trash = conf->value();
+  S.middle_tab = mtab->value();
+  bool tabs_changed = S.always_tabs != (bool)atabs->value();
+  S.always_tabs = atabs->value();
   S.thumbnails = th->value();
   S.thumb_max_mb = (int)tmax->value();
   save_settings();
@@ -2498,6 +2604,7 @@ static void show_preferences() {
   if (view_changed && !S.per_folder) set_view(S.def.view);
   else if (view_changed && !in_search() && folder_view(g_cwd).view == S.def.view) set_view(S.def.view);
   if (reload) refresh();
+  if (tabs_changed) relayout();
   g_view->redraw();
 }
 
@@ -2508,6 +2615,218 @@ static void inotify_cb(int fd, void *) {
   while (read(fd, buf, sizeof buf) > 0) {}
   Fl::remove_timeout(refresh_later);
   Fl::add_timeout(0.25, refresh_later);
+}
+
+// ---------------------------------------------------------------------------
+// Tabs
+
+// stores the current tab's state (the globals) in its Tab
+static void save_tab() {
+  Tab *t = cur_tab();
+  if (!t) return;
+  t->cwd = g_cwd;
+  t->back = std::move(g_hist_back);
+  t->fwd = std::move(g_hist_fwd);
+  t->searching = g_searching;
+  t->search_desc = g_search_desc;
+  t->v = V;
+  t->filter = g_filter->value();
+  t->find_bar = g_sbar->visible();
+  t->view->bg_search = g_searching;
+  t->view->bg_trash = in_trash();
+  t->view->bg_filter = t->filter;
+  g_hist_back.clear();
+  g_hist_fwd.clear();
+}
+
+static void activate_tab_(int i, bool save) {
+  if (i < 0 || i >= (int)g_tabs.size()) return;
+  if (save) {
+    if (i == g_cur) return;
+    save_tab();
+  }
+  if (g_view) {
+    g_view->hide();
+    Fl::remove_idle(FileView::thumb_idle, g_view);
+  }
+  g_cur = i;
+  Tab *t = cur_tab();
+  g_view = t->view;
+  g_cwd = t->cwd;
+  g_hist_back = std::move(t->back);
+  g_hist_fwd = std::move(t->fwd);
+  g_searching = t->searching;
+  g_search = t->search.get();
+  g_search_desc = t->search_desc;
+  V = t->v;
+  g_filter->value(t->filter.c_str());
+  g_view->resize(g_views->x(), g_views->y(), g_views->w(), g_views->h());
+  g_view->show();
+  if (t->find_bar != (bool)g_sbar->visible()) {
+    if (t->find_bar) g_sbar->show(); else g_sbar->hide();
+  }
+  g_s_go->label(g_search->running() ? "Stop" : "Search");
+  update_view_button();
+  update_zoom_slider();
+  show_location();
+  tree_follow(g_cwd);
+  watch_dir(g_cwd);
+  update_nav_buttons();
+  // the folder may have changed while the tab was in the background
+  if (!g_searching && !g_cwd.empty()) {
+    struct stat st;
+    std::string d = g_cwd == TRASH_URI ? fld::trash_dir() + "/files" : g_cwd;
+    if (stat(d.c_str(), &st) == 0 && (st.st_mtim.tv_sec != g_view->loaded_mtime.tv_sec ||
+                                      st.st_mtim.tv_nsec != g_view->loaded_mtime.tv_nsec))
+      refresh();
+  }
+  update_status();
+  update_tabbar();
+  relayout();
+  g_view->take_focus();
+}
+
+static void activate_tab(int i) { activate_tab_(i, true); }
+
+static void update_tabbar() {
+  if (!g_tabbar) return;
+  std::vector<fld::TabInfo> tabs;
+  for (size_t k = 0; k < g_tabs.size(); k++) {
+    Tab *t = g_tabs[k].get();
+    bool cur = (int)k == g_cur;
+    const std::string &cwd = cur ? g_cwd : t->cwd;
+    bool searching = cur ? g_searching : t->searching;
+    fld::TabInfo ti;
+    ti.label = location_name(cwd, searching, cur ? g_search_desc : t->search_desc);
+    ti.tooltip = cwd == TRASH_URI ? "Trash" : fld::tilde(cwd);
+    ti.busy = t->search->running();
+    tabs.push_back(ti);
+  }
+  g_tabbar->set_tabs(tabs, g_cur);
+  bool want = g_tabs.size() > 1 || S.always_tabs;
+  if (want != (bool)g_tabbar->visible()) relayout();
+}
+
+static void new_tab(const std::string &path, bool activate) {
+  if (path != TRASH_URI && !fld::is_dir(path)) return;
+  auto t = std::make_unique<Tab>();
+  Fl_Group::current(nullptr);
+  t->view = new FileView(g_views->x(), g_views->y(), g_views->w(), g_views->h());
+  t->view->hide();
+  g_views->add(t->view);
+  t->v = folder_view(path);
+  int at = g_cur + 1; // after the current tab
+  g_tabs.insert(g_tabs.begin() + at, std::move(t));
+  if (g_cur >= at) g_cur++;
+  if (activate || g_cur < 0) {
+    activate_tab_(at, g_cur >= 0);
+    navigate(path, false);
+  } else {
+    // loads in the background
+    Tab *bt = g_tabs[(size_t)at].get();
+    bt->cwd = path;
+    bt->view->bg_trash = path == TRASH_URI;
+    bt->view->load(path);
+    update_tabbar();
+  }
+}
+
+static void close_tab(int i) {
+  if (i < 0 || i >= (int)g_tabs.size()) return;
+  if (g_tabs.size() == 1) {
+    g_win->hide();
+    return;
+  }
+  if (i != g_cur) save_tab();
+  Tab *t = g_tabs[(size_t)i].get();
+  t->search->cancel();
+  Fl::remove_timeout(search_poll, t);
+  Fl::remove_idle(FileView::thumb_idle, t->view);
+  g_views->remove(t->view);
+  Fl::delete_widget(t->view);
+  if (g_view == t->view) g_view = nullptr;
+  bool was_cur = i == g_cur;
+  g_tabs.erase(g_tabs.begin() + i);
+  if (was_cur) {
+    g_cur = -1;
+    activate_tab_(std::min(i, (int)g_tabs.size() - 1), false);
+  } else {
+    if (i < g_cur) g_cur--;
+    activate_tab_(g_cur, false);
+  }
+}
+
+static void open_dir_elsewhere(const std::string &path) {
+  if (S.middle_tab) new_tab(path, false);
+  else fld::spawn({"fl-files", path});
+}
+
+static void leave_folder(const std::string &dir) {
+  auto inside = [&](const std::string &p) { return p == dir || fld::starts_with(p, dir + "/"); };
+  int was = g_cur;
+  for (int k = 0; k < (int)g_tabs.size(); k++) {
+    bool cur = k == g_cur;
+    if (!inside(cur ? g_cwd : g_tabs[(size_t)k]->cwd)) continue;
+    if (!cur) activate_tab(k);
+    if (g_searching) { g_search->cancel(); g_searching = false; }
+    navigate(fld::home_dir());
+  }
+  if (was != g_cur) activate_tab(was);
+}
+
+static void tab_menu(int i) {
+  bool on_tab = i >= 0;
+  int n = (int)g_tabs.size();
+  Fl_Menu_Item m[] = {{"New Tab", FL_CTRL + 't', nullptr, (void *)1},
+                      {"Duplicate Tab", 0, nullptr, (void *)2, on_tab ? 0 : FL_MENU_INACTIVE},
+                      {"Open in New Window", 0, nullptr, (void *)3, (on_tab ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER},
+                      {"Close Other Tabs", 0, nullptr, (void *)4, on_tab && n > 1 ? 0 : FL_MENU_INACTIVE},
+                      {"Close Tabs to the Right", 0, nullptr, (void *)5, on_tab && i < n - 1 ? 0 : FL_MENU_INACTIVE},
+                      {"Close Tab", FL_CTRL + 'w', nullptr, (void *)6, on_tab ? 0 : FL_MENU_INACTIVE},
+                      {nullptr}};
+  const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
+  if (!r) return;
+  auto cwd_of = [](int k) { return k == g_cur ? g_cwd : g_tabs[(size_t)k]->cwd; };
+  switch ((long)r->user_data()) {
+    case 1: new_tab(in_trash() || g_cwd.empty() ? fld::home_dir() : g_cwd); break;
+    case 2: activate_tab(i); new_tab(g_cwd); break;
+    case 3: {
+      std::string d = cwd_of(i);
+      fld::spawn({"fl-files", d});
+      close_tab(i);
+      break;
+    }
+    case 4:
+      activate_tab(i);
+      while (g_tabs.size() > 1) close_tab(g_cur == 0 ? 1 : 0);
+      break;
+    case 5:
+      activate_tab(i);
+      while ((int)g_tabs.size() > i + 1) close_tab(i + 1);
+      break;
+    case 6: close_tab(i); break;
+  }
+}
+
+static fld::TabBar *make_tabbar(int W) {
+  fld::TabBar *tb = new fld::TabBar(0, 0, W, fld::TabBar::preferred_height());
+  tb->on_select = [](int i) { activate_tab(i); };
+  tb->on_close = [](int i) { close_tab(i); };
+  tb->on_new = [] { new_tab(in_trash() || g_cwd.empty() ? fld::home_dir() : g_cwd); };
+  tb->on_menu = [](int i) { tab_menu(i); };
+  tb->on_move = [](int from, int to) {
+    save_tab();
+    fld::move_element(g_tabs, from, to);
+    g_cur = fld::moved_index(g_cur, from, to);
+    activate_tab_(g_cur, false);
+  };
+  tb->on_detach = [](int i) {
+    std::string d = i == g_cur ? g_cwd : g_tabs[(size_t)i]->cwd;
+    fld::spawn({"fl-files", d == TRASH_URI ? std::string(TRASH_URI) : d});
+    close_tab(i);
+  };
+  tb->hide();
+  return tb;
 }
 
 static int global_keys(int e) {
@@ -2524,6 +2843,17 @@ static int global_keys(int e) {
   if (k == FL_Escape && in_search() && Fl::focus() == g_view) { show_search_bar(false); return 1; }
   if (k == FL_BackSpace && Fl::focus() == g_view) { go_up(); return 1; }
   if (k == FL_F + 5) { refresh(); return 1; }
+  // tabs: Alt+1..9, Ctrl+Tab, Ctrl+Page Up/Down
+  if (alt && !ctrl && k >= '1' && k <= '9') {
+    int i = k == '9' ? (int)g_tabs.size() - 1 : k - '1';
+    if (i < (int)g_tabs.size()) activate_tab(i);
+    return 1;
+  }
+  if (ctrl && (k == FL_Tab || k == FL_Page_Up || k == FL_Page_Down) && g_tabs.size() > 1) {
+    int n = (int)g_tabs.size(), d = (k == FL_Page_Up || (k == FL_Tab && shift)) ? -1 : 1;
+    activate_tab((g_cur + d + n) % n);
+    return 1;
+  }
   if (!ctrl) return 0;
   switch (k) {
     case 'l': g_path->value(in_trash() ? "trash:///" : g_cwd.c_str()); g_path->take_focus(); g_path->insert_position(0, g_path->size()); return 1;
@@ -2535,7 +2865,9 @@ static int global_keys(int e) {
       if (shift) new_item(true);
       else fld::spawn({"fl-files", in_trash() ? fld::home_dir() : g_cwd});
       return 1;
-    case 'w': case 'q': g_win->hide(); return 1;
+    case 't': new_tab(in_trash() || in_search() ? fld::home_dir() : g_cwd); return 1;
+    case 'w': close_tab(g_cur); return 1;
+    case 'q': g_win->hide(); return 1;
     case '1': set_view(VIEW_ICONS); return 1;
     case '2': set_view(VIEW_COMPACT); return 1;
     case '3': set_view(VIEW_DETAILS); return 1;
@@ -2581,11 +2913,11 @@ int main(int argc, char **argv) {
     if (start != TRASH_URI && !fld::is_dir(start)) start = fld::dirname(fld::abs_path(start));
   }
 
-  const int W = 980, H = 640, TB = 42, ST = 24;
+  const int W = 980, H = 640, TB = TOOLBAR_H, ST = STATUS_H;
   const fld::Palette &p = fld::palette();
   g_win = new FilesWindow(W, H, "Files");
 
-  fld::Toolbar *bar = new fld::Toolbar(0, 0, W, TB);
+  fld::Toolbar *bar = g_toolbar = new fld::Toolbar(0, 0, W, TB);
   bar->color(p.bg);
   g_back = bar->add_button("go-previous", "Back (Alt+Left)", [](Fl_Widget *, void *) { go_back(); }, nullptr);
   g_fwd = bar->add_button("go-next", "Forward (Alt+Right)", [](Fl_Widget *, void *) { go_forward(); }, nullptr);
@@ -2678,7 +3010,11 @@ int main(int argc, char **argv) {
   });
   bar->add(menu_btn);
   bar->resizable(g_path);
+  bar->end();
 
+  g_tabbar = make_tabbar(W);
+  g_win->add(g_tabbar);
+  Fl_Group::current(g_win);
   build_search_bar(W, TB);
   Fl_Tile *tile = g_tile = new Fl_Tile(0, TB, W, H - TB - ST);
   Fl_Group *side = new Fl_Group(0, TB, S.sidebar_w, H - TB - ST);
@@ -2722,9 +3058,10 @@ int main(int argc, char **argv) {
   side->end();
   g_empty_trash->parent()->remove(g_empty_trash);
   side->add(g_empty_trash);
-  g_view = new FileView(S.sidebar_w, TB, W - S.sidebar_w, H - TB - ST);
+  g_views = new Fl_Group(S.sidebar_w, TB, W - S.sidebar_w, H - TB - ST);
+  g_views->end(); // the tabs' views are added by new_tab()
   tile->end();
-  tile->resizable(g_view);
+  tile->resizable(g_views);
   tile->size_range(side, 120, 120, 400, 10000);
   // status bar: text, then the zoom slider
   const int ZW = 170;
@@ -2772,8 +3109,8 @@ int main(int argc, char **argv) {
 #endif
   fill_places();
   update_view_button();
+  new_tab(start);
   if (S.show_tree) show_tree(true);
-  navigate(start, false);
   g_win->show(); // not show(argc, argv): it resets the theme colors
   g_view->take_focus();
   return Fl::run();

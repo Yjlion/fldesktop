@@ -15,6 +15,14 @@ remembers its own view, sort order and icon size.
 .PP
 F9 shows a folder tree instead of the places list. Ctrl+D bookmarks the current folder;
 right-click a bookmark to rename or remove it (bookmarks are shared with GTK applications).
+.SS Tabs
+Ctrl+T opens a tab at the current folder, Ctrl+W closes it (and the window with the last tab).
+Ctrl+Tab and Ctrl+Shift+Tab (or Ctrl+Page Down/Up) go to the next and previous tab, Alt+1 to Alt+9
+to a tab by its place. A middle click on a folder, a place or a bookmark opens it in a new tab
+behind the current one (or in a new window, see the preferences). Each tab has its own folder,
+history, view and search. Tabs can be dragged to another place, or out of the strip into a
+window of their own; right-click a tab to duplicate it or to close other tabs. The tab bar shows
+with two or more tabs, or always.
 .SS Finding files
 Ctrl+Shift+F (or F3, or the search button) opens the find bar. It searches the current folder and
 its subfolders by name (a part of the name, or a pattern with \fB*\fR and \fB?\fR), by text inside
@@ -31,7 +39,7 @@ Ctrl+comma opens the preferences.
 .TP
 \fI~/.config/fldesktop/files.ini\fR
 Preferences: default view, date format, single-click opening, trash confirmation, thumbnails,
-columns.
+columns, tabs.
 .TP
 \fI~/.config/fldesktop/files-folders.ini\fR
 Remembered views of individual folders.

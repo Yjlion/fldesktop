@@ -441,7 +441,7 @@ static void update_battery() {
   bool charging = status == "Charging" || status == "Full";
   const char *level = pct > 80 ? "full" : pct > 40 ? "good" : pct > 15 ? "low" : "caution";
   std::string icon = std::string("battery-") + level + (charging ? "-charging" : "");
-  P.battery->icon_name(icon.c_str(), 18);
+  panel_icon(P.battery, icon, "battery");
   char buf[16];
   snprintf(buf, sizeof buf, "%d%%", pct);
   P.battery->copy_label(buf);
@@ -505,7 +505,7 @@ static void update_volume_widget() {
                      : P.volume_pct < 34          ? "audio-volume-low"
                      : P.volume_pct < 67          ? "audio-volume-medium"
                                                   : "audio-volume-high";
-  P.volume->icon_name(icon, 18);
+  panel_icon(P.volume, icon, "audio-speakers");
   char tip[64];
   snprintf(tip, sizeof tip, "Volume %d%%%s", P.volume_pct, P.muted ? " (muted)" : "");
   P.volume->copy_tooltip(tip);
@@ -740,8 +740,7 @@ static void network_changed() {
   bool connecting = false;
   for (auto &d : st.devices) if (d.connecting) connecting = true;
   if (connecting && st.primary_type.empty()) icon = "network-wired-acquiring";
-  P.network->icon_name(icon, 18);
-  if (!fld::icon(icon, 18)) P.network->icon_name("fl-network", 18);
+  panel_icon(P.network, icon, "fl-network");
   g_net_tip = st.primary_id.empty() ? (st.networking ? "Not connected" : "Networking is off")
                                     : "Connected to " + st.primary_id;
   for (auto &d : st.devices)
@@ -922,6 +921,12 @@ static void battery_tick(void *) {
   update_battery();
 #endif
   Fl::repeat_timeout(30.0, battery_tick);
+}
+
+void panel_icon(fld::FlatButton *b, const std::string &name, const char *fallback) {
+  Fl_Image *img = fld::symbolic_icon(name, 18, panel_fg());
+  if (!img && fallback) img = fld::symbolic_icon(fallback, 18, panel_fg());
+  b->icon_image(img);
 }
 
 fld::FlatButton *make_btn(int w, const char *icon, const char *tip, Fl_Callback *cb) {

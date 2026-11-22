@@ -10,6 +10,8 @@
 #include <FL/Fl_Shared_Image.H>
 #include <FL/Fl_XPM_Image.H>
 
+#include <algorithm>
+#include <cctype>
 #include <climits>
 #include <cstdlib>
 #include <cstring>
@@ -290,6 +292,47 @@ Fl_Image *icon(const std::string &name, int size) {
   return img;
 }
 
+static int hexval(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+std::string recolor_symbolic_svg(const std::string &svg, const std::string &hex) {
+  std::string out;
+  out.reserve(svg.size());
+  size_t i = 0;
+  while (i < svg.size()) {
+    if (svg.compare(i, 12, "currentColor") == 0) {
+      out += hex;
+      i += 12;
+      continue;
+    }
+    char prev = i ? svg[i - 1] : ' ';
+    if (svg[i] == '#' && (prev == '"' || prev == '\'' || prev == ':' || prev == ' ' || prev == '=' || prev == ',')) {
+      size_t n = 0;
+      while (i + 1 + n < svg.size() && hexval(svg[i + 1 + n]) >= 0 && n < 7) n++;
+      bool term = i + 1 + n >= svg.size() || !isalnum((unsigned char)svg[i + 1 + n]);
+      if ((n == 3 || n == 6) && term) {
+        int c[3];
+        for (int k = 0; k < 3; k++)
+          c[k] = n == 3 ? hexval(svg[i + 1 + k]) * 17 : hexval(svg[i + 1 + 2 * k]) * 16 + hexval(svg[i + 2 + 2 * k]);
+        int lo = std::min(c[0], std::min(c[1], c[2])), hi = std::max(c[0], std::max(c[1], c[2]));
+        // neutral grays (the "foreground" of symbolic icons) take the color;
+        // colored parts (warnings, errors) and white highlights stay
+        if (hi - lo <= 16 && hi < 0xf0) {
+          out += hex;
+          i += 1 + n;
+          continue;
+        }
+      }
+    }
+    out += svg[i++];
+  }
+  return out;
+}
+
 Fl_Image *symbolic_icon(const std::string &name, int size, Fl_Color color) {
   static std::map<std::string, Fl_Image *> cache;
   uchar r, g, b;
@@ -303,14 +346,7 @@ Fl_Image *symbolic_icon(const std::string &name, int size, Fl_Color color) {
   std::string p = ends_with(name, "-symbolic") ? icon_path(name, size) : icon_path(name + "-symbolic", size);
   std::string svg;
   if (!p.empty() && extension(p) == "svg" && read_file(p, svg, 1 << 20)) {
-    // symbolic icons are drawn in one dark gray (or currentColor)
-    for (const char *from : {"#2e3436", "#2E3436", "#222222", "#232323", "#241f31", "#000000", "currentColor"}) {
-      size_t pos = 0, n = strlen(from);
-      while ((pos = svg.find(from, pos)) != std::string::npos) {
-        svg.replace(pos, n, hex);
-        pos += 7;
-      }
-    }
+    svg = recolor_symbolic_svg(svg, hex);
     auto *s = new Fl_SVG_Image(nullptr, svg.c_str());
     if (s->fail()) delete s;
     else {

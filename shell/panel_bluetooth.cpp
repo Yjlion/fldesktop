@@ -43,9 +43,7 @@ void update() {
     bool on = a->powered;
     int n = st.connected_count();
     g_btn->connected = on && n > 0;
-    Fl_Image *img = fld::symbolic_icon(on ? "bluetooth-active" : "bluetooth-disabled", 18, panel_fg());
-    g_btn->icon_image(img);
-    if (!img) g_btn->copy_label("BT");
+    panel_icon(g_btn, on ? "bluetooth-active" : "bluetooth-disabled", "bluetooth");
     if (!on) g_tip = "Bluetooth is off";
     else if (n == 0) g_tip = "Bluetooth is on";
     else {

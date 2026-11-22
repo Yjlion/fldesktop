@@ -1,5 +1,6 @@
 // fldesktop common helpers
 #pragma once
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -63,6 +64,13 @@ bool spawn(const std::vector<std::string> &argv, const std::string &cwd = "");
 bool spawn_shell(const std::string &cmdline, const std::string &cwd = "");
 // Runs a command and captures stdout (blocking). Returns exit status or -1.
 int run_capture(const std::vector<std::string> &argv, std::string &out);
+// Like run_capture, writing `input` to the command's stdin first (passwords
+// go this way, never in argv). With merge_stderr its stderr is captured too.
+int run_capture_input(const std::vector<std::string> &argv, const std::string &input, std::string &out,
+                      bool merge_stderr = false);
+// Runs a command and calls on_line for each line of its stdout as it comes
+// (without the newline). Blocking. Returns exit status or -1.
+int run_lines(const std::vector<std::string> &argv, const std::function<void(const std::string &)> &on_line);
 // KEY=value lines (optionally "export", quoted values) -> map
 std::map<std::string, std::string> parse_env_text(const std::string &text);
 // $XDG_RUNTIME_DIR/fldesktop-session.env: the environment variables fl-session

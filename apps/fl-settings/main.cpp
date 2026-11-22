@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -258,11 +259,17 @@ int main(int argc, char **argv) {
   fld::init_app("fl-settings", argc, argv);
   Fl::lock(); // pages with background work (sound, network) report via Fl::awake
 
-  // other settings programs (not our own pages' apps)
+  // other settings programs, not the apps of pages we have (fl-<page>.desktop,
+  // or named here)
+  std::set<std::string> ours{"fl-settings.desktop"};
+  for (auto &p : fld::all_pages()) {
+    ours.insert("fl-" + p.id + ".desktop");
+    if (p.id == "updates") ours.insert("fl-packages.desktop");
+    if (p.id == "sound") ours.insert("fl-mixer.desktop");
+  }
   for (auto &d : fld::all_applications()) {
     bool settings = std::find(d.categories.begin(), d.categories.end(), "Settings") != d.categories.end();
-    if (!settings || d.id == "fl-settings.desktop" || d.id == "fl-network.desktop" || d.id == "fl-mixer.desktop")
-      continue;
+    if (!settings || ours.count(d.id)) continue;
     g_external.push_back(d);
   }
 

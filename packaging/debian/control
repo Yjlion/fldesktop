@@ -73,7 +73,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-lock (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
-            fldesktop-webcam, fldesktop-archive, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
+            fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
             plymouth, fldesktop-plymouth-theme
 Description: lightweight Wayland desktop built with FLTK (metapackage)
@@ -183,6 +183,18 @@ Description: fldesktop system information
  network interfaces, PCI and USB devices, batteries and temperatures,
  and saves them as a report.
 
+Package: fldesktop-disks
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, parted, util-linux, udisks2, pkexec
+Recommends: fldesktop-polkit-agent, e2fsprogs, dosfstools
+Suggests: btrfs-progs, xfsprogs, exfatprogs, ntfs-3g
+Description: fldesktop disk and partition manager
+ fl-disks shows the disks and their partitions and changes them with parted:
+ new partition tables (GPT, MBR), new partitions, delete, format (ext4, Btrfs,
+ XFS, FAT32, exFAT, NTFS, swap), resize and move, partition names and flags.
+ It backs a whole disk up to an image file, writes images to USB sticks and
+ shows the drive health (SMART). Every change that loses data asks first.
+
 Package: fldesktop-taskmgr
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -264,7 +276,7 @@ Description: fldesktop text editor
 
 Package: fldesktop-settings
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, passwd
 Recommends: fldesktop-wm, xkb-data, fldesktop-polkit-agent, pkexec, fldesktop-icon-theme
 Suggests: fldesktop-mixer, fldesktop-network, fldesktop-printers, fldesktop-bluetooth,
           fldesktop-packages, fldesktop-firewall, fldesktop-notifyd
@@ -272,8 +284,9 @@ Description: fldesktop settings center
  fl-settings collects the desktop settings in one window: appearance,
  panel and desktop, notifications, language and region, default
  applications, keyboard layouts, shortcuts, mouse and touchpad, displays,
- sound, printers, Bluetooth, network, proxy, firewall, screen lock, login
- screen, date and time, software updates and system information. Settings tools of other programs are
+ sound, printers, Bluetooth, network, proxy, firewall, screen lock, users
+ (add, remove and change accounts), login screen, date and time, software
+ updates and system information. Settings tools of other programs are
  listed as well.
 
 Package: fldesktop-osk

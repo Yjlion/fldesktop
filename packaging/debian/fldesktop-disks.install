@@ -1,0 +1,6 @@
+usr/bin/fl-disks
+usr/share/applications/fl-disks.desktop
+usr/share/icons/hicolor/scalable/apps/fl-disks.svg
+usr/share/man/man1/fl-disks.1
+usr/libexec/fldesktop/fl-disks-helper
+usr/share/polkit-1/actions/org.fldesktop.disks.policy

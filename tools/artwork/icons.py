@@ -152,7 +152,7 @@ APPS_MONO = {
     "fl-settings": "preferences-system", "fl-term": "utilities-terminal", "fl-view": "image-viewer",
     "fldesktop": "start-here", "fl-taskmgr": "utilities-system-monitor", "fl-video": "multimedia-video-player",
     "fl-lock": "system-lock-screen", "fl-webcam": "camera-web", "fl-archive": "application-x-archive",
-    "fl-sysinfo": "computer",
+    "fl-sysinfo": "computer", "fl-disks": "drive-harddisk",
 }
 
 

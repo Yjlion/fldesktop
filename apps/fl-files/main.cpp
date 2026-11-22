@@ -11,6 +11,7 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Progress.H>
 #include <FL/Fl_Return_Button.H>
@@ -46,6 +47,7 @@
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
+#include "fld/menus.h"
 #include "fld/mime.h"
 #include "fld/tab_bar.h"
 #include "fld/theme.h"
@@ -128,6 +130,7 @@ struct Settings {
   int sidebar_w = 190;
   bool always_tabs = false;    // the tab bar also with one tab
   bool middle_tab = true;      // middle click opens folders in a new tab (else a window)
+  bool menubar = false;        // a menu bar above the toolbar
 } S;
 
 static std::string settings_path() { return fld::fld_config_dir() + "/files.ini"; }
@@ -153,6 +156,7 @@ static void save_settings() {
   c.set_bool("Files", "FolderTree", S.show_tree);
   c.set_bool("Files", "AlwaysShowTabs", S.always_tabs);
   c.set_bool("Files", "MiddleClickNewTab", S.middle_tab);
+  c.set_bool("Files", "ShowMenuBar", S.menubar);
   std::string vis, wid;
   for (int i = 0; i < NUM_COLS; i++) {
     vis += (i ? "," : "") + std::string(S.col_visible[i] ? "1" : "0");
@@ -183,6 +187,7 @@ static void load_settings() {
   S.show_tree = c.get_bool("Files", "FolderTree", false);
   S.always_tabs = c.get_bool("Files", "AlwaysShowTabs", false);
   S.middle_tab = c.get_bool("Files", "MiddleClickNewTab", true);
+  S.menubar = c.get_bool("Files", "ShowMenuBar", false);
   auto vis = fld::split(c.get("Files", "Columns", ""), ',');
   auto wid = fld::split(c.get("Files", "ColumnWidths", ""), ',');
   for (int i = 0; i < NUM_COLS; i++) {
@@ -2334,9 +2339,17 @@ static void start_search() {
 // Places the bars above the views: the toolbar, the tab bar (with more
 // than one tab, or always), the find bar
 static fld::Toolbar *g_toolbar;
-static const int TOOLBAR_H = 42, STATUS_H = 24;
+static Fl_Menu_Bar *g_menubar;
+static void rebuild_menubar(); // its menu titles, before it shows
+static const int TOOLBAR_H = 42, STATUS_H = 24, MENUBAR_H = 26;
 static void relayout() {
   int W = g_win->w(), H = g_win->h(), y = 0;
+  if (S.menubar) {
+    if (!g_menubar->visible()) rebuild_menubar();
+    g_menubar->resize(0, 0, W, MENUBAR_H);
+    g_menubar->show();
+    y += MENUBAR_H;
+  } else g_menubar->hide();
   g_toolbar->resize(0, y, W, TOOLBAR_H);
   y += TOOLBAR_H;
   bool tabs = g_tabs.size() > 1 || S.always_tabs;
@@ -2829,6 +2842,10 @@ static fld::TabBar *make_tabbar(int W) {
   return tb;
 }
 
+static void edit_location();
+static void toggle_menubar();
+static void select_all();
+
 static int global_keys(int e) {
   if (e != FL_SHORTCUT) return 0;
   int k = Fl::event_key();
@@ -2856,7 +2873,8 @@ static int global_keys(int e) {
   }
   if (!ctrl) return 0;
   switch (k) {
-    case 'l': g_path->value(in_trash() ? "trash:///" : g_cwd.c_str()); g_path->take_focus(); g_path->insert_position(0, g_path->size()); return 1;
+    case 'l': edit_location(); return 1;
+    case 'm': toggle_menubar(); return 1;
     case 'f': g_filter->take_focus(); return 1;
     case 'h': toggle_hidden(); return 1;
     case 'd': if (!in_search()) add_bookmark(g_cwd); return 1;
@@ -2877,13 +2895,188 @@ static int global_keys(int e) {
   }
   if (Fl::focus() != g_view) return 0;
   switch (k) {
-    case 'a': for (int i = 0; i < (int)g_view->items.size(); i++) g_view->sel.insert(i); g_view->redraw(); update_status(); return 1;
+    case 'a': select_all(); return 1;
     case 'c': copy_to_clipboard(false); return 1;
     case 'x': copy_to_clipboard(true); return 1;
     case 'v': if (!in_search()) paste_into(g_cwd); return 1;
   }
   return 0;
 }
+
+// ---------------------------------------------------------------------------
+// Menus: the toolbar's menu button and the menu bar (View > Show Menu Bar)
+
+static void toggle_menubar() {
+  S.menubar = !S.menubar;
+  save_settings();
+  relayout();
+}
+
+static void select_all() {
+  for (int i = 0; i < (int)g_view->items.size(); i++) g_view->sel.insert(i);
+  g_view->redraw();
+  update_status();
+}
+
+static void edit_location() {
+  g_path->value(in_trash() ? "trash:///" : g_cwd.c_str());
+  g_path->take_focus();
+  g_path->insert_position(0, g_path->size());
+}
+
+static std::string new_tab_dir() { return in_trash() || in_search() || g_cwd.empty() ? fld::home_dir() : g_cwd; }
+
+static void view_items(fld::Menu &m) {
+  m.radio("&Icons", V.view == VIEW_ICONS, [] { set_view(VIEW_ICONS); });
+  m.radio("&Compact", V.view == VIEW_COMPACT, [] { set_view(VIEW_COMPACT); });
+  m.radio("&Details", V.view == VIEW_DETAILS, [] { set_view(VIEW_DETAILS); }, FL_MENU_DIVIDER);
+  m.item("Zoom &In", [] { zoom(1); }, V.zoom >= kZoomMax ? FL_MENU_INACTIVE : 0, FL_CTRL + '=');
+  m.item("Zoom &Out", [] { zoom(-1); }, V.zoom <= 0 ? FL_MENU_INACTIVE : 0, FL_CTRL + '-');
+  m.item("&Normal Size", [] { zoom(0); }, FL_MENU_DIVIDER, FL_CTRL + '0');
+  m.item("C&olumns…", [] { columns_menu(Fl::event_x(), Fl::event_y()); });
+}
+
+// for_bar: the menu bar's menus, else the menu button's menu
+static void build_menu(fld::Menu &m, bool for_bar) {
+  bool trash = in_trash(), search = in_search(), have_sel = g_view && !g_view->sel.empty();
+  auto toggles = [&] {
+    m.toggle("Folder &Tree", S.show_tree, [] { show_tree(!S.show_tree); });
+    m.toggle("Show &Hidden Files", S.show_hidden, [] { toggle_hidden(); });
+    m.toggle("Show T&humbnails", S.thumbnails, [] {
+      S.thumbnails = !S.thumbnails;
+      save_settings();
+      g_view->clear_thumbs();
+      refresh();
+    });
+    m.toggle("Show &Menu Bar", S.menubar, [] { toggle_menubar(); });
+  };
+  if (!for_bar) {
+    m.item("New &Tab", [] { new_tab(new_tab_dir()); }, 0, FL_CTRL + 't');
+    m.item("New &Window", [] { fld::spawn({"fl-files", new_tab_dir()}); }, 0, FL_CTRL + 'n');
+    m.item("New &Folder…", [] { new_item(true); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + FL_SHIFT + 'n');
+    m.divider();
+    m.item("&Find Files…", [] { show_search_bar(true); }, 0, FL_CTRL + FL_SHIFT + 'f');
+    m.item("&Bookmark This Folder", [] { add_bookmark(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'd');
+    m.divider();
+    m.submenu("&View");
+    view_items(m);
+    m.end_submenu();
+    toggles();
+    m.divider();
+    m.item("Open Terminal &Here", [] { fld::spawn(fld::shell_split(fld::terminal_command()), g_cwd); },
+           trash || search ? FL_MENU_INACTIVE : 0);
+    m.divider();
+    m.item("&Preferences…", [] { show_preferences(); }, 0, FL_CTRL + ',');
+    m.item("&About", [] { fld::about_dialog("Files", "fl-files", "A file manager built with FLTK."); });
+    m.item("&Quit", [] { g_win->hide(); }, 0, FL_CTRL + 'q');
+    return;
+  }
+  m.submenu("&File");
+  m.item("New &Tab", [] { new_tab(new_tab_dir()); }, 0, FL_CTRL + 't');
+  m.item("New &Window", [] { fld::spawn({"fl-files", new_tab_dir()}); }, 0, FL_CTRL + 'n');
+  m.item("New &Folder…", [] { new_item(true); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + FL_SHIFT + 'n');
+  m.item("New &Empty File…", [] { new_item(false); }, trash || search ? FL_MENU_INACTIVE : 0);
+  m.divider();
+  m.item("Open Terminal &Here", [] { fld::spawn(fld::shell_split(fld::terminal_command()), g_cwd); },
+         (trash || search ? FL_MENU_INACTIVE : 0) | FL_MENU_DIVIDER);
+  m.item("P&roperties", [] { properties(g_view->sel.empty() ? std::vector<std::string>{g_cwd} : g_view->selected_paths()); },
+         trash ? FL_MENU_INACTIVE : 0, FL_ALT + FL_Enter);
+  m.divider();
+  m.item("&Close Tab", [] { close_tab(g_cur); }, 0, FL_CTRL + 'w');
+  m.item("&Quit", [] { g_win->hide(); }, 0, FL_CTRL + 'q');
+  m.end_submenu();
+
+  m.submenu("&Edit");
+  m.item("Cu&t", [] { copy_to_clipboard(true); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
+  m.item("&Copy", [] { copy_to_clipboard(false); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
+  m.item("&Paste", [] { paste_into(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'v');
+  m.item("Select &All", [] { select_all(); }, FL_MENU_DIVIDER, FL_CTRL + 'a');
+  m.item("&Rename…", [] { if (g_view->focus >= 0) g_view->start_rename(g_view->focus); },
+         have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_F + 2);
+  m.item("Move to &Trash", [] { trash_selected(false); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_Delete);
+  m.item("&Delete Permanently", [] { trash_selected(true); }, (have_sel ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER,
+         FL_SHIFT + FL_Delete);
+  m.item("&Find Files…", [] { show_search_bar(true); }, 0, FL_CTRL + FL_SHIFT + 'f');
+  m.item("Fi&lter…", [] { g_filter->take_focus(); }, FL_MENU_DIVIDER, FL_CTRL + 'f');
+  m.item("Pr&eferences…", [] { show_preferences(); }, 0, FL_CTRL + ',');
+  m.end_submenu();
+
+  m.submenu("&View");
+  view_items(m);
+  m.divider();
+  toggles();
+  m.divider();
+  m.item("&Reload", [] { refresh(); }, 0, FL_F + 5);
+  m.end_submenu();
+
+  m.submenu("&Go");
+  m.item("&Back", [] { go_back(); }, g_back->active() ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Left);
+  m.item("&Forward", [] { go_forward(); }, g_fwd->active() ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Right);
+  m.item("&Up", [] { go_up(); }, g_up->active() ? 0 : FL_MENU_INACTIVE, FL_ALT + FL_Up);
+  m.divider();
+  m.item("&Home", [] { navigate(fld::home_dir()); }, 0, FL_ALT + FL_Home);
+  m.item("&Trash", [] { navigate(TRASH_URI); });
+  m.item("File &System", [] { navigate("/"); }, FL_MENU_DIVIDER);
+  m.item("&Location…", [] { edit_location(); }, 0, FL_CTRL + 'l');
+  m.end_submenu();
+
+  m.submenu("&Bookmarks");
+  m.item("&Bookmark This Folder", [] { add_bookmark(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'd');
+  bool first = true;
+  for (auto &p : g_place_list) {
+    if (!p.bookmark) continue;
+    if (first) m.divider();
+    first = false;
+    std::string path = p.path;
+    m.item(fld::Menu::text(p.label), [path] { navigate(path); });
+  }
+  m.end_submenu();
+
+  m.submenu("&Help");
+  m.item("&About Files", [] { fld::about_dialog("Files", "fl-files", "A file manager built with FLTK."); });
+  m.end_submenu();
+}
+
+// The menu bar is built again each time it opens (selection, toggles, bookmarks)
+class FilesMenuBar : public Fl_Menu_Bar {
+public:
+  fld::Menu menu;
+  // rebuild() fills it, once the window is built
+  using Fl_Menu_Bar::Fl_Menu_Bar;
+  void rebuild() {
+    menu = fld::Menu();
+    build_menu(menu, true);
+    const Fl_Menu_Item *mi = menu.items();
+    items_.assign(mi, mi + count_items(mi));
+    for (auto &it : items_)
+      if (it.text && !(it.flags & FL_SUBMENU)) it.callback_ = cb;
+    Fl_Menu_Bar::menu(items_.data());
+  }
+  int handle(int e) override {
+    if (e == FL_PUSH) rebuild();
+    // the shortcuts are the window's (they also work with the bar hidden)
+    if (e == FL_SHORTCUT) return 0;
+    return Fl_Menu_Bar::handle(e);
+  }
+
+private:
+  std::vector<Fl_Menu_Item> items_;
+  static int count_items(const Fl_Menu_Item *m) {
+    int n = 0, depth = 0;
+    for (;; n++) {
+      if (!m[n].text) {
+        if (depth == 0) break;
+        depth--;
+        continue;
+      }
+      if (m[n].flags & FL_SUBMENU) depth++;
+    }
+    return n + 1;
+  }
+  static void cb(Fl_Widget *w, void *d) { ((FilesMenuBar *)w)->menu.run((long)d); }
+};
+
+static void rebuild_menubar() { ((FilesMenuBar *)g_menubar)->rebuild(); }
 
 class FilesWindow : public Fl_Double_Window {
 public:
@@ -2917,6 +3110,9 @@ int main(int argc, char **argv) {
   const fld::Palette &p = fld::palette();
   g_win = new FilesWindow(W, H, "Files");
 
+  g_menubar = new FilesMenuBar(0, 0, W, MENUBAR_H);
+  g_menubar->box(FL_FLAT_BOX);
+  g_menubar->hide();
   fld::Toolbar *bar = g_toolbar = new fld::Toolbar(0, 0, W, TB);
   bar->color(p.bg);
   g_back = bar->add_button("go-previous", "Back (Alt+Left)", [](Fl_Widget *, void *) { go_back(); }, nullptr);
@@ -2963,50 +3159,9 @@ int main(int argc, char **argv) {
   if (!fld::icon("open-menu", 20)) menu_btn->icon_name("preferences-system", 20);
   menu_btn->tooltip("Menu");
   menu_btn->callback([](Fl_Widget *, void *) {
-    Fl_Menu_Item m[] = {
-        {"New Window", FL_CTRL + 'n', nullptr, (void *)1},
-        {"New Folder…", FL_CTRL + FL_SHIFT + 'n', nullptr, (void *)2, FL_MENU_DIVIDER},
-        {"Find Files…", FL_CTRL + FL_SHIFT + 'f', nullptr, (void *)8},
-        {"Bookmark This Folder", FL_CTRL + 'd', nullptr, (void *)9, FL_MENU_DIVIDER},
-        {"View", 0, nullptr, nullptr, FL_SUBMENU},
-          {"Icons", FL_CTRL + '1', nullptr, (void *)20, FL_MENU_RADIO | (V.view == VIEW_ICONS ? FL_MENU_VALUE : 0)},
-          {"Compact", FL_CTRL + '2', nullptr, (void *)21, FL_MENU_RADIO | (V.view == VIEW_COMPACT ? FL_MENU_VALUE : 0)},
-          {"Details", FL_CTRL + '3', nullptr, (void *)22, FL_MENU_RADIO | (V.view == VIEW_DETAILS ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER},
-          {"Zoom In", FL_CTRL + '=', nullptr, (void *)23},
-          {"Zoom Out", FL_CTRL + '-', nullptr, (void *)24},
-          {"Normal Size", FL_CTRL + '0', nullptr, (void *)25, FL_MENU_DIVIDER},
-          {"Columns…", 0, nullptr, (void *)26},
-          {nullptr},
-        {"Folder Tree", FL_F + 9, nullptr, (void *)10, FL_MENU_TOGGLE | (S.show_tree ? FL_MENU_VALUE : 0)},
-        {"Show Hidden Files", FL_CTRL + 'h', nullptr, (void *)3, FL_MENU_TOGGLE | (S.show_hidden ? FL_MENU_VALUE : 0)},
-        {"Show Thumbnails", 0, nullptr, (void *)4, FL_MENU_TOGGLE | (S.thumbnails ? FL_MENU_VALUE : 0), 0, 0, 0, 0},
-        {"Open Terminal Here", 0, nullptr, (void *)5, FL_MENU_DIVIDER},
-        {"Preferences…", FL_CTRL + ',', nullptr, (void *)11},
-        {"About", 0, nullptr, (void *)6},
-        {"Quit", FL_CTRL + 'q', nullptr, (void *)7},
-        {nullptr}};
-    const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
-    if (!r) return;
-    switch ((long)r->user_data()) {
-      case 1: fld::spawn({"fl-files", in_trash() ? fld::home_dir() : g_cwd}); break;
-      case 2: new_item(true); break;
-      case 3: toggle_hidden(); break;
-      case 4: S.thumbnails = !S.thumbnails; save_settings(); g_view->clear_thumbs(); refresh(); break;
-      case 8: show_search_bar(true); break;
-      case 9: if (!in_search()) add_bookmark(g_cwd); break;
-      case 10: show_tree(!S.show_tree); break;
-      case 11: show_preferences(); break;
-      case 20: set_view(VIEW_ICONS); break;
-      case 21: set_view(VIEW_COMPACT); break;
-      case 22: set_view(VIEW_DETAILS); break;
-      case 23: zoom(1); break;
-      case 24: zoom(-1); break;
-      case 25: zoom(0); break;
-      case 26: columns_menu(Fl::event_x(), Fl::event_y()); break;
-      case 5: if (!in_trash()) fld::spawn(fld::shell_split(fld::terminal_command()), g_cwd); break;
-      case 6: fld::about_dialog("Files", "fl-files", "A file manager built with FLTK."); break;
-      case 7: g_win->hide(); break;
-    }
+    fld::Menu m;
+    build_menu(m, false);
+    m.popup();
   });
   bar->add(menu_btn);
   bar->resizable(g_path);

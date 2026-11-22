@@ -44,6 +44,10 @@
 #ifdef FLD_HAVE_UDISKS
 #include "udclient.h"
 #endif
+#ifdef FLD_HAVE_GVFS
+#include "gvclient.h"
+#include "gvfs_ui.h"
+#endif
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -56,6 +60,38 @@
 #include "fld/widgets.h"
 
 static const char *TRASH_URI = "trash:///";
+// the network neighbourhood (GVfs): servers and shares to connect to
+static const char *NETWORK_URI = "network:///";
+
+// ---- GVfs locations (through gvfs-fuse) ----
+// a folder of a GVfs mount (a network share, a phone)
+static bool is_remote(const std::string &path) {
+#ifdef FLD_HAVE_GVFS
+  return gv::is_fuse_path(path) || gv::Client::get().state().mount_for_path(path);
+#else
+  (void)path;
+  return false;
+#endif
+}
+// the location a folder of a GVfs mount stands for ("" for other folders)
+static std::string remote_uri(const std::string &path) {
+#ifdef FLD_HAVE_GVFS
+  return gv::uri_for_path(gv::Client::get().state(), path);
+#else
+  (void)path;
+  return "";
+#endif
+}
+// the name of the GVfs mount whose root path is ("" for other folders)
+static std::string remote_mount_name(const std::string &path) {
+#ifdef FLD_HAVE_GVFS
+  const gv::Mount *m = gv::Client::get().state().mount_for_path(path);
+  if (m && m->path == path) return m->name;
+#else
+  (void)path;
+#endif
+  return "";
+}
 
 // ---------------------------------------------------------------------------
 // Model
@@ -73,6 +109,8 @@ struct Entry {
   Fl_Image *thumb = nullptr;  // image preview (owned)
   bool thumb_tried = false;
   fld::TrashItem trash;       // in the trash view
+  std::string target;         // in the network view: the location it opens
+  std::string icon_name;      // its own icon (network view)
   const std::string &get_mime() {
     if (mime.empty()) mime = is_dir ? "inode/directory" : fld::mime_type(path);
     return mime;
@@ -131,6 +169,7 @@ struct Settings {
   bool always_tabs = false;    // the tab bar also with one tab
   bool middle_tab = true;      // middle click opens folders in a new tab (else a window)
   bool menubar = false;        // a menu bar above the toolbar
+  bool remote_thumbs = false;  // thumbnails of files on network locations (slow)
 } S;
 
 static std::string settings_path() { return fld::fld_config_dir() + "/files.ini"; }
@@ -157,6 +196,7 @@ static void save_settings() {
   c.set_bool("Files", "AlwaysShowTabs", S.always_tabs);
   c.set_bool("Files", "MiddleClickNewTab", S.middle_tab);
   c.set_bool("Files", "ShowMenuBar", S.menubar);
+  c.set_bool("Files", "RemoteThumbnails", S.remote_thumbs);
   std::string vis, wid;
   for (int i = 0; i < NUM_COLS; i++) {
     vis += (i ? "," : "") + std::string(S.col_visible[i] ? "1" : "0");
@@ -188,6 +228,7 @@ static void load_settings() {
   S.always_tabs = c.get_bool("Files", "AlwaysShowTabs", false);
   S.middle_tab = c.get_bool("Files", "MiddleClickNewTab", true);
   S.menubar = c.get_bool("Files", "ShowMenuBar", false);
+  S.remote_thumbs = c.get_bool("Files", "RemoteThumbnails", false);
   auto vis = fld::split(c.get("Files", "Columns", ""), ',');
   auto wid = fld::split(c.get("Files", "ColumnWidths", ""), ',');
   for (int i = 0; i < NUM_COLS; i++) {
@@ -331,6 +372,12 @@ static void open_entry(Entry &e);
 static void run_op(FileOp::Kind k, const std::vector<std::string> &src, const std::string &dest);
 
 static bool in_trash() { return g_cwd == TRASH_URI && !g_searching; }
+static bool in_network() { return g_cwd == NETWORK_URI && !g_searching; }
+// the network view: what it lists, and why it may be empty
+static std::vector<Entry> g_net_entries;
+static bool g_net_listing = false;
+static std::string g_net_error;
+static void mount_and_go(const std::string &uri, int where = 0); // where: 0 here, 1 window, 2 tab
 static bool in_search() { return g_searching; }
 static bool g_search_running();
 
@@ -608,7 +655,9 @@ public:
     struct stat dst;
     loaded_mtime = stat(dir == TRASH_URI ? (fld::trash_dir() + "/files").c_str() : dir.c_str(), &dst) == 0
                        ? dst.st_mtim : timespec{};
-    if (dir == TRASH_URI) {
+    if (dir == NETWORK_URI) {
+      all = g_net_entries;
+    } else if (dir == TRASH_URI) {
       for (auto &t : fld::trash_list()) {
         Entry e;
         e.trash = t;
@@ -664,6 +713,7 @@ public:
     if (slot) return slot;
     int size = big_icon ? big() : small();
     std::vector<std::string> names;
+    if (!e.icon_name.empty()) names.push_back(e.icon_name);
     if (e.is_dir) {
       std::string p = e.path;
       if (p == fld::home_dir()) names.push_back("user-home");
@@ -686,6 +736,7 @@ public:
   void make_thumb(Entry &e) {
     e.thumb_tried = true;
     if (!S.thumbnails || e.is_dir || e.size > ((unsigned long long)S.thumb_max_mb << 20)) return;
+    if (!S.remote_thumbs && is_remote(e.path)) return; // reading every image over the network is slow
     if (!fld::starts_with(e.get_mime(), "image/")) return;
     std::unique_ptr<Fl_Image> img(fld::load_image(e.path));
     if (!img) return;
@@ -798,7 +849,11 @@ public:
     if (items.empty()) {
       fl_font(FL_HELVETICA, 14);
       fl_color(p.fg_dim);
+      std::string net = g_net_listing ? "Looking for computers and shares…"
+                        : !g_net_error.empty() ? "Could not browse the network: " + g_net_error
+                                               : "No computers or shares found. Use Connect to Server… to open one.";
       const char *msg = in_search() ? (g_search_running() ? "Searching…" : "No files found")
+                        : in_network() ? net.c_str()
                         : in_trash() ? "Trash is empty"
                         : (*g_filter->value() ? "No matching files" : "Folder is empty");
       fl_draw(msg, x(), view_top(), content_w(), view_h(), FL_ALIGN_CENTER);
@@ -833,7 +888,7 @@ public:
       };
       // a folder that takes the drop shows open
       Fl_Image *open_icon = nullptr;
-      if (drop) open_icon = fld::icon_first({"folder-drag-accept", "folder-open"}, V.view == VIEW_ICONS ? B : SM);
+      if (drop) open_icon = fld::icon_first({"folder-open"}, V.view == VIEW_ICONS ? B : SM);
       if (V.view == VIEW_DETAILS) {
         if (drop) drop_frame(ix, iy, iw, ih, 3);
         else if (s) {
@@ -985,7 +1040,7 @@ static void copy_to_clipboard(bool cut) {
 }
 
 static void paste_into(const std::string &dir) {
-  if (in_trash() || dir == TRASH_URI || (in_search() && dir == g_cwd)) return;
+  if (in_trash() || in_network() || dir == TRASH_URI || (in_search() && dir == g_cwd)) return;
   if (g_clip.paths.empty()) {
     Fl::paste(*g_view, 1); // maybe file URIs from another program
     return;
@@ -994,8 +1049,22 @@ static void paste_into(const std::string &dir) {
 }
 
 static void trash_selected(bool permanent) {
+  if (in_network()) return;
   auto paths = g_view->selected_paths();
   if (paths.empty()) return;
+  // network locations have no trash (moving there would copy everything home)
+  if (!in_trash() && !permanent) {
+    bool remote = false;
+    for (auto &p : paths) remote = remote || is_remote(p);
+    if (remote) {
+      std::string what = paths.size() == 1 ? "\"" + fld::basename(paths[0]) + "\"" : std::to_string(paths.size()) + " items";
+      if (fl_choice("Files on a network location cannot be moved to the Trash.\nDelete %s permanently?", "Cancel",
+                    "Delete", nullptr, fld::escape_at(what).c_str()) != 1)
+        return;
+      run_op(FileOp::DELETE, paths, "");
+      return;
+    }
+  }
   if (!in_trash() && !permanent && S.confirm_trash) {
     std::string what = paths.size() == 1 ? "\"" + fld::basename(paths[0]) + "\"" : std::to_string(paths.size()) + " items";
     if (fl_choice("Move %s to the Trash?", "Cancel", "Move to Trash", nullptr, fld::escape_at(what).c_str()) != 1) return;
@@ -1023,7 +1092,7 @@ static void restore_selected() {
 }
 
 static void new_item(bool folder) {
-  if (in_trash() || in_search()) return;
+  if (in_trash() || in_search() || in_network()) return;
   const char *n = fl_input(folder ? "Folder name:" : "File name:", folder ? "New Folder" : "New File");
   if (!n || !*n) return;
   if (strchr(n, '/')) { fl_alert("Names cannot contain '/'."); return; }
@@ -1035,7 +1104,7 @@ static void new_item(bool folder) {
 }
 
 void FileView::start_rename(int i) {
-  if (i < 0 || in_trash()) return;
+  if (i < 0 || in_trash() || in_network()) return;
   Entry &e = entry(i);
   const char *n = fl_input("Rename to:", e.name.c_str());
   if (!n || !*n || e.name == n) return;
@@ -1174,6 +1243,10 @@ static void open_with_dialog(const std::vector<std::string> &files) {
 }
 
 static void open_entry(Entry &e) {
+  if (!e.target.empty()) { // network view: a computer or share
+    mount_and_go(e.target);
+    return;
+  }
   if (in_trash()) return;
   if (e.is_dir) {
     navigate(e.path);
@@ -1202,6 +1275,19 @@ static void tree_follow(const std::string &path);
 void FileView::context_menu(int i) {
   if (!sel.count(i)) select_only(i);
   Entry &e = entry(i);
+  if (!e.target.empty()) {
+    std::string t = e.target;
+    fld::Menu m;
+    m.item("Open", [t] { mount_and_go(t); });
+    m.item("Open in New Tab", [t] { mount_and_go(t, 2); });
+    m.item("Open in New Window", [t] { fld::spawn({"fl-files", t}); }, FL_MENU_DIVIDER);
+    m.item("Copy Address", [t] {
+      Fl::copy(t.c_str(), (int)t.size(), 1);
+      Fl::copy(t.c_str(), (int)t.size(), 0);
+    });
+    m.popup();
+    return;
+  }
   std::vector<std::string> paths = selected_paths();
   bool many = paths.size() > 1;
   std::vector<fld::DesktopEntry> apps;
@@ -1298,10 +1384,19 @@ static void zoom(int delta);
 static void show_preferences();
 static void columns_menu(int x, int y);
 
+static void connect_to_server();
+
 void FileView::background_menu() {
   sel.clear();
   redraw();
   update_status();
+  if (in_network()) {
+    fld::Menu m;
+    m.item("Connect to Server…", [] { connect_to_server(); });
+    m.item("Reload", [] { refresh(); }, 0, FL_F + 5);
+    m.popup();
+    return;
+  }
   if (in_trash()) {
     Fl_Menu_Item m[] = {{"Empty Trash", 0, nullptr, (void *)1}, {nullptr}};
     const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
@@ -1472,7 +1567,7 @@ int FileView::handle(int e) {
         update_status();
         return 1;
       }
-      if (press_item >= 0 && !dragging_files && !in_trash() &&
+      if (press_item >= 0 && !dragging_files && !in_trash() && !in_network() &&
           (std::abs(ex - press_x) > 6 || std::abs(ey - press_y) > 6)) {
         // start a drag with file URIs; the dragged items fade until it ends
         dragging_files = true;
@@ -1524,7 +1619,7 @@ int FileView::handle(int e) {
       if (window()) window()->cursor(FL_CURSOR_DEFAULT);
       return 1;
     case FL_DND_ENTER: case FL_DND_DRAG: {
-      if (in_trash()) return 0;
+      if (in_trash() || in_network()) return 0;
       // highlight the folder the files would go into
       int i = item_at(Fl::event_x(), Fl::event_y());
       if (i >= 0 && !entry(i).is_dir) i = -1;
@@ -1533,7 +1628,7 @@ int FileView::handle(int e) {
       return 1;
     }
     case FL_DND_RELEASE:
-      if (in_trash()) return 0;
+      if (in_trash() || in_network()) return 0;
       dropping = true;
       return 1;
     case FL_DND_LEAVE:
@@ -1546,7 +1641,7 @@ int FileView::handle(int e) {
       dropping = false;
       int target = drop_item;
       if (drop_item != -1) { drop_item = -1; redraw(); }
-      if (in_trash()) return 1;
+      if (in_trash() || in_network()) return 1;
       auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
       if (paths.empty()) { end_drag(); return 1; }
       std::string dest = g_cwd;
@@ -1584,8 +1679,8 @@ int FileView::handle(int e) {
           if (st & FL_ALT) { properties(selected_paths()); return 1; }
           for (int i : std::set<int>(sel)) open_entry(entry(i));
           return 1;
-        case FL_Delete: trash_selected(shift); return 1;
-        case FL_F + 2: if (focus >= 0) start_rename(focus); return 1;
+        case FL_Delete: if (!in_network()) trash_selected(shift); return 1;
+        case FL_F + 2: if (focus >= 0 && !in_network()) start_rename(focus); return 1;
         case ' ':
           if (focus >= 0 && ctrl) { if (sel.count(focus)) sel.erase(focus); else sel.insert(focus); redraw(); return 1; }
           break;
@@ -1616,6 +1711,9 @@ struct Place {
   bool bookmark = false;
   std::string volume;      // UDisks2 volume ("" for other places); path is "" while unmounted
   bool can_eject = false;  // shows the eject button
+  std::string uri;         // a network location (bookmark or mount); path is "" while not mounted
+  std::string gvfs_mount;  // the root URI of a GVfs mount (to unmount it)
+  std::string gvfs_volume; // a GVfs volume to mount (a phone, a camera)
 };
 static std::vector<Place> g_place_list;
 
@@ -1636,6 +1734,24 @@ static void fill_places() {
   std::string bm;
   if (fld::read_file(fld::config_home() + "/gtk-3.0/bookmarks", bm)) {
     for (auto &line : fld::split(bm, '\n')) {
+#ifdef FLD_HAVE_GVFS
+      if (gv::looks_like_uri(line)) { // a network location
+        size_t sp = line.find(' ');
+        std::string uri = line.substr(0, sp);
+        Place p{sp == std::string::npos ? gv::display_name_for_uri(uri) : line.substr(sp + 1), "", "folder-remote"};
+        p.uri = uri;
+        p.bookmark = true;
+        // mounted: its folder
+        for (auto &m : gv::Client::get().state().mounts)
+          if (!m.path.empty() && (fld::starts_with(uri, m.uri) || fld::starts_with(uri + "/", m.uri))) {
+            std::string rest = uri.size() > m.uri.size() ? fld::uri_decode(uri.substr(m.uri.size())) : "";
+            p.path = fld::path_join(m.path, rest);
+            if (!rest.empty() && !fld::is_dir(p.path)) p.path.clear();
+          }
+        g_place_list.push_back(p);
+        continue;
+      }
+#endif
       if (!fld::starts_with(line, "file://")) continue;
       size_t sp = line.find(' ');
       std::string p = fld::uri_decode(line.substr(7, sp == std::string::npos ? std::string::npos : sp - 7));
@@ -1655,6 +1771,28 @@ static void fill_places() {
       Place p{v.label, v.mount_point, v.icon};
       p.volume = v.path;
       p.can_eject = v.can_eject || v.mounted();
+      g_place_list.push_back(p);
+    }
+  }
+#endif
+#ifdef FLD_HAVE_GVFS
+  // network locations, phones and cameras (GVfs)
+  {
+    const gv::State &gs = gv::Client::get().state();
+    if (gs.running) {
+      Place net{"Network", NETWORK_URI, "network-workgroup"};
+      g_place_list.push_back(net);
+    }
+    for (auto &m : gs.mounts) {
+      Place p{m.name, m.path, m.icon};
+      p.uri = m.uri;
+      p.gvfs_mount = m.uri;
+      p.can_eject = m.can_unmount || m.can_eject;
+      g_place_list.push_back(p);
+    }
+    for (auto &v : gs.volumes) {
+      Place p{v.name, "", v.icon};
+      p.gvfs_volume = v.id;
       g_place_list.push_back(p);
     }
   }
@@ -1684,22 +1822,35 @@ static void fill_places() {
 
 static std::string bookmarks_path() { return fld::config_home() + "/gtk-3.0/bookmarks"; }
 
-static void add_bookmark(const std::string &path) {
-  if (path.empty() || path == TRASH_URI) return;
-  std::string bm, uri = "file://" + fld::uri_encode_path(path);
+// a bookmark's URI: file://..., or the network location of a remote folder
+static std::string bookmark_uri(const std::string &path) {
+  std::string r = remote_uri(path);
+  return r.empty() ? "file://" + fld::uri_encode_path(path) : r;
+}
+static std::string bookmark_uri(const Place &p) { return p.uri.empty() ? bookmark_uri(p.path) : p.uri; }
+
+static void add_bookmark_uri(const std::string &uri, const std::string &label = "") {
+  std::string bm;
   fld::read_file(bookmarks_path(), bm);
   for (auto &line : fld::split(bm, '\n'))
     if (line == uri || fld::starts_with(line, uri + " ")) return; // already there
   if (!bm.empty() && bm.back() != '\n') bm += '\n';
-  bm += uri + "\n";
+  bm += uri + (label.empty() ? "" : " " + label) + "\n";
   fld::mkdir_p(fld::dirname(bookmarks_path()));
   if (!fld::write_file(bookmarks_path(), bm)) fl_alert("Could not save %s", bookmarks_path().c_str());
   fill_places();
   select_place_for(g_cwd);
 }
 
-static void remove_bookmark(const std::string &path) {
-  std::string bm, out, uri = "file://" + fld::uri_encode_path(path);
+static void add_bookmark(const std::string &path) {
+  if (path.empty() || path == TRASH_URI || path == NETWORK_URI) return;
+  // a network share is named after its location, not the gvfs-fuse folder
+  std::string name = remote_mount_name(path);
+  add_bookmark_uri(bookmark_uri(path), name);
+}
+
+static void remove_bookmark(const std::string &uri) {
+  std::string bm, out;
   if (!fld::read_file(bookmarks_path(), bm)) return;
   for (auto &line : fld::split(bm, '\n'))
     if (line != uri && !fld::starts_with(line, uri + " ")) out += line + "\n";
@@ -1708,10 +1859,10 @@ static void remove_bookmark(const std::string &path) {
   select_place_for(g_cwd);
 }
 
-static void rename_bookmark(const std::string &path, const std::string &old_label) {
+static void rename_bookmark(const std::string &uri, const std::string &old_label) {
   const char *n = fl_input("Bookmark name:", old_label.c_str());
   if (!n) return;
-  std::string bm, out, uri = "file://" + fld::uri_encode_path(path);
+  std::string bm, out;
   if (!fld::read_file(bookmarks_path(), bm)) return;
   for (auto &line : fld::split(bm, '\n')) {
     if (line == uri || fld::starts_with(line, uri + " ")) out += uri + (*n ? " " + std::string(n) : "") + "\n";
@@ -1733,6 +1884,26 @@ static void open_place(const Place &p, PlaceWhere where = PLACE_HERE) {
     else if (where == PLACE_TAB) new_tab(path);
     else navigate(path);
   };
+#ifdef FLD_HAVE_GVFS
+  if (!p.gvfs_volume.empty()) { // a phone or camera
+    std::string label = p.label;
+    g_status->copy_label("Mounting…");
+    gv::Client::get().mount_volume(p.gvfs_volume, [go, label](const std::string &err, const std::string &path) {
+      update_status();
+      if (err == gv::kCancelled) return;
+      if (!err.empty()) {
+        fl_alert("Could not open \"%s\":\n%s", fld::escape_at(label).c_str(), fld::escape_at(err).c_str());
+        return;
+      }
+      go(path);
+    });
+    return;
+  }
+  if (p.path.empty() && !p.uri.empty()) { // a network location that is not mounted
+    mount_and_go(p.uri, where);
+    return;
+  }
+#endif
   if (!p.path.empty() || p.volume.empty()) { go(p.path); return; }
 #ifdef FLD_HAVE_UDISKS
   ud::Client &c = ud::Client::get();
@@ -1764,6 +1935,19 @@ static void open_place(const Place &p, PlaceWhere where = PLACE_HERE) {
 }
 
 static void unmount_place(const Place &p, bool eject) {
+#ifdef FLD_HAVE_GVFS
+  if (!p.gvfs_mount.empty()) {
+    if (!p.path.empty()) leave_folder(p.path);
+    std::string label = p.label;
+    g_status->copy_label("Disconnecting…");
+    gv::Client::get().unmount(p.gvfs_mount, eject, [label](const std::string &err) {
+      update_status();
+      if (!err.empty() && err != gv::kCancelled)
+        fl_alert("Could not disconnect \"%s\":\n%s", fld::escape_at(label).c_str(), fld::escape_at(err).c_str());
+    });
+    return;
+  }
+#endif
 #ifdef FLD_HAVE_UDISKS
   if (p.volume.empty()) return;
   // leave the drive first, or it is busy
@@ -1797,7 +1981,12 @@ public:
       std::vector<Fl_Menu_Item> m = {{"Open", 0, nullptr, (void *)1},
                                      {"Open in New Tab", 0, nullptr, (void *)8},
                                      {"Open in New Window", 0, nullptr, (void *)2, FL_MENU_DIVIDER}};
-      if (vol) {
+      if (!p.gvfs_mount.empty()) { // a network location or a phone
+        m.push_back({"Add Bookmark", 0, nullptr, (void *)10});
+        m.push_back({"Disconnect", 0, nullptr, (void *)6, FL_MENU_DIVIDER});
+      } else if (!p.gvfs_volume.empty()) {
+        m.push_back({"Mount", 0, nullptr, (void *)5, FL_MENU_DIVIDER});
+      } else if (vol) {
         if (!mounted) m.push_back({"Mount", 0, nullptr, (void *)5});
         else m.push_back({"Unmount", 0, nullptr, (void *)6});
         m.push_back({"Eject", 0, nullptr, (void *)7, (p.can_eject ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER});
@@ -1805,6 +1994,10 @@ public:
         m.push_back({"Rename Bookmark…", 0, nullptr, (void *)3, p.bookmark ? 0 : FL_MENU_INACTIVE});
         m.push_back({"Remove Bookmark", 0, nullptr, (void *)4, p.bookmark ? 0 : FL_MENU_INACTIVE});
       }
+#ifdef FLD_HAVE_GVFS
+      m.back().flags |= FL_MENU_DIVIDER;
+      m.push_back({"Connect to Server…", 0, nullptr, (void *)9});
+#endif
       m.push_back({nullptr});
       const Fl_Menu_Item *r = m[0].popup(Fl::event_x(), Fl::event_y());
       if (!r) return 1;
@@ -1812,10 +2005,12 @@ public:
         case 1: case 5: open_place(p); break;
         case 2: open_place(p, PLACE_WINDOW); break;
         case 8: open_place(p, PLACE_TAB); break;
-        case 3: rename_bookmark(p.path, p.label); break;
-        case 4: remove_bookmark(p.path); break;
+        case 3: rename_bookmark(bookmark_uri(p), p.label); break;
+        case 4: remove_bookmark(bookmark_uri(p)); break;
         case 6: unmount_place(p, false); break;
         case 7: unmount_place(p, true); break;
+        case 9: connect_to_server(); break;
+        case 10: add_bookmark_uri(p.gvfs_mount, p.label); break;
       }
       return 1;
     }
@@ -1998,7 +2193,7 @@ static void tree_build() {
 
 // opens the tree down to `path` and selects it
 static void tree_follow(const std::string &path) {
-  if (!g_tree || !g_tree->visible() || path == TRASH_URI || in_search()) return;
+  if (!g_tree || !g_tree->visible() || path == TRASH_URI || path == NETWORK_URI || in_search()) return;
   Fl_Tree_Item *base = nullptr;
   std::string rest;
   std::string home = fld::home_dir();
@@ -2080,7 +2275,7 @@ static void watch_dir(const std::string &dir) {
 static void update_nav_buttons() {
   if (g_hist_back.empty() && !in_search()) g_back->deactivate(); else g_back->activate();
   if (g_hist_fwd.empty()) g_fwd->deactivate(); else g_fwd->activate();
-  if (g_cwd == "/" || in_trash()) g_up->deactivate(); else g_up->activate();
+  if (g_cwd == "/" || in_trash() || in_network()) g_up->deactivate(); else g_up->activate();
   if (in_trash()) g_empty_trash->show(); else g_empty_trash->hide();
 }
 
@@ -2088,13 +2283,18 @@ static void update_nav_buttons() {
 static std::string location_name(const std::string &cwd, bool searching, const std::string &desc) {
   if (searching) return "Search: " + desc;
   if (cwd == TRASH_URI) return "Trash";
+  if (cwd == NETWORK_URI) return "Network";
+  std::string mount = remote_mount_name(cwd);
+  if (!mount.empty()) return mount;
   if (cwd == "/" || cwd.empty()) return "/";
   return fld::basename(cwd);
 }
 
 // The path field, window title and selected place for the current tab
 static void show_location() {
-  g_path->value(g_cwd == TRASH_URI ? "Trash" : g_cwd.c_str());
+  // network folders show their location (sftp://host/dir), not the gvfs-fuse path
+  std::string uri = remote_uri(g_cwd);
+  g_path->value(g_cwd == TRASH_URI ? "Trash" : g_cwd == NETWORK_URI ? "Network" : !uri.empty() ? uri.c_str() : g_cwd.c_str());
   g_win->copy_label((location_name(g_cwd, g_searching, g_search_desc) + " – Files").c_str());
   if (g_searching) {
     g_places->value(0);
@@ -2102,9 +2302,43 @@ static void show_location() {
   } else select_place_for(g_cwd);
 }
 
+// Lists the network neighbourhood again; the network view shows it when done
+static void network_relist() {
+#ifdef FLD_HAVE_GVFS
+  if (g_net_listing) return;
+  g_net_listing = true;
+  g_net_error.clear();
+  gv::Client::get().list(NETWORK_URI, [](const std::string &err, std::vector<gv::NetEntry> list) {
+    g_net_listing = false;
+    g_net_error = err == gv::kCancelled ? "" : err;
+    g_net_entries.clear();
+    for (auto &n : list) {
+      Entry e;
+      e.name = n.name;
+      e.path = e.target = n.target;
+      e.icon_name = n.icon;
+      e.is_dir = true;
+      e.mime = "inode/directory";
+      g_net_entries.push_back(e);
+    }
+    // the tabs that show the network
+    for (auto &t : g_tabs) {
+      bool cur = t.get() == cur_tab();
+      if ((cur ? g_cwd : t->cwd) != NETWORK_URI || (cur ? g_searching : t->searching)) continue;
+      t->view->load(NETWORK_URI);
+      if (cur) update_status();
+    }
+  });
+  if (g_view) g_view->redraw();
+#else
+  g_net_error = "fl-files was built without GVfs support";
+#endif
+}
+
 static void navigate(const std::string &path_in, bool record) {
-  std::string path = path_in == TRASH_URI ? path_in : fld::abs_path(path_in);
-  if (path != TRASH_URI) {
+  std::string path = path_in == TRASH_URI || path_in == NETWORK_URI ? path_in : fld::abs_path(path_in);
+  if (path == NETWORK_URI) network_relist();
+  else if (path != TRASH_URI) {
     if (!fld::is_dir(path)) {
       fl_alert("\"%s\" is not a folder.", path.c_str());
       return;
@@ -2151,6 +2385,10 @@ static void refresh() {
     update_status();
     return;
   }
+  if (in_network()) network_relist();
+#ifdef FLD_HAVE_GVFS
+  else if (is_remote(g_cwd)) gv::Client::get().refresh(); // a share may have gone
+#endif
   std::set<std::string> selected;
   for (int i : g_view->sel) selected.insert(g_view->entry(i).name);
   int top = g_view->top;
@@ -2225,7 +2463,9 @@ static void go_forward() {
 
 static void go_up() {
   if (in_search()) { navigate(g_cwd, false); return; }
-  if (in_trash() || g_cwd == "/") return;
+  if (in_trash() || in_network() || g_cwd == "/") return;
+  // up from a network location's top folder: the network
+  if (!remote_mount_name(g_cwd).empty()) { navigate(NETWORK_URI); return; }
   navigate(fld::dirname(g_cwd));
 }
 
@@ -2284,7 +2524,7 @@ static void start_search() {
     return;
   }
   search::Query q;
-  q.root = g_cwd == TRASH_URI ? fld::home_dir() : g_cwd;
+  q.root = g_cwd == TRASH_URI || g_cwd == NETWORK_URI ? fld::home_dir() : g_cwd;
   q.name = fld::trim(g_s_name->value());
   q.content = g_s_text->value();
   q.kind = (search::Query::Kind)std::max(0, g_s_kind->value());
@@ -2319,7 +2559,7 @@ static void start_search() {
     return;
   }
   if (!in_search()) {
-    if (g_cwd == TRASH_URI) g_cwd = q.root;
+    if (g_cwd == TRASH_URI || g_cwd == NETWORK_URI) g_cwd = q.root;
     g_searching = true;
   }
   g_search_desc = q.name.empty() ? (q.content.empty() ? "files" : "\"" + q.content + "\"") : q.name;
@@ -2578,6 +2818,7 @@ static void show_preferences() {
   y += 6;
   heading("Thumbnails");
   Fl_Check_Button *th = check("Show image thumbnails", S.thumbnails);
+  Fl_Check_Button *rth = check("Also for files on network locations (slower)", S.remote_thumbs);
   Fl_Spinner *tmax = new Fl_Spinner(200, y, 80, 26, "Only for files up to:");
   tmax->range(1, 1024);
   tmax->value(S.thumb_max_mb);
@@ -2598,7 +2839,8 @@ static void show_preferences() {
   w->show();
   while (w->shown()) Fl::wait();
   bool reload = S.show_hidden != (bool)hid->value() || S.folders_first != (bool)ff->value() ||
-                S.thumbnails != (bool)th->value() || S.thumb_max_mb != (int)tmax->value();
+                S.thumbnails != (bool)th->value() || S.thumb_max_mb != (int)tmax->value() ||
+                S.remote_thumbs != (bool)rth->value();
   bool view_changed = S.def.view != (ViewMode)view->value();
   S.def.view = (ViewMode)view->value();
   S.date_fmt = date->value();
@@ -2611,6 +2853,7 @@ static void show_preferences() {
   bool tabs_changed = S.always_tabs != (bool)atabs->value();
   S.always_tabs = atabs->value();
   S.thumbnails = th->value();
+  S.remote_thumbs = rth->value();
   S.thumb_max_mb = (int)tmax->value();
   save_settings();
   Fl::delete_widget(w);
@@ -2711,7 +2954,8 @@ static void update_tabbar() {
     bool searching = cur ? g_searching : t->searching;
     fld::TabInfo ti;
     ti.label = location_name(cwd, searching, cur ? g_search_desc : t->search_desc);
-    ti.tooltip = cwd == TRASH_URI ? "Trash" : fld::tilde(cwd);
+    std::string ru = remote_uri(cwd);
+    ti.tooltip = cwd == TRASH_URI ? "Trash" : cwd == NETWORK_URI ? "Network" : !ru.empty() ? ru : fld::tilde(cwd);
     ti.busy = t->search->running();
     tabs.push_back(ti);
   }
@@ -2842,6 +3086,73 @@ static fld::TabBar *make_tabbar(int W) {
   return tb;
 }
 
+// ---------------------------------------------------------------------------
+// Network locations (GVfs)
+
+// Mounts a location (smb://server/share...) and opens its folder here, in a
+// new window or in a new tab
+static void mount_and_go(const std::string &uri, int where) {
+#ifdef FLD_HAVE_GVFS
+  if (gv::uri_scheme(uri) == "network") {
+    if (where == 2) new_tab(NETWORK_URI);
+    else if (where == 1) fld::spawn({"fl-files", NETWORK_URI});
+    else navigate(NETWORK_URI);
+    return;
+  }
+  if (where == 1) {
+    fld::spawn({"fl-files", uri});
+    return;
+  }
+  std::string name = gv::display_name_for_uri(uri);
+  g_status->copy_label(fld::escape_at("Connecting to " + name + "…").c_str());
+  gv::Client::get().mount_uri(uri, [uri, name, where](const std::string &err, const std::string &path) {
+    update_status();
+    if (err == gv::kCancelled) return;
+    if (!err.empty()) {
+      fl_alert("Could not open %s:\n%s", fld::escape_at(uri).c_str(), fld::escape_at(err).c_str());
+      return;
+    }
+    gv::Client::get().refresh();
+    if (where == 2) new_tab(path);
+    else navigate(path);
+  });
+#else
+  (void)where;
+  fl_alert("fl-files was built without GVfs: it cannot open %s.", fld::escape_at(uri).c_str());
+#endif
+}
+
+static void connect_to_server() {
+#ifdef FLD_HAVE_GVFS
+  fld::Ini c;
+  c.load(settings_path());
+  std::vector<std::string> recent;
+  for (int i = 0; i < 10; i++) {
+    std::string r = c.get("Servers", "Recent" + std::to_string(i), "");
+    if (!r.empty()) recent.push_back(r);
+  }
+  bool bookmark = false;
+  std::string uri = connect_dialog(recent, bookmark);
+  if (!uri.empty() && !gv::looks_like_uri(uri)) {
+    fl_alert("\"%s\" is not a server address.\nIt starts with the kind of server, for example smb://, sftp:// or ftp://.",
+             fld::escape_at(uri).c_str());
+    uri.clear();
+  }
+  if (!uri.empty()) {
+    recent.erase(std::remove(recent.begin(), recent.end(), uri), recent.end());
+    recent.insert(recent.begin(), uri);
+  }
+  c.remove_group("Servers");
+  for (size_t i = 0; i < recent.size() && i < 10; i++) c.set("Servers", "Recent" + std::to_string(i), recent[i]);
+  c.save(settings_path());
+  if (uri.empty()) return;
+  if (bookmark) add_bookmark_uri(uri, gv::display_name_for_uri(uri));
+  mount_and_go(uri);
+#else
+  fl_alert("fl-files was built without GVfs support.");
+#endif
+}
+
 static void edit_location();
 static void toggle_menubar();
 static void select_all();
@@ -2938,7 +3249,8 @@ static void view_items(fld::Menu &m) {
 
 // for_bar: the menu bar's menus, else the menu button's menu
 static void build_menu(fld::Menu &m, bool for_bar) {
-  bool trash = in_trash(), search = in_search(), have_sel = g_view && !g_view->sel.empty();
+  // the trash and the network view take no new files
+  bool trash = in_trash() || in_network(), search = in_search(), have_sel = g_view && !g_view->sel.empty();
   auto toggles = [&] {
     m.toggle("Folder &Tree", S.show_tree, [] { show_tree(!S.show_tree); });
     m.toggle("Show &Hidden Files", S.show_hidden, [] { toggle_hidden(); });
@@ -2957,6 +3269,9 @@ static void build_menu(fld::Menu &m, bool for_bar) {
     m.divider();
     m.item("&Find Files…", [] { show_search_bar(true); }, 0, FL_CTRL + FL_SHIFT + 'f');
     m.item("&Bookmark This Folder", [] { add_bookmark(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'd');
+#ifdef FLD_HAVE_GVFS
+    m.item("Connect to &Server…", [] { connect_to_server(); });
+#endif
     m.divider();
     m.submenu("&View");
     view_items(m);
@@ -2977,6 +3292,9 @@ static void build_menu(fld::Menu &m, bool for_bar) {
   m.item("New &Folder…", [] { new_item(true); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + FL_SHIFT + 'n');
   m.item("New &Empty File…", [] { new_item(false); }, trash || search ? FL_MENU_INACTIVE : 0);
   m.divider();
+#ifdef FLD_HAVE_GVFS
+  m.item("Connect to &Server…", [] { connect_to_server(); }, FL_MENU_DIVIDER);
+#endif
   m.item("Open Terminal &Here", [] { fld::spawn(fld::shell_split(fld::terminal_command()), g_cwd); },
          (trash || search ? FL_MENU_INACTIVE : 0) | FL_MENU_DIVIDER);
   m.item("P&roperties", [] { properties(g_view->sel.empty() ? std::vector<std::string>{g_cwd} : g_view->selected_paths()); },
@@ -3016,6 +3334,9 @@ static void build_menu(fld::Menu &m, bool for_bar) {
   m.divider();
   m.item("&Home", [] { navigate(fld::home_dir()); }, 0, FL_ALT + FL_Home);
   m.item("&Trash", [] { navigate(TRASH_URI); });
+#ifdef FLD_HAVE_GVFS
+  m.item("&Network", [] { navigate(NETWORK_URI); });
+#endif
   m.item("File &System", [] { navigate("/"); }, FL_MENU_DIVIDER);
   m.item("&Location…", [] { edit_location(); }, 0, FL_CTRL + 'l');
   m.end_submenu();
@@ -3095,15 +3416,24 @@ int main(int argc, char **argv) {
   fld::init_app("fl-files", argc, argv);
   Fl::lock(); // enable Fl::awake from worker threads
   load_settings();
-  std::string start = fld::home_dir();
+  std::string start = fld::home_dir(), start_uri;
+  bool connect = false;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
-    if (a == "-h" || a == "--help") { printf("Usage: fl-files [folder|trash:///]\n"); return 0; }
+    if (a == "-h" || a == "--help") {
+      printf("Usage: fl-files [--connect] [folder|trash:///|network:///|smb://server/share|sftp://host/...]\n");
+      return 0;
+    }
+    if (a == "--connect") { connect = true; continue; }
     if (a[0] == '-') continue;
+    if (a == NETWORK_URI || a == "network:") { start = NETWORK_URI; continue; }
+#ifdef FLD_HAVE_GVFS
+    if (gv::looks_like_uri(a)) { start_uri = a; continue; }
+#endif
     if (a == TRASH_URI || a == "trash:") start = TRASH_URI;
     else if (fld::starts_with(a, "file://")) start = fld::uri_decode(a.substr(7));
     else start = a;
-    if (start != TRASH_URI && !fld::is_dir(start)) start = fld::dirname(fld::abs_path(start));
+    if (start != TRASH_URI && start != NETWORK_URI && !fld::is_dir(start)) start = fld::dirname(fld::abs_path(start));
   }
 
   const int W = 980, H = 640, TB = TOOLBAR_H, ST = STATUS_H;
@@ -3126,6 +3456,11 @@ int main(int argc, char **argv) {
   g_path->callback([](Fl_Widget *w, void *) {
     std::string v = fld::trim(((Fl_Input *)w)->value());
     if (v == "Trash" || v == "trash:///" || v == "trash:") navigate(TRASH_URI);
+    else if (v == "Network" || v == "network:///" || v == "network:") navigate(NETWORK_URI);
+#ifdef FLD_HAVE_GVFS
+    else if (gv::looks_like_uri(v)) mount_and_go(v);
+#endif
+    else if (fld::starts_with(v, "file://")) navigate(fld::uri_decode(v.substr(7)));
     else navigate(fld::expand_tilde(v));
   });
   g_path->tooltip("Location (Ctrl+L)");
@@ -3262,11 +3597,25 @@ int main(int argc, char **argv) {
   };
   ud::Client::get().start();
 #endif
+#ifdef FLD_HAVE_GVFS
+  gv::Client &gc = gv::Client::get();
+  gc.ask_password = gvfs_password_dialog;
+  gc.ask_question = gvfs_question_dialog;
+  gc.on_changed = [] {
+    fill_places();
+    select_place_for(g_cwd);
+    show_location(); // a mount's name and location
+    update_tabbar();
+  };
+  gc.start();
+#endif
   fill_places();
   update_view_button();
   new_tab(start);
   if (S.show_tree) show_tree(true);
   g_win->show(); // not show(argc, argv): it resets the theme colors
   g_view->take_focus();
+  if (!start_uri.empty()) mount_and_go(start_uri);
+  if (connect) Fl::add_timeout(0.2, [](void *) { connect_to_server(); });
   return Fl::run();
 }

@@ -236,11 +236,14 @@ Description: fldesktop image viewer
 Package: fldesktop-files
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, shared-mime-info
-Recommends: xdg-utils, udisks2
+Recommends: xdg-utils, udisks2, gvfs, gvfs-fuse
+Suggests: gvfs-backends
 Description: fldesktop file manager
- fl-files is a file manager with icon and list views, thumbnails, the XDG
- trash, background copy and move, drag and drop and "open with". With
- udisks2 it lists drives and mounts, unmounts and ejects them.
+ fl-files is a file manager with tabs, icon and list views, thumbnails, the
+ XDG trash, background copy and move, drag and drop and "open with". With
+ udisks2 it lists drives and mounts, unmounts and ejects them; with gvfs,
+ gvfs-fuse and gvfs-backends it opens network shares (SMB, SFTP, FTP,
+ WebDAV, NFS), phones and cameras.
 
 Package: fldesktop-edit
 Architecture: any

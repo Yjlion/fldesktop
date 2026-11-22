@@ -208,7 +208,10 @@ package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _a
 package_fldesktop-files() {
   pkgdesc="fldesktop file manager"
   depends=(fltk glib2 shared-mime-info)
-  optdepends=('udisks2: list, mount and eject drives')
+  optdepends=('udisks2: list, mount and eject drives'
+              'gvfs: network locations, phones and cameras (with gvfs-fuse)'
+              'gvfs-smb: Windows shares' 'gvfs-mtp: phones' 'gvfs-gphoto2: cameras'
+              'gvfs-nfs: NFS shares' 'gvfs-dnssd: finding servers on the network')
   _app files
 }
 package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _app edit; }

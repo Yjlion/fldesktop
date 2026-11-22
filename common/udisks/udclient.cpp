@@ -26,6 +26,33 @@ const Volume *State::by_mount_point(const std::string &mp) const {
   return nullptr;
 }
 
+const Drive *State::drive_for_device(const std::string &dev) const {
+  for (auto &d : drives)
+    if (!dev.empty() && d.device == dev) return &d;
+  return nullptr;
+}
+
+std::string health_text(const Drive &d) {
+  if (!d.smart_supported) return "";
+  if (d.smart_failing) return "FAILING: the drive reports it is about to fail. Back up its data now.";
+  if (!d.nvme_warnings.empty()) return "Warning: " + fld::join(d.nvme_warnings, ", ") + ". Back up its data.";
+  if (!d.nvme && !d.smart_enabled) return "SMART is turned off";
+  std::string s = d.bad_sectors > 0 ? std::to_string(d.bad_sectors) + " bad sectors" : "Healthy";
+  char buf[64];
+  if (d.temperature_c > 0) {
+    snprintf(buf, sizeof buf, " · %.0f °C", d.temperature_c);
+    s += buf;
+  }
+  if (d.power_on_seconds > 0) {
+    double h = d.power_on_seconds / 3600.0;
+    if (h < 48) snprintf(buf, sizeof buf, " · powered on %.0f hours", h);
+    else if (h < 24 * 365) snprintf(buf, sizeof buf, " · powered on %.0f days", h / 24);
+    else snprintf(buf, sizeof buf, " · powered on %.1f years", h / 24 / 365.25);
+    s += buf;
+  }
+  return s;
+}
+
 namespace {
 
 const char *kBus = "org.freedesktop.UDisks2";
@@ -33,6 +60,9 @@ const char *kBlock = "org.freedesktop.UDisks2.Block";
 const char *kFs = "org.freedesktop.UDisks2.Filesystem";
 const char *kEncrypted = "org.freedesktop.UDisks2.Encrypted";
 const char *kDrive = "org.freedesktop.UDisks2.Drive";
+const char *kAta = "org.freedesktop.UDisks2.Drive.Ata";
+const char *kNvme = "org.freedesktop.UDisks2.NVMe.Controller";
+const char *kPartition = "org.freedesktop.UDisks2.Partition";
 
 // ---- GLib thread state --------------------------------------------------------
 GDBusConnection *g_bus = nullptr;
@@ -69,6 +99,34 @@ std::string prop_bytes(GDBusProxy *p, const char *name) {
   if (v && g_variant_is_of_type(v, G_VARIANT_TYPE_BYTESTRING)) s = g_variant_get_bytestring(v);
   if (v) g_variant_unref(v);
   return s;
+}
+
+// any numeric property as a double (0 when missing)
+double prop_number(GDBusProxy *p, const char *name) {
+  GVariant *v = prop(p, name);
+  double n = 0;
+  if (v) {
+    if (g_variant_is_of_type(v, G_VARIANT_TYPE_DOUBLE)) n = g_variant_get_double(v);
+    else if (g_variant_is_of_type(v, G_VARIANT_TYPE_UINT64)) n = (double)g_variant_get_uint64(v);
+    else if (g_variant_is_of_type(v, G_VARIANT_TYPE_INT64)) n = (double)g_variant_get_int64(v);
+    else if (g_variant_is_of_type(v, G_VARIANT_TYPE_UINT32)) n = g_variant_get_uint32(v);
+    else if (g_variant_is_of_type(v, G_VARIANT_TYPE_INT32)) n = g_variant_get_int32(v);
+    else if (g_variant_is_of_type(v, G_VARIANT_TYPE_UINT16)) n = g_variant_get_uint16(v);
+    g_variant_unref(v);
+  }
+  return n;
+}
+
+std::vector<std::string> prop_strv(GDBusProxy *p, const char *name) {
+  std::vector<std::string> out;
+  GVariant *v = prop(p, name);
+  if (v && g_variant_is_of_type(v, G_VARIANT_TYPE_STRING_ARRAY)) {
+    const gchar **a = g_variant_get_strv(v, nullptr);
+    for (const gchar **i = a; i && *i; i++) out.push_back(*i);
+    g_free(a);
+  }
+  if (v) g_variant_unref(v);
+  return out;
 }
 
 bool prop_bool(GDBusProxy *p, const char *name) {
@@ -129,9 +187,49 @@ State build_state() {
       di.can_eject = prop_bool(d, "Ejectable") || prop_bool(d, "CanPowerOff");
       di.optical = prop_bool(d, "Optical");
       drives[g_dbus_object_get_object_path(o)] = di;
+      Drive dr;
+      dr.path = g_dbus_object_get_object_path(o);
+      dr.name = di.name;
+      dr.serial = prop_string(d, "Serial");
+      if (GDBusProxy *a = iface(o, kAta)) {
+        dr.smart_supported = prop_bool(a, "SmartSupported");
+        dr.smart_enabled = prop_bool(a, "SmartEnabled");
+        dr.smart_failing = prop_bool(a, "SmartFailing");
+        double k = prop_number(a, "SmartTemperature");
+        dr.temperature_c = k > 0 ? k - 273.15 : 0;
+        dr.power_on_seconds = (unsigned long long)prop_number(a, "SmartPowerOnSeconds");
+        GVariant *bs = prop(a, "SmartNumBadSectors");
+        if (bs && g_variant_is_of_type(bs, G_VARIANT_TYPE_INT64)) dr.bad_sectors = g_variant_get_int64(bs);
+        if (bs) g_variant_unref(bs);
+        g_object_unref(a);
+      }
+      if (GDBusProxy *n = iface(o, kNvme)) {
+        dr.nvme = true;
+        dr.smart_supported = dr.smart_enabled = true;
+        dr.nvme_warnings = prop_strv(n, "SmartCriticalWarning");
+        double k = prop_number(n, "SmartTemperature");
+        dr.temperature_c = k > 0 ? k - 273.15 : 0;
+        dr.power_on_seconds = (unsigned long long)(prop_number(n, "SmartPowerOnHours") * 3600);
+        g_object_unref(n);
+      }
+      s.drives.push_back(dr);
       g_object_unref(d);
     }
   }
+  // each drive's whole-disk block device
+  for (GList *l = objs; l; l = l->next) {
+    GDBusObject *o = G_DBUS_OBJECT(l->data);
+    GDBusProxy *b = iface(o, kBlock);
+    if (!b) continue;
+    GDBusProxy *part = iface(o, kPartition);
+    std::string drive = prop_string(b, "Drive");
+    if (!part && !drive.empty())
+      for (auto &dr : s.drives)
+        if (dr.path == drive && dr.device.empty()) dr.device = prop_bytes(b, "Device");
+    if (part) g_object_unref(part);
+    g_object_unref(b);
+  }
+  std::sort(s.drives.begin(), s.drives.end(), [](const Drive &a, const Drive &b) { return a.device < b.device; });
   std::map<std::string, std::string> cleartext_of; // encrypted block -> cleartext block
   for (GList *l = objs; l; l = l->next) {
     GDBusObject *o = G_DBUS_OBJECT(l->data);

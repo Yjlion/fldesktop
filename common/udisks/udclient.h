@@ -31,9 +31,28 @@ struct Volume {
   bool mounted() const { return !mount_point.empty(); }
 };
 
+// A drive with its health (SMART) as UDisks reports it.
+struct Drive {
+  std::string path;             // UDisks2 drive object path
+  std::string device;           // its whole-disk block device, /dev/sda
+  std::string name;             // vendor + model
+  std::string serial;
+  bool smart_supported = false; // ATA SMART or NVMe health data is available
+  bool smart_enabled = false;
+  bool smart_failing = false;   // the drive predicts it will fail
+  bool nvme = false;
+  double temperature_c = 0;     // 0 = unknown
+  unsigned long long power_on_seconds = 0;
+  long long bad_sectors = -1;   // -1 = unknown
+  std::vector<std::string> nvme_warnings; // NVMe SmartCriticalWarning: spare, temperature, degraded, readonly, ...
+  bool healthy() const { return !smart_failing && nvme_warnings.empty() && bad_sectors <= 0; }
+};
+
 struct State {
   bool running = false;          // udisksd is on the bus
   std::vector<Volume> volumes;   // removable first, then by name
+  std::vector<Drive> drives;     // drives with a block device, by device
+  const Drive *drive_for_device(const std::string &dev) const;
   const Volume *volume(const std::string &path) const;
   const Volume *by_mount_point(const std::string &mp) const;
 };
@@ -66,6 +85,9 @@ private:
 std::string error_text(const std::string &dbus_error_name, const std::string &message);
 // The name to show: hint name, file system label, else "<size> Volume".
 std::string volume_label(const std::string &hint_name, const std::string &id_label, unsigned long long size);
+// One line about a drive's health: "Healthy · 34 °C · powered on 1.2 years",
+// "FAILING: back up its data now", "" when no data.
+std::string health_text(const Drive &d);
 // Whether a block device is shown as a volume.
 bool volume_shown(const std::string &id_usage, bool hint_ignore, bool hint_system, bool mounted,
                   const std::string &mount_point);

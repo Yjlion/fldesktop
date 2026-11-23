@@ -7,7 +7,8 @@ pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
-         fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring)
+         fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring
+         fldesktop-passwords fldesktop-logs fldesktop-services fldesktop-paint fldesktop-fonts fldesktop-clock fldesktop-remote fldesktop-scan fldesktop-welcome)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
@@ -69,7 +70,7 @@ package_fldesktop() {
   depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
            fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-taskmgr fldesktop-sysinfo
            fldesktop-mixer fldesktop-polkit-agent fldesktop-network fldesktop-notifyd
-           xdg-desktop-portal-fl fldesktop-lock fldesktop-icon-theme)
+           xdg-desktop-portal-fl fldesktop-lock fldesktop-icon-theme fldesktop-welcome)
   optdepends=('fldesktop-greeter: graphical login with greetd'
               'adwaita-icon-theme: default icon theme'
               'fldesktop-printers: printer settings'
@@ -83,6 +84,14 @@ package_fldesktop() {
               'fldesktop-disks: disk and partition manager'
               'fldesktop-web: web browser'
               'fldesktop-docs: document viewer (PDF, EPUB, ODT, Markdown, comic books)'
+              'fldesktop-passwords: passwords and keys (Secret Service, SSH, GPG)'
+              'fldesktop-logs: log viewer (journal, syslog, OpenRC)'
+              'fldesktop-services: service manager (systemd, OpenRC)'
+              'fldesktop-paint: drawing program'
+              'fldesktop-fonts: font manager'
+              'fldesktop-clock: clocks, alarms and timers'
+              'fldesktop-remote: VNC and RDP remote desktop viewer'
+              'fldesktop-scan: document scanner (SANE)'
               'plymouth: boot splash'
               'fldesktop-plymouth-theme: the fldesktop boot splash')
   arch=(any)
@@ -218,6 +227,67 @@ package_fldesktop-media-player() {
   conflicts=(fldesktop-video)
   _app media-player
   _install_files usr/bin/fl-video usr/share/man/man1/fl-video.1
+}
+package_fldesktop-passwords() {
+  pkgdesc="fldesktop passwords and keys (Secret Service, SSH, GPG)"
+  depends=(fltk glib2)
+  optdepends=('gnome-keyring: a password store' 'openssh: SSH keys' 'gnupg: GPG keys')
+  _app keyring
+}
+
+package_fldesktop-logs() {
+  pkgdesc="fldesktop log viewer (journal, syslog, OpenRC)"
+  depends=(fltk)
+  _app logs
+}
+
+package_fldesktop-services() {
+  pkgdesc="fldesktop service manager (systemd, OpenRC)"
+  depends=(fltk polkit)
+  _app services
+  _install_files usr/lib/fldesktop/fl-services-helper usr/share/polkit-1/actions/org.fldesktop.services.policy
+}
+
+package_fldesktop-paint() {
+  pkgdesc="fldesktop drawing program"
+  depends=(fltk)
+  optdepends=('wl-clipboard: copy pictures')
+  _app paint
+}
+
+package_fldesktop-fonts() {
+  pkgdesc="fldesktop font manager"
+  depends=(fltk fontconfig)
+  _app fonts
+}
+
+package_fldesktop-clock() {
+  pkgdesc="fldesktop clocks, alarms and timers"
+  depends=(fltk glib2 tzdata)
+  optdepends=('pipewire: alarm sounds' 'sound-theme-freedesktop: the alarm sound')
+  _app clock
+}
+
+package_fldesktop-remote() {
+  pkgdesc="fldesktop VNC and RDP remote desktop viewer"
+  depends=(fltk)
+  optdepends=('freerdp: RDP connections')
+  _app remote
+}
+
+package_fldesktop-scan() {
+  pkgdesc="fldesktop document scanner (SANE)"
+  depends=(fltk cairo sane)
+  optdepends=('sane-airscan: network scanners')
+  _app scan
+}
+
+package_fldesktop-welcome() {
+  pkgdesc="fldesktop first-login tour"
+  depends=(fltk)
+  optdepends=('flatpak: Flathub')
+  _app welcome
+  _install_files etc/xdg/autostart/fl-welcome.desktop
 }
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }

@@ -71,10 +71,12 @@ Depends: fldesktop-wm (>= ${source:Version}),
          xdg-desktop-portal-fl (>= ${source:Version}),
          fldesktop-icon-theme (>= ${source:Version}),
          fldesktop-lock (>= ${source:Version}),
+         fldesktop-welcome (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-media-player,
             fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
+            fldesktop-passwords, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
             plymouth, fldesktop-plymouth-theme
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
@@ -424,3 +426,71 @@ Recommends: firewalld
 Description: fldesktop firewall settings
  fl-firewall configures firewalld: default zone, panic mode, and per zone
  services, ports, interfaces, sources, masquerading and port forwarding.
+
+Package: fldesktop-passwords
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: gnome-keyring, openssh-client, gnupg
+Description: fldesktop passwords and keys (Secret Service, SSH, GPG)
+ fl-keyring shows and edits the passwords programs keep in the Secret Service
+ (GNOME Keyring, KeePassXC), and makes, copies and deletes SSH and GPG keys.
+
+Package: fldesktop-logs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop log viewer (journal, syslog, OpenRC)
+ fl-logs shows the systemd journal or the syslog and OpenRC log files, coloured
+ by priority, filtered by priority, program and text, and follows new entries.
+
+Package: fldesktop-services
+Architecture: any
+Depends: pkexec | policykit-1, ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop service manager (systemd, OpenRC)
+ fl-services starts, stops, restarts, enables and disables system services of
+ systemd or OpenRC, and shows their status.
+
+Package: fldesktop-paint
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: wl-clipboard
+Description: fldesktop drawing program
+ fl-paint is a simple raster drawing program: brush, eraser, shapes, fill,
+ text, selections, layers and undo; PNG, JPEG, BMP and GIF in, PNG out.
+
+Package: fldesktop-fonts
+Architecture: any
+Depends: fontconfig, ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop font manager
+ fl-fonts previews the installed fonts with any text and size and installs
+ and removes fonts in ~/.local/share/fonts.
+
+Package: fldesktop-clock
+Architecture: any
+Depends: tzdata, ${shlibs:Depends}, ${misc:Depends}
+Recommends: pipewire-bin | pulseaudio-utils, sound-theme-freedesktop
+Description: fldesktop clocks, alarms and timers
+ fl-clock shows world clocks and has alarms (with snooze, also when it is
+ closed), a timer and a stopwatch.
+
+Package: fldesktop-remote
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: freerdp3-wayland | freerdp2-wayland | freerdp3-x11 | freerdp2-x11
+Description: fldesktop VNC and RDP remote desktop viewer
+ fl-remote keeps a list of connections to other computers and shows VNC
+ desktops in a window of its own; RDP connections open in FreeRDP.
+
+Package: fldesktop-scan
+Architecture: any
+Depends: sane-utils, ${shlibs:Depends}, ${misc:Depends}
+Recommends: sane-airscan
+Description: fldesktop document scanner (SANE)
+ fl-scan scans with SANE: preview, choose an area, scan pages from the glass
+ or the feeder, and save them as one PDF or as PNG pictures.
+
+Package: fldesktop-welcome
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop first-login tour
+ fl-welcome is a short tour at the first login: light or dark, the accent
+ colour, a wallpaper, the panel position, the keyboard layout and Flathub.

@@ -25,6 +25,15 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-sysinfo** | System information: computer and firmware, processor (cores, speeds, caches, mitigations), memory, graphics and outputs, disks and file systems, network interfaces, PCI and USB devices, batteries, temperatures and fans; copy or save it as a report |
 | **fl-disks** | Disk and partition manager on parted: new GPT or MBR tables, create, delete, format (ext4, Btrfs, XFS, FAT32, exFAT, NTFS, swap), resize and move partitions, names and flags, a partition bar with the used space, drive health (SMART), backing a disk up to an image and writing images to USB sticks; warns first and asks again before anything that erases data |
+| **fl-paint** | Drawing program: brush, eraser, lines, rectangles and ellipses (outlined or filled), fill, text, a selection with copy, cut, paste and crop, a colour picker, layers with opacity, undo, zoom, resize, rotate and flip; PNG, JPEG, BMP and GIF in, PNG out |
+| **fl-scan** | Scanning with SANE (scanimage): preview, an area to scan, the glass or the document feeder, pages reordered and saved as one PDF or as PNG pictures |
+| **fl-remote** | Remote desktop: saved VNC and RDP connections; VNC in a window of its own (its own RFB client, VNC passwords, scaling, clipboard text, Ctrl+Alt+Delete), RDP through FreeRDP |
+| **fl-keyring** | Passwords and keys: the passwords in the Secret Service (GNOME Keyring, KeePassXC) shown, copied, changed, added and deleted, keyrings locked and unlocked; SSH keys (generate, copy, passphrase, delete) and GPG keys (generate, import, copy, delete) |
+| **fl-logs** | Log viewer: the systemd journal (system or user, by boot or time) or the syslog and OpenRC files in /var/log; priority colours, filters by priority, program and text, following new entries, all fields of an entry, saving as text |
+| **fl-services** | Services of systemd or OpenRC: start, stop, restart, enable, disable (through polkit), state and status; systemd user services |
+| **fl-fonts** | Fonts: every family and style previewed with any text and size, monospace and own fonts filters, installing font files for yourself and removing them |
+| **fl-clock** | World clocks, alarms (repeat on days, snooze, ringing also when closed), a timer and a stopwatch with laps |
+| **fl-welcome** | First-login tour: light or dark, accent colour, wallpaper, panel position, keyboard layout and Flathub |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
 | **fl-cliphist** | Clipboard history: texts and images, pins, a list in the panel; password managers' copies are not kept |

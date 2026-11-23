@@ -28,6 +28,13 @@
 #include "fld/widgets.h"
 #include "settings_common.h"
 #include "settings_page.h"
+#ifdef FLD_HAVE_FPRINT
+#include <FL/Fl_Progress.H>
+
+#include <memory>
+
+#include "fprint.h"
+#endif
 #include "users_model.h"
 
 #ifndef FLD_LIBEXECDIR
@@ -284,6 +291,82 @@ std::string find_picture(const Account &a) {
   return "";
 }
 
+#ifdef FLD_HAVE_FPRINT
+// Fingerprints of a user (fprintd): the enrolled fingers, enrolling one more
+// with the reader's stages, deleting them all.
+void fingerprint_dialog(const std::string &user) {
+  Fl_Double_Window d(440, 380, "Fingerprints");
+  d.set_modal();
+  Fl_Box head(16, 10, 408, 26, "Fingers that unlock the screen and log in:");
+  head.align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
+  Fl_Hold_Browser list(16, 40, 408, 120);
+  Fl_Choice finger(110, 172, 200, 28, "New finger:");
+  for (auto &f : fprint::all_fingers()) finger.add(fprint::finger_label(f).c_str());
+  finger.value(0);
+  Fl_Button enroll(318, 172, 106, 28, "Enroll…");
+  Fl_Progress progress(16, 212, 408, 20);
+  progress.minimum(0);
+  progress.maximum(1);
+  progress.selection_color(palette().accent);
+  Fl_Box status(16, 238, 408, 44, "");
+  status.align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_WRAP);
+  Fl_Box note(16, 284, 408, 40, "Logging in with a finger needs pam_fprintd in the PAM setup of greetd and polkit.");
+  note.align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_WRAP);
+  note.labelsize(11);
+  note.labelcolor(palette().fg_dim);
+  Fl_Button del(16, 336, 120, 30, "Delete All…");
+  Fl_Button close(324, 336, 100, 30, "Close");
+  struct Ctx {
+    std::string user;
+    Fl_Hold_Browser *list;
+    Fl_Choice *finger;
+    Fl_Progress *progress;
+    Fl_Box *status;
+    std::string status_text;
+    std::unique_ptr<fprint::Enroll> enroll;
+    void fill() {
+      list->clear();
+      for (auto &f : fprint::enrolled(user)) list->add(fprint::finger_label(f).c_str());
+      if (list->size() == 0) list->add("@iNone yet");
+    }
+    void say(const std::string &t) {
+      status_text = t;
+      status->label(status_text.c_str());
+      status->redraw();
+    }
+  } ctx{user, &list, &finger, &progress, &status, "", nullptr};
+  ctx.fill();
+  enroll.callback([](Fl_Widget *, void *v) {
+    Ctx *c = (Ctx *)v;
+    if (c->enroll) return;
+    std::string f = fprint::all_fingers()[(size_t)std::max(0, c->finger->value())];
+    c->progress->value(0);
+    c->say("Starting…");
+    c->enroll.reset(new fprint::Enroll(c->user, f, [c](int stage, int stages, const std::string &t, bool done, bool ok) {
+      c->progress->value(stages > 0 ? (float)stage / stages : 0);
+      c->say(t);
+      if (done) {
+        // the enroller ends itself; drop it after this callback
+        Fl::add_timeout(0, [](void *v) { ((Ctx *)v)->enroll.reset(); }, c);
+        if (ok) c->fill();
+      }
+    }));
+  }, &ctx);
+  del.callback([](Fl_Widget *, void *v) {
+    Ctx *c = (Ctx *)v;
+    if (fl_choice("Delete all fingerprints of %s?", "Cancel", "Delete", nullptr, c->user.c_str()) != 1) return;
+    std::string err;
+    if (!fprint::delete_all(c->user, err)) fl_alert("The fingerprints were not deleted: %s", err.c_str());
+    c->fill();
+  }, &ctx);
+  close.callback([](Fl_Widget *w, void *) { w->window()->hide(); });
+  d.end();
+  d.show();
+  while (d.shown()) Fl::wait();
+  ctx.enroll.reset();
+}
+#endif
+
 class UsersPage : public Fl_Group {
 public:
   std::vector<Group> groups;
@@ -293,6 +376,7 @@ public:
   bool greetd = false, busy = false;
   Fl_Hold_Browser *list;
   Fl_Button *add_b, *remove_b, *pic_b, *pic_rm, *pw_b, *apply, *revert;
+  Fl_Button *fp_b = nullptr;
   Picture *pic;
   Fl_Input *full;
   Fl_Box *uname, *status;
@@ -339,6 +423,16 @@ public:
     f.row("Password:", 28, wx, wy, ww);
     pw_b = new Fl_Button(wx, wy, 180, 28, "Change Password…");
     pw_b->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->change_password(); }, this);
+#ifdef FLD_HAVE_FPRINT
+    // fingerprints: when there is a reader
+    if (fprint::available()) {
+      fp_b = new Fl_Button(wx + 190, wy, 150, 28, "Fingerprints…");
+      fp_b->callback([](Fl_Widget *, void *d) {
+        UsersPage *p = (UsersPage *)d;
+        if (const Account *a = p->current()) fingerprint_dialog(a->name);
+      }, this);
+    }
+#endif
     f.row("", 26, wx, wy, ww);
     auto_b = new Fl_Check_Button(wx, wy, ww, 26, "Log in automatically when the computer starts");
     auto_b->callback(changed, this);
@@ -427,6 +521,8 @@ public:
     for (auto &gname : editable) grp->add(gname.c_str(), a->in(gname) ? 1 : 0);
     pic->set(find_picture(*a), a->real_name.empty() ? a->name : a->real_name);
     if (a->uid == getuid()) remove_b->deactivate();
+    // others' fingers need an administrator (fprintd asks polkit)
+    if (fp_b) a->uid == getuid() || !admin.empty() ? fp_b->activate() : fp_b->deactivate();
     apply->deactivate();
     revert->deactivate();
     redraw();

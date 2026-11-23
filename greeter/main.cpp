@@ -220,8 +220,10 @@ static void login() {
         }
         ok = g_greetd->post_response(&answer, reply, err);
       } else {
-        // info / error messages: show them and acknowledge
+        // info / error messages: show them and acknowledge ("Place your
+        // finger on the reader": greetd answers once pam_fprintd has one)
         set_message(msg, mtype == "error");
+        Fl::flush();
         ok = g_greetd->post_response(nullptr, reply, err);
       }
       if (!ok) {

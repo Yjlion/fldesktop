@@ -23,6 +23,11 @@ fl-wm starts it again and the screen stays covered.
 \fBfl-lock \-\-daemon\fR, started at login, locks the session when logind
 asks (\fBloginctl lock-session\fR) and before the system suspends, holding
 the suspend back for a moment with a logind delay inhibitor.
+.SH FINGERPRINTS
+When \fBfprintd\fR(1) runs and the user has enrolled a finger (Settings >
+Users > Fingerprints), touching the reader unlocks as well; the password
+field stays ready meanwhile. After a few mismatches only the password is
+left.
 .SH CONFIGURATION
 Settings > Screen Lock, or by hand:
 .TP

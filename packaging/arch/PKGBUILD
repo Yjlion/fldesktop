@@ -118,6 +118,7 @@ package_fldesktop-shell() {
               'upower: battery indicator and low battery warnings'
               'power-profiles-daemon: power modes'
               'iio-sensor-proxy: turning the screen of convertibles and tablets'
+              'fprintd: fingerprints for unlocking and logging in'
               'udisks2: mounting drives as they are plugged in'
               'fldesktop-polkit-agent: administrator password prompts'
               'fldesktop-notifyd: notifications and their history'

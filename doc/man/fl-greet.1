@@ -21,6 +21,13 @@ An on-screen keyboard is built in. \fBKeyboard=button\fR (the default) adds a
 Keyboard button that shows it, \fBalways\fR shows it from the start (for
 touch-only devices) and \fBnever\fR removes the button.
 \fBKeyboardLayout\fR selects its layout: \fBus\fR, \fBde\fR or \fBfr\fR.
+.SH FINGERPRINTS
+fl-greet answers greetd's PAM conversation: with \fBpam_fprintd\fR in greetd's
+PAM setup (\fI/etc/pam.d/greetd\fR, e.g. \fBauth sufficient pam_fprintd.so\fR
+before the password line) it shows "Place your finger on the reader" and logs
+in with a finger; an empty password field is fine then. The polkit password
+dialog (\fBfl-polkit-agent\fR(1)) shows the same messages for polkit's PAM
+setup.
 .SH OPTIONS
 .TP
 \fB\-\-demo\fR

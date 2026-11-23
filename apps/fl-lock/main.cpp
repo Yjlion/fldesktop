@@ -27,6 +27,11 @@
 #include <unistd.h>
 
 #include "auth.h"
+#ifdef FLD_HAVE_FPRINT
+#include <memory>
+
+#include "fprint.h"
+#endif
 #include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/osk.h"
@@ -270,6 +275,27 @@ int run_locker() {
   g_win->show();
   g_pass->take_focus();
   Fl::add_timeout(10.0, tick);
+#ifdef FLD_HAVE_FPRINT
+  // a finger unlocks as well, when the user has one enrolled
+  static std::unique_ptr<fprint::Verify> verify;
+  if (fprint::available() && !fprint::enrolled(g_user).empty()) {
+    verify.reset(new fprint::Verify(g_user, [](fprint::Verify::Event e, const std::string &text) {
+      if (g_busy) return;
+      switch (e) {
+        case fprint::Verify::READY: set_message("Type the password or touch the fingerprint reader", false); break;
+        case fprint::Verify::MATCH: {
+          AuthResult r;
+          r.ok = true;
+          finish_auth(r);
+          break;
+        }
+        case fprint::Verify::NO_MATCH:
+        case fprint::Verify::RETRY: set_message(text, true); break;
+        case fprint::Verify::UNAVAILABLE: break;
+      }
+    }));
+  }
+#endif
   return Fl::run();
 }
 

@@ -1,0 +1,18 @@
+.TH FL-LOGS 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-logs \- log viewer
+.SH SYNOPSIS
+\fBfl-logs\fR [\fB\-\-user\fR | \fIFILE\fR]
+.SH DESCRIPTION
+Shows the systemd journal (the system's, or yours with \fB\-\-user\fR) for
+this boot, the boot before, the last hour, today or the last week, or a log
+file in \fI/var/log\fR (syslog, messages, OpenRC's \fIrc.log\fR) on systems
+without systemd. Entries are coloured by priority (errors red, warnings
+yellow) and can be filtered by priority, program and text; new entries
+appear as they come (Follow). Selecting an entry shows all its fields; the
+shown entries can be saved as text.
+.PP
+Reading the system journal needs membership of the \fBsystemd-journal\fR or
+\fBadm\fR group; reading the files in \fI/var/log\fR may need \fBadm\fR.
+.SH SEE ALSO
+\fBjournalctl\fR(1), \fBfl-services\fR(1)

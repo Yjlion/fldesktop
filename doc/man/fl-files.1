@@ -23,6 +23,26 @@ behind the current one (or in a new window, see the preferences). Each tab has i
 history, view and search. Tabs can be dragged to another place, or out of the strip into a
 window of their own; right-click a tab to duplicate it or to close other tabs. The tab bar shows
 with two or more tabs, or always.
+.SS Split view
+F4 (or \fBSplit View\fR in the menus) shows two tabs side by side: the current one and the
+next, or a new tab at the same folder. A click in a pane makes it the current one (a line at its
+top marks it); the toolbar, the location and the keys work on it. The context menu copies or
+moves the selection to the other pane's folder, and files can be dragged between the panes.
+F4 again shows one pane; closing either tab does too.
+.SS Renaming many files
+With more than one item selected, F2 (or \fBRename\fR) opens a dialog that renames them
+together. The name pattern takes \fB{name}\fR (the old name without its extension),
+\fB{ext}\fR (the extension with its dot), \fB{n}\fR (a number, counting from a chosen
+start) and \fB{n:3}\fR (a number with three digits); then a text (or a regular expression,
+with \fB$1\fR in the replacement) is replaced and the letter case changed. A preview shows the
+new names; names used twice or taken by another file stop the rename. Names may swap.
+.SS Properties and the administrator
+The Properties dialog (Alt+Enter) shows the type, size, dates and owner. For one's own files
+it changes the permissions and the group (to one the user is in); for a folder, \fBApply to
+everything inside\fR gives the same read and write permissions to all files and folders inside
+it, and execute to the folders.
+\fBOpen as Administrator\fR (context menu) opens a folder in a new fl-files, or a file in
+\fBfl-edit\fR(1), as root through \fBpkexec\fR(1); that window's title says so.
 .SS Network locations
 With GVfs (\fBgvfs\fR, \fBgvfs-fuse\fR and the backends such as \fBgvfs-smb\fR, \fBgvfs-mtp\fR)
 fl-files opens network shares, phones and cameras. Type a location into the location field
@@ -49,7 +69,7 @@ any other files; the context menu offers \fBOpen Containing Folder\fR. Escape st
 search, then closes the find bar.
 .SS Keys
 Alt+arrows navigate, Ctrl+L edits the location, Ctrl+F filters the current folder, Ctrl+H toggles
-hidden files, F2 renames, Delete moves to the trash, Shift+Delete deletes, F5 reloads,
+hidden files, F2 renames (one item, or many: see above), F4 splits the view, Delete moves to the trash, Shift+Delete deletes, F5 reloads,
 Ctrl+M shows or hides the menu bar (File, Edit, View, Go, Bookmarks, Help; hidden by default,
 the menu button has the same commands), Ctrl+comma opens the preferences.
 .SH FILES
@@ -64,4 +84,4 @@ Remembered views of individual folders.
 \fI~/.config/gtk-3.0/bookmarks\fR
 Bookmarks.
 .SH SEE ALSO
-\fBfl-wm\fR(1), \fBfl-term\fR(1), \fBfl-video\fR(1)
+\fBfl-wm\fR(1), \fBfl-term\fR(1), \fBfl-media-player\fR(1)

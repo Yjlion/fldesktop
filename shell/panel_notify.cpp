@@ -7,6 +7,9 @@
 
 #include <algorithm>
 #include <ctime>
+#include <unistd.h>
+
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -172,6 +175,50 @@ public:
   }
 };
 
+// Do not disturb for a while: the end in $XDG_RUNTIME_DIR (it outlasts a
+// panel restart, not the session)
+std::string dnd_until_path() { return fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-panel-dnd-until"; }
+
+void dnd_check(void *) {
+  std::string s;
+  if (!fld::read_file(dnd_until_path(), s)) return;
+  time_t until = (time_t)atoll(s.c_str());
+  if (until && time(nullptr) >= until) {
+    unlink(dnd_until_path().c_str());
+    g_dnd = false;
+    fld::NotifyHistory::get().set_dnd(false);
+    update_button();
+    return;
+  }
+  Fl::repeat_timeout(30, dnd_check);
+}
+
+void set_dnd(bool on, time_t until) {
+  g_dnd = on;
+  fld::NotifyHistory::get().set_dnd(on);
+  if (on && until) {
+    fld::write_file(dnd_until_path(), std::to_string((long long)until));
+    Fl::remove_timeout(dnd_check);
+    Fl::add_timeout(30, dnd_check);
+  } else {
+    unlink(dnd_until_path().c_str());
+    Fl::remove_timeout(dnd_check);
+  }
+  update_button();
+}
+
+time_t tomorrow_morning() {
+  time_t now = time(nullptr);
+  struct tm tm;
+  localtime_r(&now, &tm);
+  tm.tm_mday += 1;
+  tm.tm_hour = 7;
+  tm.tm_min = 0;
+  tm.tm_sec = 0;
+  tm.tm_isdst = -1;
+  return mktime(&tm);
+}
+
 void bell_cb(Fl_Widget *w, void *) {
   const int W = 360;
   int list_h = 0;
@@ -186,11 +233,7 @@ void bell_cb(Fl_Widget *w, void *) {
   Fl_Check_Button *dnd = new Fl_Check_Button(140, 8, 130, 28, "Do not disturb");
   dnd->labelsize(12);
   dnd->value(g_dnd);
-  dnd->callback([](Fl_Widget *b, void *) {
-    g_dnd = ((Fl_Check_Button *)b)->value();
-    fld::NotifyHistory::get().set_dnd(g_dnd);
-    update_button();
-  });
+  dnd->callback([](Fl_Widget *b, void *) { set_dnd(((Fl_Check_Button *)b)->value(), 0); });
   Fl_Button *clear = new Fl_Button(W - 82, 9, 72, 26, "Clear all");
   clear->labelsize(12);
   clear->callback([](Fl_Widget *b, void *) {
@@ -224,6 +267,14 @@ void bell_cb(Fl_Widget *w, void *) {
 
 } // namespace
 
+void dnd_menu_items(fld::Menu &m) {
+  m.toggle("Do Not Disturb", g_dnd, [] { set_dnd(!g_dnd, 0); });
+  if (!g_dnd) {
+    m.item("Do Not Disturb for 1 Hour", [] { set_dnd(true, time(nullptr) + 3600); });
+    m.item("Do Not Disturb Until Tomorrow", [] { set_dnd(true, tomorrow_morning()); });
+  }
+}
+
 fld::FlatButton *notify_indicator_create() {
   g_bell = new BellButton(0, 0, 34, PANEL_H - 4);
   g_bell->color(panel_bg());
@@ -231,11 +282,7 @@ fld::FlatButton *notify_indicator_create() {
   g_bell->hover_color(panel_hover());
   g_bell->callback(bell_cb);
   panel_context_menu(g_bell, [](fld::Menu &m) {
-    m.toggle("Do Not Disturb", g_dnd, [] {
-      g_dnd = !g_dnd;
-      fld::NotifyHistory::get().set_dnd(g_dnd);
-      update_button();
-    });
+    dnd_menu_items(m);
     m.item("Clear All", [] {
       fld::NotifyHistory::get().clear();
       g_list.clear();
@@ -247,5 +294,7 @@ fld::FlatButton *notify_indicator_create() {
   fld::NotifyHistory::get().on_changed = refresh;
   fld::NotifyHistory::get().start();
   refresh();
+  // a timed do not disturb from before a restart
+  Fl::add_timeout(1, dnd_check);
   return g_bell;
 }

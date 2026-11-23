@@ -2,10 +2,10 @@
 Type=Application
 Name=Documents
 GenericName=Document Viewer
-Comment=View, search and print PDF documents, e-books, OpenDocument text and comic books
+Comment=View, search and print PDF documents, e-books, OpenDocument text, Markdown and comic books
 Exec=fl-docs %f
 Icon=fl-docs
 Categories=Office;Viewer;
-MimeType=application/pdf;application/epub+zip;application/vnd.oasis.opendocument.text;application/vnd.oasis.opendocument.text-template;application/vnd.comicbook+zip;application/x-cbz;application/vnd.comicbook-rar;application/x-cbr;application/x-cb7;application/x-cbt;
-Keywords=pdf;document;viewer;print;epub;ebook;book;odt;opendocument;comic;cbz;
+MimeType=application/pdf;application/epub+zip;application/vnd.oasis.opendocument.text;application/vnd.oasis.opendocument.text-template;text/markdown;text/x-markdown;application/vnd.comicbook+zip;application/x-cbz;application/vnd.comicbook-rar;application/x-cbr;application/x-cb7;application/x-cbt;
+Keywords=pdf;document;viewer;print;epub;ebook;book;odt;opendocument;markdown;md;comic;cbz;
 StartupWMClass=fl-docs

@@ -624,12 +624,23 @@ namespace fld {
 
 bool reload_wm() {
   const char *pid = getenv("FLWM_PID");
-  if (!pid || atoi(pid) <= 1) return false;
-  // make sure the pid still belongs to fl-wm
-  std::string comm;
-  read_file(std::string("/proc/") + pid + "/comm", comm);
-  if (trim(comm) != "fl-wm") return false;
-  return kill(atoi(pid), SIGHUP) == 0;
+  if (pid && atoi(pid) > 1) {
+    // make sure the pid still belongs to fl-wm
+    std::string comm;
+    read_file(std::string("/proc/") + pid + "/comm", comm);
+    if (trim(comm) == "fl-wm") return kill(atoi(pid), SIGHUP) == 0;
+  }
+  // started by D-Bus (the portal): our own fl-wm, found in /proc
+  bool sent = false;
+  for (const std::string &d : list_dir("/proc")) {
+    if (d.find_first_not_of("0123456789") != std::string::npos) continue;
+    struct stat st;
+    if (stat(("/proc/" + d).c_str(), &st) != 0 || st.st_uid != getuid()) continue;
+    std::string comm;
+    read_file("/proc/" + d + "/comm", comm, 64);
+    if (trim(comm) == "fl-wm" && kill(atoi(d.c_str()), SIGHUP) == 0) sent = true;
+  }
+  return sent;
 }
 
 std::string wm_config_path() { return fld_config_dir() + "/wm.ini"; }

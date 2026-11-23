@@ -1,0 +1,21 @@
+.TH FL-CLOCK 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-clock \- world clocks, alarms, a timer and a stopwatch
+.SH SYNOPSIS
+\fBfl-clock\fR [\fB\-\-page\fR world|alarms|timer|stopwatch]
+.br
+\fBfl-clock \-\-alarms\fR
+.SH DESCRIPTION
+\fBWorld Clocks\fR shows the time here and in the cities you add, with
+their difference to the local time. \fBAlarms\fR ring at a time once or on
+chosen days of the week: a notification with Snooze (10 minutes) and Stop,
+and a sound. \fBTimer\fR counts down a duration (5, 1:30, 1h30m) and
+\fBStopwatch\fR counts up, with laps.
+.PP
+Alarms ring while Clock is open. With "Ring alarms when Clock is closed",
+\fBfl-clock \-\-alarms\fR (no window) rings them; it starts with the session
+(\fI~/.config/autostart/fl-clock-alarms.desktop\fR).
+.SH FILES
+\fI~/.config/fldesktop/clock.ini\fR: the cities and the alarms.
+.SH SEE ALSO
+\fBfl-notifyd\fR(1)

@@ -118,5 +118,65 @@ int main() {
   CHECK_NEAR(parse_length("1pc", 0), 12.0);
   CHECK_NEAR(parse_length("bogus", 5), 5.0);
   CHECK_NEAR(parse_length("3em", 5), 5.0);
+  // Markdown
+  CHECK(sniff("# Title\n", "notes/README.md") == Format::Markdown);
+  CHECK(sniff("text", "a.MARKDOWN") == Format::Markdown);
+  CHECK(sniff("%PDF-1.4", "a.md") == Format::Pdf); // the bytes win
+  CHECK(sniff("text", "a.txt") == Format::Unknown);
+  CHECK(!is_markdown_name("md"));
+  auto md = [](const std::string &s) { return markdown_to_html(s); };
+  CHECK_EQ(md("# One\n\nSome *text*."), std::string("<h1>One</h1>\n<p>Some <i>text</i>.</p>\n"));
+  CHECK_EQ(md("Two\n===\nThree\n---\n"), std::string("<h1>Two</h1>\n<h2>Three</h2>\n"));
+  CHECK_EQ(md("### Closed ###"), std::string("<h3>Closed</h3>\n"));
+  CHECK_EQ(md("#hashtag"), std::string("<p>#hashtag</p>\n"));
+  CHECK_EQ(md("**bold** __bold__ *it* _it_ ***both*** ~~gone~~"),
+           std::string("<p><b>bold</b> <b>bold</b> <i>it</i> <i>it</i> <i><b>both</b></i> <s>gone</s></p>\n"));
+  CHECK_EQ(md("snake_case_name and 2*3*4"), std::string("<p>snake_case_name and 2<i>3</i>4</p>\n"));
+  CHECK_EQ(md("a * b * c"), std::string("<p>a * b * c</p>\n"));
+  CHECK_EQ(md("`a*b*` and ``x ` y``"), std::string("<p><code>a*b*</code> and <code>x ` y</code></p>\n"));
+  CHECK_EQ(md("\\*not\\* &amp; &copy; a&b <x> 1 < 2"),
+           std::string("<p>*not* &amp; &copy; a&amp;b <x> 1 &lt; 2</p>\n"));
+  CHECK_EQ(md("line  \nbreak\\\nagain"), std::string("<p>line<br/>\nbreak<br/>\nagain</p>\n"));
+  CHECK_EQ(md("[fl](https://x.org \"t\") ![pic](<img/a b.png>) <https://y.org>"),
+           std::string("<p><a href=\"https://x.org\">fl</a> <img src=\"img/a b.png\" alt=\"pic\"/> "
+                       "<a href=\"https://y.org\">https://y.org</a></p>\n"));
+  CHECK_EQ(md("[ref] and [text][Ref]\n\n[ref]: /u \"T\""),
+           std::string("<p><a href=\"/u\">ref</a> and <a href=\"/u\">text</a></p>\n"));
+  CHECK_EQ(md("[no link]"), std::string("<p>[no link]</p>\n"));
+  // code keeps its stars and its indentation
+  CHECK_EQ(md("```c\nint *p = **q;\n  x < y\n```\n"), std::string("<pre><code>int *p = **q;\n  x &lt; y</code></pre>\n"));
+  CHECK_EQ(md("~~~\n```\n~~~"), std::string("<pre><code>```</code></pre>\n"));
+  CHECK_EQ(md("    indented\n    *code*\n\npara"), std::string("<pre><code>indented\n*code*</code></pre>\n<p>para</p>\n"));
+  CHECK_EQ(md("- a\n- b\n  - c\n- d"), std::string("<ul>\n<li>a</li>\n<li>b\n<ul>\n<li>c</li>\n</ul></li>\n<li>d</li>\n</ul>\n"));
+  CHECK_EQ(md("3. three\n4. four"), std::string("<ol start=\"3\">\n<li>three</li>\n<li>four</li>\n</ol>\n"));
+  CHECK_EQ(md("1) one\n\n2) two"), std::string("<ol>\n<li><p>one</p></li>\n<li><p>two</p></li>\n</ol>\n"));
+  CHECK_EQ(md("- [ ] todo\n- [x] done"), std::string("<ul>\n<li>\xe2\x98\x90 todo</li>\n<li>\xe2\x98\x91 done</li>\n</ul>\n"));
+  CHECK_EQ(md("- a\nlazy"), std::string("<ul>\n<li>a\nlazy</li>\n</ul>\n"));
+  CHECK_EQ(md("text\n- item"), std::string("<p>text</p>\n<ul>\n<li>item</li>\n</ul>\n"));
+  CHECK_EQ(md("x\n2. not a list"), std::string("<p>x\n2. not a list</p>\n"));
+  CHECK_EQ(md("> quoted\ncontinued\n> > nested"),
+           std::string("<blockquote>\n<p>quoted\ncontinued</p>\n<blockquote>\n<p>nested</p>\n</blockquote>\n</blockquote>\n"));
+  CHECK_EQ(md("***\n- - -\n___"), std::string("<hr/>\n<hr/>\n<hr/>\n"));
+  CHECK_EQ(md("| a | b |\n|:--|--:|\n| 1 | `x|y` |\n| 2 \\| 3 | |"),
+           std::string("<table>\n<thead>\n<tr><th style=\"text-align:left\">a</th><th style=\"text-align:right\">b</th></tr>\n"
+                       "</thead>\n<tbody>\n<tr><td style=\"text-align:left\">1</td><td style=\"text-align:right\"><code>x|y</code></td></tr>\n"
+                       "<tr><td style=\"text-align:left\">2 | 3</td><td style=\"text-align:right\"></td></tr>\n</tbody>\n</table>\n"));
+  CHECK_EQ(md("a | b\nnot a table"), std::string("<p>a | b\nnot a table</p>\n"));
+  CHECK_EQ(md("<div align=\"center\">\n<b>hi</b>\n</div>\n\nafter"),
+           std::string("<div align=\"center\">\n<b>hi</b>\n</div>\n<p>after</p>\n"));
+  std::string title;
+  CHECK_EQ(markdown_to_html("---\ntitle: \"My notes\"\ntags: [a]\n---\n# Heading\n", &title), std::string("<h1>Heading</h1>\n"));
+  CHECK_EQ(title, std::string("My notes"));
+  markdown_to_html("intro\n\nSetext *title*\n=====\n# Second", &title);
+  CHECK_EQ(title, std::string("Setext title"));
+  markdown_to_html("## only h2", &title);
+  CHECK_EQ(title, std::string(""));
+  CHECK_EQ(md("\xef\xbb\xbfhi\r\n"), std::string("<p>hi</p>\n"));
+  CHECK_EQ(md("\tcode"), std::string("<pre><code>code</code></pre>\n"));
+  CHECK_EQ(md(""), std::string(""));
+  // unbalanced and odd input does not hang or crash
+  md("**[`*_~<&\\");
+  md("- \n-\n1.\n>\n```");
+  md(std::string(5000, '*') + std::string(5000, '['));
   return test_result("docs");
 }

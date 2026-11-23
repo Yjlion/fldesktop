@@ -28,6 +28,26 @@ opposite arrow gives it back the size and place it had. Snapped windows stay
 snapped when the panel or the screen changes. \fBSuper+R\fR resizes the focused
 window with the arrow keys (Shift for small steps); Enter keeps the size and
 Escape goes back.
+.PP
+Super+Left (or Right) again on a half goes to two thirds, then one third, then
+back to the half; Super+Alt+Left and Super+Alt+Right move a window through the
+left, center and right thirds. After a window snaps to a side or a third,
+\fBsnap assist\fR offers the other windows of the workspace for the rest of the
+screen (arrows and Enter or a click choose, Escape or Super leaves it;
+\fBsnap_assist=false\fR turns it off).
+.SH TABLET MODE
+When a convertible is folded into a tablet (libinput's tablet mode switch),
+the on-screen keyboard (\fBfl-osk\fR(1)) comes up when a text field gets the
+focus and goes away when none has it (\fBosk_in_tablet_mode=false\fR in
+\fB[behaviour]\fR turns this off). \fBfl-autorotate\fR(1) turns the screen.
+.SH OVERVIEW AND HOT CORNERS
+\fBSuper+Tab\fR shows the windows of the workspace over a dimmed screen (the
+\fBoverview\fR action); a click, or the arrows and Enter, picks one. Hot
+corners run an action when the pointer is pushed into a corner of a screen:
+\fBhot_corner_top_left=\fR (and top_right, bottom_left, bottom_right) in
+\fB[behaviour]\fR take any action, e.g. overview, launcher, show-desktop or
+lock. The touchpad swipes (\fB[gestures]\fR swipe_up, swipe_down) can be set to
+\fBoverview\fR as well.
 .SH WORKSPACES
 There are four workspaces by default (\fBworkspaces=\fR1 to 9 in the \fB[behaviour]\fR section of
 \fIwm.ini\fR); all outputs switch together. Super+1 to Super+9 go to a workspace and
@@ -64,6 +84,22 @@ the keys go to it (key bindings still work); its candidate window is placed
 below the text cursor. Settings > Keyboard chooses the input method and sets
 up the session environment for programs that use IM modules instead
 (XMODIFIERS, QT_IM_MODULE, GTK_IM_MODULE for IBus).
+.SH PROTOCOLS
+Besides the usual ones, fl-wm offers tearing-control (a fullscreen game
+that asks for it gets asynchronous page flips), content-type (a fullscreen
+video or game keeps the screen from blanking and locking), xdg-foreign,
+alpha-modifier, ext-data-control, color-management (wlroots 0.20),
+drm-lease (VR headsets are offered for leasing instead of joining the
+desktop) and tablet-v2 (pens: pressure and tilt for programs that know
+tablets, a pointer for the others). Sandboxed programs (security-context-v1,
+as Flatpak sets it up) do not see the privileged protocols: screen capture,
+clipboard managers, input injection, the layer shell, output management.
+.SH MEDIA KEYS
+The volume, microphone, brightness, keyboard light and media keys
+(XF86AudioRaiseVolume, XF86MonBrightnessUp, XF86AudioPlay, ...) run
+\fBfl-panel \-\-action\fR by default; they also work while the screen is locked
+or the launcher is open. Caps Lock, Num Lock and layout changes are shown by
+the panel's on-screen display.
 .SH KEY BINDINGS IN VIRTUAL MACHINES
 Programs that ask for the keyboard shortcuts (keyboard-shortcuts-inhibit,
 used by virtual machines, remote desktop viewers and some games) get every

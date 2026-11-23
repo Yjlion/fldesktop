@@ -15,6 +15,11 @@ struct flwm_rect flwm_snap_rect(enum flwm_snap snap, struct flwm_rect a) {
 		r.width = hw;
 		r.height = hh;
 		break;
+	case FLWM_SNAP_LEFT_THIRD: r.width = a.width / 3; break;
+	case FLWM_SNAP_CENTER_THIRD: r.x = a.x + a.width / 3; r.width = a.width - 2 * (a.width / 3); break;
+	case FLWM_SNAP_RIGHT_THIRD: r.x = a.x + a.width - a.width / 3; r.width = a.width / 3; break;
+	case FLWM_SNAP_LEFT_TWO_THIRDS: r.width = a.width - a.width / 3; break;
+	case FLWM_SNAP_RIGHT_TWO_THIRDS: r.x = a.x + a.width / 3; r.width = a.width - a.width / 3; break;
 	default: break; /* none, maximized: the whole area */
 	}
 	return r;
@@ -24,6 +29,12 @@ enum flwm_snap flwm_snap_next(enum flwm_snap cur, enum flwm_snap_dir dir) {
 	switch (dir) {
 	case FLWM_SNAP_DIR_LEFT:
 		switch (cur) {
+		/* again on the left: half, two thirds, one third, half */
+		case FLWM_SNAP_LEFT: return FLWM_SNAP_LEFT_TWO_THIRDS;
+		case FLWM_SNAP_LEFT_TWO_THIRDS: return FLWM_SNAP_LEFT_THIRD;
+		case FLWM_SNAP_LEFT_THIRD: return FLWM_SNAP_LEFT;
+		case FLWM_SNAP_CENTER_THIRD: return FLWM_SNAP_LEFT_THIRD;
+		case FLWM_SNAP_RIGHT_THIRD: case FLWM_SNAP_RIGHT_TWO_THIRDS:
 		case FLWM_SNAP_RIGHT: return FLWM_SNAP_NONE;
 		case FLWM_SNAP_TOP_RIGHT: return FLWM_SNAP_TOP_LEFT;
 		case FLWM_SNAP_BOTTOM_RIGHT: return FLWM_SNAP_BOTTOM_LEFT;
@@ -32,6 +43,11 @@ enum flwm_snap flwm_snap_next(enum flwm_snap cur, enum flwm_snap_dir dir) {
 		}
 	case FLWM_SNAP_DIR_RIGHT:
 		switch (cur) {
+		case FLWM_SNAP_RIGHT: return FLWM_SNAP_RIGHT_TWO_THIRDS;
+		case FLWM_SNAP_RIGHT_TWO_THIRDS: return FLWM_SNAP_RIGHT_THIRD;
+		case FLWM_SNAP_RIGHT_THIRD: return FLWM_SNAP_RIGHT;
+		case FLWM_SNAP_CENTER_THIRD: return FLWM_SNAP_RIGHT_THIRD;
+		case FLWM_SNAP_LEFT_THIRD: case FLWM_SNAP_LEFT_TWO_THIRDS:
 		case FLWM_SNAP_LEFT: return FLWM_SNAP_NONE;
 		case FLWM_SNAP_TOP_LEFT: return FLWM_SNAP_TOP_RIGHT;
 		case FLWM_SNAP_BOTTOM_LEFT: return FLWM_SNAP_BOTTOM_RIGHT;
@@ -59,6 +75,36 @@ enum flwm_snap flwm_snap_next(enum flwm_snap cur, enum flwm_snap_dir dir) {
 		}
 	}
 	return cur;
+}
+
+enum flwm_snap flwm_snap_next_third(enum flwm_snap cur, enum flwm_snap_dir dir) {
+	if (dir == FLWM_SNAP_DIR_LEFT) {
+		switch (cur) {
+		case FLWM_SNAP_RIGHT_THIRD: return FLWM_SNAP_CENTER_THIRD;
+		case FLWM_SNAP_CENTER_THIRD: case FLWM_SNAP_LEFT_THIRD: return FLWM_SNAP_LEFT_THIRD;
+		default: return FLWM_SNAP_LEFT_THIRD;
+		}
+	}
+	if (dir == FLWM_SNAP_DIR_RIGHT) {
+		switch (cur) {
+		case FLWM_SNAP_LEFT_THIRD: return FLWM_SNAP_CENTER_THIRD;
+		case FLWM_SNAP_CENTER_THIRD: case FLWM_SNAP_RIGHT_THIRD: return FLWM_SNAP_RIGHT_THIRD;
+		default: return FLWM_SNAP_RIGHT_THIRD;
+		}
+	}
+	return flwm_snap_next(cur, dir);
+}
+
+enum flwm_snap flwm_snap_complement(enum flwm_snap s) {
+	switch (s) {
+	case FLWM_SNAP_LEFT: return FLWM_SNAP_RIGHT;
+	case FLWM_SNAP_RIGHT: return FLWM_SNAP_LEFT;
+	case FLWM_SNAP_LEFT_THIRD: return FLWM_SNAP_RIGHT_TWO_THIRDS;
+	case FLWM_SNAP_RIGHT_THIRD: return FLWM_SNAP_LEFT_TWO_THIRDS;
+	case FLWM_SNAP_LEFT_TWO_THIRDS: return FLWM_SNAP_RIGHT_THIRD;
+	case FLWM_SNAP_RIGHT_TWO_THIRDS: return FLWM_SNAP_LEFT_THIRD;
+	default: return FLWM_SNAP_NONE;
+	}
 }
 
 enum flwm_snap flwm_snap_zone(int px, int py, struct flwm_rect o, int edge, int corner) {

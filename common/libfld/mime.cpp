@@ -336,8 +336,8 @@ bool open_path(const std::string &path) {
   if (starts_with(m, "text/") || m == "application/x-shellscript" || m == "application/x-zerosize")
     return spawn({"fl-edit", p});
   if (starts_with(m, "image/")) return spawn({"fl-view", p});
-  if ((starts_with(m, "video/") || starts_with(m, "audio/")) && !which("fl-video").empty())
-    return spawn({"fl-video", p});
+  if ((starts_with(m, "video/") || starts_with(m, "audio/")) && !which("fl-media-player").empty())
+    return spawn({"fl-media-player", p});
   if (is_archive_mime(m) && !which("fl-archive").empty()) return spawn({"fl-archive", p});
   return spawn({"xdg-open", p});
 }

@@ -1,0 +1,15 @@
+# screen and keyboard backlights (sysfs, logind, UPower) and the pkexec helper
+add_library(fld-backlight STATIC backlight.cpp)
+target_include_directories(fld-backlight PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fld-backlight PUBLIC fld)
+target_compile_definitions(fld-backlight PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}/fldesktop")
+if(TARGET fld-glib)
+  target_link_libraries(fld-backlight PUBLIC fld-glib)
+  target_compile_definitions(fld-backlight PRIVATE FLD_HAVE_GIO=1)
+endif()
+
+add_executable(fl-backlight-helper helper.cpp)
+target_link_libraries(fl-backlight-helper PRIVATE fld)
+install(TARGETS fl-backlight-helper RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/fldesktop)
+configure_file(org.fldesktop.backlight.policy.in ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.backlight.policy @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.backlight.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)

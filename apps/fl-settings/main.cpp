@@ -23,6 +23,7 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "settings_page.h"
+#include "settings_search.h"
 
 static Fl_Double_Window *g_win;
 static Fl_Input *g_search;
@@ -42,6 +43,7 @@ struct Entry {
   std::string page_id;     // compiled-in page
   std::string desktop_id;  // external settings program
   std::string label;
+  std::string focus;       // a setting on the page to point at (search results)
 };
 static std::vector<Entry> g_entries;
 static std::vector<fld::DesktopEntry> g_external;
@@ -75,6 +77,25 @@ static void rebuild_list() {
       g_entries.push_back(e);
       g_list->add(("  " + fld::escape_at(p.title)).c_str());
       g_list->icon(g_list->size(), fld::icon_first({p.icon, "preferences-system"}, 20));
+    }
+  }
+  // single settings on all pages: "Tap to click — Mouse & Touchpad"
+  if (!q.empty()) {
+    bool first = true;
+    for (auto &h : settings_search::search(q, settings_search::index(), 12)) {
+      const fld::PageInfo *pi = nullptr;
+      for (auto &p : fld::all_pages())
+        if (p.id == h.page) pi = &p;
+      if (!pi) continue; // a page this build does not have
+      if (first) add_header("Settings");
+      first = false;
+      Entry e;
+      e.page_id = h.page;
+      e.focus = h.label;
+      e.label = h.label;
+      g_entries.push_back(e);
+      g_list->add(("  " + fld::escape_at(h.label) + "  — " + fld::escape_at(pi->title)).c_str());
+      g_list->icon(g_list->size(), fld::icon_first({pi->icon, "preferences-system"}, 20));
     }
   }
   bool any = false;
@@ -220,9 +241,68 @@ static void show_page(const std::string &id) {
   g_current = id;
   std::string title = info->title + " – Settings";
   g_win->copy_label(title.c_str());
-  for (size_t i = 0; i < g_entries.size(); i++)
-    if (g_entries[i].page_id == id) g_list->value((int)i + 1);
+  int line = g_list->value();
+  bool on_result = line >= 1 && line <= (int)g_entries.size() && g_entries[(size_t)line - 1].page_id == id;
+  if (!on_result)
+    for (size_t i = 0; i < g_entries.size(); i++)
+      if (g_entries[i].page_id == id && g_entries[i].focus.empty()) {
+        g_list->value((int)i + 1);
+        break;
+      }
   g_win->redraw();
+}
+
+// ---- pointing at a setting found by the search ------------------------------------
+
+static Fl_Widget *g_flash;
+static Fl_Color g_flash_label;
+static int g_flash_count;
+
+static Fl_Widget *find_label(Fl_Group *g, const std::string &want) {
+  for (int i = 0; i < g->children(); i++) {
+    Fl_Widget *c = g->child(i);
+    if (c->label() && settings_search::normalize(c->label()) == want) return c;
+    if (Fl_Group *cg = c->as_group())
+      if (Fl_Widget *w = find_label(cg, want)) return w;
+  }
+  return nullptr;
+}
+
+static void flash_tick(void *) {
+  if (!g_flash) return;
+  bool on = g_flash_count % 2 == 0;
+  g_flash->labelcolor(on ? fld::palette().accent : g_flash_label);
+  g_flash->redraw_label();
+  g_flash->redraw();
+  if (++g_flash_count < 6) Fl::repeat_timeout(0.3, flash_tick);
+  else {
+    g_flash->labelcolor(g_flash_label);
+    g_flash->redraw_label();
+    g_flash = nullptr;
+  }
+}
+
+// scrolls the page to the setting with that label, gives it the focus and
+// makes its label blink a few times
+static void point_at(const std::string &page, const std::string &label, bool focus = true) {
+  auto it = g_created.find(page);
+  if (it == g_created.end()) return;
+  Fl_Widget *w = find_label(it->second, settings_search::normalize(label));
+  if (!w) return;
+  if (g_flash) {
+    Fl::remove_timeout(flash_tick);
+    g_flash->labelcolor(g_flash_label);
+    g_flash->redraw_label();
+  }
+  int top = w->y() - g_content->y() + g_content->yposition() - 40;
+  if (top > 0 && w->y() + w->h() > g_content->y() + g_content->h()) {
+    g_content->scroll_to(g_content->xposition(), std::min(top, (int)g_content->scrollbar.maximum()));
+  }
+  if (focus && w->visible_focus() && w->active_r()) w->take_focus();
+  g_flash = w;
+  g_flash_label = w->labelcolor();
+  g_flash_count = 0;
+  Fl::add_timeout(0.05, flash_tick);
 }
 
 static void list_cb(Fl_Widget *, void *) {
@@ -234,8 +314,10 @@ static void list_cb(Fl_Widget *, void *) {
     rebuild_list();
     return;
   }
-  if (!e.page_id.empty()) show_page(e.page_id);
-  else {
+  if (!e.page_id.empty()) {
+    show_page(e.page_id);
+    if (!e.focus.empty()) point_at(e.page_id, e.focus);
+  } else {
     for (auto &d : g_external)
       if (d.id == e.desktop_id) d.launch();
     rebuild_list();
@@ -289,9 +371,26 @@ int main(int argc, char **argv) {
   g_search->when(FL_WHEN_CHANGED);
   g_search->callback([](Fl_Widget *, void *) {
     rebuild_list();
-    // jump to the first match while searching
+    // while searching, show the best match: a page whose title has a word
+    // starting with the text, else the best single setting, else any page
+    std::string q = fld::lower(fld::trim(g_search->value()));
+    if (q.empty()) return;
+    auto title_match = [&](const Entry &e) {
+      std::string t = " " + fld::lower(e.label);
+      return e.focus.empty() && t.find(" " + q) != std::string::npos;
+    };
+    const Entry *best = nullptr;
     for (auto &e : g_entries)
-      if (!e.page_id.empty()) { if (*g_search->value()) show_page(e.page_id); break; }
+      if (!e.page_id.empty() && title_match(e)) { best = &e; break; }
+    if (!best)
+      for (auto &e : g_entries)
+        if (!e.focus.empty()) { best = &e; break; }
+    if (!best)
+      for (auto &e : g_entries)
+        if (!e.page_id.empty()) { best = &e; break; }
+    if (!best) return;
+    show_page(best->page_id);
+    if (!best->focus.empty()) point_at(best->page_id, best->focus, false); // the typing goes on
   });
   g_list = new Fl_Hold_Browser(0, 50, SIDE, H - 50);
   g_list->box(FL_FLAT_BOX);

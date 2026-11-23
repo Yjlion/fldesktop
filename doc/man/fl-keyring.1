@@ -1,0 +1,19 @@
+.TH FL-KEYRING 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-keyring \- passwords and keys
+.SH SYNOPSIS
+\fBfl-keyring\fR [\fB\-\-page\fR passwords|ssh|gpg]
+.SH DESCRIPTION
+\fBPasswords\fR lists the passwords programs keep in the Secret Service
+(GNOME Keyring, KeePassXC, KWallet): web sites, Wi-Fi networks, mail
+accounts, SSH key passphrases. A keyring is unlocked with its own password
+when needed; passwords can be shown, copied (and taken off the clipboard
+again after 30 seconds), changed, renamed, added and deleted, and new
+keyrings made.
+.PP
+\fBSSH Keys\fR lists the keys in \fI~/.ssh\fR with their fingerprints:
+generate an Ed25519 key, copy a public key, change a passphrase, delete a
+key. \fBGPG Keys\fR lists your GnuPG keys: generate one, import, copy a
+public key, delete.
+.SH SEE ALSO
+\fBssh-keygen\fR(1), \fBgpg\fR(1), \fBsecret-tool\fR(1)

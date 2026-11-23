@@ -2,7 +2,8 @@
 //
 // Owns org.freedesktop.impl.portal.desktop.fl and implements FileChooser,
 // AppChooser, Settings, Screenshot, Access, Account, Notification,
-// Wallpaper and ScreenCast at /org/freedesktop/portal/desktop. xdg-desktop-portal picks it
+// Wallpaper, ScreenCast, RemoteDesktop, Inhibit, Background,
+// GlobalShortcuts and Print at /org/freedesktop/portal/desktop. xdg-desktop-portal picks it
 // for XDG_CURRENT_DESKTOP=fldesktop (see fldesktop-portals.conf).
 #include <FL/Fl.H>
 
@@ -129,6 +130,137 @@ const char *kXml = R"XML(
     <property name="AvailableCursorModes" type="u" access="read"/>
     <property name="version" type="u" access="read"/>
   </interface>
+  <interface name="org.freedesktop.impl.portal.RemoteDesktop">
+    <method name="CreateSession">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="SelectDevices">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="Start">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="s" name="parent_window" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="NotifyPointerMotion">
+      <arg type="o" name="session_handle" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="d" name="dx" direction="in"/><arg type="d" name="dy" direction="in"/>
+    </method>
+    <method name="NotifyPointerMotionAbsolute">
+      <arg type="o" name="session_handle" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="stream" direction="in"/><arg type="d" name="x" direction="in"/><arg type="d" name="y" direction="in"/>
+    </method>
+    <method name="NotifyPointerButton">
+      <arg type="o" name="session_handle" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="i" name="button" direction="in"/><arg type="u" name="state" direction="in"/>
+    </method>
+    <method name="NotifyPointerAxis">
+      <arg type="o" name="session_handle" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="d" name="dx" direction="in"/><arg type="d" name="dy" direction="in"/>
+    </method>
+    <method name="NotifyPointerAxisDiscrete">
+      <arg type="o" name="session_handle" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="axis" direction="in"/><arg type="i" name="steps" direction="in"/>
+    </method>
+    <method name="NotifyKeyboardKeycode">
+      <arg type="o" name="session_handle" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="i" name="keycode" direction="in"/><arg type="u" name="state" direction="in"/>
+    </method>
+    <method name="NotifyKeyboardKeysym">
+      <arg type="o" name="session_handle" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="i" name="keysym" direction="in"/><arg type="u" name="state" direction="in"/>
+    </method>
+    <property name="AvailableDeviceTypes" type="u" access="read"/>
+    <property name="version" type="u" access="read"/>
+  </interface>
+  <interface name="org.freedesktop.impl.portal.Inhibit">
+    <method name="Inhibit">
+      <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="window" direction="in"/><arg type="u" name="flags" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+    </method>
+    <method name="CreateMonitor">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="s" name="window" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+    </method>
+    <method name="QueryEndResponse">
+      <arg type="o" name="session_handle" direction="in"/>
+    </method>
+    <signal name="StateChanged">
+      <arg type="o" name="session_handle"/><arg type="a{sv}" name="state"/>
+    </signal>
+  </interface>
+  <interface name="org.freedesktop.impl.portal.Background">
+    <method name="GetAppState">
+      <arg type="a{sv}" name="apps" direction="out"/>
+    </method>
+    <method name="NotifyBackground">
+      <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="name" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="EnableAutostart">
+      <arg type="s" name="app_id" direction="in"/><arg type="b" name="enable" direction="in"/>
+      <arg type="as" name="commandline" direction="in"/><arg type="u" name="flags" direction="in"/>
+      <arg type="b" name="result" direction="out"/>
+    </method>
+    <signal name="RunningApplicationsChanged"/>
+  </interface>
+  <interface name="org.freedesktop.impl.portal.GlobalShortcuts">
+    <method name="CreateSession">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="BindShortcuts">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="a(sa{sv})" name="shortcuts" direction="in"/><arg type="s" name="parent_window" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="ListShortcuts">
+      <arg type="o" name="handle" direction="in"/><arg type="o" name="session_handle" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <signal name="Activated">
+      <arg type="o" name="session_handle"/><arg type="s" name="shortcut_id"/><arg type="t" name="timestamp"/>
+      <arg type="a{sv}" name="options"/>
+    </signal>
+    <signal name="Deactivated">
+      <arg type="o" name="session_handle"/><arg type="s" name="shortcut_id"/><arg type="t" name="timestamp"/>
+      <arg type="a{sv}" name="options"/>
+    </signal>
+    <signal name="ShortcutsChanged">
+      <arg type="o" name="session_handle"/><arg type="a(sa{sv})" name="shortcuts"/>
+    </signal>
+    <property name="version" type="u" access="read"/>
+  </interface>
+  <interface name="org.fldesktop.GlobalShortcuts">
+    <method name="Activate">
+      <arg type="s" name="app_id" direction="in"/><arg type="s" name="shortcut_id" direction="in"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.impl.portal.Print">
+    <method name="PreparePrint">
+      <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/><arg type="s" name="title" direction="in"/>
+      <arg type="a{sv}" name="settings" direction="in"/><arg type="a{sv}" name="page_setup" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="Print">
+      <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/><arg type="s" name="title" direction="in"/>
+      <arg type="h" name="fd" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+  </interface>
   <interface name="org.freedesktop.impl.portal.Wallpaper">
     <method name="SetWallpaperURI">
       <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
@@ -173,13 +305,33 @@ void method_call(GDBusConnection *, const char *, const char *, const char *ifac
   else if (i == p + "Notification") notification_call(m, params, inv);
   else if (i == p + "Wallpaper") wallpaper_call(m, params, inv);
   else if (i == p + "ScreenCast") screencast_call(m, params, inv);
+#ifdef FLD_HAVE_SCREENCAST
+  else if (i == p + "RemoteDesktop") remotedesktop_call(m, params, inv);
+#endif
+  else if (i == p + "Inhibit") inhibit_call(m, params, inv);
+  else if (i == p + "Background") background_call(m, params, inv);
+  else if (i == p + "GlobalShortcuts") shortcuts_call(m, params, inv);
+#ifdef FLD_HAVE_PRINTERS
+  else if (i == p + "Print")
+    print_call(m, params, inv, g_dbus_message_get_unix_fd_list(g_dbus_method_invocation_get_message(inv)));
+#endif
+  else if (i == "org.fldesktop.GlobalShortcuts" && m == "Activate") {
+    const char *app, *id;
+    g_variant_get(params, "(&s&s)", &app, &id);
+    shortcuts_activate(app, id);
+    g_dbus_method_invocation_return_value(inv, nullptr);
+  }
   else g_dbus_method_invocation_return_dbus_error(inv, "org.freedesktop.DBus.Error.UnknownInterface", iface);
 }
 
 GVariant *get_property(GDBusConnection *, const char *, const char *, const char *iface, const char *prop, GError **,
                        gpointer) {
   std::string i = iface, p = prop;
+#ifdef FLD_HAVE_SCREENCAST
   if (i == "org.freedesktop.impl.portal.ScreenCast") return screencast_property(p);
+  if (i == "org.freedesktop.impl.portal.RemoteDesktop") return remotedesktop_property(p);
+#endif
+  if (i == "org.freedesktop.impl.portal.GlobalShortcuts" && p == "version") return g_variant_new_uint32(1);
   if (p == "version") return g_variant_new_uint32(i.find("Settings") != std::string::npos ? 2 : 2);
   if (p == "SupportedOptions") return g_variant_new("a{sv}", nullptr);
   return nullptr;
@@ -270,8 +422,23 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-r" || a == "--replace") portal::g_replace = true;
+    else if (a == "--activate-shortcut" && i + 2 < argc) {
+      // fl-wm: a global shortcut was pressed; tell the running portal
+      GError *err = nullptr;
+      GDBusConnection *c = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &err);
+      GVariant *r = c ? g_dbus_connection_call_sync(c, "org.freedesktop.impl.portal.desktop.fl",
+                                                     "/org/freedesktop/portal/desktop", "org.fldesktop.GlobalShortcuts",
+                                                     "Activate", g_variant_new("(ss)", argv[i + 1], argv[i + 2]),
+                                                     nullptr, G_DBUS_CALL_FLAGS_NO_AUTO_START, 3000, nullptr, &err)
+                      : nullptr;
+      if (r) g_variant_unref(r);
+      else fprintf(stderr, "xdg-desktop-portal-fl: %s\n", err ? err->message : "no session bus");
+      g_clear_error(&err);
+      return r ? 0 : 1;
+    }
     else if (a == "-h" || a == "--help") {
       printf("Usage: xdg-desktop-portal-fl [--replace]\n"
+             "       xdg-desktop-portal-fl --activate-shortcut <app id> <shortcut id>\n"
              "fldesktop backend of xdg-desktop-portal (normally started by D-Bus).\n");
       return 0;
     }

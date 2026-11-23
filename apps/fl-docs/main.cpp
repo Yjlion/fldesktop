@@ -512,12 +512,13 @@ void open_dialog() {
   o.title = "Open Document";
   o.folder = g_last_dir.empty() ? fld::user_dir("DOCUMENTS") : g_last_dir;
   if (o.folder.empty() || !fld::is_dir(o.folder)) o.folder = fld::home_dir();
-  o.filters = {{"Documents", {"*.pdf", "*.epub", "*.odt", "*.ott", "*.cbz", "*.cbr", "*.cb7", "*.cbt"},
-                {"application/pdf", "application/epub+zip", "application/vnd.oasis.opendocument.text",
+  o.filters = {{"Documents", {"*.pdf", "*.epub", "*.odt", "*.ott", "*.md", "*.markdown", "*.cbz", "*.cbr", "*.cb7", "*.cbt"},
+                {"application/pdf", "application/epub+zip", "application/vnd.oasis.opendocument.text", "text/markdown",
                  "application/vnd.comicbook+zip", "application/x-cbz", "application/vnd.comicbook-rar"}},
                {"PDF documents", {"*.pdf"}, {"application/pdf"}},
                {"E-books", {"*.epub"}, {"application/epub+zip"}},
                {"OpenDocument text", {"*.odt", "*.ott"}, {"application/vnd.oasis.opendocument.text"}},
+               {"Markdown", {"*.md", "*.markdown"}, {"text/markdown"}},
                {"Comic books", {"*.cbz", "*.cbr", "*.cb7", "*.cbt"}, {"application/vnd.comicbook+zip"}},
                {"All files", {"*"}, {}}};
   fld::FileDialogResult r = fld::run_file_dialog(o);
@@ -635,7 +636,7 @@ void command(Cmd c) {
     break;
   case FIND_PREV: search(-1); break;
   case FIND_NEXT: search(1); break;
-  case ABOUT: fld::about_dialog("Documents", "fl-docs", "A document viewer for fldesktop: PDF, EPUB, OpenDocument text and comic books."); break;
+  case ABOUT: fld::about_dialog("Documents", "fl-docs", "A document viewer for fldesktop: PDF, EPUB, OpenDocument text, Markdown and comic books."); break;
   }
 }
 

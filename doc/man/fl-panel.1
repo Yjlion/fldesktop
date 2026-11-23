@@ -3,6 +3,8 @@
 fl-panel \- taskbar of the fldesktop desktop
 .SH SYNOPSIS
 \fBfl-panel\fR
+.br
+\fBfl-panel \-\-action\fR \fINAME\fR [\fIARGUMENT\fR]
 .SH DESCRIPTION
 Shows the applications button, quick launch buttons, the workspace pager (when
 the compositor offers ext-workspace-v1 and more than one workspace), the list of
@@ -16,13 +18,52 @@ The network button shows the wired or Wi-Fi state from NetworkManager and
 opens \fBfl-network\fR(1); the panel also asks for Wi-Fi passwords that
 NetworkManager needs.
 .PP
+When music or a video plays, the volume popup shows what is playing with
+previous, play/pause and next buttons (any MPRIS player). On laptops the
+battery popup has a brightness slider.
+.SH KEYS AND ON-SCREEN DISPLAY
+\fBfl-wm\fR(1) binds the volume, microphone, brightness, keyboard light and
+media keys to \fBfl-panel \-\-action\fR. That hands the action to the running
+panel, which does it and shows a small display at the bottom of the screen with
+the new level; without a running panel the action is done all the same. The
+display also shows Caps Lock, Num Lock and keyboard layout changes. Actions:
+volume-up, volume-down, volume-mute, mic-mute, brightness-up, brightness-down,
+kbd-brightness-up, kbd-brightness-down, kbd-brightness-toggle,
+media-play-pause, media-play, media-pause, media-stop, media-next,
+media-previous, caps-lock on|off, num-lock on|off and layout \fINAME\fR.
+.PP
+The screen brightness is set through logind, or with
+\fI/usr/libexec/fldesktop/fl-backlight-helper\fR through pkexec where logind
+cannot; the keyboard light through UPower; media keys go to the player that
+plays (or played last).
+.SH APPLETS
+The panel menu (right-click on an empty part of the panel) turns on two
+optional applets. \fBWeather\fR shows the temperature and the sky for a place
+chosen by name; the forecast comes from Open-Meteo (open-meteo.com, no key
+needed) every half hour through curl or wget, and is kept in
+\fI~/.cache/fldesktop/weather.json\fR. Its popup has the next days.
+\fBSystem Monitor\fR draws small processor and memory graphs; a click opens
+\fBfl-taskmgr\fR(1).
+.PP
+While a program uses the camera or records from a microphone, an orange
+camera or microphone shows in the panel; its tooltip and right-click menu
+name the programs. The camera is found by the programs that have
+\fI/dev/video*\fR open, the microphone by PipeWire's recording streams.
+Settings > Privacy turns it off.
+.PP
+The notification button's menu turns Do Not Disturb on until it is turned off,
+for an hour, or until tomorrow morning (07:00).
+.PP
 The panel restarts itself when its settings, the desktop theme or the
 compositor configuration change.
 .SH FILES
 .TP
 \fI~/.config/fldesktop/panel.ini\fR
 \fB[Panel]\fR QuickLaunch=id;id;..., KeyboardButton=auto|always|never,
-Pager=auto|never;
+Pager=auto|never, OSD=true|false (the on-screen display),
+SystemMonitor=true|false, PrivacyIndicator=true|false;
+\fB[Weather]\fR Enabled=, City=, Latitude=, Longitude=,
+Units=celsius|fahrenheit;
 \fB[Clock]\fR Format= (strftime format).
 .SH SEE ALSO
 \fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-settings\fR(1), \fBfl-osk\fR(1)

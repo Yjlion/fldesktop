@@ -251,7 +251,10 @@ static void new_input_method(struct wl_listener *l, void *data) {
 
 static void ti_enable(struct wl_listener *l, void *data) {
 	struct text_input *t = wl_container_of(l, t, enable);
-	if (t == active_text_input()) activate(t);
+	if (t == active_text_input()) {
+		activate(t);
+		protocols_text_input(true);
+	}
 }
 
 static void ti_commit(struct wl_listener *l, void *data) {
@@ -264,6 +267,7 @@ static void ti_commit(struct wl_listener *l, void *data) {
 
 static void ti_disable(struct wl_listener *l, void *data) {
 	struct text_input *t = wl_container_of(l, t, disable);
+	protocols_text_input(false);
 	if (!R.im || !t->ti->focused_surface) return;
 	wlr_input_method_v2_send_deactivate(R.im);
 	wlr_input_method_v2_send_done(R.im);

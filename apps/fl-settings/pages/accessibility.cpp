@@ -76,10 +76,10 @@ public:
     reader = check(f, "Read the screen aloud (Orca)", have_orca && file_exists(orca_autostart()));
     if (!have_orca) {
       reader->deactivate();
-      f.note("Install Orca for a screen reader. It reads GTK and Qt programs; the fldesktop programs are not "
-             "read yet.", 2);
+      f.note("Install Orca for a screen reader. It reads the fldesktop programs (started after it) as well "
+             "as GTK and Qt programs.", 2);
     } else {
-      f.note("Orca reads GTK and Qt programs; the fldesktop programs are not read yet.");
+      f.note("Orca reads the fldesktop programs started after it, and GTK and Qt programs.");
     }
 
     f.heading("Typing");
@@ -137,6 +137,11 @@ public:
       unlink(orca_autostart().c_str());
       spawn({"pkill", "-u", std::to_string(getuid()), "-x", "orca"});
     }
+    // programs (the fldesktop ones too) make their widgets readable when this is on
+    if (want != had && !which("gdbus").empty())
+      spawn({"gdbus", "call", "--session", "--dest", "org.a11y.Bus", "--object-path", "/org/a11y/bus", "--method",
+             "org.freedesktop.DBus.Properties.Set", "org.a11y.Status", "ScreenReaderEnabled",
+             want ? "<true>" : "<false>"});
   }
 };
 

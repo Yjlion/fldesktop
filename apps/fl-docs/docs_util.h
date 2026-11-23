@@ -55,6 +55,7 @@ enum class Format {
   OdfOther, // spreadsheets, presentations, ...: not supported
   Zip,      // another zip: EPUB or ODF without a leading "mimetype", or a comic book
   Archive,  // rar, 7z, tar: a comic book (.cbr, .cb7, .cbt)
+  Markdown, // .md, .markdown, ... (text has no magic: by the name)
 };
 Format sniff(const std::string &head, const std::string &path);
 
@@ -70,5 +71,12 @@ bool is_image_name(const std::string &name);
 // A CSS / ODF length ("2.5cm", "12pt", "0.5in", "10mm", "16px", "1pc") in
 // points; `fallback` for anything else.
 double parse_length(const std::string &text, double fallback);
+
+// Markdown (CommonMark and GitHub's tables, strike-through and task lists)
+// to HTML for the e-book layout (markdown.cpp). `title`: the front matter's
+// title, else the first level 1 heading, else "".
+std::string markdown_to_html(const std::string &md, std::string *title = nullptr);
+// .md, .markdown, .mdown, .mkd, ...
+bool is_markdown_name(const std::string &path);
 
 } // namespace docs

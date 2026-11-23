@@ -18,6 +18,7 @@ endfunction()
 
 fld_settings_page(appearance pages/appearance.cpp)
 fld_settings_page(lock       pages/lock.cpp)
+fld_settings_page(privacy    pages/privacy.cpp REQUIRES fl-applets-util)
 fld_settings_page(panel      pages/panel.cpp)
 fld_settings_page(notifications pages/notifications.cpp REQUIRES fld-glib)
 fld_settings_page(language   pages/language.cpp)
@@ -65,7 +66,8 @@ configure_file(${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp.in ${CMAKE_CURRENT
 set(DISPLAYS_PROTO)
 fld_wayland_protocol(DISPLAYS_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-management-unstable-v1.xml client)
 
-add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp users_model.cpp datetime_sys.cpp)
+add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp users_model.cpp datetime_sys.cpp
+            settings_search.cpp)
 target_include_directories(fl-settings-xkb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-settings-xkb PUBLIC fld)
 
@@ -74,6 +76,14 @@ add_executable(fl-settings main.cpp settings_common.cpp ${FLD_SETTINGS_PAGE_SRCS
 target_include_directories(fl-settings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${FLD_PROTO_OUT})
 target_link_libraries(fl-settings PRIVATE fld fl-settings-xkb PkgConfig::WAYLAND_CLIENT ${FLD_SETTINGS_PAGE_LIBS})
 target_compile_definitions(fl-settings PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}/fldesktop")
+if(TARGET fld-fprint)
+  target_link_libraries(fl-settings PRIVATE fld-fprint)
+  target_compile_definitions(fl-settings PRIVATE FLD_HAVE_FPRINT=1)
+endif()
+if(TARGET fld-backlight)
+  target_link_libraries(fl-settings PRIVATE fld-backlight)
+  target_compile_definitions(fl-settings PRIVATE FLD_HAVE_BACKLIGHT=1)
+endif()
 install(TARGETS fl-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # the root part of the Login Screen page, run through pkexec

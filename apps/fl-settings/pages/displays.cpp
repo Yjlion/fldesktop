@@ -15,6 +15,10 @@
 #include <FL/platform.H>
 
 #include <wayland-client.h>
+#ifdef FLD_HAVE_BACKLIGHT
+#include "backlight.h"
+#endif
+#include <FL/Fl_Slider.H>
 #include "wlr-output-management-unstable-v1-client-protocol.h"
 
 #include <algorithm>
@@ -296,7 +300,42 @@ public:
     status->labelsize(12);
     status->labelcolor(palette().fg_dim);
 
-    Form nf(g, X + 24, cy + 450, lw);
+    int ny = cy + 450;
+    {
+      // convertibles and tablets: fl-autorotate follows the accelerometer
+      Fl_Check_Button *rot = new Fl_Check_Button(X + 24, ny, lw, 26, "Turn the built-in screen with the device");
+      rot->tooltip("For convertibles and tablets with a rotation sensor (iio-sensor-proxy)");
+      ConfigFile d(desktop_ini_path());
+      rot->value(d.ini.get_bool("Display", "AutoRotate", true));
+      rot->callback([](Fl_Widget *w, void *) {
+        ConfigFile d(desktop_ini_path());
+        d.ini.set_bool("Display", "AutoRotate", ((Fl_Check_Button *)w)->value());
+        d.save();
+      });
+      ny += 34;
+    }
+#ifdef FLD_HAVE_BACKLIGHT
+    // the built-in screen's backlight (laptops)
+    int pct;
+    if (bl::screen_get(pct)) {
+      Form bf(g, X + 24, ny, lw);
+      bf.heading("Brightness");
+      bf.row("Built-in screen:", 26, wx, wy, ww);
+      Fl_Slider *b = new Fl_Slider(wx, wy, std::min(ww, 320), 26);
+      b->type(FL_HOR_NICE_SLIDER);
+      b->bounds(1, 100);
+      b->step(1);
+      b->value(pct);
+      b->when(FL_WHEN_CHANGED);
+      b->callback([](Fl_Widget *w, void *) {
+        std::string err;
+        if (!bl::screen_set((int)((Fl_Slider *)w)->value(), err)) fprintf(stderr, "fl-settings: %s\n", err.c_str());
+      });
+      bf.note("The brightness keys change it too.");
+      ny = bf.y() + 16;
+    }
+#endif
+    Form nf(g, X + 24, ny, lw);
     nf.heading("Night Light");
     ConfigFile desk(desktop_ini_path());
     const std::string N = "NightLight";
@@ -515,7 +554,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new DisplaysPage(x, y, w, 
 
 PageInfo page_displays() {
   return {"displays", "Displays", "video-display", "Hardware",
-          "display monitor screen resolution scale hidpi rotation position output refresh night light warm colour color temperature", create};
+          "display monitor screen resolution scale hidpi rotation position output refresh night light warm colour color temperature brightness backlight", create};
 }
 
 } // namespace fld

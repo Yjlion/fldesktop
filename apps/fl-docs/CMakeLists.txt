@@ -1,10 +1,10 @@
-# fl-docs: document viewer. PDF through poppler-cpp; EPUB, OpenDocument text
-# and comic books with libxml2, libarchive and Pango (DOCS_REFLOW).
-add_library(fl-docs-util STATIC docs_util.cpp)   # testable logic, linked by tests
+# fl-docs: document viewer. PDF through poppler-cpp; EPUB, OpenDocument text,
+# Markdown and comic books with libxml2, libarchive and Pango (DOCS_REFLOW).
+add_library(fl-docs-util STATIC docs_util.cpp markdown.cpp)   # testable logic, linked by tests
 target_include_directories(fl-docs-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 set(_sources main.cpp backend.cpp backend_pdf.cpp)
 if(DOCS_REFLOW_FOUND)
-  list(APPEND _sources archive_reader.cpp images.cpp flow.cpp backend_comic.cpp backend_epub.cpp backend_odt.cpp)
+  list(APPEND _sources archive_reader.cpp images.cpp flow.cpp backend_comic.cpp backend_epub.cpp backend_odt.cpp backend_markdown.cpp)
 endif()
 add_executable(fl-docs ${_sources})
 target_link_libraries(fl-docs PRIVATE fl-docs-util fld PkgConfig::POPPLER_CPP)

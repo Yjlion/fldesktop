@@ -1,0 +1,19 @@
+.TH FL-PAINT 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-paint \- a simple drawing program
+.SH SYNOPSIS
+\fBfl-paint\fR [\fIPICTURE\fR]
+.SH DESCRIPTION
+Draws on pictures: a soft round brush (B), an eraser (E), lines (L),
+rectangles (R) and ellipses (O), outlined or filled (Shift: squares and
+circles), a fill (F), text (T), a rectangular selection (S) with copy, cut,
+paste and crop, and a colour picker (I). [ and ] change the size; Ctrl and
+the mouse wheel zoom. Layers can be added, hidden (double-click), moved,
+merged and made see-through. Undo and redo go back 25 steps. The picture
+can be resized, its canvas enlarged, rotated and flipped.
+.PP
+PNG, JPEG, BMP and GIF pictures open; pictures are saved as PNG (the layers
+merged). Copying also puts the selection on the clipboard as a PNG
+(\fBwl-copy\fR).
+.SH SEE ALSO
+\fBfl-view\fR(1), \fBfl-snip\fR(1)

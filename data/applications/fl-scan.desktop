@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Scan
+GenericName=Document Scanner
+Comment=Scan documents and pictures to PDF or PNG
+Exec=fl-scan
+Icon=fl-scan
+Categories=Graphics;Scanning;Office;
+Keywords=scan;scanner;sane;document;pdf;photo;copy;
+StartupWMClass=fl-scan

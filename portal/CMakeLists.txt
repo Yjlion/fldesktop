@@ -4,13 +4,24 @@ if(NOT TARGET fld-glib)
   return()
 endif()
 
-add_library(fld-portal-util STATIC portal_util.cpp cast_util.cpp)
+add_library(fld-portal-util STATIC portal_util.cpp cast_util.cpp portal_misc.cpp)
 target_include_directories(fld-portal-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fld-portal-util PUBLIC fld-glib)
 
+# gunixfdlist.h: in gio-unix-2.0 before GLib 2.80
+pkg_check_modules(PORTAL_GIO_UNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
+set(INHIBIT_PROTO)
+fld_wayland_protocol(INHIBIT_PROTO ${WAYLAND_PROTOCOLS_DIR}/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml client)
 add_executable(xdg-desktop-portal-fl main.cpp filechooser.cpp appchooser.cpp settings.cpp dialogs.cpp
-               notification.cpp)
-target_link_libraries(xdg-desktop-portal-fl PRIVATE fld-portal-util)
+               notification.cpp inhibit.cpp background.cpp shortcuts.cpp ${INHIBIT_PROTO})
+target_include_directories(xdg-desktop-portal-fl PRIVATE ${FLD_PROTO_OUT})
+target_link_libraries(xdg-desktop-portal-fl PRIVATE fld-portal-util PkgConfig::PORTAL_GIO_UNIX PkgConfig::WAYLAND_CLIENT)
+# Print: through CUPS
+if(TARGET fld-printers)
+  target_sources(xdg-desktop-portal-fl PRIVATE print.cpp)
+  target_link_libraries(xdg-desktop-portal-fl PRIVATE fld-printers)
+  target_compile_definitions(xdg-desktop-portal-fl PRIVATE FLD_HAVE_PRINTERS=1)
+endif()
 
 # ScreenCast: Wayland capture into PipeWire
 pkg_check_modules(PORTAL_PW IMPORTED_TARGET libpipewire-0.3)
@@ -33,7 +44,13 @@ if(PORTAL_PW_FOUND)
   else()
     message(STATUS "xdg-desktop-portal-fl: wayland-protocols without ext-image-copy-capture, screens only")
   endif()
-  target_sources(xdg-desktop-portal-fl PRIVATE screencast.cpp cast_capture.c ${CAST_PROTO})
+  # RemoteDesktop shares the ScreenCast sessions; input through virtual devices
+  pkg_check_modules(PORTAL_XKB REQUIRED IMPORTED_TARGET xkbcommon)
+  fld_wayland_protocol(CAST_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-virtual-pointer-unstable-v1.xml client)
+  fld_wayland_protocol(CAST_PROTO ${CMAKE_SOURCE_DIR}/protocols/virtual-keyboard-unstable-v1.xml client)
+  fld_wayland_protocol(CAST_PROTO ${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-output/xdg-output-unstable-v1.xml client)
+  target_sources(xdg-desktop-portal-fl PRIVATE screencast.cpp rd_input.cpp cast_capture.c ${CAST_PROTO})
+  target_link_libraries(xdg-desktop-portal-fl PRIVATE PkgConfig::PORTAL_XKB)
   target_include_directories(xdg-desktop-portal-fl PRIVATE ${FLD_PROTO_OUT})
   set_source_files_properties(cast_capture.c PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers;-Wno-pedantic")
   target_link_libraries(xdg-desktop-portal-fl PRIVATE PkgConfig::PORTAL_PW PkgConfig::WAYLAND_CLIENT)

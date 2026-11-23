@@ -67,6 +67,9 @@ static bool parse_action(const char *action, enum flwm_action_type *type_out, ch
 		{"sticky", FLWM_ACTION_STICKY},
 		{"zoom-in", FLWM_ACTION_ZOOM_IN}, {"zoom-out", FLWM_ACTION_ZOOM_OUT},
 		{"zoom-reset", FLWM_ACTION_ZOOM_RESET},
+		{"portal-shortcut", FLWM_ACTION_PORTAL_SHORTCUT},
+		{"overview", FLWM_ACTION_OVERVIEW},
+		{"snap-third-left", FLWM_ACTION_SNAP_THIRD_LEFT}, {"snap-third-right", FLWM_ACTION_SNAP_THIRD_RIGHT},
 	};
 	enum flwm_action_type type = FLWM_ACTION_NONE;
 	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
@@ -175,6 +178,8 @@ void config_init_defaults(struct flwm_config *c) {
 	c->default_scale = 1.0f;
 	c->launcher_cmd = strdup("fl-launcher");
 	c->switcher = true;
+	c->snap_assist = true;
+	c->osk_in_tablet_mode = true;
 	c->xwayland = true;
 	c->workspaces = 4;
 	c->gestures = true;
@@ -198,6 +203,9 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+r", "resize-mode");
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
+	add_binding(c, "Super+Alt+Left", "snap-third-left");
+	add_binding(c, "Super+Alt+Right", "snap-third-right");
+	add_binding(c, "Super+Tab", "overview");
 	add_binding(c, "Super+f", "fullscreen");
 	add_binding(c, "Super+equal", "zoom-in");
 	add_binding(c, "Super+plus", "zoom-in");
@@ -214,6 +222,23 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Shift+Print", "exec fl-snip --area");
 	add_binding(c, "Super+Shift+s", "exec fl-snip --snip");
 	add_binding(c, "Ctrl+Shift+Escape", "exec fl-taskmgr");
+	/* media, volume and brightness keys: fl-panel does them and shows the
+	 * on-screen display */
+	static const char *const media[][2] = {
+		{"XF86AudioRaiseVolume", "volume-up"}, {"XF86AudioLowerVolume", "volume-down"},
+		{"XF86AudioMute", "volume-mute"}, {"XF86AudioMicMute", "mic-mute"},
+		{"XF86MonBrightnessUp", "brightness-up"}, {"XF86MonBrightnessDown", "brightness-down"},
+		{"XF86KbdBrightnessUp", "kbd-brightness-up"}, {"XF86KbdBrightnessDown", "kbd-brightness-down"},
+		{"XF86KbdLightOnOff", "kbd-brightness-toggle"},
+		{"XF86AudioPlay", "media-play-pause"}, {"XF86AudioPause", "media-pause"},
+		{"XF86AudioStop", "media-stop"}, {"XF86AudioNext", "media-next"},
+		{"XF86AudioPrev", "media-previous"},
+	};
+	for (size_t i = 0; i < sizeof media / sizeof media[0]; i++) {
+		char action[96];
+		snprintf(action, sizeof action, "exec fl-panel --action %s", media[i][1]);
+		add_binding(c, media[i][0], action);
+	}
 	/* workspaces: Super+N goes there, Super+Shift+N sends the window there */
 	for (int i = 1; i <= FLWM_MAX_WORKSPACES; i++) {
 		char combo[32], action[32];
@@ -287,6 +312,19 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "drag_snap")) c->drag_snap = parse_bool(v);
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
+			else if (!strcmp(k, "snap_assist")) c->snap_assist = parse_bool(v);
+			else if (!strcmp(k, "osk_in_tablet_mode")) c->osk_in_tablet_mode = parse_bool(v);
+			else if (!strncmp(k, "hot_corner_", 11)) {
+				static const char *names[] = {"top_left", "top_right", "bottom_left", "bottom_right"};
+				for (int i = 0; i < 4; i++)
+					if (!strcmp(k + 11, names[i])) {
+						struct flwm_gesture_action *h = &c->hot_corner[i];
+						free(h->arg);
+						h->arg = NULL;
+						h->type = FLWM_ACTION_NONE;
+						if (*v && strcasecmp(v, "none")) parse_action(v, &h->type, &h->arg);
+					}
+			}
 			else if (!strcmp(k, "xwayland")) c->xwayland = parse_bool(v);
 			else if (!strcmp(k, "workspaces")) {
 				int n = atoi(v);
@@ -380,6 +418,60 @@ bool config_load(struct flwm_config *c, const char *path) {
 	return true;
 }
 
+/* an id for the shell: letters, digits and . _ - only */
+static bool plain_id(const char *s) {
+	if (!*s || strlen(s) > 200) return false;
+	for (; *s; s++)
+		if (!isalnum((unsigned char)*s) && !strchr("._-", *s)) return false;
+	return true;
+}
+
+void config_load_global_shortcuts(struct flwm_config *c) {
+	char path[1024];
+	const char *xdg = getenv("XDG_CONFIG_HOME");
+	if (xdg && *xdg) snprintf(path, sizeof path, "%s/fldesktop/global-shortcuts.ini", xdg);
+	else snprintf(path, sizeof path, "%s/.config/fldesktop/global-shortcuts.ini", getenv("HOME") ? getenv("HOME") : "/");
+	FILE *f = fopen(path, "r");
+	if (!f) return;
+	char line[1024], app[256] = "";
+	while (fgets(line, sizeof line, f)) {
+		char *l = trim(line);
+		if (!*l || *l == '#' || *l == ';') continue;
+		if (*l == '[') {
+			char *e = strchr(l, ']');
+			if (e) *e = 0;
+			snprintf(app, sizeof app, "%s", l + 1);
+			continue;
+		}
+		char *eq = strchr(l, '=');
+		if (!eq || !*app) continue;
+		*eq = 0;
+		char *id = trim(l), *v = trim(eq + 1);
+		char *bar = strchr(v, '|');
+		if (bar) *bar = 0;
+		char *combo = trim(v);
+		if (!*combo || !plain_id(app) || !plain_id(id)) continue;
+		/* parse the combination like a binding, but keep what is bound already */
+		struct flwm_config probe;
+		memset(&probe, 0, sizeof probe);
+		add_binding(&probe, combo, "close");
+		if (probe.nbindings != 1) continue;
+		bool taken = false;
+		for (int i = 0; i < c->nbindings; i++)
+			if (c->bindings[i].modifiers == probe.bindings[0].modifiers && c->bindings[i].sym == probe.bindings[0].sym)
+				taken = true;
+		free(probe.bindings[0].arg);
+		if (taken) {
+			wlr_log(WLR_INFO, "global shortcut %s of %s: %s is taken", id, app, combo);
+			continue;
+		}
+		char action[512];
+		snprintf(action, sizeof action, "portal-shortcut %s\x1f%s", app, id);
+		add_binding(c, combo, action);
+	}
+	fclose(f);
+}
+
 void config_free(struct flwm_config *c) {
 	free(c->font);
 	free(c->kb_layout);
@@ -392,6 +484,7 @@ void config_free(struct flwm_config *c) {
 	free(c->scroll_method);
 	free(c->gesture_up.arg);
 	free(c->gesture_down.arg);
+	for (int i = 0; i < 4; i++) free(c->hot_corner[i].arg);
 	free(c->path);
 	for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);
 	for (int i = 0; i < c->nautostart; i++) free(c->autostart[i]);

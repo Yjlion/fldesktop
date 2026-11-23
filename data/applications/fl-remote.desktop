@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Remote Desktop
+GenericName=Remote Desktop Viewer
+Comment=See and control other computers over VNC and RDP
+Exec=fl-remote %u
+Icon=fl-remote
+Categories=Network;RemoteAccess;
+Keywords=vnc;rdp;remote;desktop;viewer;windows;freerdp;
+MimeType=x-scheme-handler/vnc;x-scheme-handler/rdp;
+StartupWMClass=fl-remote

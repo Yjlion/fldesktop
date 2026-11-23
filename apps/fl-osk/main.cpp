@@ -114,15 +114,20 @@ static std::string pidfile() {
   return fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-osk-" + std::to_string(getuid()) + ".pid";
 }
 
-static bool toggle_existing() {
+// the running fl-osk, or 0
+static pid_t running() {
   std::string s;
-  if (!fld::read_file(pidfile(), s)) return false;
+  if (!fld::read_file(pidfile(), s)) return 0;
   pid_t pid = atoi(s.c_str());
-  if (pid <= 1 || pid == getpid()) return false;
+  if (pid <= 1 || pid == getpid()) return 0;
   std::string comm;
   fld::read_file("/proc/" + std::to_string(pid) + "/comm", comm);
-  if (fld::trim(comm) != "fl-osk") return false;
-  return kill(pid, SIGTERM) == 0;
+  return fld::trim(comm) == "fl-osk" ? pid : 0;
+}
+
+static bool toggle_existing() {
+  pid_t pid = running();
+  return pid && kill(pid, SIGTERM) == 0;
 }
 
 static void on_term(int) {
@@ -139,8 +144,17 @@ int main(int argc, char **argv) {
     std::string a = argv[i];
     if (a == "--layout" && i + 1 < argc) layout = argv[++i];
     else if (a == "--no-toggle") toggle = false;
-    else if (a == "-h" || a == "--help") {
-      printf("Usage: fl-osk [--layout us|de|fr] [--no-toggle]\nStarting it while it runs closes it.\n");
+    // tablet mode (fl-wm): show when a text field is focused, hide after
+    else if (a == "--show") {
+      if (running()) return 0;
+      toggle = false;
+    } else if (a == "--hide") {
+      pid_t pid = running();
+      if (pid) kill(pid, SIGTERM);
+      return 0;
+    } else if (a == "-h" || a == "--help") {
+      printf("Usage: fl-osk [--layout us|de|fr] [--no-toggle | --show | --hide]\n"
+             "Starting it while it runs closes it (--show leaves it, --hide only closes it).\n");
       return 0;
     }
   }

@@ -1,5 +1,8 @@
 // xdg-desktop-portal-fl helpers: option parsing and settings values
 #include <glib.h>
+#include <unistd.h>
+
+#include <cstdlib>
 
 #include "portal.h"
 #include "test.h"
@@ -126,6 +129,42 @@ int main() {
     fld::Ini bad;
     bad.parse("[Appearance]\nTextScale=9\n");
     CHECK(read_appearance(bad).text_scale == 1.0);
+  }
+  // Background: autostart entries
+  CHECK_EQ(autostart_file_name("org.example.App"), std::string("org.example.App.desktop"));
+  CHECK_EQ(autostart_file_name("../evil"), std::string(""));
+  CHECK_EQ(autostart_file_name("a/b"), std::string(""));
+  CHECK_EQ(autostart_entry("org.example.App", {"flatpak", "run", "org.example.App", "--hidden"}, 0),
+           std::string("[Desktop Entry]\nType=Application\nName=org.example.App\n"
+                       "Exec=flatpak run org.example.App --hidden\nX-XDP-Autostart=org.example.App\n"));
+  std::string e = autostart_entry("a.b", {"/bin/sh", "-c", "echo \"$HOME\" 100%"}, 1);
+  CHECK(e.find("Exec=/bin/sh -c \"echo \\\"\\$HOME\\\" 100%%\"\n") != std::string::npos);
+  CHECK(e.find("DBusActivatable=true\n") != std::string::npos);
+  // GlobalShortcuts: triggers
+  CHECK_EQ(trigger_to_combo("CTRL+ALT+k"), std::string("Ctrl+Alt+k"));
+  CHECK_EQ(trigger_to_combo("SHIFT+LOGO+Return"), std::string("Super+Shift+Return"));
+  CHECK_EQ(trigger_to_combo("<Control><Alt>t"), std::string("Ctrl+Alt+t"));
+  CHECK_EQ(trigger_to_combo("F9"), std::string("F9"));
+  CHECK_EQ(trigger_to_combo("NUM+a"), std::string(""));
+  CHECK_EQ(trigger_to_combo("CTRL+"), std::string(""));
+  CHECK_EQ(trigger_to_combo(""), std::string(""));
+  // the store
+  {
+    char tmpl[] = "/tmp/fld-portal-XXXXXX";
+    std::string dir = mkdtemp(tmpl);
+    std::string path = dir + "/global-shortcuts.ini";
+    shortcuts_save(path, "org.example.App", {{"toggle", "Ctrl+Alt+k", "Show or hide"}, {"bad=id", "F1", ""}});
+    shortcuts_save(path, "org.other.App", {{"next", "", "Next"}});
+    auto l = shortcuts_load(path, "org.example.App");
+    CHECK_EQ(l.size(), (size_t)1); // "bad=id" cannot be a key
+    CHECK_EQ(l[0].id, std::string("toggle"));
+    CHECK_EQ(l[0].combo, std::string("Ctrl+Alt+k"));
+    CHECK_EQ(l[0].description, std::string("Show or hide"));
+    shortcuts_save(path, "org.example.App", {});
+    CHECK(shortcuts_load(path, "org.example.App").empty());
+    CHECK_EQ(shortcuts_load(path, "org.other.App").size(), (size_t)1);
+    unlink(path.c_str());
+    rmdir(dir.c_str());
   }
   return test_result("portal");
 }

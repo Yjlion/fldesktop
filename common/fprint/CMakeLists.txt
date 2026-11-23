@@ -1,0 +1,7 @@
+# fingerprints through fprintd (fl-lock, Settings > Users)
+pkg_check_modules(FPRINT_GIO QUIET IMPORTED_TARGET gio-2.0)
+if(FPRINT_GIO_FOUND)
+  add_library(fld-fprint STATIC fprint.cpp)
+  target_include_directories(fld-fprint PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-fprint PUBLIC fld PkgConfig::FPRINT_GIO)
+endif()

@@ -1,0 +1,12 @@
+# fl-scan: scanning through SANE's scanimage; PDF through cairo
+add_library(fl-scan-util STATIC scan_util.cpp)
+target_include_directories(fl-scan-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-scan-util PUBLIC fld)
+pkg_check_modules(SCAN_CAIRO_PDF IMPORTED_TARGET cairo-pdf)
+if(NOT SCAN_CAIRO_PDF_FOUND)
+  message(STATUS "cairo-pdf not found: fl-scan is not built")
+  return()
+endif()
+add_executable(fl-scan main.cpp)
+target_link_libraries(fl-scan PRIVATE fl-scan-util fld PkgConfig::SCAN_CAIRO_PDF)
+install(TARGETS fl-scan RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

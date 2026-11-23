@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "fld/menus.h"
 #include "fld/theme.h"
@@ -89,6 +90,29 @@ void power_indicator_start(fld::FlatButton *battery);
 bool power_indicator_active();
 // panel_drives.cpp: mounts removable drives as they are plugged in.
 void drives_start();
+// panel_osd.cpp: the on-screen display (volume, brightness, Caps Lock, ...):
+// an icon, a level bar (0..100, -1 for none) and a line of text
+void osd_show(const std::string &icon, int level, const std::string &text = "");
+// panel_actions.cpp: the media and brightness keys ("fl-panel --action X")
+std::string panel_socket_path();
+void panel_actions_listen(bool osd);
+void panel_run_action(const std::string &action);
+int panel_action_main(const std::string &action); // the --action process
+// panel.cpp: the volume, for the keys (they show the display)
+void panel_volume_step(int delta_pct);
+void panel_volume_toggle_mute();
+void panel_mic_toggle_mute();
+// panel_weather.cpp: the weather (hidden until a place is chosen)
+fld::FlatButton *weather_create();
+void weather_menu_items(fld::Menu &m);
+// panel_sysmon.cpp: processor and memory graphs ([Panel] SystemMonitor)
+fld::FlatButton *sysmon_create(bool on);
+// panel_privacy.cpp: the camera or microphone in use ([Panel] PrivacyIndicator);
+// null when turned off. privacy_audio: the programs recording sound now.
+fld::FlatButton *privacy_create(bool on);
+void privacy_audio(const std::vector<std::string> &recording);
+// panel_notify.cpp: do not disturb for a while ("Do Not Disturb" menus)
+void dnd_menu_items(fld::Menu &m);
 // panel_network.cpp: the network button's popup and right-click menu
 void network_popup(Fl_Widget *button);
 void network_context_menu(fld::Menu &m);

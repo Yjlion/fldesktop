@@ -370,6 +370,20 @@ G["preferences-system-notifications"] = BELL
 G["notifications-disabled"] = BELL + [S("M2 2 l12 12", w=1.75)]
 G["display-brightness"] = [C(8, 8, 3), S("M8 1 v1.5 M8 13.5 v1.5 M1 8 h1.5 M13.5 8 h1.5 M3 3 l1 1 M12 12 l1 1 M3 13 l1 -1 M12 4 l1 -1")]
 G["weather-clear"] = G["display-brightness"]
+CLOUD = "M4.5 12.5 h7 a2.75 2.75 0 0 0 0.3 -5.5 a3.75 3.75 0 0 0 -7.2 1.05 a2.25 2.25 0 0 0 -0.1 4.45 z"
+CLOUD_HI = "M4.5 9.75 h7 a2.75 2.75 0 0 0 0.3 -5.5 a3.75 3.75 0 0 0 -7.2 1.05 a2.25 2.25 0 0 0 -0.1 4.45 z"
+SMALL_CLOUD = "M6.5 14 h6 a2.4 2.4 0 0 0 0.25 -4.8 a3.2 3.2 0 0 0 -6.15 0.9 a1.95 1.95 0 0 0 -0.1 3.9 z"
+G["weather-overcast"] = [S(CLOUD)]
+G["weather-few-clouds"] = [C(5.5, 5.5, 2.25), S("M5.5 1 v1 M1 5.5 h1 M2.3 2.3 l0.75 0.75 M8.7 2.3 l-0.75 0.75 M2.3 8.7 l0.75 -0.75"),
+                           S(SMALL_CLOUD)]
+G["weather-few-clouds-night"] = [S("M6 1.75 a4 4 0 1 0 3.5 6 a3.25 3.25 0 0 1 -3.5 -6 z"), S(SMALL_CLOUD)]
+G["weather-fog"] = [S("M2 5 h12 M3.5 8 h9 M2 11 h12", w=1.5)]
+G["weather-showers"] = [S(CLOUD_HI), S("M5.5 11.75 l-1 2.5 M8.5 11.75 l-1 2.5 M11.5 11.75 l-1 2.5")]
+G["weather-snow"] = [S(CLOUD_HI), C(5, 12.75, 0.9, fill=True), C(8, 14, 0.9, fill=True), C(11, 12.75, 0.9, fill=True)]
+G["weather-storm"] = [S(CLOUD_HI), F("M8.75 10.25 l-2.75 3.25 h2.25 l-1 2.25 l3.25 -3.5 h-2.25 l1.25 -2 z")]
+G["weather-severe-alert"] = G["dialog-warning"]
+G["transform-crop"] = [S("M4.5 1.5 v10 h10 M1.5 4.5 h10 v10")]
+G["transform-scale"] = [R(1.75, 8.25, 6, 6, 1), S("M8.5 7.5 l5 -5 M9.75 2.5 h3.75 v3.75")]
 G["user-available"] = [C(8, 8, 5.5, fill=True)]
 G["user-offline"] = [C(8, 8, 5.25)]
 G["user-busy"] = [C(8, 8, 6, fill=True), ]

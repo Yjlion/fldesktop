@@ -10,6 +10,10 @@
            -> several hundred pages (laid out while shown)
  test.cbz  three PNGs named 1, 2 and 10 (natural order), sizes 300x400,
            320x400 and 340x400, inside a folder, plus a __MACOSX file
+ test.md   Markdown: front matter title "fl-docs markdown test", "FLDESKTOP"
+           in a paragraph and a table, an image beside it in "md img/",
+           a long code block                                  -> 2+ pages
+ noimg.md  the same without the image
  nobook.zip a zip of text files (not a document)
 """
 import os
@@ -135,6 +139,40 @@ def big_epub(path):
         z.writestr("c.xhtml", ch)
 
 
+def markdown(out):
+    os.makedirs(os.path.join(out, "md img"), exist_ok=True)
+    with open(os.path.join(out, "md img", "dot.png"), "wb") as f:
+        f.write(png(60, 40, (30, 30, 200)))
+    code = "\n".join("    line %d of the listing: *not emphasis*" % i for i in range(90))
+    text = f"""---
+title: fl-docs markdown test
+---
+# Heading
+
+A paragraph with **bold** text and FLDESKTOP in it.
+
+![dot](md%20img/dot.png) ![web](https://example.org/x.png)
+
+- one
+- two
+  1. nested
+
+| a | b |
+|---|---|
+| FLDESKTOP | cell |
+
+```
+{code}
+```
+
+Last line.
+"""
+    with open(os.path.join(out, "test.md"), "w") as f:
+        f.write(text)
+    with open(os.path.join(out, "noimg.md"), "w") as f:
+        f.write(text.replace("![dot](md%20img/dot.png) ", ""))
+
+
 def cbz(path):
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("__MACOSX/comic/._1.png", b"junk")
@@ -151,6 +189,7 @@ def main():
     epub(os.path.join(out, "test.epub"))
     big_epub(os.path.join(out, "big.epub"))
     cbz(os.path.join(out, "test.cbz"))
+    markdown(out)
     with zipfile.ZipFile(os.path.join(out, "nobook.zip"), "w") as z:
         z.writestr("a.txt", "a")
         z.writestr("b.txt", "b")

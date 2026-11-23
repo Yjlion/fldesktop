@@ -5,6 +5,11 @@ find_path(PAM_INCLUDE_DIR security/pam_appl.h REQUIRED)
 add_executable(fl-lock main.cpp auth.cpp daemon.cpp)
 target_include_directories(fl-lock PRIVATE ${PAM_INCLUDE_DIR})
 target_link_libraries(fl-lock PRIVATE fld PkgConfig::LOCK_GIO ${PAM_LIBRARY} Threads::Threads)
+# a finger unlocks too (fprintd)
+if(TARGET fld-fprint)
+  target_link_libraries(fl-lock PRIVATE fld-fprint)
+  target_compile_definitions(fl-lock PRIVATE FLD_HAVE_FPRINT=1)
+endif()
 install(TARGETS fl-lock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # PAM service: the distributions name their common stack differently

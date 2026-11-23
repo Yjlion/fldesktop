@@ -26,13 +26,14 @@ std::unique_ptr<Backend> open_document(const std::string &path, std::string &err
     err = "The file cannot be read.";
     return nullptr;
   }
-  const char *unknown = "This is not a PDF, EPUB, OpenDocument text or comic book file, or it is damaged.";
+  const char *unknown = "This is not a PDF, EPUB, OpenDocument text, Markdown or comic book file, or it is damaged.";
   Format f = sniff(head, path);
   switch (f) {
   case Format::Pdf: return open_pdf(path, err, password);
 #ifdef FLD_DOCS_REFLOW
   case Format::Epub: return open_epub(path, err);
   case Format::Odt: return open_odt(path, err);
+  case Format::Markdown: return open_markdown(path, err);
   case Format::OdfOther:
     err = "Only OpenDocument text documents can be shown, not spreadsheets, presentations or drawings.";
     return nullptr;
@@ -53,6 +54,7 @@ std::unique_ptr<Backend> open_document(const std::string &path, std::string &err
 #else
   case Format::Epub:
   case Format::Odt:
+  case Format::Markdown:
   case Format::OdfOther:
   case Format::Zip:
   case Format::Archive:

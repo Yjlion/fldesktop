@@ -212,5 +212,23 @@ int main() {
   CHECK_EQ(d[0].x, 0);
   CHECK_EQ(d[0].w, 47);
   CHECK_EQ(d[0].h, 11);
+  // saved logins
+  CHECK_EQ(login_origin("https://Example.org/login?x=1"), std::string("https://example.org"));
+  CHECK_EQ(login_origin("https://a.org:443/"), std::string("https://a.org"));
+  CHECK_EQ(login_origin("http://a.org:8080"), std::string("http://a.org:8080"));
+  CHECK_EQ(login_origin("https://user:pw@a.org/x"), std::string("https://a.org"));
+  CHECK_EQ(login_origin("file:///etc/passwd"), std::string(""));
+  CHECK_EQ(login_origin("about:blank"), std::string(""));
+  std::string o, u, p;
+  CHECK(parse_login_message("{\"origin\":\"https://a.org\",\"user\":\"me\",\"pass\":\"s3\\\"cret\"}", o, u, p));
+  CHECK_EQ(o, std::string("https://a.org"));
+  CHECK_EQ(u, std::string("me"));
+  CHECK_EQ(p, std::string("s3\"cret"));
+  CHECK(!parse_login_message("{\"origin\":\"https://a.org\",\"user\":\"me\",\"pass\":\"\"}", o, u, p));
+  CHECK(!parse_login_message("{\"origin\":\"file://\",\"pass\":\"x\"}", o, u, p));
+  CHECK(!parse_login_message("nope", o, u, p));
+  std::string fill = login_fill_script("me", "a'b\"c</script>");
+  CHECK(fill.find("(\"me\", \"a'b\\\"c</script>\")") != std::string::npos);
+  CHECK(std::string(login_capture_script()).find("flwebLogin") != std::string::npos);
   return test_result("web");
 }

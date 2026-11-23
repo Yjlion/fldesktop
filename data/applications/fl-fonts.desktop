@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Fonts
+GenericName=Font Manager
+Comment=Preview, install and remove fonts
+Exec=fl-fonts %F
+Icon=fl-fonts
+Categories=Utility;Settings;
+Keywords=font;fonts;typeface;ttf;otf;install;preview;
+MimeType=font/ttf;font/otf;application/x-font-ttf;application/x-font-otf;font/collection;
+StartupWMClass=fl-fonts

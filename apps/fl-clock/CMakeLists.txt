@@ -1,0 +1,11 @@
+# fl-clock: world clocks, alarms, a timer and a stopwatch
+add_library(fl-clock-util STATIC clock_util.cpp)
+target_include_directories(fl-clock-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-clock-util PUBLIC fld)
+if(NOT TARGET fld-glib)
+  message(STATUS "glib/gio not found: fl-clock is not built (it rings through notifications)")
+  return()
+endif()
+add_executable(fl-clock main.cpp)
+target_link_libraries(fl-clock PRIVATE fl-clock-util fld-glib)
+install(TARGETS fl-clock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

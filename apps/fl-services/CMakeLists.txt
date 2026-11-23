@@ -1,0 +1,13 @@
+# fl-services: systemd or OpenRC services
+add_library(fl-services-util STATIC services_util.cpp)
+target_include_directories(fl-services-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-services-util PUBLIC fld)
+add_executable(fl-services main.cpp)
+target_link_libraries(fl-services PRIVATE fl-services-util fld)
+target_compile_definitions(fl-services PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}/fldesktop")
+add_executable(fl-services-helper helper.cpp)
+target_link_libraries(fl-services-helper PRIVATE fl-services-util fld)
+install(TARGETS fl-services RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS fl-services-helper RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/fldesktop)
+configure_file(org.fldesktop.services.policy.in ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.services.policy @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.services.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)

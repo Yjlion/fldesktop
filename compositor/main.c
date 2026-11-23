@@ -78,7 +78,7 @@ static int handle_signal(int sig, void *data) {
  * handle on the render node and closing that handle. vmwgfx (VMware's virtual
  * GPU) gives back handles GEM_CLOSE refuses (EINVAL), so every buffer of a
  * client using the GPU is rejected and the client dies of a protocol error
- * ("importing the supplied dmabufs failed": fl-video, fl-webcam, any OpenGL
+ * ("importing the supplied dmabufs failed": fl-media-player, fl-webcam, any OpenGL
  * app). There, check by importing the buffer into the renderer instead. */
 static bool check_dmabuf_by_texture(struct wlr_dmabuf_attributes *attribs, void *data) {
 	struct wlr_texture *tex = wlr_texture_from_dmabuf(data, attribs);
@@ -177,6 +177,7 @@ int main(int argc, char *argv[]) {
 		if (i == 0) wlr_log(WLR_ERROR, "cannot read %s", candidates[i]);
 	}
 	if (!server.config.path) server.config.path = strdup(default_path);
+	config_load_global_shortcuts(&server.config);
 	free(default_path);
 
 	/* children get a clean environment describing this session */
@@ -200,6 +201,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGPIPE, SIG_IGN);
 
 	server.zoom = 1;
+	server.hot_corner_fired = -1;
 	server.wl_display = wl_display_create();
 	server.event_loop = wl_display_get_event_loop(server.wl_display);
 	server.backend = wlr_backend_autocreate(server.event_loop, &server.session);
@@ -264,6 +266,7 @@ int main(int argc, char *argv[]) {
 	gesture_init(&server);
 	im_init(&server);
 	inhibit_init(&server);
+	protocols_init(&server);
 	xwayland_init(&server); /* sets DISPLAY for the programs we start */
 
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
@@ -327,6 +330,7 @@ int main(int argc, char *argv[]) {
 	im_finish();
 	inhibit_finish();
 	view_finish(&server);
+	protocols_finish(&server);
 	input_finish(&server);
 	gesture_finish();
 	output_finish(&server);

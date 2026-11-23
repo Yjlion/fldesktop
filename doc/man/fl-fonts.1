@@ -1,0 +1,15 @@
+.TH FL-FONTS 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-fonts \- preview, install and remove fonts
+.SH SYNOPSIS
+\fBfl-fonts\fR [\fIFONT-FILE\fR...]
+.SH DESCRIPTION
+Lists the font families fontconfig knows and shows each style of the
+selected one with a sample text at a chosen size. Fonts can be found by
+name and limited to monospace ones or to those you installed. \fBInstall
+Fonts\fR copies font files (TTF, OTF, TTC, WOFF) to
+\fI~/.local/share/fonts\fR for you; fonts you installed can be removed.
+Font files given on the command line (opened from the file manager) are
+offered for installing.
+.SH SEE ALSO
+\fBfc-list\fR(1), \fBfc-cache\fR(1), \fBfl-charmap\fR(1)

@@ -6,25 +6,34 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 |-----------|------------|
 | **fl-wm** | Stacking Wayland compositor on wlroots (0.18 – 0.20) with server-side decorations, key bindings, an Alt+Tab window switcher, window snapping, layer-shell, session locking (also ext-session-lock for swaylock), workspaces (ext-workspace-v1) and X11 programs through Xwayland |
 | **fl-lock** | Screen locker: clock, user picture, PAM password check, on-screen keyboard; locks on Super+L, after an idle time and before suspend |
-| **fl-panel** | Taskbar: application button, quick launch, workspace pager, window list, network (a popup with Wi-Fi networks, wired devices and VPNs), volume, Bluetooth, printing, battery (UPower: time left, power modes, low battery warnings), calendar clock, notification history, power menu; right-click menus on everything; mounts drives as they are plugged in (UDisks2) |
+| **fl-panel** | Taskbar: application button, quick launch, workspace pager, window list, network (a popup with Wi-Fi networks, wired devices and VPNs), volume, Bluetooth, printing, battery (UPower: time left, power modes, low battery warnings), calendar clock, notification history, power menu; right-click menus on everything; mounts drives as they are plugged in (UDisks2); volume, brightness and media keys with an on-screen display, a now playing row (MPRIS) and a brightness slider; optional weather (Open-Meteo) and system monitor applets; an indicator while the camera or microphone is in use; Do Not Disturb for an hour or until tomorrow |
 | **fl-launcher** | Searchable application menu with categories and recently used apps (Super+Space); lock, log out, suspend, restart and shut down buttons; right-click an app for its actions, quick launch and the desktop |
 | **fl-desktop** | Wallpaper and desktop icons for the XDG desktop folder, with drag and drop and icon zoom |
 | **fl-greet** | Graphical greeter for [greetd](https://sr.ht/~kennylevinsen/greetd/), with an on-screen keyboard; its look and user list are set in Settings > Login Screen |
-| **fl-settings** | Settings center: appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, power, removable drives, network, proxy, firewall, date & time, software updates, users (add, remove and change accounts: account type, password, picture, groups, automatic login), login screen |
-| **fl-term** | Terminal emulator (libvterm): tabs (drag to reorder, out into a new window or onto another fl-term window, right-click to rename, duplicate, close others), optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
-| **fl-files** | File manager: icon, compact and details views with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, tabs (drag them out into a new window or onto another Files window, history included), an optional menu bar, drag and drop with the dragged icons and their number under the pointer, folders that open when you hover them and scrolling at the edges (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), network shares, phones and cameras through GVfs (SMB, SFTP, FTP, WebDAV, NFS, MTP; Connect to Server, network browsing), and a search for files and folders by name, text, date and size |
-| **fl-edit** | Tabbed text editor (tabs you can drag and right-click) with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent |
+| **fl-settings** | Settings center: search across all pages down to single settings, a Privacy page (recent files, camera and microphone indicator), appearance (accent color presets or a custom color, widget styles: GTK+, Gleam, Plastic, Oxy, classic FLTK, Flat, Rounded, Retro, wallpaper gallery), screen lock, panel, notifications, language & region, default apps, keyboard, shortcuts, mouse, displays, sound, printers, Bluetooth, power, removable drives, network, proxy, firewall, date & time, software updates, users (add, remove and change accounts: account type, password, picture, groups, automatic login), login screen |
+| **fl-term** | Terminal emulator (libvterm): split panes (Ctrl+Shift+E/O), search in the scrollback (Ctrl+Shift+F), profiles, tabs (drag to reorder, out into a new window or onto another fl-term window, right-click to rename, duplicate, close others), optional menu bar, translucent background, scrollback, true colour, mouse, bracketed paste; saved SSH connections (and `~/.ssh/config` hosts) with port forwards, jump hosts, key setup and sshfs browsing |
+| **fl-files** | File manager: icon, compact and details views, a split view (F4), batch rename with a pattern and a preview, permissions, group and recursive changes in Properties, Open as Administrator (pkexec) with zoom (16–256 px, slider in the status bar) and per-folder memory, folder tree, bookmarks, thumbnails, trash, background copy/move, tabs (drag them out into a new window or onto another Files window, history included), an optional menu bar, drag and drop with the dragged icons and their number under the pointer, folders that open when you hover them and scrolling at the edges (also onto the sidebar, the folder tree and the desktop), drives through UDisks2 (mount, unlock, eject), network shares, phones and cameras through GVfs (SMB, SFTP, FTP, WebDAV, NFS, MTP; Connect to Server, network browsing), and a search for files and folders by name, text, date and size |
+| **fl-edit** | Tabbed text editor (tabs you can drag and right-click) with syntax highlighting for 27 languages, color themes, bracket matching, find/replace and auto-indent, language servers (diagnostics, completion, go to definition), a minimap, multiple carets (Ctrl+D, Alt+click) and reopening the last session |
 | **fl-calc** | Basic and scientific calculator with history and memory |
-| **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs |
-| **fl-web** | Web browser on WPE WebKit: ad and tracker blocking (EasyList, EasyPrivacy) with per-site exceptions, tabs (drag, right-click, reopen closed ones), private windows, developer tools (F12), full screen, an optional menu bar, page right-click menus, an address bar that searches and completes from bookmarks and history, downloads, find in page, zoom, bookmarks and history, the pages' password, file, permission and notification requests |
-| **fl-video** | Video and audio player on GStreamer: playlists, subtitles, track selection, speed, screenshots, resume |
-| **fl-docs** | Document viewer: PDF (poppler), EPUB e-books, OpenDocument text and comic books (.cbz); continuous pages with thumbnails, fit width/page and zoom, search with highlights, printing through CUPS with page ranges and two-sided printing, password protected documents |
+| **fl-view** | Image viewer: zoom, rotate, slideshow, animated GIFs, a thumbnail strip, EXIF information (and upright photos), crop and resize with saving to PNG or JPEG |
+| **fl-web** | Web browser on WPE WebKit: reader mode (F9), saved logins in the keyring with a Saved Passwords list, ad and tracker blocking (EasyList, EasyPrivacy) with per-site exceptions, tabs (drag, right-click, reopen closed ones), private windows, developer tools (F12), full screen, an optional menu bar, page right-click menus, an address bar that searches and completes from bookmarks and history, downloads, find in page, zoom, bookmarks and history, the pages' password, file, permission and notification requests |
+| **fl-media-player** | Video and music player on GStreamer (formerly fl-video): a playlist sidebar (reorder, shuffle, repeat, M3U/PLS), music with cover art and tags, subtitles, track selection, speed, screenshots, resume; MPRIS for the panel and media keys |
+| **fl-docs** | Document viewer: PDF (poppler), EPUB e-books, OpenDocument text, Markdown and comic books (.cbz); continuous pages with thumbnails, fit width/page and zoom, search with highlights, printing through CUPS with page ranges and two-sided printing, password protected documents |
 | **fl-archive** | Archive manager (libarchive): browse, extract, create and change zip, 7z and tar archives, encrypted zip, Extract Here / Compress in fl-files |
 | **fl-snip** | Snipping tool: a rectangle, a freeform shape, a window or the whole screen, chosen on a frozen picture of the screen with a magnifier; an editor with pen, highlighter, arrows, shapes, text, pixelate and crop; copy, save, print; quick snips for the Print keys; screen recording to WebM through the ScreenCast portal |
 | **fl-webcam** | Camera app on GStreamer: live preview, photos, video recording with sound, self-timer, camera and resolution choice |
 | **fl-taskmgr** | Task manager: processes (end, kill, priority, tree view) and CPU, memory, network and disk graphs (Ctrl+Shift+Escape) |
 | **fl-sysinfo** | System information: computer and firmware, processor (cores, speeds, caches, mitigations), memory, graphics and outputs, disks and file systems, network interfaces, PCI and USB devices, batteries, temperatures and fans; copy or save it as a report |
 | **fl-disks** | Disk and partition manager on parted: new GPT or MBR tables, create, delete, format (ext4, Btrfs, XFS, FAT32, exFAT, NTFS, swap), resize and move partitions, names and flags, a partition bar with the used space, drive health (SMART), backing a disk up to an image and writing images to USB sticks; warns first and asks again before anything that erases data |
+| **fl-paint** | Drawing program: brush, eraser, lines, rectangles and ellipses (outlined or filled), fill, text, a selection with copy, cut, paste and crop, a colour picker, layers with opacity, undo, zoom, resize, rotate and flip; PNG, JPEG, BMP and GIF in, PNG out |
+| **fl-scan** | Scanning with SANE (scanimage): preview, an area to scan, the glass or the document feeder, pages reordered and saved as one PDF or as PNG pictures |
+| **fl-remote** | Remote desktop: saved VNC and RDP connections; VNC in a window of its own (its own RFB client, VNC passwords, scaling, clipboard text, Ctrl+Alt+Delete), RDP through FreeRDP |
+| **fl-keyring** | Passwords and keys: the passwords in the Secret Service (GNOME Keyring, KeePassXC) shown, copied, changed, added and deleted, keyrings locked and unlocked; SSH keys (generate, copy, passphrase, delete) and GPG keys (generate, import, copy, delete) |
+| **fl-logs** | Log viewer: the systemd journal (system or user, by boot or time) or the syslog and OpenRC files in /var/log; priority colours, filters by priority, program and text, following new entries, all fields of an entry, saving as text |
+| **fl-services** | Services of systemd or OpenRC: start, stop, restart, enable, disable (through polkit), state and status; systemd user services |
+| **fl-fonts** | Fonts: every family and style previewed with any text and size, monospace and own fonts filters, installing font files for yourself and removing them |
+| **fl-clock** | World clocks, alarms (repeat on days, snooze, ringing also when closed), a timer and a stopwatch with laps |
+| **fl-welcome** | First-login tour: light or dark, accent colour, wallpaper, panel position, keyboard layout and Flathub |
 | **fl-mixer** | PipeWire volume mixer: applications, devices, ports, card profiles, level meters |
 | **fl-network** | NetworkManager settings: wired and Wi-Fi devices, saved connections, IPv4/IPv6 editor, WireGuard and plugin VPNs (wg-quick / .ovpn import); VPN switch in the panel |
 | **fl-cliphist** | Clipboard history: texts and images, pins, a list in the panel; password managers' copies are not kept |
@@ -33,7 +42,7 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-osk** | On-screen keyboard (Wayland virtual-keyboard protocol) |
 | **fl-charmap** | Unicode character map with search by name |
 | **fl-notifyd** | Notification server (org.freedesktop.Notifications): popups with actions, history and do not disturb in the panel |
-| **xdg-desktop-portal-fl** | Portal backend: file chooser, open with, settings, screenshot, access, account, notification, wallpaper and screen casting (PipeWire) portals for Flatpak and portal aware apps |
+| **xdg-desktop-portal-fl** | Portal backend: file chooser, open with, settings, screenshot, access, account, notification, wallpaper, screen casting (PipeWire), remote desktop, inhibit, background (autostart), global shortcuts and print portals for Flatpak and portal aware apps |
 | **fl-printers** | CUPS printers: driverless or driver setup, defaults, jobs; a panel button while printing and a notification when done |
 | **fl-bluetooth** | BlueZ: pairing (with the panel's pairing agent), connecting, trust, battery levels; a panel button with quick connect |
 | **fl-packages** | Software updates and packages through PackageKit, with application names and icons from AppStream: updates with changelogs, search, install/remove, a package's files, dependencies and reverse dependencies, sources, history; update notifications |
@@ -89,6 +98,14 @@ Screenshots are made in a headless session by `tools/screenshots.sh`.
 All programs share `libfld` (XDG directories, desktop entries, icon themes,
 mime types, trash, theme) and read their settings from `~/.config/fldesktop/`.
 
+Screen readers: `libfld` has an AT-SPI2 bridge, so Orca and other assistive
+technologies can read and work the fldesktop programs: windows, buttons,
+check boxes, text fields, lists, sliders, tabs and menus, with their names,
+states, text and values, focus events, and actions (click, set text, set a
+value). It starts when the accessibility bus says assistive technologies are
+on (Settings > Accessibility > Screen Reader turns this on) or with
+`FLD_ATSPI=1`; `ctest -R atspi` tests it against the real AT-SPI registry.
+
 ## Building
 
 Dependencies: CMake ≥ 3.19, a C11/C++17 compiler, FLTK ≥ 1.4 (built with
@@ -98,9 +115,9 @@ tools also use glib, libpipewire 0.3 (fl-mixer, panel volume, Sound page),
 polkit-agent-1 (fl-polkit-agent), libnm (fl-network, panel network, Network
 page), fontconfig (fl-charmap), libcups (fl-printers, panel printer button),
 packagekit-glib2 (fl-packages), libflatpak and appstream ≥ 1.0 (fl-flatpak),
-GStreamer with its base plugins (fl-video, fl-webcam), libarchive (fl-archive), PAM (fl-lock),
+GStreamer with its base plugins (fl-media-player, fl-webcam), libarchive (fl-archive), PAM (fl-lock),
 WPE WebKit (fl-web: with the WPE Platform API, or libwpe and WPEBackend-fdo);
-poppler-cpp, and libxml2, libarchive and Pango for e-books, OpenDocument text and comic books (fl-docs);
+poppler-cpp, and libxml2, libarchive and Pango for e-books, OpenDocument text, Markdown and comic books (fl-docs);
 UPower, power-profiles-daemon and UDisks2 are used at run time when present;
 gio is used for notifications, the portal, Bluetooth and the firewall. Without
 one of them the parts that need it are left out.

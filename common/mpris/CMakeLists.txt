@@ -1,0 +1,6 @@
+# MPRIS media players (the panel's now playing row and the media keys)
+if(TARGET fld-glib)
+  add_library(fld-mpris STATIC mpris.cpp)
+  target_include_directories(fld-mpris PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-mpris PUBLIC fld-glib)
+endif()

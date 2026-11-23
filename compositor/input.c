@@ -2,6 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include <linux/input-event-codes.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <unistd.h>
 #include <string.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/interfaces/wlr_keyboard.h>
@@ -91,6 +93,7 @@ static void reload_config(struct flwm_server *server) {
 	config_free(&server->config);
 	config_init_defaults(&server->config);
 	if (!config_load(&server->config, path)) wlr_log(WLR_INFO, "reload: no config at %s", path);
+	config_load_global_shortcuts(&server->config);
 	free(path);
 	input_apply_config(server);
 	output_apply_config(server);
@@ -126,10 +129,21 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 		if (v) view_set_fullscreen(v, !v->fullscreen);
 		return true;
 	case FLWM_ACTION_SNAP_LEFT:
-		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_LEFT));
-		return true;
 	case FLWM_ACTION_SNAP_RIGHT:
-		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_RIGHT));
+	case FLWM_ACTION_SNAP_THIRD_LEFT:
+	case FLWM_ACTION_SNAP_THIRD_RIGHT: {
+		if (!v) return true;
+		enum flwm_snap_dir d = action == FLWM_ACTION_SNAP_LEFT || action == FLWM_ACTION_SNAP_THIRD_LEFT
+			? FLWM_SNAP_DIR_LEFT : FLWM_SNAP_DIR_RIGHT;
+		bool third = action == FLWM_ACTION_SNAP_THIRD_LEFT || action == FLWM_ACTION_SNAP_THIRD_RIGHT;
+		enum flwm_snap n = third ? flwm_snap_next_third(view_snap_state(v), d) : flwm_snap_next(view_snap_state(v), d);
+		view_set_snap(v, n);
+		/* the rest of the screen: one of the other windows */
+		switcher_snap_assist(server, v);
+		return true;
+	}
+	case FLWM_ACTION_OVERVIEW:
+		switcher_overview(server);
 		return true;
 	case FLWM_ACTION_SNAP_UP:
 		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_UP));
@@ -209,6 +223,17 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	case FLWM_ACTION_ZOOM_RESET:
 		zoom_step(server, 0);
 		return true;
+	case FLWM_ACTION_PORTAL_SHORTCUT: {
+		/* the portal tells the application (ids are plain: see config.c) */
+		const char *sep = arg ? strchr(arg, '\x1f') : NULL;
+		if (!sep) return true;
+		char portal[4200], cmd[4800];
+		snprintf(portal, sizeof portal, "%s/xdg-desktop-portal-fl", server->exe_dir);
+		if (access(portal, X_OK) != 0) snprintf(portal, sizeof portal, "%s", FLD_PORTAL_EXEC);
+		snprintf(cmd, sizeof cmd, "'%s' --activate-shortcut '%.*s' '%s'", portal, (int)(sep - arg), arg, sep + 1);
+		flwm_spawn(server, cmd);
+		return true;
+	}
 	default:
 		return false;
 	}
@@ -217,6 +242,7 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 /* ---- keyboard ------------------------------------------------------------ */
 
 static void update_capabilities(struct flwm_server *server);
+static void osd_lock_keys(struct flwm_keyboard *keyboard);
 
 static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) {
 	struct flwm_keyboard *keyboard = wl_container_of(listener, keyboard, modifiers);
@@ -226,6 +252,7 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 		if (!(mods & server->cycle_modifier)) finish_cycle(server);
 	}
 	if (!keyboard->wlr_keyboard->keymap) return;
+	osd_lock_keys(keyboard);
 	struct wlr_input_method_keyboard_grab_v2 *grab = im_keyboard_grab(keyboard->wlr_keyboard);
 	if (grab) {
 		wlr_input_method_keyboard_grab_v2_set_keyboard(grab, keyboard->wlr_keyboard);
@@ -234,6 +261,50 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 	}
 	wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
 	wlr_seat_keyboard_notify_modifiers(server->seat, &keyboard->wlr_keyboard->modifiers);
+}
+
+/* keys that work even while the screen is locked or a layer surface (the
+ * launcher) has the keyboard: volume, brightness, media */
+static bool is_media_key(xkb_keysym_t sym) {
+	switch (sym) {
+	case XKB_KEY_XF86AudioRaiseVolume: case XKB_KEY_XF86AudioLowerVolume: case XKB_KEY_XF86AudioMute:
+	case XKB_KEY_XF86AudioMicMute: case XKB_KEY_XF86MonBrightnessUp: case XKB_KEY_XF86MonBrightnessDown:
+	case XKB_KEY_XF86KbdBrightnessUp: case XKB_KEY_XF86KbdBrightnessDown: case XKB_KEY_XF86KbdLightOnOff:
+	case XKB_KEY_XF86AudioPlay: case XKB_KEY_XF86AudioPause: case XKB_KEY_XF86AudioStop:
+	case XKB_KEY_XF86AudioNext: case XKB_KEY_XF86AudioPrev:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* Caps Lock, Num Lock and layout changes go to the panel's on-screen display */
+static void osd_lock_keys(struct flwm_keyboard *keyboard) {
+	struct wlr_keyboard *kb = keyboard->wlr_keyboard;
+	if (!kb->xkb_state || !kb->keymap) return;
+	int caps = xkb_state_mod_name_is_active(kb->xkb_state, XKB_MOD_NAME_CAPS, XKB_STATE_MODS_LOCKED) > 0;
+	int num = xkb_state_mod_name_is_active(kb->xkb_state, XKB_MOD_NAME_NUM, XKB_STATE_MODS_LOCKED) > 0;
+	long group = (long)kb->modifiers.group;
+	bool first = keyboard->osd_caps < 0;
+	char cmd[256] = "";
+	if (!first && caps != keyboard->osd_caps)
+		snprintf(cmd, sizeof cmd, "fl-panel --action caps-lock %s", caps ? "on" : "off");
+	else if (!first && num != keyboard->osd_num)
+		snprintf(cmd, sizeof cmd, "fl-panel --action num-lock %s", num ? "on" : "off");
+	else if (!first && group != keyboard->osd_group && xkb_keymap_num_layouts(kb->keymap) > 1) {
+		const char *name = xkb_keymap_layout_get_name(kb->keymap, (xkb_layout_index_t)group);
+		/* quoted for the shell: only harmless characters */
+		char safe[128];
+		size_t n = 0;
+		for (const char *s = name ? name : "?"; *s && n < sizeof safe - 1; s++)
+			if ((unsigned char)*s >= 0x80 || isalnum((unsigned char)*s) || strchr(" ()-_.,", *s)) safe[n++] = *s;
+		safe[n] = 0;
+		snprintf(cmd, sizeof cmd, "fl-panel --action layout '%s'", safe);
+	}
+	keyboard->osd_caps = caps;
+	keyboard->osd_num = num;
+	keyboard->osd_group = group;
+	if (*cmd && !keyboard->server->locked) flwm_spawn(keyboard->server, cmd);
 }
 
 static bool handle_binding(struct flwm_server *server, uint32_t mods, xkb_keysym_t sym) {
@@ -297,6 +368,19 @@ static void handle_key(struct flwm_keyboard *keyboard, struct wlr_keyboard_key_e
 			/* everything but modifiers stays here */
 			if (!(sym >= XKB_KEY_Shift_L && sym <= XKB_KEY_Hyper_R)) handled = true;
 		}
+		/* snap assist and the overview close on Super+anything (snapping on
+		 * with Super+Left again, Super+Tab closing the overview) */
+		if (!handled && switcher_active(server) && server->switcher.mode != FLWM_SW_SWITCH &&
+				(mods & WLR_MODIFIER_LOGO)) {
+			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
+			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap, keycode, layout, 0, &syms);
+			bool tab = nsyms > 0 && syms[0] == XKB_KEY_Tab;
+			bool overview = server->switcher.mode == FLWM_SW_OVERVIEW;
+			if (!(nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R)) {
+				switcher_finish(server, false);
+				if (overview && tab) handled = true;
+			}
+		}
 		/* the switcher has the keyboard while it is open */
 		if (!handled && switcher_active(server)) {
 			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
@@ -328,6 +412,12 @@ static void handle_key(struct flwm_keyboard *keyboard, struct wlr_keyboard_key_e
 					handled = inhibit_shortcuts_toggle(server);
 			if (!inhibit_shortcuts_active(server))
 				for (int i = 0; i < nsyms && !handled; i++) handled = handle_binding(server, mods, syms[i]);
+		} else if (!handled) {
+			/* locked, or the launcher has the keyboard: the media keys still work */
+			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
+			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap, keycode, layout, 0, &syms);
+			for (int i = 0; i < nsyms && !handled; i++)
+				if (is_media_key(syms[i])) handled = handle_binding(server, mods, syms[i]);
 		}
 		/* Ctrl+Alt+BackSpace and friends even when a layer surface owns the keyboard */
 		if (!handled && server->focused_layer && (mods & MOD_MASK) == (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)) {
@@ -422,6 +512,8 @@ static void server_new_keyboard(struct flwm_server *server, struct wlr_input_dev
 	struct wlr_keyboard *wlr_keyboard = wlr_keyboard_from_input_device(device);
 	struct flwm_keyboard *keyboard = calloc(1, sizeof(*keyboard));
 	keyboard->server = server;
+	keyboard->osd_caps = keyboard->osd_num = -1;
+	keyboard->osd_group = -1;
 	keyboard->wlr_keyboard = wlr_keyboard;
 	/* virtual keyboards (wtype, on-screen keyboards) bring their own keymap */
 	if (!is_virtual) keyboard_apply_config(server, wlr_keyboard);
@@ -502,9 +594,15 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 	case WLR_INPUT_DEVICE_KEYBOARD:
 		server_new_keyboard(server, device, false);
 		break;
+	case WLR_INPUT_DEVICE_SWITCH:
+		protocols_new_switch(device);
+		break;
+	case WLR_INPUT_DEVICE_TABLET:
+		protocols_new_tablet(device);
+		/* the cursor follows the pen */
+		/* fall through */
 	case WLR_INPUT_DEVICE_POINTER:
 	case WLR_INPUT_DEVICE_TOUCH:
-	case WLR_INPUT_DEVICE_TABLET:
 		server_new_pointer(server, device);
 		break;
 	default:
@@ -750,6 +848,30 @@ void input_update_pointer_focus(struct flwm_server *server, uint32_t time) {
 	}
 }
 
+/* Hot corners: the pointer pushed into a corner runs its action, once until
+ * it leaves the corner again. */
+static void hot_corners(struct flwm_server *server) {
+	if (server->locked) return;
+	struct flwm_output *o = output_at(server, server->cursor->x, server->cursor->y);
+	if (!o) return;
+	struct wlr_box b = o->full_area;
+	double x = server->cursor->x, y = server->cursor->y;
+	bool left = x <= b.x + 1, right = x >= b.x + b.width - 2;
+	bool top = y <= b.y + 1, bottom = y >= b.y + b.height - 2;
+	int corner = top && left ? 0 : top && right ? 1 : bottom && left ? 2 : bottom && right ? 3 : -1;
+	if (corner < 0) {
+		/* away from all corners: armed again */
+		bool near = (x < b.x + 24 || x > b.x + b.width - 24) && (y < b.y + 24 || y > b.y + b.height - 24);
+		if (!near) server->hot_corner_fired = -1;
+		return;
+	}
+	if (corner == server->hot_corner_fired) return;
+	struct flwm_gesture_action *a = &server->config.hot_corner[corner];
+	if (a->type == FLWM_ACTION_NONE) return;
+	server->hot_corner_fired = corner;
+	input_run_action(server, a->type, a->arg);
+}
+
 static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
 	zoom_cursor_moved(server);
 	if (server->drag_icon)
@@ -770,6 +892,7 @@ static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
 		}
 		return;
 	default:
+		hot_corners(server);
 		input_update_pointer_focus(server, time);
 	}
 }
@@ -833,6 +956,7 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 			view_set_snap(dropped, snap);
 			/* unsnapping brings it back where the drag began */
 			dropped->saved = server->drag_from;
+			switcher_snap_assist(server, dropped);
 		}
 		if (mode == FLWM_CURSOR_PASSTHROUGH)
 			wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
@@ -869,7 +993,8 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	struct flwm_view *view = desc ? desc->ptr : NULL;
 	/* the on-screen keyboard and notifications get pointer events but never
 	 * the keyboard focus */
-	if (view && view->role != FLWM_ROLE_OSK && view->role != FLWM_ROLE_NOTIFY) view_focus(view);
+	if (view && view->role != FLWM_ROLE_OSK && view->role != FLWM_ROLE_NOTIFY && view->role != FLWM_ROLE_OSD)
+		view_focus(view);
 
 	/* Super + drag moves / resizes any normal window */
 	if (view && view->role == FLWM_ROLE_NORMAL && (mods & WLR_MODIFIER_LOGO)) {
@@ -916,6 +1041,19 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	}
 
 	wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
+}
+
+void input_emulate_motion(struct flwm_server *server, uint32_t time) {
+	process_cursor_motion(server, time);
+}
+
+void input_emulate_button(struct flwm_server *server, uint32_t time, uint32_t button, bool pressed) {
+	struct wlr_pointer_button_event ev = {0};
+	ev.time_msec = time;
+	ev.button = button;
+	ev.state = pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED;
+	server_cursor_button(&server->cursor_button, &ev);
+	wlr_seat_pointer_notify_frame(server->seat);
 }
 
 static void server_cursor_axis(struct wl_listener *listener, void *data) {

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Logs
+GenericName=Log Viewer
+Comment=Read the system's logs: the journal, syslog and OpenRC
+Exec=fl-logs %f
+Icon=fl-logs
+Categories=System;Monitor;
+Keywords=log;logs;journal;journalctl;syslog;messages;errors;dmesg;debug;
+StartupWMClass=fl-logs

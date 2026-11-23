@@ -483,6 +483,11 @@ if(TARGET fl-files-search)
   add_test(NAME search COMMAND test_search)
 endif()
 
+if(TARGET fl-files-rename)
+  add_executable(test_files_rename test_files_rename.cpp)
+  target_link_libraries(test_files_rename PRIVATE fl-files-rename)
+  add_test(NAME files-rename COMMAND test_files_rename)
+endif()
 
 # the generated icon / cursor themes (tools/artwork/build.sh)
 find_program(FLD_PYTHON3 python3)

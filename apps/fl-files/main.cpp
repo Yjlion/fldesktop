@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cstring>
 #include <deque>
+#include <dirent.h>
 #include <grp.h>
 #include <map>
 #include <memory>
@@ -44,6 +45,7 @@
 
 #include "fld/fileops.h"
 #include "search.h"
+#include "rename_util.h"
 #ifdef FLD_HAVE_UDISKS
 #include "udclient.h"
 #endif
@@ -366,6 +368,9 @@ static void activate_tab(int i);
 static void update_tabbar();
 static void open_dir_elsewhere(const std::string &path); // middle click: a new tab or window
 static void leave_folder(const std::string &dir); // tabs in dir (or below) go home
+static std::string other_pane_dir();
+static void toggle_split();
+static void batch_rename(const std::vector<std::string> &paths);
 
 static void navigate(const std::string &path, bool record = true);
 static void fill_places();
@@ -385,6 +390,38 @@ static std::string g_net_error;
 static void mount_and_go(const std::string &uri, int where = 0); // where: 0 here, 1 window, 2 tab
 static bool in_search() { return g_searching; }
 static bool g_search_running();
+
+// Split view: two tabs side by side; clicking in a pane makes its tab current.
+static bool g_split = false;
+static Tab *g_pane[2] = {nullptr, nullptr}; // left and right while split
+static int g_pane_focus = 0;
+static Tab *tab_of(const void *view) {
+  for (auto &t : g_tabs)
+    if ((const void *)t->view == view) return t.get();
+  return nullptr;
+}
+static void activate_tab(int i);
+static int tab_index(const Tab *t) {
+  for (size_t k = 0; k < g_tabs.size(); k++)
+    if (g_tabs[k].get() == t) return (int)k;
+  return -1;
+}
+// While the other pane's view draws or takes an event, the globals that
+// describe "the current tab" (view settings, folder, search) are its tab's.
+struct PaneGuard {
+  Tab *t = nullptr;
+  explicit PaneGuard(const void *view) {
+    if (!g_split || view == (const void *)g_view) return;
+    t = tab_of(view);
+    if (t) swap();
+  }
+  ~PaneGuard() { if (t) swap(); }
+  void swap() {
+    std::swap(V, t->v);
+    std::swap(g_cwd, t->cwd);
+    std::swap(g_searching, t->searching);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // The file view (icon grid or detail list)
@@ -859,6 +896,7 @@ public:
 
   static void thumb_idle(void *d) {
     FileView *v = (FileView *)d;
+    PaneGuard guard(v);
     // generate one thumbnail per idle call for visible items
     int first = v->first_visible();
     for (int i = first; i < (int)v->items.size(); i++) {
@@ -941,6 +979,15 @@ public:
   }
 
   void draw() override {
+    PaneGuard guard(this);
+    draw_view();
+    if (g_split && this == g_view) { // the current pane is marked
+      fl_color(fld::palette().accent);
+      fl_xyline(x(), y(), x() + w() - 1);
+      fl_xyline(x(), y() + 1, x() + w() - 1);
+    }
+  }
+  void draw_view() {
     const fld::Palette &p = fld::palette();
     fl_push_clip(x(), y(), w(), h());
     fl_color(p.bg2);
@@ -1124,6 +1171,7 @@ public:
   void start_rename(int i);
 
   int handle(int e) override;
+  int handle_view(int e);
 };
 
 // ---------------------------------------------------------------------------
@@ -1230,13 +1278,33 @@ void FileView::start_rename(int i) {
 
 // ---- properties dialog ------------------------------------------------------------------------
 
+// the folder's read and write bits to everything inside (execute: folders only,
+// files keep theirs); returns how many items failed
+static int chmod_tree(const std::string &dir, mode_t m) {
+  int failed = 0;
+  DIR *d = opendir(dir.c_str());
+  if (!d) return 1;
+  while (struct dirent *de = readdir(d)) {
+    std::string n = de->d_name;
+    if (n == "." || n == "..") continue;
+    std::string p = dir + "/" + n;
+    struct stat st;
+    if (lstat(p.c_str(), &st) != 0 || S_ISLNK(st.st_mode)) continue;
+    mode_t want = S_ISDIR(st.st_mode) ? m : ((m & 0666) | (st.st_mode & 0111));
+    if ((st.st_mode & 0777) != want && chmod(p.c_str(), (st.st_mode & 07000) | want) != 0) failed++;
+    if (S_ISDIR(st.st_mode)) failed += chmod_tree(p, m);
+  }
+  closedir(d);
+  return failed;
+}
+
 static void properties(const std::vector<std::string> &paths_in) {
   std::vector<std::string> paths = paths_in;
   if (paths.empty()) paths.push_back(g_cwd);
   bool single = paths.size() == 1;
   struct stat st{};
   if (single) lstat(paths[0].c_str(), &st);
-  Fl_Double_Window *w = new Fl_Double_Window(440, single ? 420 : 200, "Properties");
+  Fl_Double_Window *w = new Fl_Double_Window(440, single ? 480 : 200, "Properties");
   int y = 16;
   auto row = [&](const char *k, const std::string &v) {
     Fl_Box *a = new Fl_Box(16, y, 110, 22, k);
@@ -1274,13 +1342,52 @@ static void properties(const std::vector<std::string> &paths_in) {
   if (dirs) sz += ", " + std::to_string(files) + " files";
   row("Size:", sz);
   Fl_Check_Button *perm[9] = {};
+  Fl_Choice *group = nullptr;
+  Fl_Check_Button *recurse = nullptr;
+  std::vector<gid_t> gids;
+  bool mine = single && (st.st_uid == getuid() || geteuid() == 0) && !S_ISLNK(st.st_mode) && !is_remote(paths[0]);
   if (single) {
     row("Modified:", fld::format_time(st.st_mtime, "%Y-%m-%d %H:%M:%S"));
     row("Accessed:", fld::format_time(st.st_atime, "%Y-%m-%d %H:%M:%S"));
     struct passwd *pw = getpwuid(st.st_uid);
     struct group *gr = getgrgid(st.st_gid);
-    row("Owner:", std::string(pw ? pw->pw_name : std::to_string(st.st_uid)) + " : " +
-                     (gr ? gr->gr_name : std::to_string(st.st_gid)));
+    row("Owner:", pw ? pw->pw_name : std::to_string(st.st_uid));
+    if (mine) {
+      // the owner may give the file to any group they are in
+      Fl_Box *gl = new Fl_Box(16, y, 110, 22, "Group:");
+      gl->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
+      gl->labelcolor(fld::palette().fg_dim);
+      group = new Fl_Choice(134, y, 200, 24);
+      std::vector<gid_t> list;
+      if (geteuid() == 0) {
+        setgrent();
+        while (struct group *g = getgrent()) list.push_back(g->gr_gid);
+        endgrent();
+      } else {
+        int n = getgroups(0, nullptr);
+        list.resize(n > 0 ? (size_t)n : 0);
+        if (n > 0) list.resize((size_t)std::max(0, getgroups(n, list.data())));
+        list.push_back(getegid());
+      }
+      if (std::find(list.begin(), list.end(), st.st_gid) == list.end()) list.push_back(st.st_gid);
+      std::sort(list.begin(), list.end());
+      list.erase(std::unique(list.begin(), list.end()), list.end());
+      for (gid_t g : list) {
+        struct group *e = getgrgid(g);
+        std::string name = e ? e->gr_name : std::to_string(g);
+        std::string esc;
+        for (char c : name) {
+          if (c == '/' || c == '\\' || c == '&' || c == '_') esc += '\\';
+          esc += c;
+        }
+        group->add(esc.c_str());
+        if (g == st.st_gid) group->value((int)gids.size());
+        gids.push_back(g);
+      }
+      y += 28;
+    } else {
+      row("Group:", gr ? gr->gr_name : std::to_string(st.st_gid));
+    }
     y += 4;
     const char *who[] = {"Owner", "Group", "Others"};
     const char *what[] = {"Read", "Write", "Execute"};
@@ -1291,8 +1398,13 @@ static void properties(const std::vector<std::string> &paths_in) {
       for (int c = 0; c < 3; c++) {
         perm[r * 3 + c] = new Fl_Check_Button(134 + c * 95, y, 90, 22, what[c]);
         perm[r * 3 + c]->value((st.st_mode >> (8 - (r * 3 + c))) & 1);
-        if (st.st_uid != getuid() || S_ISLNK(st.st_mode)) perm[r * 3 + c]->deactivate();
+        if (!mine) perm[r * 3 + c]->deactivate();
       }
+      y += 26;
+    }
+    if (mine && S_ISDIR(st.st_mode)) {
+      recurse = new Fl_Check_Button(134, y, 290, 22, "Apply to everything inside");
+      recurse->tooltip("Read and write go to all files and folders inside; execute to the folders only");
       y += 26;
     }
   }
@@ -1307,9 +1419,176 @@ static void properties(const std::vector<std::string> &paths_in) {
     for (int i = 0; i < 9; i++) if (perm[i]->value()) m |= 1 << (8 - i);
     if ((m & 07777) != (st.st_mode & 07777) && chmod(paths[0].c_str(), m & 07777) != 0)
       fl_alert("Could not change permissions: %s", strerror(errno));
+    if (group && group->value() >= 0 && gids[(size_t)group->value()] != st.st_gid &&
+        lchown(paths[0].c_str(), (uid_t)-1, gids[(size_t)group->value()]) != 0)
+      fl_alert("Could not change the group: %s", strerror(errno));
+    if (recurse && recurse->value()) {
+      int failed = chmod_tree(paths[0], m & 0777);
+      if (failed) fl_alert("%d items inside could not be changed.", failed);
+    }
   }
   Fl::delete_widget(w);
   refresh();
+}
+
+// ---- batch rename ----------------------------------------------------------------------------
+
+namespace {
+struct RenameDlg {
+  Fl_Input *pat, *find, *repl;
+  Fl_Check_Button *regex, *icase;
+  Fl_Choice *lcase;
+  Fl_Spinner *start;
+  Fl_Hold_Browser *list;
+  Fl_Box *msg;
+  Fl_Return_Button *ok;
+  std::string dir;
+  std::vector<std::string> olds, news;
+  bool go = false;
+};
+} // namespace
+
+static void rename_preview(Fl_Widget *, void *data) {
+  RenameDlg &d = *(RenameDlg *)data;
+  frename::Rule r;
+  r.pattern = d.pat->value();
+  r.find = d.find->value();
+  r.replace = d.repl->value();
+  r.regex = d.regex->value();
+  r.ignore_case = d.icase->value();
+  r.letter_case = (frename::Case)std::max(0, d.lcase->value());
+  r.start = (int)d.start->value();
+  std::string err;
+  d.news = frename::apply(d.olds, r, &err);
+  d.list->clear();
+  std::set<std::string> olds(d.olds.begin(), d.olds.end());
+  int bad = 0, changed = 0;
+  if (d.news.empty()) {
+    d.msg->copy_label(fld::escape_at(err).c_str());
+    d.ok->deactivate();
+    return;
+  }
+  auto why = frename::problems(d.olds, d.news);
+  for (size_t i = 0; i < d.olds.size(); i++) {
+    std::string w = why[i];
+    struct stat st;
+    if (w.empty() && d.news[i] != d.olds[i] && !olds.count(d.news[i]) && lstat((d.dir + "/" + d.news[i]).c_str(), &st) == 0)
+      w = "already exists";
+    if (!w.empty()) bad++;
+    if (d.news[i] != d.olds[i]) changed++;
+    std::string line = d.olds[i] + "\t" + d.news[i] + (w.empty() ? "" : "  (" + w + ")");
+    d.list->add(line.c_str());
+    if (!w.empty()) d.list->icon(d.list->size(), fld::icon_first({"dialog-warning"}, 16));
+  }
+  std::string m = bad ? std::to_string(bad) + (bad == 1 ? " name has a problem" : " names have problems")
+                      : std::to_string(changed) + " of " + std::to_string(d.olds.size()) + " will be renamed";
+  d.msg->copy_label(m.c_str());
+  if (bad || !changed) d.ok->deactivate(); else d.ok->activate();
+}
+
+// F2 with more than one item selected: a pattern, find and replace and letter case,
+// with a preview of the new names
+static void batch_rename(const std::vector<std::string> &paths) {
+  if (paths.empty()) return;
+  RenameDlg d;
+  d.dir = fld::dirname(paths[0]);
+  for (auto &p : paths) {
+    if (fld::dirname(p) != d.dir) {
+      fl_alert("Items from different folders cannot be renamed together.");
+      return;
+    }
+    d.olds.push_back(fld::basename(p));
+  }
+  const int W = 600, H = 500;
+  Fl_Double_Window *w = new Fl_Double_Window(W, H, "Rename Items");
+  auto label = [](int y, const char *t) {
+    Fl_Box *b = new Fl_Box(12, y, 96, 26, t);
+    b->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
+  };
+  label(12, "Name:");
+  d.pat = new Fl_Input(114, 12, W - 126, 26);
+  d.pat->value("{name}{ext}");
+  d.pat->tooltip("{name} the name without its extension, {ext} the extension, {n} a number, {n:3} a number with three digits");
+  label(44, "Find:");
+  d.find = new Fl_Input(114, 44, (W - 126) / 2 - 4, 26);
+  Fl_Box *rl = new Fl_Box(114 + (W - 126) / 2, 44, 70, 26, "Replace:");
+  rl->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
+  d.repl = new Fl_Input(rl->x() + 74, 44, W - 12 - (rl->x() + 74), 26);
+  d.regex = new Fl_Check_Button(114, 74, 170, 24, "Regular expression");
+  d.icase = new Fl_Check_Button(290, 74, 120, 24, "Ignore case");
+  label(104, "Case:");
+  d.lcase = new Fl_Choice(114, 104, 160, 26);
+  d.lcase->add("Keep|lower case|UPPER CASE|Title Case");
+  d.lcase->value(0);
+  Fl_Box *sl = new Fl_Box(290, 104, 120, 26, "Numbers from:");
+  sl->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
+  d.start = new Fl_Spinner(414, 104, 90, 26);
+  d.start->range(0, 1e9);
+  d.start->step(1);
+  d.start->value(1);
+  d.list = new Fl_Hold_Browser(12, 142, W - 24, H - 142 - 84);
+  static int cols[] = {(W - 24) / 2, 0};
+  d.list->column_widths(cols);
+  d.list->column_char('\t');
+  d.list->format_char(0);
+  d.msg = new Fl_Box(12, H - 76, W - 24, 24);
+  d.msg->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
+  d.msg->labelcolor(fld::palette().fg_dim);
+  Fl_Button *cancel = new Fl_Button(W - 224, H - 44, 100, 30, "Cancel");
+  cancel->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
+  d.ok = new Fl_Return_Button(W - 116, H - 44, 104, 30, "Rename");
+  d.ok->callback([](Fl_Widget *b, void *data) {
+    ((RenameDlg *)data)->go = true;
+    b->window()->hide();
+  }, &d);
+  for (Fl_Widget *x : std::initializer_list<Fl_Widget *>{d.pat, d.find, d.repl, d.regex, d.icase, d.lcase, d.start}) {
+    x->callback(rename_preview, &d);
+    x->when(FL_WHEN_CHANGED);
+  }
+  w->end();
+  w->resizable(d.list);
+  w->set_modal();
+  rename_preview(nullptr, &d);
+  w->show();
+  d.pat->take_focus();
+  while (w->shown()) Fl::wait();
+  Fl::delete_widget(w);
+  if (!d.go) return;
+  auto steps = frename::plan(d.olds, d.news, ".fl-rename-" + std::to_string(getpid()) + "-");
+  for (auto &st : steps) {
+    std::string a = d.dir + "/" + st.first, b = d.dir + "/" + st.second;
+    struct stat sb;
+    // never overwrite (a file may have appeared since the preview)
+    if (lstat(b.c_str(), &sb) == 0 || rename(a.c_str(), b.c_str()) != 0) {
+      fl_alert("Could not rename \"%s\" to \"%s\": %s", fld::escape_at(st.first).c_str(),
+               fld::escape_at(st.second).c_str(), errno ? strerror(errno) : "it exists");
+      break;
+    }
+  }
+  refresh();
+}
+
+// ---- open as administrator -------------------------------------------------------------------
+
+// a folder in a new fl-files, a file in fl-edit, both as root through pkexec
+static void open_as_admin(const std::string &path) {
+  if (fld::which("pkexec").empty()) {
+    fl_alert("pkexec (polkit) is needed to open items as the administrator.");
+    return;
+  }
+  bool dir = fld::is_dir(path);
+  std::string prog = fld::which(dir ? "fl-files" : "fl-edit");
+  if (prog.empty()) prog = fld::which("fl-files");
+  std::vector<std::string> argv{"pkexec", "env"};
+  // pkexec keeps none of the session's variables: say where the display is
+  const char *wd = getenv("WAYLAND_DISPLAY"), *rt = getenv("XDG_RUNTIME_DIR"), *xd = getenv("DISPLAY");
+  if (wd && *wd) argv.push_back(std::string("WAYLAND_DISPLAY=") + (wd[0] == '/' || !rt ? wd : std::string(rt) + "/" + wd));
+  if (xd && *xd) argv.push_back(std::string("DISPLAY=") + xd);
+  if (const char *xa = getenv("XAUTHORITY")) argv.push_back(std::string("XAUTHORITY=") + xa);
+  argv.push_back("XDG_RUNTIME_DIR=/tmp");
+  argv.push_back(prog);
+  argv.push_back(path);
+  fld::spawn(argv);
 }
 
 // ---- open / open with ------------------------------------------------------------------------
@@ -1401,7 +1680,10 @@ void FileView::context_menu(int i) {
   if (!e.is_dir && !many && !in_trash()) apps = fld::apps_for_mime(e.get_mime());
   std::vector<Fl_Menu_Item> m;
   enum { OPEN = 1, OPEN_TAB, OPEN_TERM, OPEN_WITH_OTHER, CUT, COPY, PASTE, RENAME, TRASH, DELETE, PROPS,
-         RESTORE, COPY_PATH, CONTAINING, BOOKMARK, NEW_WINDOW, EXTRACT_HERE, EXTRACT_TO, COMPRESS, APP = 100 };
+         RESTORE, COPY_PATH, CONTAINING, BOOKMARK, NEW_WINDOW, EXTRACT_HERE, EXTRACT_TO, COMPRESS, BATCH_RENAME,
+         ADMIN, COPY_OTHER, MOVE_OTHER, APP = 100 };
+  std::string other = other_pane_dir();
+  bool local = !is_remote(e.path) && geteuid() != 0;
   // archives: extract / compress with fl-archive
   bool have_archiver = !in_trash() && !fld::which("fl-archive").empty();
   bool all_archives = have_archiver && !paths.empty();
@@ -1415,6 +1697,7 @@ void FileView::context_menu(int i) {
     if (e.is_dir) m.push_back({"Open in New Tab", 0, nullptr, (void *)OPEN_TAB});
     if (e.is_dir) m.push_back({"Open in New Window", 0, nullptr, (void *)NEW_WINDOW});
     if (e.is_dir) m.push_back({"Open in Terminal", 0, nullptr, (void *)OPEN_TERM});
+    if (!many && local) m.push_back({"Open as Administrator", 0, nullptr, (void *)ADMIN});
     if (e.is_dir && !many) m.push_back({"Add to Bookmarks", 0, nullptr, (void *)BOOKMARK});
     if (!e.is_dir && !many) {
       m.push_back({"Open With", 0, nullptr, nullptr, FL_SUBMENU});
@@ -1433,7 +1716,12 @@ void FileView::context_menu(int i) {
     m.push_back({"Copy", FL_CTRL + 'c', nullptr, (void *)COPY});
     if (e.is_dir && !many) m.push_back({"Paste Into Folder", 0, nullptr, (void *)PASTE, g_clip.paths.empty() ? FL_MENU_INACTIVE : 0});
     m.push_back({"Copy Path", 0, nullptr, (void *)COPY_PATH, FL_MENU_DIVIDER});
+    if (!other.empty() && other != g_cwd) {
+      m.push_back({"Copy to Other Pane", 0, nullptr, (void *)COPY_OTHER});
+      m.push_back({"Move to Other Pane", 0, nullptr, (void *)MOVE_OTHER, FL_MENU_DIVIDER});
+    }
     if (!many) m.push_back({"Rename…", FL_F + 2, nullptr, (void *)RENAME});
+    else if (!in_search()) m.push_back({"Rename…", FL_F + 2, nullptr, (void *)BATCH_RENAME});
     m.push_back({"Move to Trash", FL_Delete, nullptr, (void *)TRASH});
     m.push_back({"Delete Permanently", FL_SHIFT + FL_Delete, nullptr, (void *)DELETE, FL_MENU_DIVIDER});
     m.push_back({"Properties", FL_ALT + FL_Enter, nullptr, (void *)PROPS});
@@ -1465,6 +1753,10 @@ void FileView::context_menu(int i) {
       break;
     }
     case RENAME: start_rename(i); break;
+    case BATCH_RENAME: batch_rename(paths); break;
+    case ADMIN: open_as_admin(e.path); break;
+    case COPY_OTHER: run_op(FileOp::COPY, paths, other); break;
+    case MOVE_OTHER: run_op(FileOp::MOVE, paths, other); break;
     case TRASH: trash_selected(false); break;
     case DELETE: trash_selected(true); break;
     case PROPS: properties(paths); break;
@@ -1519,6 +1811,7 @@ void FileView::background_menu() {
       {"New Empty File…", 0, nullptr, (void *)2, FL_MENU_DIVIDER | (search ? FL_MENU_INACTIVE : 0)},
       {"Paste", FL_CTRL + 'v', nullptr, (void *)3, FL_MENU_DIVIDER},
       {"Open Terminal Here", 0, nullptr, (void *)4},
+      {"Open as Administrator", 0, nullptr, (void *)8, search || is_remote(g_cwd) || geteuid() == 0 ? FL_MENU_INACTIVE : 0},
       {"Select All", FL_CTRL + 'a', nullptr, (void *)5, FL_MENU_DIVIDER},
       {"Sort By", 0, nullptr, nullptr, FL_SUBMENU},
         {"Name", 0, nullptr, (void *)10, FL_MENU_RADIO | (V.sort == SORT_NAME ? FL_MENU_VALUE : 0)},
@@ -1554,6 +1847,7 @@ void FileView::background_menu() {
     case 5: for (int i = 0; i < (int)items.size(); i++) sel.insert(i); redraw(); update_status(); break;
     case 6: toggle_hidden(); break;
     case 7: properties({g_cwd}); break;
+    case 8: open_as_admin(g_cwd); break;
     case 10: case 11: case 12: case 13: case 14: case 15: {
       static const SortKey k[] = {SORT_NAME, SORT_SIZE, SORT_TYPE, SORT_DATE, SORT_PERMS, SORT_OWNER};
       set_sort(k[id - 10], V.desc);
@@ -1572,6 +1866,21 @@ void FileView::background_menu() {
 }
 
 int FileView::handle(int e) {
+  if (g_split && this != g_view) {
+    // a click, a drop or the keyboard focus in the other pane makes it current
+    if (e == FL_PUSH || e == FL_FOCUS || e == FL_DND_ENTER || e == FL_MOUSEWHEEL) {
+      int i = tab_index(tab_of(this));
+      if (i >= 0) activate_tab(i);
+    }
+    if (this != g_view) {
+      PaneGuard guard(this);
+      return handle_view(e);
+    }
+  }
+  return handle_view(e);
+}
+
+int FileView::handle_view(int e) {
   if (sb->visible() && Fl::event_inside(sb) && e != FL_KEYBOARD && e != FL_MOUSEWHEEL) return Fl_Group::handle(e);
   switch (e) {
     case FL_FOCUS: case FL_UNFOCUS: redraw(); return 1;
@@ -1837,7 +2146,10 @@ int FileView::handle(int e) {
           for (int i : std::set<int>(sel)) open_entry(entry(i));
           return 1;
         case FL_Delete: if (!in_network()) trash_selected(shift); return 1;
-        case FL_F + 2: if (focus >= 0 && !in_network()) start_rename(focus); return 1;
+        case FL_F + 2:
+          if (sel.size() > 1 && !in_network() && !in_trash() && !in_search()) batch_rename(selected_paths());
+          else if (focus >= 0 && !in_network()) start_rename(focus);
+          return 1;
         case ' ':
           if (focus >= 0 && ctrl) { if (sel.count(focus)) sel.erase(focus); else sel.insert(focus); redraw(); return 1; }
           break;
@@ -2466,7 +2778,7 @@ static void show_location() {
   // network folders show their location (sftp://host/dir), not the gvfs-fuse path
   std::string uri = remote_uri(g_cwd);
   g_path->value(g_cwd == TRASH_URI ? "Trash" : g_cwd == NETWORK_URI ? "Network" : !uri.empty() ? uri.c_str() : g_cwd.c_str());
-  g_win->copy_label((location_name(g_cwd, g_searching, g_search_desc) + " – Files").c_str());
+  g_win->copy_label((location_name(g_cwd, g_searching, g_search_desc) + (geteuid() == 0 ? " – Files (Administrator)" : " – Files")).c_str());
   if (g_searching) {
     g_places->value(0);
     if (g_tree) g_tree->deselect_all(nullptr, 0);
@@ -3076,6 +3388,82 @@ static void save_tab() {
   g_hist_fwd.clear();
 }
 
+// shows the current tab's view, or both panes in a split
+static void place_views() {
+  int X = g_views->x(), Y = g_views->y(), W = g_views->w(), H = g_views->h();
+  if (!g_split) {
+    g_view->resize(X, Y, W, H);
+    g_view->show();
+    return;
+  }
+  int half = (W - 2) / 2;
+  for (int k = 0; k < 2; k++) {
+    if (!g_pane[k]) continue;
+    FileView *v = g_pane[k]->view;
+    if (k == 0) v->resize(X, Y, half, H);
+    else v->resize(X + half + 2, Y, W - half - 2, H);
+    v->show();
+  }
+  g_views->redraw();
+}
+
+static void new_tab(const std::string &path, bool activate);
+static std::string new_tab_dir();
+
+// only the current pane's folder is watched: the other one is looked at every second
+static void split_poll(void *) {
+  if (!g_split) return;
+  Tab *o = g_pane[1 - g_pane_focus];
+  if (o && !o->searching && o->cwd != NETWORK_URI) {
+    std::string d = o->cwd == TRASH_URI ? fld::trash_dir() + "/files" : o->cwd;
+    struct stat st;
+    if (stat(d.c_str(), &st) == 0 && (st.st_mtim.tv_sec != o->view->loaded_mtime.tv_sec ||
+                                      st.st_mtim.tv_nsec != o->view->loaded_mtime.tv_nsec)) {
+      PaneGuard guard(o->view);
+      int top = o->view->top;
+      o->view->load(o->cwd);
+      o->view->top = std::max(0, std::min(top, o->view->content_height() - o->view->view_h()));
+      o->view->redraw();
+    }
+  }
+  Fl::repeat_timeout(1.0, split_poll);
+}
+
+// F4: two folders side by side (the current tab and the next one, or a new tab)
+static void toggle_split() {
+  if (g_split) {
+    Fl::remove_timeout(split_poll);
+    g_split = false;
+    for (Tab *t : g_pane)
+      if (t && t->view != g_view) t->view->hide();
+    g_pane[0] = g_pane[1] = nullptr;
+    place_views();
+    g_view->take_focus();
+    return;
+  }
+  Tab *cur = cur_tab();
+  int other = g_cur + 1 < (int)g_tabs.size() ? g_cur + 1 : g_cur - 1;
+  if (other < 0) {
+    new_tab(new_tab_dir(), false);
+    other = g_cur + 1;
+  }
+  g_split = true;
+  g_pane[0] = cur;
+  g_pane[1] = g_tabs[(size_t)other].get();
+  g_pane_focus = 0;
+  place_views();
+  g_view->take_focus();
+  Fl::add_timeout(1.0, split_poll);
+}
+
+// the other pane's folder (for copying and moving between panes), or ""
+static std::string other_pane_dir() {
+  if (!g_split) return "";
+  Tab *o = g_pane[1 - g_pane_focus];
+  if (!o || o->searching || o->cwd == TRASH_URI || o->cwd == NETWORK_URI) return "";
+  return o->cwd;
+}
+
 static void activate_tab_(int i, bool save) {
   if (i < 0 || i >= (int)g_tabs.size()) return;
   if (save) {
@@ -3083,11 +3471,20 @@ static void activate_tab_(int i, bool save) {
     save_tab();
   }
   if (g_view) {
-    g_view->hide();
+    if (!g_split) g_view->hide();
     Fl::remove_idle(FileView::thumb_idle, g_view);
   }
+  FileView *was = g_view;
   g_cur = i;
   Tab *t = cur_tab();
+  if (g_split) {
+    if (g_pane[0] == t) g_pane_focus = 0;
+    else if (g_pane[1] == t) g_pane_focus = 1;
+    else {
+      if (g_pane[g_pane_focus]) g_pane[g_pane_focus]->view->hide();
+      g_pane[g_pane_focus] = t;
+    }
+  }
   g_view = t->view;
   g_cwd = t->cwd;
   g_hist_back = std::move(t->back);
@@ -3097,8 +3494,8 @@ static void activate_tab_(int i, bool save) {
   g_search_desc = t->search_desc;
   V = t->v;
   g_filter->value(t->filter.c_str());
-  g_view->resize(g_views->x(), g_views->y(), g_views->w(), g_views->h());
-  g_view->show();
+  place_views();
+  if (was && was != g_view) was->redraw();
   if (t->find_bar != (bool)g_sbar->visible()) {
     if (t->find_bar) g_sbar->show(); else g_sbar->hide();
   }
@@ -3177,6 +3574,12 @@ static void close_tab(int i) {
   }
   if (i != g_cur) save_tab();
   Tab *t = g_tabs[(size_t)i].get();
+  if (g_split && (t == g_pane[0] || t == g_pane[1])) {
+    for (Tab *pt : g_pane)
+      if (pt && pt != t && pt->view != g_view) pt->view->hide();
+    g_split = false;
+    g_pane[0] = g_pane[1] = nullptr;
+  }
   t->search->cancel();
   Fl::remove_timeout(search_poll, t);
   Fl::remove_idle(FileView::thumb_idle, t->view);
@@ -3405,6 +3808,7 @@ static int global_keys(int e) {
   if (alt && k == FL_Up) { go_up(); return 1; }
   if (alt && k == FL_Home) { navigate(fld::home_dir()); return 1; }
   if (k == FL_F + 9) { show_tree(!S.show_tree); return 1; }
+  if (k == FL_F + 4) { toggle_split(); return 1; }
   if (k == FL_F + 3 || (ctrl && shift && (k == 'f' || k == 'F'))) { show_search_bar(true); return 1; }
   if (k == FL_Escape && in_search() && Fl::focus() == g_view) { show_search_bar(false); return 1; }
   if (k == FL_BackSpace && Fl::focus() == g_view) { go_up(); return 1; }
@@ -3499,6 +3903,7 @@ static void build_menu(fld::Menu &m, bool for_bar) {
       refresh();
     });
     m.toggle("Show &Menu Bar", S.menubar, [] { toggle_menubar(); });
+    m.toggle("S&plit View (F4)", g_split, [] { toggle_split(); });
   };
   if (!for_bar) {
     m.item("New &Tab", [] { new_tab(new_tab_dir()); }, 0, FL_CTRL + 't');
@@ -3547,7 +3952,10 @@ static void build_menu(fld::Menu &m, bool for_bar) {
   m.item("&Copy", [] { copy_to_clipboard(false); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
   m.item("&Paste", [] { paste_into(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'v');
   m.item("Select &All", [] { select_all(); }, FL_MENU_DIVIDER, FL_CTRL + 'a');
-  m.item("&Rename…", [] { if (g_view->focus >= 0) g_view->start_rename(g_view->focus); },
+  m.item("&Rename…", [] {
+    if (g_view->sel.size() > 1 && !in_search()) batch_rename(g_view->selected_paths());
+    else if (g_view->focus >= 0) g_view->start_rename(g_view->focus);
+  },
          have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_F + 2);
   m.item("Move to &Trash", [] { trash_selected(false); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_Delete);
   m.item("&Delete Permanently", [] { trash_selected(true); }, (have_sel ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER,

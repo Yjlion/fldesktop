@@ -214,6 +214,23 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Shift+Print", "exec fl-snip --area");
 	add_binding(c, "Super+Shift+s", "exec fl-snip --snip");
 	add_binding(c, "Ctrl+Shift+Escape", "exec fl-taskmgr");
+	/* media, volume and brightness keys: fl-panel does them and shows the
+	 * on-screen display */
+	static const char *const media[][2] = {
+		{"XF86AudioRaiseVolume", "volume-up"}, {"XF86AudioLowerVolume", "volume-down"},
+		{"XF86AudioMute", "volume-mute"}, {"XF86AudioMicMute", "mic-mute"},
+		{"XF86MonBrightnessUp", "brightness-up"}, {"XF86MonBrightnessDown", "brightness-down"},
+		{"XF86KbdBrightnessUp", "kbd-brightness-up"}, {"XF86KbdBrightnessDown", "kbd-brightness-down"},
+		{"XF86KbdLightOnOff", "kbd-brightness-toggle"},
+		{"XF86AudioPlay", "media-play-pause"}, {"XF86AudioPause", "media-pause"},
+		{"XF86AudioStop", "media-stop"}, {"XF86AudioNext", "media-next"},
+		{"XF86AudioPrev", "media-previous"},
+	};
+	for (size_t i = 0; i < sizeof media / sizeof media[0]; i++) {
+		char action[96];
+		snprintf(action, sizeof action, "exec fl-panel --action %s", media[i][1]);
+		add_binding(c, media[i][0], action);
+	}
 	/* workspaces: Super+N goes there, Super+Shift+N sends the window there */
 	for (int i = 1; i <= FLWM_MAX_WORKSPACES; i++) {
 		char combo[32], action[32];

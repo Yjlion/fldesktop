@@ -133,6 +133,7 @@ if(FLD_NEED_FLTK)
   endif()
   if(FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
     add_subdirectory(common/backlight)
+    add_subdirectory(common/mpris)
   endif()
 endif()
 

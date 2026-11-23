@@ -469,6 +469,10 @@ struct flwm_keyboard {
 	struct wl_listener key;
 	struct wl_listener keymap;
 	struct wl_listener destroy;
+	/* Caps Lock, Num Lock and the layout as last seen, for the panel's
+	 * on-screen display (-1: not seen yet) */
+	int osd_caps, osd_num;
+	long osd_group;
 };
 
 struct flwm_pointer {

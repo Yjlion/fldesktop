@@ -453,6 +453,9 @@ static void update_battery() {
 static bool have_wpctl() { static int v = -1; if (v < 0) v = !fld::which("wpctl").empty(); return v; }
 static bool have_pactl() { static int v = -1; if (v < 0) v = !fld::which("pactl").empty(); return v; }
 
+#ifdef FLD_HAVE_MPRIS
+#include "mpris.h"
+#endif
 #ifdef FLD_HAVE_AUDIO
 #include "audiobackend.h"
 static AudioBackend *g_audio = nullptr;
@@ -471,6 +474,13 @@ static void audio_changed() {
   if (was_visible != (bool)P.volume->visible()) relayout();
 }
 #endif
+
+static const char *volume_icon(int pct, bool muted) {
+  return muted || pct == 0 ? "audio-volume-muted"
+         : pct < 34        ? "audio-volume-low"
+         : pct < 67        ? "audio-volume-medium"
+                           : "audio-volume-high";
+}
 
 static void query_volume() {
 #ifdef FLD_HAVE_AUDIO
@@ -501,11 +511,7 @@ static void update_volume_widget() {
     return;
   }
   P.volume->show();
-  const char *icon = P.muted || P.volume_pct == 0 ? "audio-volume-muted"
-                     : P.volume_pct < 34          ? "audio-volume-low"
-                     : P.volume_pct < 67          ? "audio-volume-medium"
-                                                  : "audio-volume-high";
-  panel_icon(P.volume, icon, "audio-speakers");
+  panel_icon(P.volume, volume_icon(P.volume_pct, P.muted), "audio-speakers");
   char tip[64];
   snprintf(tip, sizeof tip, "Volume %d%%%s", P.volume_pct, P.muted ? " (muted)" : "");
   P.volume->copy_tooltip(tip);
@@ -549,6 +555,60 @@ static void toggle_mute() {
   update_volume_widget();
 }
 
+static std::string sink_name() {
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio)
+    if (const Audio::Device *d = g_audio->defaultDevice(Audio::Sink)) return d->description;
+#endif
+  return "";
+}
+
+void panel_volume_step(int delta) {
+  if (P.volume_pct < 0) query_volume();
+  if (P.volume_pct < 0) return;
+  // the keys stop at 100 %; above that only the mixer goes
+  int pct = P.volume_pct;
+  if (delta > 0) pct = pct >= 100 ? pct : std::min(100, pct + delta);
+  else pct = std::max(0, pct + delta);
+  if (P.muted && delta > 0) toggle_mute(); // turning it up unmutes
+  set_volume(pct);
+  osd_show(volume_icon(pct, false), pct, sink_name());
+}
+
+void panel_volume_toggle_mute() {
+  bool muted = !P.muted;
+  toggle_mute();
+  if (P.volume_pct >= 0) osd_show(volume_icon(P.volume_pct, muted), muted ? 0 : P.volume_pct, muted ? "Muted" : sink_name());
+}
+
+void panel_mic_toggle_mute() {
+  bool muted = false;
+#ifdef FLD_HAVE_AUDIO
+  if (g_audio) {
+    const Audio::Device *d = g_audio->defaultDevice(Audio::Source);
+    if (!d) return;
+    muted = !d->muted;
+    g_audio->toggleDefaultMute(Audio::Source);
+  } else
+#endif
+  {
+    std::string out;
+    if (have_wpctl()) {
+      fld::run_capture({"wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"}, out);
+      fld::run_capture({"wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@"}, out);
+      muted = out.find("MUTED") != std::string::npos;
+    } else if (have_pactl()) {
+      fld::run_capture({"pactl", "set-source-mute", "@DEFAULT_SOURCE@", "toggle"}, out);
+      fld::run_capture({"pactl", "get-source-mute", "@DEFAULT_SOURCE@"}, out);
+      muted = out.find("yes") != std::string::npos;
+    } else {
+      return;
+    }
+  }
+  osd_show(muted ? "microphone-sensitivity-muted" : "microphone-sensitivity-high", -1,
+           muted ? "Microphone off" : "Microphone on");
+}
+
 class VolumeButton : public fld::FlatButton {
 public:
   using fld::FlatButton::FlatButton;
@@ -572,28 +632,75 @@ static void volume_menu(fld::Menu &m) {
 }
 
 static void volume_cb(Fl_Widget *w, void *) {
-  PanelPopup pop(260, 96);
-  Fl_Slider *s = new Fl_Slider(12, 14, 180, 22);
+  int media_h = 0;
+#ifdef FLD_HAVE_MPRIS
+  static mpris::Player player;
+  const mpris::Player *ap = mpris::active(mpris::Client::get().state());
+  if (ap) {
+    player = *ap;
+    media_h = 62;
+  }
+#endif
+  PanelPopup pop(260, 96 + media_h);
+#ifdef FLD_HAVE_MPRIS
+  if (media_h) {
+    // now playing: what, and the buttons (they act on the active player)
+    static std::string what, who;
+    what = fld::escape_at(player.title.empty() ? player.identity : player.title);
+    who = fld::escape_at(player.title.empty() ? "" : (player.artist.empty() ? player.identity : player.artist));
+    Fl_Box *t = new Fl_Box(12, 8, 140, 22, what.c_str());
+    t->labelfont(FL_HELVETICA_BOLD);
+    t->labelsize(13);
+    t->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
+    t->tooltip(what.c_str());
+    Fl_Box *a = new Fl_Box(12, 30, 140, 20, who.c_str());
+    a->labelsize(12);
+    a->labelcolor(fld::palette().fg_dim);
+    a->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
+    struct Btn {
+      const char *icon, *tip, *method;
+      bool on;
+    } btns[] = {{"media-skip-backward", "Previous", "Previous", player.can_prev},
+                {player.status == "Playing" ? "media-playback-pause" : "media-playback-start",
+                 player.status == "Playing" ? "Pause" : "Play", "PlayPause", player.can_play || player.can_pause},
+                {"media-skip-forward", "Next", "Next", player.can_next}};
+    int bx = 156;
+    for (auto &b : btns) {
+      fld::FlatButton *fb = new fld::FlatButton(bx, 12, 30, 30);
+      fb->icon_name(b.icon, 18);
+      if (!fld::icon(b.icon, 18)) fb->copy_label(!strcmp(b.method, "Next") ? "⏭" : !strcmp(b.method, "Previous") ? "⏮" : "⏯");
+      fb->tooltip(b.tip);
+      fb->callback([](Fl_Widget *, void *m) { mpris::Client::get().command((const char *)m); }, (void *)b.method);
+      if (!b.on) fb->deactivate();
+      bx += 32;
+    }
+    Fl_Box *line = new Fl_Box(12, media_h - 6, 236, 1);
+    line->box(FL_FLAT_BOX);
+    line->color(fld::palette().border);
+  }
+#endif
+  int oy = media_h;
+  Fl_Slider *s = new Fl_Slider(12, oy + 14, 180, 22);
   s->type(FL_HOR_NICE_SLIDER);
   s->bounds(0, 100);
   s->step(1);
   s->value(std::min(100, P.volume_pct));
   s->callback([](Fl_Widget *sl, void *) { set_volume((int)((Fl_Slider *)sl)->value()); });
   s->when(FL_WHEN_CHANGED);
-  Fl_Check_Button *m = new Fl_Check_Button(200, 12, 56, 26, "Mute");
+  Fl_Check_Button *m = new Fl_Check_Button(200, oy + 12, 56, 26, "Mute");
   m->value(P.muted);
   m->callback([](Fl_Widget *, void *) { toggle_mute(); });
-  Fl_Box *more = new Fl_Box(12, 40, 236, 20);
+  Fl_Box *more = new Fl_Box(12, oy + 40, 236, 20);
   more->labelsize(11);
   more->labelcolor(fld::palette().fg_dim);
   more->label("Scroll on the icon to adjust, middle-click to mute");
-  Fl_Button *settings = new Fl_Button(12, 62, 116, 26, "Sound Settings");
+  Fl_Button *settings = new Fl_Button(12, oy + 62, 116, 26, "Sound Settings");
   settings->labelsize(12);
   settings->callback([](Fl_Widget *b, void *) {
     fld::spawn({"fl-settings", "sound"});
     b->window()->hide();
   });
-  Fl_Button *mixer = new Fl_Button(132, 62, 116, 26, "Volume Mixer");
+  Fl_Button *mixer = new Fl_Button(132, oy + 62, 116, 26, "Volume Mixer");
   mixer->labelsize(12);
   mixer->callback([](Fl_Widget *b, void *) {
     fld::spawn({"fl-mixer"});
@@ -953,6 +1060,12 @@ static std::string settings_signature() {
 }
 
 int main(int argc, char **argv) {
+  // fl-panel --action <name> [arg]: the keys (fl-wm), before any window
+  if (argc >= 3 && !strcmp(argv[1], "--action")) {
+    std::string a = argv[2];
+    for (int i = 3; i < argc; i++) a += std::string(" ") + argv[i];
+    return panel_action_main(a);
+  }
   fld::init_app("fldesktop.panel", argc, argv);
   // The shell window is borderless and fl-wm knows it by its title; any other
   // window (dialogs, fl_choice) gets an ordinary app id, or fl-wm would give
@@ -1110,6 +1223,8 @@ int main(int argc, char **argv) {
   update_volume_widget();
   update_battery();
   relayout();
+  Fl::lock();
+  panel_actions_listen(cfg.get_bool("Panel", "OSD", true));
 
   // fl-wm also asks for the full width, but FLTK ignores configure sizes for
   // borderless windows, so follow the screen size ourselves.

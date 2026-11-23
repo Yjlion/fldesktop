@@ -64,6 +64,12 @@ the keys go to it (key bindings still work); its candidate window is placed
 below the text cursor. Settings > Keyboard chooses the input method and sets
 up the session environment for programs that use IM modules instead
 (XMODIFIERS, QT_IM_MODULE, GTK_IM_MODULE for IBus).
+.SH MEDIA KEYS
+The volume, microphone, brightness, keyboard light and media keys
+(XF86AudioRaiseVolume, XF86MonBrightnessUp, XF86AudioPlay, ...) run
+\fBfl-panel \-\-action\fR by default; they also work while the screen is locked
+or the launcher is open. Caps Lock, Num Lock and layout changes are shown by
+the panel's on-screen display.
 .SH KEY BINDINGS IN VIRTUAL MACHINES
 Programs that ask for the keyboard shortcuts (keyboard-shortcuts-inhibit,
 used by virtual machines, remote desktop viewers and some games) get every

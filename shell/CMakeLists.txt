@@ -63,7 +63,7 @@ endif()
 add_executable(fl-launcher launcher.cpp)
 target_link_libraries(fl-launcher PRIVATE fld)
 
-add_executable(fl-desktop desktop.cpp)
+add_executable(fl-desktop desktop.cpp desktop_layout.cpp)
 target_link_libraries(fl-desktop PRIVATE fld)
 
 add_executable(fl-autostart autostart.cpp)

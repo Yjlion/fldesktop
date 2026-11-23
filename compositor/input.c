@@ -973,6 +973,22 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	struct wlr_keyboard *kb = wlr_seat_get_keyboard(server->seat);
 	uint32_t mods = kb ? wlr_keyboard_get_modifiers(kb) : 0;
 
+	/* An open popup menu holds a grab that only sees clicks passed to the
+	 * seat. Clicks we handle ourselves (title bars, borders, Super+drag)
+	 * would leave it open, and a client in its menu loop ignores a close
+	 * request, so end the grab first: the popups get popup_done and close. */
+	struct wlr_seat_pointer_state *ps = &server->seat->pointer_state;
+	bool ours = !surface || (desc && desc->kind == FLWM_NODE_DECOR) || (mods & WLR_MODIFIER_LOGO);
+	if (ps->grab != ps->default_grab && !server->locked && ours)
+		wlr_seat_pointer_end_grab(server->seat);
+	/* menus without a grab (FLTK's): a click elsewhere closes them too */
+	struct flwm_view *menu_owner = view_focused(server);
+	if (!server->locked && view_has_menus(menu_owner)) {
+		struct flwm_view *target = desc && (desc->kind == FLWM_NODE_VIEW || desc->kind == FLWM_NODE_DECOR)
+			? desc->ptr : NULL;
+		if (ours || target != menu_owner) view_dismiss_menus(menu_owner);
+	}
+
 	if (server->locked) {
 		/* the cover swallows clicks; the lock client gets its own */
 		struct flwm_view *lv = desc && desc->kind == FLWM_NODE_VIEW ? desc->ptr : NULL;

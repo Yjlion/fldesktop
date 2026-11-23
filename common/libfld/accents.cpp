@@ -1,4 +1,5 @@
 #include "fld/accents.h"
+#include "fld/ini.h"
 #include "fld/util.h"
 
 #include <cmath>
@@ -78,6 +79,18 @@ bool is_accent_icon_theme(const std::string &theme) {
   for (size_t i = 0; i < accent_presets().size(); i++)
     if (theme == accent_icon_theme((int)i)) return true;
   return false;
+}
+
+std::string effective_icon_theme(const Ini &desktop,
+                                 const std::function<bool(const std::string &)> &installed) {
+  std::string stored = trim(desktop.get("General", "IconTheme", ""));
+  bool follow = desktop.get_bool("Appearance", "IconsFollowAccent",
+                                 stored.empty() || is_accent_icon_theme(stored));
+  if (!follow || !desktop.has("Appearance", "Accent")) return stored;
+  std::string want = accent_icon_theme(nearest_accent(desktop.get("Appearance", "Accent", "")));
+  if (want == stored) return stored;
+  if (installed && !installed(want)) return stored;
+  return want;
 }
 
 } // namespace fld

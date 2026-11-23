@@ -141,7 +141,17 @@ static const wl_registry_listener kRegListener = {reg_global, reg_global_remove}
 
 Fl_Color panel_bg() { return fld::palette().panel_bg; }
 Fl_Color panel_fg() { return fld::palette().panel_fg; }
-Fl_Color panel_hover() { return fl_color_average(panel_bg(), FL_WHITE, 0.85f); }
+// whether the panel is light (Appearance > Panel, or the light theme)
+bool panel_is_light() {
+  uchar r, g, b;
+  Fl::get_color(panel_bg(), r, g, b);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 128;
+}
+// a step away from the panel colour: darker on a light panel, lighter on a dark one
+Fl_Color panel_shade(float amount) {
+  return fl_color_average(panel_bg(), panel_is_light() ? FL_BLACK : FL_WHITE, 1.0f - amount);
+}
+Fl_Color panel_hover() { return panel_shade(panel_is_light() ? 0.08f : 0.15f); }
 
 static Fl_Image *icon_for_app_id(const std::string &app_id, int size) {
   static std::map<std::string, std::string> cache;
@@ -168,16 +178,16 @@ public:
   bool hover = false;
   TaskButton(Task *t, int x, int y, int w, int h) : Fl_Widget(x, y, w, h), task(t) {}
   void draw() override {
-    Fl_Color bg = panel_bg();
-    if (task->activated) bg = fl_color_average(panel_bg(), FL_WHITE, 0.78f);
-    else if (hover) bg = panel_hover();
+    // the active window shows only by its accent underline; a box on hover
     fl_color(panel_bg());
     fl_rectf(x(), y(), w(), h());
-    fl_color(bg);
-    fl_rounded_rectf(x() + 1, y() + 3, w() - 2, h() - 6, 5);
+    if (hover) {
+      fl_color(panel_hover());
+      fl_rounded_rectf(x() + 1, y() + 3, w() - 2, h() - 6, 5);
+    }
     if (task->activated) {
       fl_color(fld::palette().accent);
-      fl_rectf(x() + 8, y() + h() - 5, w() - 16, 2);
+      fl_rounded_rectf(x() + 8, y() + h() - 6, w() - 16, 3, 1);
     }
     int ix = x() + 8;
     if (Fl_Image *img = icon_for_app_id(task->app_id, 20)) {
@@ -1021,9 +1031,13 @@ public:
     relayout();
   }
   void draw() override {
-    Fl_Double_Window::draw();
+    // the panel colour, not the scheme's window background (plastic tiles
+    // one in, which showed between the buttons as a lighter strip)
+    fl_color(panel_bg());
+    fl_rectf(0, 0, w(), h());
+    draw_children();
     // thin separator line towards the screen
-    fl_color(fl_color_average(panel_bg(), FL_WHITE, 0.8f));
+    fl_color(panel_is_light() ? fld::palette().border : panel_shade(0.2f));
     if (P.top) fl_xyline(0, h() - 1, w());
     else fl_xyline(0, 0, w());
   }
@@ -1095,7 +1109,8 @@ static std::string settings_signature() {
   d.load(fld::desktop_config_path());
   w.load(fld::fld_config_dir() + "/wm.ini");
   std::string sig = p.to_string() + "|" + w.get("behaviour", "panel_position", "bottom");
-  for (const char *k : {"Theme", "Accent", "Font", "FontSize", "Scheme"}) sig += "|" + d.get("Appearance", k);
+  for (const char *k : {"Theme", "Accent", "Font", "FontSize", "Scheme", "IconsFollowAccent", "PanelTheme"})
+    sig += "|" + d.get("Appearance", k);
   return sig + "|" + d.get("General", "IconTheme");
 }
 

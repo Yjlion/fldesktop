@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <linux/input-event-codes.h>
+#include <time.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include "xdg-shell-protocol.h"
 #include <wlr/util/edges.h>
@@ -579,9 +581,55 @@ void view_set_fullscreen(struct flwm_view *view, bool fullscreen) {
 	decor_update(view);
 }
 
+bool view_has_menus(struct flwm_view *view) {
+	return view && !is_x11(view) && view->xdg_toplevel && !wl_list_empty(&view->xdg_toplevel->base->popups);
+}
+
+void view_dismiss_menus(struct flwm_view *view) {
+	if (!view_has_menus(view)) return;
+	struct wlr_seat *seat = view->server->seat;
+	/* FLTK (and others) take no popup grab: destroying the popup only makes
+	 * them map it again. Escape, sent where the client expects keys, ends
+	 * the menu loop the way the user would. */
+	if (seat->keyboard_state.focused_surface != view->xdg_toplevel->base->surface) return;
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	uint32_t ms = (uint32_t)(now.tv_sec * 1000 + now.tv_nsec / 1000000);
+	wlr_seat_keyboard_notify_key(seat, ms, KEY_ESC, WL_KEYBOARD_KEY_STATE_PRESSED);
+	wlr_seat_keyboard_notify_key(seat, ms, KEY_ESC, WL_KEYBOARD_KEY_STATE_RELEASED);
+}
+
+/* a close that waits for the client's menus to go (at most about a second) */
+static int close_retry(void *data) {
+	struct flwm_view *view = data;
+	if (view_has_menus(view) && ++view->close_tries < 10) {
+		wl_event_source_timer_update(view->close_timer, 100);
+		return 0;
+	}
+	wl_event_source_remove(view->close_timer);
+	view->close_timer = NULL;
+	wlr_xdg_toplevel_send_close(view->xdg_toplevel);
+	return 0;
+}
+
 void view_close(struct flwm_view *view) {
-	if (is_x11(view)) xwayland_view_close(view);
-	else wlr_xdg_toplevel_send_close(view->xdg_toplevel);
+	if (is_x11(view)) {
+		xwayland_view_close(view);
+		return;
+	}
+	if (view_has_menus(view)) {
+		/* a client inside a menu loop ignores the request: end the menu first */
+		view_dismiss_menus(view);
+		if (!view->close_timer) {
+			view->close_tries = 0;
+			view->close_timer = wl_event_loop_add_timer(view->server->event_loop, close_retry, view);
+		}
+		if (view->close_timer) {
+			wl_event_source_timer_update(view->close_timer, 50);
+			return;
+		}
+	}
+	wlr_xdg_toplevel_send_close(view->xdg_toplevel);
 }
 
 void views_reconfigure_maximized(struct flwm_server *server) {
@@ -869,6 +917,10 @@ void view_handle_unmap(struct flwm_view *view) {
 	switcher_view_gone(server, view);
 	if (server->hover_view == view) server->hover_view = NULL;
 	if (server->last_click_view == view) server->last_click_view = NULL;
+	if (view->close_timer) {
+		wl_event_source_remove(view->close_timer);
+		view->close_timer = NULL;
+	}
 	bool was_focused = view_focused(server) == view;
 	view->mapped = false;
 	/* the decorations are ours, not the surface's: hide them with it */

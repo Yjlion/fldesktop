@@ -85,6 +85,16 @@ void init_app(const char *app_id, int argc, char **argv) {
     p.panel_bg = fl_rgb_color(0x23, 0x25, 0x2a);
     p.panel_fg = fl_rgb_color(0xf0, 0xf0, 0xf0);
   }
+  if (!high) {
+    // the panel can differ from the windows (a dark panel with light windows)
+    if (panel_is_light_theme(cfg)) {
+      p.panel_bg = fl_rgb_color(0xf2, 0xf3, 0xf5);
+      p.panel_fg = fl_rgb_color(0x22, 0x24, 0x28);
+    } else if (!dark) {
+      p.panel_bg = fl_rgb_color(0x23, 0x25, 0x2a);
+      p.panel_fg = fl_rgb_color(0xf0, 0xf0, 0xf0);
+    }
+  }
   p.accent = parse_color(cfg.get(A, "Accent", "#3584e4"), fl_rgb_color(0x35, 0x84, 0xe4));
   // a dark accent on white, a light one on black, so text on it stays readable
   if (high) p.accent = dark ? fl_rgb_color(0xff, 0xd7, 0x00) : fl_rgb_color(0x00, 0x3d, 0xa5);
@@ -141,6 +151,13 @@ void init_app(const char *app_id, int argc, char **argv) {
   install_tab_drop_hook(); // tabs dropped from other windows reach the tab strip
   (void)argc;
   (void)argv;
+}
+
+bool panel_is_light_theme(const Ini &desktop) {
+  std::string pt = lower(trim(desktop.get("Appearance", "PanelTheme", "auto")));
+  if (pt == "light") return true;
+  if (pt == "dark") return false;
+  return lower(desktop.get("Appearance", "Theme", "light")) != "dark";
 }
 
 const Palette &palette() { return g_pal; }

@@ -14,6 +14,11 @@
 #include "server.h"
 
 #define HANDLE 6 /* invisible resize handle thickness */
+/* soft shadow: rings this far outside the border, each a little fainter.
+ * They stay inside the resize handles, which therefore take every click
+ * on them (the shadow rects carry no descriptor). */
+static const int shadow_spread[3] = {1, 2, 4};
+static const float shadow_alpha[3] = {0.10f, 0.06f, 0.035f};
 
 /* ---- a wlr_buffer backed by a cairo image surface ---------------------- */
 
@@ -63,6 +68,12 @@ static struct cairo_buffer *cairo_buffer_create(int width, int height) {
 
 int decor_title_height(struct flwm_server *server) { return server->config.title_height; }
 int decor_border(struct flwm_server *server) { return server->config.border_width; }
+
+/* the border: the accent on the focused window (wm.ini accent_border) */
+static uint32_t border_for(struct flwm_server *server, bool active) {
+	if (active && server->config.accent_border) return 0xff000000 | flwm_accent_color();
+	return server->config.border_color;
+}
 
 static void set_source_argb(cairo_t *cr, uint32_t c) {
 	cairo_set_source_rgba(cr, ((c >> 16) & 255) / 255.0, ((c >> 8) & 255) / 255.0,
@@ -152,7 +163,7 @@ static void render_title(struct flwm_view *view) {
 	cairo_line_to(cr, W, H);
 	cairo_close_path(cr);
 	if (B > 0) {
-		set_source_argb(cr, c->border_color);
+		set_source_argb(cr, border_for(server, d->active));
 		cairo_fill_preserve(cr);
 		cairo_new_path(cr);
 		double ir = rad > B ? rad - B : 0;
@@ -212,6 +223,13 @@ void decor_create(struct flwm_view *view) {
 	d->tree = wlr_scene_tree_create(view->tree);
 	wlr_scene_node_lower_to_bottom(&d->tree->node);
 	float transparent[4] = {0, 0, 0, 0};
+	/* created first: below the borders and the title */
+	for (int i = 2; i >= 0; i--) {
+		float a = shadow_alpha[i];
+		float col[4] = {0, 0, 0, a}; /* premultiplied black */
+		d->shadow[i] = wlr_scene_rect_create(d->tree, 1, 1, col);
+		wlr_scene_node_set_enabled(&d->shadow[i]->node, false);
+	}
 	for (int i = 0; i < 8; i++) {
 		d->handle[i] = wlr_scene_rect_create(d->tree, 1, 1, transparent);
 		d->handle_desc[i].kind = FLWM_NODE_DECOR;
@@ -266,11 +284,13 @@ void decor_update(struct flwm_view *view) {
 	bool title_changed = !d->title_text || strcmp(d->title_text, title) != 0;
 	float scale = view_scale(view);
 
+	bool shadowed = server->config.shadows && !view->maximized && view->snap == FLWM_SNAP_NONE;
 	if (w == d->width && h == d->height && active == d->active && !title_changed &&
-			scale == d->scale)
+			scale == d->scale && shadowed == d->shadowed)
 		return;
 
-	bool size_changed = w != d->width || h != d->height;
+	bool size_changed = w != d->width || h != d->height || shadowed != d->shadowed;
+	bool active_changed = active != d->active;
 	d->width = w;
 	d->height = h;
 	d->active = active;
@@ -315,6 +335,20 @@ void decor_update(struct flwm_view *view) {
 			wlr_scene_node_set_enabled(&d->handle[i]->node, !view->maximized);
 		/* corners above edges */
 		for (int i = 4; i < 8; i++) wlr_scene_node_raise_to_top(&d->handle[i]->node);
+
+		/* the shadow: sides and bottom, starting below the rounded title corners */
+		d->shadowed = shadowed;
+		for (int i = 0; i < 3; i++) {
+			int s = shadow_spread[i], sy = -T - B + 8;
+			wlr_scene_rect_set_size(d->shadow[i], w + 2 * (B + s), h + B + s - sy);
+			wlr_scene_node_set_position(&d->shadow[i]->node, -B - s, sy);
+			wlr_scene_node_set_enabled(&d->shadow[i]->node, shadowed);
+		}
+	}
+	if (size_changed || active_changed) {
+		float bc[4];
+		argb_to_float(border_for(server, active), bc);
+		for (int i = 0; i < 4; i++) wlr_scene_rect_set_color(d->border[i], bc);
 	}
 	render_title(view);
 }

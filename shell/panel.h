@@ -18,6 +18,8 @@ static const int PANEL_H = 38;
 Fl_Color panel_bg();
 Fl_Color panel_fg();
 Fl_Color panel_hover();
+bool panel_is_light();
+Fl_Color panel_shade(float amount);
 // Lays out the panel again (after an indicator was shown or hidden).
 void relayout();
 // A right-click menu for a panel widget: fill adds the items when it is

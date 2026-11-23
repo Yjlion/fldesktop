@@ -83,7 +83,7 @@ private:
   int rows_ = 24, cols_ = 80;
   int cw_ = 8, ch_ = 16, ascent_ = 12;
   int font_size_ = 14;
-  int pad_ = 4;
+  int pad_ = 8; // inner margin around the text
   double opacity_ = 1.0;
   void fill_background(int x, int y, int w, int h);
   bool hold_ = false, hold_on_error_ = false;

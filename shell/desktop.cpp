@@ -7,6 +7,7 @@
 #include <FL/Fl_File_Chooser.H>
 #include <FL/Fl_Image.H>
 #include <FL/Fl_Menu_Item.H>
+#include <FL/Fl_RGB_Image.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 #include <FL/fl_utf8.h>
@@ -58,6 +59,9 @@ public:
   std::string dir;
   std::vector<Item> items;
   std::set<int> selected;
+  std::unique_ptr<Fl_RGB_Image> sel_img_[2];
+  std::vector<uchar> sel_buf_[2];
+  Fl_Color sel_accent_ = 0;
   std::string wallpaper, mode = "fill";
   Fl_Color bg_color = fl_rgb_color(0x2d, 0x3a, 0x4f);
   bool show_icons = true;
@@ -251,9 +255,10 @@ public:
       Item &it = items[i];
       bool sel = selected.count(i) > 0 || i == drop_item;
       if (sel) {
-        Fl_Color c = fld::palette().accent;
-        fl_color(fl_color_average(c, FL_BLACK, 0.7f));
-        fl_rounded_rectf(it.x + 2, it.y, CELL_W - 4, CELL_H - 4, 8);
+        // translucent so the wallpaper shows through: the accent with an
+        // outline while the desktop has the focus, a neutral tint otherwise
+        bool focused = Fl::focus() == this || i == drop_item;
+        if (Fl_RGB_Image *img = selection_image(focused)) img->draw(it.x + 2, it.y);
       }
       if (it.icon) it.icon->draw(it.x + (CELL_W - ICON) / 2, it.y + 4);
       auto lines = wrap_label(it.name, CELL_W - 8, sel ? 4 : 2);
@@ -273,6 +278,38 @@ public:
       int rx = std::min(bx0, bx1), ry = std::min(by0, by1);
       fl_rect(rx, ry, std::abs(bx1 - bx0), std::abs(by1 - by0));
     }
+  }
+
+  // A rounded cell-sized highlight with an alpha channel (FLTK has no
+  // translucent fills); rebuilt when the cell size or accent changes.
+  Fl_RGB_Image *selection_image(bool focused) {
+    int w = CELL_W - 4, h = CELL_H - 4;
+    Fl_Color accent = fld::palette().accent;
+    std::unique_ptr<Fl_RGB_Image> &img = focused ? sel_img_[1] : sel_img_[0];
+    std::vector<uchar> &buf = focused ? sel_buf_[1] : sel_buf_[0];
+    if (img && img->w() == w && img->h() == h && sel_accent_ == accent) return img.get();
+    if (sel_accent_ != accent) { sel_img_[0].reset(); sel_img_[1].reset(); sel_accent_ = accent; }
+    uchar ar, ag, ab;
+    Fl::get_color(accent, ar, ag, ab);
+    uchar fr = focused ? ar : 0xd0, fg = focused ? ag : 0xd4, fb = focused ? ab : 0xda;
+    const double fill_a = focused ? 0.38 : 0.26, edge_a = focused ? 0.95 : 0.0, r = 8;
+    buf.assign((size_t)w * h * 4, 0);
+    for (int y = 0; y < h; y++)
+      for (int x = 0; x < w; x++) {
+        // distance outside the rounded rectangle (<= 0 inside), for antialiased edges
+        double cx = std::min(std::max(x + 0.5, r), w - r), cy = std::min(std::max(y + 0.5, r), h - r);
+        double d = std::hypot(x + 0.5 - cx, y + 0.5 - cy) - r;
+        double cover = std::min(1.0, std::max(0.0, 0.5 - d));
+        if (cover <= 0) continue;
+        double edge = std::min(1.0, std::max(0.0, 1.0 - std::fabs(d + 0.5)));
+        double a = fill_a * (1 - edge) + edge_a * edge;
+        if (edge_a == 0) a = fill_a;
+        uchar *p = &buf[((size_t)y * w + x) * 4];
+        p[0] = fr; p[1] = fg; p[2] = fb;
+        p[3] = (uchar)std::lround(255 * a * cover);
+      }
+    img.reset(new Fl_RGB_Image(buf.data(), w, h, 4));
+    return img.get();
   }
 
   int item_at(int ex, int ey) const {
@@ -438,7 +475,7 @@ public:
 
   int handle(int e) override {
     switch (e) {
-      case FL_FOCUS: case FL_UNFOCUS: return 1;
+      case FL_FOCUS: case FL_UNFOCUS: if (!selected.empty()) redraw(); return 1;
       case FL_PUSH: {
         take_focus();
         int i = item_at(Fl::event_x(), Fl::event_y());
@@ -590,7 +627,8 @@ static std::string appearance_signature() {
   fld::Ini d;
   d.load(fld::desktop_config_path());
   std::string sig;
-  for (const char *k : {"Theme", "Accent", "Font", "FontSize", "Scheme"}) sig += "|" + d.get("Appearance", k);
+  for (const char *k : {"Theme", "Accent", "Font", "FontSize", "Scheme", "IconsFollowAccent", "PanelTheme"})
+    sig += "|" + d.get("Appearance", k);
   return sig + "|" + d.get("General", "IconTheme");
 }
 static std::string g_appearance;

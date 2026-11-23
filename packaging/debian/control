@@ -78,7 +78,7 @@ Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-
             fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
             fldesktop-passwords, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
-            plymouth, fldesktop-plymouth-theme
+            plymouth, plymouth-themes, fldesktop-plymouth-theme
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
  toolkit: its own wlroots compositor, a taskbar panel, an application
@@ -118,12 +118,14 @@ Recommends: hicolor-icon-theme
 Description: fldesktop icon and cursor themes
  The fldesktop icon theme in full color (with folder colors for eight accent
  colors) and in monochrome versions for light and dark backgrounds, with
- symbolic icons, and the fldesktop cursor themes (dark and light).
+ symbolic icons, the fldesktop cursor themes (dark and light) and the stock
+ user pictures that Settings offers.
 
 Package: fldesktop-plymouth-theme
 Architecture: all
 Multi-Arch: foreign
 Depends: plymouth, ${misc:Depends}
+Recommends: plymouth-themes
 Description: fldesktop boot splash theme for Plymouth
  The fldesktop logo with a spinner on the blue of the fldesktop login screen,
  and a password field for encrypted disks. Installing it does not change the
@@ -132,6 +134,8 @@ Description: fldesktop boot splash theme for Plymouth
    sudo plymouth-set-default-theme -R fldesktop
  .
  (plymouth must be in the initramfs and "splash" on the kernel command line).
+ The text of the password prompt needs the label plugin from plymouth-label,
+ which plymouth-themes pulls in.
 
 Package: fldesktop-shell
 Architecture: any

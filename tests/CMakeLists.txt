@@ -516,6 +516,21 @@ if(TARGET fl-files-rename)
 endif()
 
 # the generated icon / cursor themes (tools/artwork/build.sh)
+# the AT-SPI bridge (libfld) with the real registry
+pkg_check_modules(ATSPI_PROBE_GIO QUIET IMPORTED_TARGET gio-2.0)
+if(ATSPI_PROBE_GIO_FOUND AND FLD_BUILD_WM)
+  add_executable(atspi-app tools/atspi-app.cpp)
+  target_link_libraries(atspi-app PRIVATE fld)
+  add_executable(atspi-probe tools/atspi-probe.c)
+  target_link_libraries(atspi-probe PRIVATE PkgConfig::ATSPI_PROBE_GIO)
+  add_test(NAME atspi-smoke COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/atspi-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+           $<TARGET_FILE:atspi-app> $<TARGET_FILE:atspi-probe>)
+  set_tests_properties(atspi-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+endif()
+add_executable(test_atspi test_atspi.cpp)
+target_link_libraries(test_atspi PRIVATE fld)
+add_test(NAME atspi COMMAND test_atspi)
+
 find_program(FLD_PYTHON3 python3)
 if(FLD_PYTHON3)
   # fl-settings' search index is up to date with the pages (tools/settings-index.py)

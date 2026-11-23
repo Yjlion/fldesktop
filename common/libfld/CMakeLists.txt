@@ -21,11 +21,20 @@ add_library(fld STATIC
   tab_bar.cpp
   drag.cpp
   tab_move.cpp
+  atspi_model.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Threads REQUIRED)
 pkg_check_modules(FLD_CAIRO REQUIRED IMPORTED_TARGET cairo)
 target_link_libraries(fld PUBLIC fltk::images fltk::fltk Threads::Threads PkgConfig::FLD_CAIRO PkgConfig::WAYLAND_CLIENT)
+
+# screen readers: an AT-SPI2 bridge over GDBus (GLib comes with Pango anyway)
+pkg_check_modules(FLD_ATSPI_GIO IMPORTED_TARGET gio-2.0)
+if(FLD_ATSPI_GIO_FOUND)
+  target_sources(fld PRIVATE atspi.cpp)
+  target_compile_definitions(fld PRIVATE FLD_HAVE_ATSPI=1)
+  target_link_libraries(fld PUBLIC PkgConfig::FLD_ATSPI_GIO)
+endif()
 
 # GLib main loop bridge (only for programs using GObject libraries)
 pkg_check_modules(FLD_GLIB IMPORTED_TARGET glib-2.0 gio-2.0)

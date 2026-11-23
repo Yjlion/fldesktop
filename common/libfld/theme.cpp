@@ -5,6 +5,9 @@
 #include "fld/menus.h"
 #include "fld/styles.h"
 #include "fld/util.h"
+#ifdef FLD_HAVE_ATSPI
+#include "fld/atspi.h"
+#endif
 
 #include <FL/Fl.H>
 #include <FL/Fl_RGB_Image.H>
@@ -129,6 +132,10 @@ void init_app(const char *app_id, int argc, char **argv) {
   fl_message_font(FL_HELVETICA, g_ui_size);
 
   if (app_id) Fl_Window::default_xclass(app_id);
+#ifdef FLD_HAVE_ATSPI
+  // screen readers: the widgets over AT-SPI when assistive technologies are on
+  atspi_start(app_id ? std::string(app_id) : argc > 0 ? fld::basename(argv[0]) : std::string("fldesktop"));
+#endif
   Fl::visual(FL_RGB);
   install_edit_menu(); // Cut/Copy/Paste on a right click in every text field
   install_tab_drop_hook(); // tabs dropped from other windows reach the tab strip

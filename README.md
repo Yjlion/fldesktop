@@ -98,6 +98,14 @@ Screenshots are made in a headless session by `tools/screenshots.sh`.
 All programs share `libfld` (XDG directories, desktop entries, icon themes,
 mime types, trash, theme) and read their settings from `~/.config/fldesktop/`.
 
+Screen readers: `libfld` has an AT-SPI2 bridge, so Orca and other assistive
+technologies can read and work the fldesktop programs: windows, buttons,
+check boxes, text fields, lists, sliders, tabs and menus, with their names,
+states, text and values, focus events, and actions (click, set text, set a
+value). It starts when the accessibility bus says assistive technologies are
+on (Settings > Accessibility > Screen Reader turns this on) or with
+`FLD_ATSPI=1`; `ctest -R atspi` tests it against the real AT-SPI registry.
+
 ## Building
 
 Dependencies: CMake ≥ 3.19, a C11/C++17 compiler, FLTK ≥ 1.4 (built with

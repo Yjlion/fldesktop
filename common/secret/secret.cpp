@@ -155,6 +155,63 @@ bool connect(std::string &err) {
   return true;
 }
 
+static Item read_item(const std::string &ip) {
+  Item it;
+  it.path = ip;
+  it.label = prop_string(ip, kItem, "Label");
+  it.locked = prop_bool(ip, kItem, "Locked");
+  it.created = prop_u64(ip, kItem, "Created");
+  it.modified = prop_u64(ip, kItem, "Modified");
+  if (GVariant *a = get_prop(ip, kItem, "Attributes")) {
+    if (g_variant_is_of_type(a, G_VARIANT_TYPE("a{ss}"))) {
+      GVariantIter iter;
+      g_variant_iter_init(&iter, a);
+      const char *k, *v;
+      while (g_variant_iter_next(&iter, "{&s&s}", &k, &v)) it.attributes.push_back({k, v});
+    }
+    g_variant_unref(a);
+  }
+  return it;
+}
+
+std::vector<Item> search(const std::vector<std::pair<std::string, std::string>> &attributes) {
+  std::vector<Item> out;
+  GVariantBuilder b;
+  g_variant_builder_init(&b, G_VARIANT_TYPE("a{ss}"));
+  for (auto &a : attributes) g_variant_builder_add(&b, "{ss}", a.first.c_str(), a.second.c_str());
+  std::string err;
+  GVariant *r = call(kPath, kService, "SearchItems", g_variant_new("(a{ss})", &b), "(aoao)", err);
+  if (!r) return out;
+  GVariantIter *unlocked, *locked;
+  g_variant_get(r, "(aoao)", &unlocked, &locked);
+  const char *p;
+  while (g_variant_iter_next(unlocked, "&o", &p)) out.push_back(read_item(p));
+  while (g_variant_iter_next(locked, "&o", &p)) out.push_back(read_item(p));
+  g_variant_iter_free(unlocked);
+  g_variant_iter_free(locked);
+  g_variant_unref(r);
+  return out;
+}
+
+std::string default_collection() {
+  std::string err;
+  std::string path;
+  if (GVariant *r = call(kPath, kService, "ReadAlias", g_variant_new("(s)", "default"), "(o)", err)) {
+    const char *p;
+    g_variant_get(r, "(&o)", &p);
+    if (strcmp(p, "/") != 0) path = p;
+    g_variant_unref(r);
+  }
+  // no default: the login collection, or the first there is
+  if (path.empty()) {
+    auto all = prop_paths(kPath, kService, "Collections");
+    for (auto &c : all)
+      if (c.find("/login") != std::string::npos) path = c;
+    if (path.empty() && !all.empty()) path = all[0];
+  }
+  return path;
+}
+
 std::vector<Collection> collections() {
   std::vector<Collection> out;
   for (const std::string &cp : prop_paths(kPath, kService, "Collections")) {
@@ -162,24 +219,7 @@ std::vector<Collection> collections() {
     c.path = cp;
     c.label = prop_string(cp, kCollection, "Label");
     c.locked = prop_bool(cp, kCollection, "Locked");
-    for (const std::string &ip : prop_paths(cp, kCollection, "Items")) {
-      Item it;
-      it.path = ip;
-      it.label = prop_string(ip, kItem, "Label");
-      it.locked = prop_bool(ip, kItem, "Locked");
-      it.created = prop_u64(ip, kItem, "Created");
-      it.modified = prop_u64(ip, kItem, "Modified");
-      if (GVariant *a = get_prop(ip, kItem, "Attributes")) {
-        if (g_variant_is_of_type(a, G_VARIANT_TYPE("a{ss}"))) {
-          GVariantIter iter;
-          g_variant_iter_init(&iter, a);
-          const char *k, *v;
-          while (g_variant_iter_next(&iter, "{&s&s}", &k, &v)) it.attributes.push_back({k, v});
-        }
-        g_variant_unref(a);
-      }
-      c.items.push_back(it);
-    }
+    for (const std::string &ip : prop_paths(cp, kCollection, "Items")) c.items.push_back(read_item(ip));
     out.push_back(c);
   }
   // which one is the default (the login keyring)

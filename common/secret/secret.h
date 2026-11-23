@@ -1,4 +1,4 @@
-// fl-keyring: the Secret Service (org.freedesktop.secrets: GNOME Keyring,
+// The Secret Service (org.freedesktop.secrets: GNOME Keyring,
 // KeePassXC, KWallet) over GDBus, called from the FLTK thread. Unlocking and
 // deleting may need the service's own password prompt; while it is open the
 // calls wait and keep the FLTK windows drawn.
@@ -36,6 +36,10 @@ bool delete_item(const std::string &item, std::string &err);
 bool create_item(const std::string &collection, const std::string &label,
                  const std::vector<std::pair<std::string, std::string>> &attributes, const std::string &value,
                  std::string &err);
+// the items whose attributes include all of these (locked ones too)
+std::vector<Item> search(const std::vector<std::pair<std::string, std::string>> &attributes);
+// the collection new passwords go to ("" when there is none)
+std::string default_collection();
 bool create_collection(const std::string &label, std::string &err);
 bool delete_collection(const std::string &path, std::string &err);
 

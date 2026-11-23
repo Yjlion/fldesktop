@@ -54,4 +54,18 @@ std::vector<Bookmark> suggestions(const std::string &text, const std::vector<Boo
 // Strips tabs and newlines (for the files above).
 std::string one_line(const std::string &s);
 
+// ---- saved logins -------------------------------------------------------------
+// They live in the Secret Service with these attributes.
+extern const char *const kLoginSchema; // xdg:schema
+// "https://example.org:8443" for a page address; "" for other schemes
+std::string login_origin(const std::string &url);
+// a page script: posts {origin, user, pass} to the flwebLogin message handler
+// when a form with a filled password field is sent
+const char *login_capture_script();
+// reads such a message (JSON); false when it is not one
+bool parse_login_message(const std::string &json, std::string &origin, std::string &user, std::string &pass);
+// a page script that fills the first password form (and the user name before
+// it) unless the password field already holds something; returns 1 when it did
+std::string login_fill_script(const std::string &user, const std::string &pass);
+
 } // namespace web

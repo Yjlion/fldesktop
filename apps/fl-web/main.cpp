@@ -49,6 +49,12 @@
 #include "glib_loop.h"
 #include "gl_readback.h"
 #include "webview.h"
+#ifdef FLD_HAVE_READER
+#include "reader.h"
+#endif
+#ifdef FLD_HAVE_SECRET
+#include "secret.h"
+#endif
 
 using namespace web;
 
@@ -67,6 +73,9 @@ struct Config {
   bool easylist = true, easyprivacy = true;
   std::vector<std::string> adblock_extra; // more filter list addresses
   std::vector<std::string> adblock_allow; // sites where nothing is blocked
+  bool save_passwords = true;              // offer to keep logins in the keyring
+  std::vector<std::string> logins_never;   // sites (origins) not to offer it for
+  int reader_font = 19;                    // reader mode's text size in px
   static std::vector<std::string> list(const std::string &v) {
     std::vector<std::string> out;
     for (auto &x : fld::split(v, ','))
@@ -107,6 +116,9 @@ struct Config {
     }
     adblock_extra = list(c.get("Web", "AdblockExtra", ""));
     adblock_allow = list(c.get("Web", "AdblockAllow", ""));
+    save_passwords = c.get_bool("Web", "SavePasswords", save_passwords);
+    logins_never = list(c.get("Web", "LoginsNever", ""));
+    reader_font = std::max(10, std::min(40, c.get_int("Web", "ReaderFontSize", reader_font)));
   }
   void save() const {
     fld::Ini c;
@@ -125,6 +137,9 @@ struct Config {
     c.set("Web", "AdblockLists", join(lists));
     c.set("Web", "AdblockExtra", join(adblock_extra));
     c.set("Web", "AdblockAllow", join(adblock_allow));
+    c.set_bool("Web", "SavePasswords", save_passwords);
+    c.set("Web", "LoginsNever", join(logins_never));
+    c.set_int("Web", "ReaderFontSize", reader_font);
     c.save(path());
   }
   static std::string path() { return fld::fld_config_dir() + "/web.ini"; }
@@ -162,6 +177,7 @@ static void show_downloads();
 static void show_history(Browser *b);
 static void show_bookmarks(Browser *b);
 static void show_settings();
+static void show_passwords();
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -178,6 +194,9 @@ struct Tab {
   std::string hit_link, hit_image;
   bool hit_editable = false, hit_selection = false;
   double menu_shown = 0; // when WebKit last asked for a context menu
+  bool reader = false;   // the page shows in reader mode
+  std::string reader_of; // the address it came from
+  bool filled = false;   // a saved login was filled into this page
 };
 
 // The address bar: completes from bookmarks and history as you type
@@ -569,6 +588,8 @@ public:
   void save_page();
   void view_source();
   void open_devtools();
+  void toggle_reader();
+  void fill_login(bool choose);
 
   void select(int i) {
     if (i < 0 || i >= (int)tabs.size()) return;
@@ -807,6 +828,7 @@ public:
       case FL_F + 6: url->take_focus(); return true;
       case FL_F + 3: find_next(!shift); return true;
       case FL_F + 11: set_fullscreen(!fullscreen); return true;
+      case FL_F + 9: toggle_reader(); return true;
       case FL_F + 12: open_devtools(); return true;
       case FL_Escape:
         if (findbar->visible()) { find_close(); return true; }
@@ -919,8 +941,19 @@ void Browser::connect(Tab *t) {
 
   g_signal_connect(v, "load-changed", CB([](WebKitWebView *v, WebKitLoadEvent ev, gpointer d) {
     Tab *t = (Tab *)d;
+    if (ev == WEBKIT_LOAD_COMMITTED) {
+      // leaving the article (a link, back, another address) ends reader mode
+      if (t->reader && str(webkit_web_view_get_uri(v)) != t->reader_of) t->reader = false;
+      t->filled = false;
+    }
     if (t->win->tab() == t) t->win->update_chrome();
-    if (ev == WEBKIT_LOAD_FINISHED && !t->win->priv) { // private windows keep no history
+    if (ev == WEBKIT_LOAD_FINISHED && !t->reader) {
+      Browser *b = t->win;
+      later([b, t] {
+        if (tab_alive(t)) b->fill_login(false);
+      });
+    }
+    if (ev == WEBKIT_LOAD_FINISHED && !t->win->priv && !t->reader) { // private windows keep no history
       std::string uri = str(webkit_web_view_get_uri(v));
       if (fld::starts_with(uri, "http://") || fld::starts_with(uri, "https://") || fld::starts_with(uri, "file://")) {
         HistoryEntry e{time(nullptr), uri, str(webkit_web_view_get_title(v))};
@@ -1338,7 +1371,8 @@ enum Cmd {
   C_NEW_TAB = 1, C_NEW_WINDOW, C_OPEN_FILE, C_FIND, C_ZOOM_IN, C_ZOOM_OUT, C_ZOOM_RESET, C_BOOKMARK, C_BOOKMARKS,
   C_HISTORY, C_DOWNLOADS, C_SETTINGS, C_ABOUT, C_CLOSE_WINDOW, C_QUIT, C_PRIVATE, C_FULLSCREEN, C_DEVTOOLS,
   C_MENUBAR, C_SAVE_PAGE, C_SOURCE, C_REOPEN, C_CLOSE_TAB, C_RELOAD, C_BACK, C_FORWARD, C_HOME, C_UNDO, C_REDO,
-  C_CUT, C_COPY, C_PASTE, C_SELECT_ALL, C_ADBLOCK_SITE, C_BOOKMARK_BASE = 1000,
+  C_CUT, C_COPY, C_PASTE, C_SELECT_ALL, C_ADBLOCK_SITE, C_READER, C_PASSWORDS, C_FILL_LOGIN,
+  C_BOOKMARK_BASE = 1000,
 };
 
 // a site in the allowed list (example.com covers www.example.com too)
@@ -1422,6 +1456,9 @@ void Browser::command(long id) {
       break;
     case C_SELECT_ALL: edit(WEBKIT_EDITING_COMMAND_SELECT_ALL); break;
     case C_ADBLOCK_SITE: toggle_site_blocking(tab()); break;
+    case C_READER: toggle_reader(); break;
+    case C_PASSWORDS: show_passwords(); break;
+    case C_FILL_LOGIN: fill_login(true); break;
     default:
       if (id >= C_BOOKMARK_BASE && id - C_BOOKMARK_BASE < (long)g_bookmarks.size())
         load(g_bookmarks[(size_t)(id - C_BOOKMARK_BASE)].url);
@@ -1438,6 +1475,22 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
     bool web = uri.compare(0, 7, "http://") == 0 || uri.compare(0, 8, "https://") == 0;
     mm.toggle("Block Ads on This Site", g_cfg.block_ads && web && !site_allowed(uri), cmd(C_ADBLOCK_SITE),
               g_cfg.block_ads && web ? 0 : FL_MENU_INACTIVE);
+  };
+  auto reader_item = [&](fld::Menu &mm) {
+#ifdef FLD_HAVE_READER
+    bool web = tab() && (tab()->reader || !login_origin(tab()->uri).empty() || fld::starts_with(tab()->uri, "file://"));
+    mm.toggle("Reader Mode", tab() && tab()->reader, cmd(C_READER), web ? 0 : FL_MENU_INACTIVE);
+#else
+    (void)mm;
+#endif
+  };
+  auto password_items = [&](fld::Menu &mm) {
+#ifdef FLD_HAVE_SECRET
+    mm.item("Fill Saved Login", cmd(C_FILL_LOGIN), tab() && !login_origin(tab()->uri).empty() ? 0 : FL_MENU_INACTIVE);
+    mm.item("Saved Passwords…", cmd(C_PASSWORDS));
+#else
+    (void)mm;
+#endif
   };
   auto bookmarks = [&]() {
     bool marked = tab() && is_bookmarked(tab()->uri);
@@ -1463,13 +1516,16 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
     m.item("Actual Size", cmd(C_ZOOM_RESET), 0, FL_CTRL + '0');
     m.toggle("Full Screen", fullscreen, cmd(C_FULLSCREEN));
     m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR));
+    reader_item(m);
     adblock_item(m);
     m.divider();
     m.submenu("Bookmarks");
     bookmarks();
     m.end_submenu();
     m.item("History…", cmd(C_HISTORY), 0, FL_CTRL + 'h');
-    m.item("Downloads…", cmd(C_DOWNLOADS), 0, FL_CTRL + 'j').divider();
+    m.item("Downloads…", cmd(C_DOWNLOADS), 0, FL_CTRL + 'j');
+    password_items(m);
+    m.divider();
     m.item("Developer Tools", cmd(C_DEVTOOLS), g_inspector_port ? 0 : FL_MENU_INACTIVE, FL_F + 12);
     m.item("View Page Source", cmd(C_SOURCE), tab() && !tab()->uri.empty() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'u');
     m.item("Settings…", cmd(C_SETTINGS));
@@ -1497,6 +1553,8 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
   m.item("Paste", cmd(C_PASTE), 0, FL_CTRL + 'v');
   m.item("Select All", cmd(C_SELECT_ALL), 0, FL_CTRL + 'a').divider();
   m.item("Find in Page…", cmd(C_FIND), 0, FL_CTRL + 'f').divider();
+  password_items(m);
+  m.divider();
   m.item("Settings…", cmd(C_SETTINGS));
   m.end_submenu();
   m.submenu("&View");
@@ -1506,6 +1564,7 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
   m.item("Actual Size", cmd(C_ZOOM_RESET), 0, FL_CTRL + '0').divider();
   m.toggle("Full Screen", fullscreen, cmd(C_FULLSCREEN));
   m.toggle("Show Menu Bar", g_cfg.menubar, cmd(C_MENUBAR));
+  reader_item(m);
   adblock_item(m);
   m.divider();
   m.item("View Page Source", cmd(C_SOURCE), 0, FL_CTRL + 'u');
@@ -1639,6 +1698,281 @@ void Browser::view_source() {
     });
   }, new std::string(name));
   glib_loop_poke();
+}
+
+// ---- reader mode ------------------------------------------------------------
+
+// F9: the page's article alone, in a plain layout; F9 again goes back to the page
+void Browser::toggle_reader() {
+#ifdef FLD_HAVE_READER
+  Tab *t = tab();
+  if (!t) return;
+  if (t->reader) {
+    t->reader = false;
+    webkit_web_view_load_uri(t->wv->view(), t->reader_of.c_str());
+    glib_loop_poke();
+    return;
+  }
+  if (t->uri.empty() || t->loading) return;
+  struct Job {
+    Browser *b;
+    Tab *t;
+    std::string uri;
+  };
+  webkit_web_view_evaluate_javascript(
+      t->wv->view(), "document.documentElement.outerHTML", -1, nullptr, nullptr, nullptr,
+      [](GObject *o, GAsyncResult *r, gpointer d) {
+        std::unique_ptr<Job> job((Job *)d);
+        GError *e = nullptr;
+        JSCValue *v = webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(o), r, &e);
+        std::string html;
+        if (v) {
+          char *s = jsc_value_to_string(v);
+          html = s ? s : "";
+          g_free(s);
+          g_object_unref(v);
+        }
+        if (e) g_error_free(e);
+        Job j = *job;
+        later([j, html] {
+          if (!tab_alive(j.t) || j.t->uri != j.uri) return;
+          reader::Article a = reader::extract(html, j.uri);
+          if (!a.ok()) {
+            j.b->set_status("Reader mode: no article found on this page", 3);
+            return;
+          }
+          if (a.title.empty()) a.title = fallback_title(j.uri);
+          j.t->reader = true;
+          j.t->reader_of = j.uri;
+          std::string page = reader::page(a, fld::palette().dark, g_cfg.reader_font);
+          webkit_web_view_load_html(j.t->wv->view(), page.c_str(), j.uri.c_str());
+          glib_loop_poke();
+        });
+      },
+      new Job{this, t, t->uri});
+  glib_loop_poke();
+#endif
+}
+
+// ---- saved logins -----------------------------------------------------------
+
+#ifdef FLD_HAVE_SECRET
+static bool g_secret_ok = false, g_secret_tried = false;
+static bool secret_ready() {
+  if (!g_secret_tried) {
+    g_secret_tried = true;
+    std::string err;
+    g_secret_ok = secret::connect(err);
+  }
+  return g_secret_ok;
+}
+
+static std::string item_attr(const secret::Item &it, const char *key) {
+  for (auto &a : it.attributes)
+    if (a.first == key) return a.second;
+  return "";
+}
+
+static std::vector<secret::Item> saved_logins(const std::string &origin) {
+  if (!secret_ready()) return {};
+  std::vector<std::pair<std::string, std::string>> q{{"xdg:schema", kLoginSchema}};
+  if (!origin.empty()) q.push_back({"origin", origin});
+  auto items = secret::search(q);
+  std::sort(items.begin(), items.end(), [](const secret::Item &a, const secret::Item &b) { return a.modified > b.modified; });
+  return items;
+}
+
+// a login a page sent: offer to keep it (or the new password of a saved one)
+static void login_submitted(const std::string &json) {
+  std::string origin, user, pass;
+  if (!web::parse_login_message(json, origin, user, pass) || !g_cfg.save_passwords) return;
+  if (std::find(g_cfg.logins_never.begin(), g_cfg.logins_never.end(), origin) != g_cfg.logins_never.end()) return;
+  // the window showing that site (private windows keep nothing)
+  Browser *b = nullptr;
+  for (Browser *w : g_windows)
+    if (w->tab() && login_origin(w->tab()->uri) == origin) b = w;
+  if (!b || b->priv || !secret_ready()) return;
+  std::string have;
+  std::string existing;
+  for (auto &it : saved_logins(origin))
+    if (item_attr(it, "username") == user) existing = it.path;
+  if (!existing.empty()) {
+    std::string err;
+    if (!secret::get_secret(existing, have, err) && !secret::unlock(existing, err)) return;
+    if (have.empty()) secret::get_secret(existing, have, err);
+    if (have == pass) return; // nothing new
+  }
+  later([b, origin, user, pass, existing] {
+    std::string who = user.empty() ? origin : user + " on " + origin;
+    int c = fl_choice(existing.empty() ? "Save the password for %s in the keyring?" : "Update the saved password for %s?",
+                      "Not Now", existing.empty() ? "Save" : "Update", existing.empty() ? "Never for This Site" : nullptr,
+                      fld::escape_at(who).c_str());
+    std::string err;
+    if (c == 1) {
+      bool ok;
+      if (!existing.empty()) ok = secret::set_secret(existing, pass, err);
+      else {
+        std::string coll = secret::default_collection();
+        if (!coll.empty() && !secret::unlock(coll, err)) coll.clear();
+        ok = !coll.empty() &&
+             secret::create_item(coll, "Web login for " + who,
+                                 {{"xdg:schema", kLoginSchema}, {"origin", origin}, {"username", user}}, pass, err);
+      }
+      if (!ok) fl_alert("The password could not be saved: %s", fld::escape_at(err.empty() ? "no keyring" : err).c_str());
+      else b->set_status("Password saved", 2);
+    } else if (c == 2) {
+      g_cfg.logins_never.push_back(origin);
+      g_cfg.save();
+    }
+  });
+}
+#endif
+
+// After a page has loaded (choose=false): fills its login form with the
+// newest saved login when the keyring is open. From the menu (choose=true):
+// asks to open the keyring and which login to use when there are several.
+void Browser::fill_login(bool choose) {
+#ifdef FLD_HAVE_SECRET
+  Tab *t = tab();
+  if (!t || t->reader || (t->filled && !choose)) return;
+  std::string origin = login_origin(t->uri);
+  if (origin.empty() || !secret_ready()) return;
+  auto items = saved_logins(origin);
+  if (items.empty()) {
+    if (choose) set_status("No saved login for " + origin, 3);
+    return;
+  }
+  size_t pick = 0;
+  if (choose && items.size() > 1) {
+    std::vector<std::string> labels;
+    for (auto &it : items) labels.push_back(fld::Menu::text(item_attr(it, "username").empty() ? "(no user name)" : item_attr(it, "username")));
+    std::vector<Fl_Menu_Item> menu;
+    for (size_t i = 0; i < labels.size(); i++) menu.push_back({labels[i].c_str(), 0, nullptr, (void *)i});
+    menu.push_back({nullptr});
+    const Fl_Menu_Item *r = menu[0].popup(content->x() + 40, content->y() + 20);
+    if (!r) return;
+    pick = (size_t)(long)r->user_data();
+  }
+  const secret::Item &it = items[pick];
+  std::string err, pass;
+  if (it.locked) {
+    if (!choose || !secret::unlock(it.path, err)) return;
+  }
+  if (!secret::get_secret(it.path, pass, err) || pass.empty()) return;
+  std::string js = login_fill_script(item_attr(it, "username"), pass);
+  t->filled = true;
+  webkit_web_view_evaluate_javascript(t->wv->view(), js.c_str(), -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+  glib_loop_poke();
+#else
+  (void)choose;
+#endif
+}
+
+// Saved Passwords: the logins in the keyring, to look at, copy and remove
+static void show_passwords() {
+#ifdef FLD_HAVE_SECRET
+  if (!secret_ready()) {
+    fl_alert("No password store (Secret Service) is running. Install GNOME Keyring or KeePassXC.");
+    return;
+  }
+  struct Dlg {
+    Fl_Double_Window *w;
+    Fl_Hold_Browser *list;
+    Fl_Input *filter;
+    Fl_Box *shown;
+    std::vector<secret::Item> items, view;
+  } d;
+  d.w = new Fl_Double_Window(560, 420, "Saved Passwords");
+  d.filter = new Fl_Input(12, 12, 536, 28);
+  d.filter->tooltip("Search sites and user names");
+  d.filter->when(FL_WHEN_CHANGED);
+  d.list = new Fl_Hold_Browser(12, 48, 536, 260);
+  static int cols[] = {300, 0};
+  d.list->column_widths(cols);
+  d.list->column_char('\t');
+  d.list->format_char(0);
+  d.shown = new Fl_Box(12, 314, 536, 26);
+  d.shown->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+  auto *show = new Fl_Button(12, 348, 90, 30, "Show");
+  auto *copy = new Fl_Button(108, 348, 90, 30, "Copy");
+  auto *open = new Fl_Button(204, 348, 90, 30, "Open Site");
+  auto *del = new Fl_Button(300, 348, 90, 30, "Remove");
+  auto *close = new Fl_Return_Button(448, 380, 100, 30, "Close");
+  close->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
+  auto refill = [](Fl_Widget *, void *v) {
+    Dlg &d = *(Dlg *)v;
+    std::string f = fld::lower(d.filter->value());
+    d.list->clear();
+    d.view.clear();
+    for (auto &it : d.items) {
+      std::string site = item_attr(it, "origin"), user = item_attr(it, "username");
+      if (!f.empty() && fld::lower(site + " " + user).find(f) == std::string::npos) continue;
+      d.view.push_back(it);
+      d.list->add((site + "\t" + (user.empty() ? "(no user name)" : user) + (it.locked ? "  (locked)" : "")).c_str());
+    }
+    d.shown->label(d.items.empty() ? "No saved passwords" : "");
+  };
+  d.items = saved_logins("");
+  d.filter->callback(refill, &d);
+  refill(nullptr, &d);
+  auto selected = [](Dlg &d) -> const secret::Item * {
+    int i = d.list->value() - 1;
+    return i >= 0 && i < (int)d.view.size() ? &d.view[(size_t)i] : nullptr;
+  };
+  struct Ctx {
+    Dlg *d;
+    const secret::Item *(*sel)(Dlg &);
+  };
+  static Ctx ctx;
+  ctx = {&d, +selected};
+  auto get = [](Dlg &d, const secret::Item &it, std::string &pass) {
+    std::string err;
+    if (it.locked && !secret::unlock(it.path, err)) return false;
+    if (!secret::get_secret(it.path, pass, err)) {
+      fl_alert("%s", fld::escape_at(err).c_str());
+      return false;
+    }
+    (void)d;
+    return true;
+  };
+  static bool (*getp)(Dlg &, const secret::Item &, std::string &) = +get;
+  show->callback([](Fl_Widget *, void *) {
+    const secret::Item *it = ctx.sel(*ctx.d);
+    std::string pass;
+    if (it && getp(*ctx.d, *it, pass)) ctx.d->shown->copy_label(fld::escape_at("Password: " + pass).c_str());
+  });
+  copy->callback([](Fl_Widget *, void *) {
+    const secret::Item *it = ctx.sel(*ctx.d);
+    std::string pass;
+    if (it && getp(*ctx.d, *it, pass)) {
+      Fl::copy(pass.c_str(), (int)pass.size(), 1);
+      ctx.d->shown->label("Copied to the clipboard");
+    }
+  });
+  open->callback([](Fl_Widget *, void *) {
+    const secret::Item *it = ctx.sel(*ctx.d);
+    if (it && !g_windows.empty()) g_windows.front()->new_tab(item_attr(*it, "origin"), true);
+  });
+  del->callback([](Fl_Widget *, void *v) {
+    Dlg &d = *(Dlg *)v;
+    const secret::Item *it = ctx.sel(d);
+    if (!it) return;
+    std::string what = item_attr(*it, "username") + " on " + item_attr(*it, "origin");
+    if (fl_choice("Remove the saved password for %s?", "Cancel", "Remove", nullptr, fld::escape_at(what).c_str()) != 1)
+      return;
+    std::string err;
+    if (!secret::delete_item(it->path, err)) fl_alert("%s", fld::escape_at(err).c_str());
+    d.items = saved_logins("");
+    d.filter->do_callback();
+  }, &d);
+  d.list->callback([](Fl_Widget *, void *v) { ((Dlg *)v)->shown->label(""); }, &d);
+  d.w->end();
+  d.w->resizable(d.list);
+  d.w->set_modal();
+  d.w->show();
+  while (d.w->shown()) Fl::wait();
+  Fl::delete_widget(d.w);
+#endif
 }
 
 // F12: WebKit's inspector frontend, served on loopback, in a window of its own
@@ -1890,7 +2224,7 @@ static void apply_settings() {
 }
 
 static void show_settings() {
-  Fl_Double_Window dlg(480, 530, "Web Settings");
+  Fl_Double_Window dlg(480, 600, "Web Settings");
   Fl_Input home(140, 14, 326, 28, "Home page:");
   home.value(g_cfg.home.c_str());
   Fl_Choice search(140, 50, 200, 28, "Search with:");
@@ -1960,8 +2294,18 @@ static void show_settings() {
     bool ok = fld::spawn({"xdg-settings", "set", "default-web-browser", "fl-web.desktop"});
     fl_message(ok ? "Web is now the default browser." : "Could not run xdg-settings.");
   });
-  Fl_Button cancel(268, 488, 96, 30, "Cancel");
-  Fl_Return_Button ok(370, 488, 96, 30, "Save");
+  Fl_Box pwlabel(14, py + 76, 120, 26, "Passwords:");
+  pwlabel.align(FL_ALIGN_RIGHT | FL_ALIGN_INSIDE);
+  Fl_Check_Button savepw(140, py + 76, 330, 26, "Offer to save passwords in the keyring");
+  savepw.value(g_cfg.save_passwords);
+  Fl_Button pwlist(140, py + 106, 230, 28, "Saved Passwords…");
+  pwlist.callback([](Fl_Widget *, void *) { show_passwords(); });
+#ifndef FLD_HAVE_SECRET
+  savepw.deactivate();
+  pwlist.deactivate();
+#endif
+  Fl_Button cancel(268, 558, 96, 30, "Cancel");
+  Fl_Return_Button ok(370, 558, 96, 30, "Save");
   int result = -1;
   cancel.callback([](Fl_Widget *, void *r) { *(int *)r = 0; }, &result);
   ok.callback([](Fl_Widget *, void *r) { *(int *)r = 1; }, &result);
@@ -1980,6 +2324,7 @@ static void show_settings() {
   g_cfg.menubar = menubar.value();
   g_cfg.devtools = devtools.value();
   g_cfg.block_ads = ads.value();
+  g_cfg.save_passwords = savepw.value();
   g_cfg.easylist = easylist.value();
   g_cfg.easyprivacy = easyprivacy.value();
   g_cfg.adblock_extra.clear();
@@ -2124,6 +2469,21 @@ int main(int argc, char **argv) {
   apply_settings();
   g_ucm = webkit_user_content_manager_new();
   web::adblock::init(g_ucm, data_dir(), cache + "/adblock");
+#ifdef FLD_HAVE_SECRET
+  // logins sent by pages: offered for the keyring
+  if (webkit_user_content_manager_register_script_message_handler(g_ucm, "flwebLogin", nullptr)) {
+    g_signal_connect(g_ucm, "script-message-received::flwebLogin", CB([](WebKitUserContentManager *, JSCValue *v, gpointer) {
+      char *s = jsc_value_to_string(v);
+      std::string json = s ? s : "";
+      g_free(s);
+      later([json] { login_submitted(json); });
+    }), nullptr);
+    WebKitUserScript *us = webkit_user_script_new(login_capture_script(), WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                                                  WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END, nullptr, nullptr);
+    webkit_user_content_manager_add_script(g_ucm, us);
+    webkit_user_script_unref(us);
+  }
+#endif
   Backend::on_copy = [](const std::string &text) { Fl::copy(text.c_str(), (int)text.size(), 1); };
 
   glib_loop_start();

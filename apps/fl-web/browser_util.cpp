@@ -7,6 +7,7 @@
 #include <cstring>
 #include <map>
 
+#include "fld/json.h"
 #include "fld/util.h"
 
 namespace web {
@@ -262,6 +263,86 @@ std::vector<Bookmark> suggestions(const std::string &text, const std::vector<Boo
     if (matches(r.first, titles[r.first]) && !have(r.first)) out.push_back({r.first, titles[r.first]});
   }
   return out;
+}
+
+// ---- saved logins -------------------------------------------------------------
+
+const char *const kLoginSchema = "org.fldesktop.Web.Login";
+
+std::string login_origin(const std::string &url) {
+  size_t se = url.find("://");
+  if (se == std::string::npos) return "";
+  std::string scheme = fld::lower(url.substr(0, se));
+  if (scheme != "https" && scheme != "http") return "";
+  size_t end = url.find_first_of("/?#", se + 3);
+  std::string host = fld::lower(url.substr(se + 3, end == std::string::npos ? std::string::npos : end - se - 3));
+  size_t at = host.rfind('@');
+  if (at != std::string::npos) host = host.substr(at + 1); // no user:password@
+  if (host.empty()) return "";
+  // the default port is left out
+  std::string def = scheme == "https" ? ":443" : ":80";
+  if (host.size() > def.size() && host.compare(host.size() - def.size(), def.size(), def) == 0)
+    host.resize(host.size() - def.size());
+  return scheme + "://" + host;
+}
+
+const char *login_capture_script() {
+  return R"JS((function () {
+  if (window.top !== window || !window.webkit || !window.webkit.messageHandlers.flwebLogin) return;
+  var last = '';
+  function grab(form) {
+    if (!form || !form.querySelector) return;
+    var pw = form.querySelector('input[type=password]');
+    if (!pw || !pw.value) return;
+    var user = '', ins = form.querySelectorAll('input');
+    for (var i = 0; i < ins.length && ins[i] !== pw; i++) {
+      var t = (ins[i].type || 'text').toLowerCase();
+      if ((t === 'text' || t === 'email' || t === 'tel') && ins[i].value) user = ins[i].value;
+    }
+    var m = JSON.stringify({origin: location.origin, user: user, pass: pw.value});
+    if (m === last) return;
+    last = m;
+    window.webkit.messageHandlers.flwebLogin.postMessage(m);
+  }
+  document.addEventListener('submit', function (e) { grab(e.target); }, true);
+  // pages that log in from a script: the button of a form with a password
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button, input[type=submit]') : null;
+    if (b && b.form) grab(b.form);
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target && e.target.form) grab(e.target.form);
+  }, true);
+})();)JS";
+}
+
+bool parse_login_message(const std::string &json, std::string &origin, std::string &user, std::string &pass) {
+  fld::Json j;
+  if (!fld::Json::parse(json, j) || !j.is_object() || !j["pass"].is_string() || !j["origin"].is_string()) return false;
+  origin = login_origin(j["origin"].as_string() + "/");
+  user = j["user"].as_string();
+  pass = j["pass"].as_string();
+  return !origin.empty() && !pass.empty();
+}
+
+std::string login_fill_script(const std::string &user, const std::string &pass) {
+  return "(function (u, p) {\n"
+         "  var pw = document.querySelector('input[type=password]');\n"
+         "  if (!pw || pw.value) return 0;\n"
+         "  var f = pw.form || document, ins = f.querySelectorAll('input'), un = null;\n"
+         "  for (var i = 0; i < ins.length && ins[i] !== pw; i++) {\n"
+         "    var t = (ins[i].type || 'text').toLowerCase();\n"
+         "    if (t === 'text' || t === 'email' || t === 'tel') un = ins[i];\n"
+         "  }\n"
+         "  function set(el, v) {\n"
+         "    el.value = v;\n"
+         "    el.dispatchEvent(new Event('input', {bubbles: true}));\n"
+         "    el.dispatchEvent(new Event('change', {bubbles: true}));\n"
+         "  }\n"
+         "  if (un && u) set(un, u);\n"
+         "  set(pw, p);\n"
+         "  return 1;\n"
+         "})(" + fld::Json(user).dump() + ", " + fld::Json(pass).dump() + ")";
 }
 
 } // namespace web

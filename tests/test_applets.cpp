@@ -2,6 +2,11 @@
 #include "applets_util.h"
 #include "test.h"
 
+#include <cstdio>
+#include <cstdlib>
+#include <sys/stat.h>
+#include <unistd.h>
+
 using namespace applets;
 
 int main() {
@@ -55,5 +60,34 @@ int main() {
   CHECK_NEAR(memory_usage("MemTotal:       16000000 kB\nMemFree:  1000 kB\nMemAvailable:    4000000 kB\n", &total), 0.75);
   CHECK_EQ(total, 16000000ull);
   CHECK_NEAR(memory_usage(""), 0.0);
+  // privacy: a fake /proc with a process holding /dev/video0
+  {
+    char tmpl[] = "/tmp/fl-proc-XXXXXX";
+    std::string root = mkdtemp(tmpl);
+    auto proc = [&](const char *pid, const char *comm, const char *fd_target) {
+      std::string d = root + "/" + pid;
+      mkdir(d.c_str(), 0755);
+      mkdir((d + "/fd").c_str(), 0755);
+      FILE *f = fopen((d + "/comm").c_str(), "w");
+      fprintf(f, "%s\n", comm);
+      fclose(f);
+      if (symlink(fd_target, (d + "/fd/3").c_str()) != 0) {}
+    };
+    proc("100", "fl-webcam", "/dev/video0");
+    proc("101", "bash", "/dev/pts/1");
+    proc("102", "zoom", "/dev/video2");
+    proc("103", "fl-webcam", "/dev/video0");
+    mkdir((root + "/self").c_str(), 0755);
+    auto u = camera_users(root);
+    CHECK_EQ(u.size(), (size_t)2);
+    CHECK_EQ(u[0], std::string("fl-webcam"));
+    CHECK_EQ(u[1], std::string("zoom"));
+    CHECK(camera_users(root + "/none").empty());
+    if (system(("rm -rf " + root).c_str()) != 0) {}
+  }
+  CHECK_EQ(name_list({}), std::string(""));
+  CHECK_EQ(name_list({"a"}), std::string("a"));
+  CHECK_EQ(name_list({"a", "b", "c"}), std::string("a, b and c"));
+  CHECK_EQ(name_list({"a", "b", "c", "d", "e"}), std::string("a, b, c and 2 more"));
   return test_result("applets");
 }

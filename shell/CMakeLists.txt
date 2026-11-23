@@ -6,7 +6,7 @@ add_library(fl-applets-util STATIC applets_util.cpp)
 target_include_directories(fl-applets-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-applets-util PUBLIC fld)
 add_executable(fl-panel panel.cpp panel_nightlight.cpp panel_clipboard.cpp panel_osd.cpp panel_actions.cpp
-               panel_weather.cpp panel_sysmon.cpp ${PANEL_PROTO})
+               panel_weather.cpp panel_sysmon.cpp panel_privacy.cpp ${PANEL_PROTO})
 target_include_directories(fl-panel PRIVATE ${FLD_PROTO_OUT})
 target_link_libraries(fl-panel PRIVATE fld fl-cliphist-store fl-applets-util PkgConfig::WAYLAND_CLIENT)
 # the workspace pager (ext-workspace-v1, wayland-protocols 1.40+)

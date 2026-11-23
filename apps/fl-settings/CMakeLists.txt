@@ -18,6 +18,7 @@ endfunction()
 
 fld_settings_page(appearance pages/appearance.cpp)
 fld_settings_page(lock       pages/lock.cpp)
+fld_settings_page(privacy    pages/privacy.cpp REQUIRES fl-applets-util)
 fld_settings_page(panel      pages/panel.cpp)
 fld_settings_page(notifications pages/notifications.cpp REQUIRES fld-glib)
 fld_settings_page(language   pages/language.cpp)
@@ -65,7 +66,8 @@ configure_file(${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp.in ${CMAKE_CURRENT
 set(DISPLAYS_PROTO)
 fld_wayland_protocol(DISPLAYS_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-management-unstable-v1.xml client)
 
-add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp users_model.cpp datetime_sys.cpp)
+add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp users_model.cpp datetime_sys.cpp
+            settings_search.cpp)
 target_include_directories(fl-settings-xkb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-settings-xkb PUBLIC fld)
 

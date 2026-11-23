@@ -45,6 +45,12 @@ needed) every half hour through curl or wget, and is kept in
 \fBSystem Monitor\fR draws small processor and memory graphs; a click opens
 \fBfl-taskmgr\fR(1).
 .PP
+While a program uses the camera or records from a microphone, an orange
+camera or microphone shows in the panel; its tooltip and right-click menu
+name the programs. The camera is found by the programs that have
+\fI/dev/video*\fR open, the microphone by PipeWire's recording streams.
+Settings > Privacy turns it off.
+.PP
 The notification button's menu turns Do Not Disturb on until it is turned off,
 for an hour, or until tomorrow morning (07:00).
 .PP
@@ -55,7 +61,7 @@ compositor configuration change.
 \fI~/.config/fldesktop/panel.ini\fR
 \fB[Panel]\fR QuickLaunch=id;id;..., KeyboardButton=auto|always|never,
 Pager=auto|never, OSD=true|false (the on-screen display),
-SystemMonitor=true|false;
+SystemMonitor=true|false, PrivacyIndicator=true|false;
 \fB[Weather]\fR Enabled=, City=, Latitude=, Longitude=,
 Units=celsius|fahrenheit;
 \fB[Clock]\fR Format= (strftime format).

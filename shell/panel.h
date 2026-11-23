@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "fld/menus.h"
 #include "fld/theme.h"
@@ -106,6 +107,10 @@ fld::FlatButton *weather_create();
 void weather_menu_items(fld::Menu &m);
 // panel_sysmon.cpp: processor and memory graphs ([Panel] SystemMonitor)
 fld::FlatButton *sysmon_create(bool on);
+// panel_privacy.cpp: the camera or microphone in use ([Panel] PrivacyIndicator);
+// null when turned off. privacy_audio: the programs recording sound now.
+fld::FlatButton *privacy_create(bool on);
+void privacy_audio(const std::vector<std::string> &recording);
 // panel_notify.cpp: do not disturb for a while ("Do Not Disturb" menus)
 void dnd_menu_items(fld::Menu &m);
 // panel_network.cpp: the network button's popup and right-click menu

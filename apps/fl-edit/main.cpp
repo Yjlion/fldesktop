@@ -907,6 +907,10 @@ static void load_settings() {
 static void rebuild_recent_menu();
 
 static void add_recent(const std::string &p) {
+  // Settings > Privacy can turn the list off
+  fld::Ini desk;
+  desk.load(fld::desktop_config_path());
+  if (!desk.get_bool("Privacy", "RememberRecent", true)) return;
   S.recent.erase(std::remove(S.recent.begin(), S.recent.end(), p), S.recent.end());
   S.recent.insert(S.recent.begin(), p);
   if (S.recent.size() > 10) S.recent.resize(10);

@@ -352,6 +352,7 @@ struct Panel {
   fld::FlatButton *nightlight = nullptr;
   fld::FlatButton *weather = nullptr;
   fld::FlatButton *sysmon = nullptr;
+  fld::FlatButton *privacy = nullptr;
   fld::FlatButton *clipboard = nullptr;
   fld::FlatButton *battery = nullptr;
   fld::FlatButton *bell = nullptr;
@@ -474,6 +475,16 @@ static void audio_changed() {
   }
   update_volume_widget();
   if (was_visible != (bool)P.volume->visible()) relayout();
+  // the programs recording from a microphone (not from a monitor of the output)
+  std::vector<std::string> rec;
+  for (const Audio::Stream *s : g_audio->streams(Audio::Recording)) {
+    if (s->corked) continue;
+    const Audio::Device *dev = g_audio->device(s->deviceId);
+    if (dev && dev->isMonitor) continue;
+    std::string n = !s->appName.empty() ? s->appName : s->binary;
+    if (!n.empty() && std::find(rec.begin(), rec.end(), n) == rec.end()) rec.push_back(n);
+  }
+  privacy_audio(rec);
 }
 #endif
 
@@ -905,6 +916,11 @@ void relayout() {
     P.sysmon->resize(r - 60, 2, 60, H - 4);
     r -= 62;
   }
+  if (P.privacy && P.privacy->visible()) {
+    int pw = P.privacy->w();
+    P.privacy->resize(r - pw, 2, pw, H - 4);
+    r -= pw + 2;
+  }
   for (fld::FlatButton *b : {P.nightlight, P.clipboard, P.printer, P.bluetooth}) {
     if (b && b->visible()) {
       b->resize(r - 34, 2, 34, H - 4);
@@ -1194,6 +1210,7 @@ int main(int argc, char **argv) {
   P.nightlight = nightlight_indicator_create();
   P.weather = weather_create();
   P.sysmon = sysmon_create(cfg.get_bool("Panel", "SystemMonitor", false));
+  P.privacy = privacy_create(cfg.get_bool("Panel", "PrivacyIndicator", true));
   P.clipboard = clipboard_indicator_create();
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();

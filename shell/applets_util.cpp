@@ -1,5 +1,17 @@
 #include "applets_util.h"
 
+#include <cctype>
+
+#include <cstring>
+
+#include <fstream>
+
+#include <set>
+
+#include <unistd.h>
+
+#include <dirent.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -135,6 +147,53 @@ double memory_usage(const std::string &meminfo, unsigned long long *total_kb) {
   if (total_kb) *total_kb = total;
   if (!total) return 0;
   return (double)(total - std::min(avail, total)) / (double)total;
+}
+
+// ---- privacy ----
+
+std::vector<std::string> camera_users(const std::string &proc) {
+  std::set<std::string> names;
+  DIR *d = opendir(proc.c_str());
+  if (!d) return {};
+  while (struct dirent *e = readdir(d)) {
+    if (!std::isdigit((unsigned char)e->d_name[0])) continue;
+    std::string pdir = proc + "/" + e->d_name;
+    DIR *fd = opendir((pdir + "/fd").c_str());
+    if (!fd) continue; // another user's process
+    bool cam = false;
+    while (struct dirent *f = readdir(fd)) {
+      if (f->d_name[0] == '.') continue;
+      char target[256];
+      ssize_t n = readlink((pdir + "/fd/" + f->d_name).c_str(), target, sizeof target - 1);
+      if (n <= 0) continue;
+      target[n] = 0;
+      if (strncmp(target, "/dev/video", 10) == 0) {
+        cam = true;
+        break;
+      }
+    }
+    closedir(fd);
+    if (!cam) continue;
+    std::string comm;
+    std::ifstream c(pdir + "/comm");
+    std::getline(c, comm);
+    if (!comm.empty()) names.insert(comm);
+  }
+  closedir(d);
+  return {names.begin(), names.end()};
+}
+
+std::string name_list(const std::vector<std::string> &n, size_t max) {
+  if (n.empty()) return "";
+  if (n.size() == 1) return n[0];
+  if (n.size() <= max) {
+    std::string s;
+    for (size_t i = 0; i + 1 < n.size(); i++) s += (i ? ", " : "") + n[i];
+    return s + " and " + n.back();
+  }
+  std::string s;
+  for (size_t i = 0; i < max; i++) s += (i ? ", " : "") + n[i];
+  return s + " and " + std::to_string(n.size() - max) + " more";
 }
 
 } // namespace applets

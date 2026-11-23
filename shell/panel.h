@@ -101,6 +101,13 @@ int panel_action_main(const std::string &action); // the --action process
 void panel_volume_step(int delta_pct);
 void panel_volume_toggle_mute();
 void panel_mic_toggle_mute();
+// panel_weather.cpp: the weather (hidden until a place is chosen)
+fld::FlatButton *weather_create();
+void weather_menu_items(fld::Menu &m);
+// panel_sysmon.cpp: processor and memory graphs ([Panel] SystemMonitor)
+fld::FlatButton *sysmon_create(bool on);
+// panel_notify.cpp: do not disturb for a while ("Do Not Disturb" menus)
+void dnd_menu_items(fld::Menu &m);
 // panel_network.cpp: the network button's popup and right-click menu
 void network_popup(Fl_Widget *button);
 void network_context_menu(fld::Menu &m);

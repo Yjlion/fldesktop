@@ -350,6 +350,8 @@ struct Panel {
   fld::FlatButton *bluetooth = nullptr;
   fld::FlatButton *printer = nullptr;
   fld::FlatButton *nightlight = nullptr;
+  fld::FlatButton *weather = nullptr;
+  fld::FlatButton *sysmon = nullptr;
   fld::FlatButton *clipboard = nullptr;
   fld::FlatButton *battery = nullptr;
   fld::FlatButton *bell = nullptr;
@@ -893,6 +895,16 @@ void relayout() {
     P.battery->resize(r - bw, 2, bw, H - 4);
     r -= bw + 2;
   }
+  if (P.weather && P.weather->visible()) {
+    fl_font(FL_HELVETICA, 14);
+    int ww = (int)fl_width(P.weather->label() ? P.weather->label() : "00°") + 40;
+    P.weather->resize(r - ww, 2, ww, H - 4);
+    r -= ww + 2;
+  }
+  if (P.sysmon && P.sysmon->visible()) {
+    P.sysmon->resize(r - 60, 2, 60, H - 4);
+    r -= 62;
+  }
   for (fld::FlatButton *b : {P.nightlight, P.clipboard, P.printer, P.bluetooth}) {
     if (b && b->visible()) {
       b->resize(r - 34, 2, 34, H - 4);
@@ -936,6 +948,18 @@ static void panel_menu() {
   m.item("Applications…", [] { fld::spawn({"fl-launcher"}); }).divider();
   m.item("Lock Screen", [] { fld::lock_screen(); }, fld::can_lock() ? 0 : FL_MENU_INACTIVE).divider();
   nightlight_menu_items(m);
+#ifdef FLD_HAVE_NOTIFY
+  dnd_menu_items(m);
+#endif
+  weather_menu_items(m);
+  if (!P.sysmon || !P.sysmon->visible())
+    m.item("Show a System Monitor", [] {
+      fld::Ini c;
+      c.load(fld::fld_config_dir() + "/panel.ini");
+      c.set_bool("Panel", "SystemMonitor", true);
+      c.save(fld::fld_config_dir() + "/panel.ini");
+    });
+  m.divider();
   panel_menu_items(m);
   m.item("Settings…", [] { fld::spawn({"fl-settings"}); });
   m.popup();
@@ -1168,6 +1192,8 @@ int main(int argc, char **argv) {
   P.printer = printer_indicator_create();
 #endif
   P.nightlight = nightlight_indicator_create();
+  P.weather = weather_create();
+  P.sysmon = sysmon_create(cfg.get_bool("Panel", "SystemMonitor", false));
   P.clipboard = clipboard_indicator_create();
   P.battery = make_btn(70, "battery-good", "Battery", nullptr);
   P.battery->hide();

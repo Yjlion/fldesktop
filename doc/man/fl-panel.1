@@ -36,6 +36,17 @@ The screen brightness is set through logind, or with
 \fI/usr/libexec/fldesktop/fl-backlight-helper\fR through pkexec where logind
 cannot; the keyboard light through UPower; media keys go to the player that
 plays (or played last).
+.SH APPLETS
+The panel menu (right-click on an empty part of the panel) turns on two
+optional applets. \fBWeather\fR shows the temperature and the sky for a place
+chosen by name; the forecast comes from Open-Meteo (open-meteo.com, no key
+needed) every half hour through curl or wget, and is kept in
+\fI~/.cache/fldesktop/weather.json\fR. Its popup has the next days.
+\fBSystem Monitor\fR draws small processor and memory graphs; a click opens
+\fBfl-taskmgr\fR(1).
+.PP
+The notification button's menu turns Do Not Disturb on until it is turned off,
+for an hour, or until tomorrow morning (07:00).
 .PP
 The panel restarts itself when its settings, the desktop theme or the
 compositor configuration change.
@@ -43,7 +54,10 @@ compositor configuration change.
 .TP
 \fI~/.config/fldesktop/panel.ini\fR
 \fB[Panel]\fR QuickLaunch=id;id;..., KeyboardButton=auto|always|never,
-Pager=auto|never, OSD=true|false (the on-screen display);
+Pager=auto|never, OSD=true|false (the on-screen display),
+SystemMonitor=true|false;
+\fB[Weather]\fR Enabled=, City=, Latitude=, Longitude=,
+Units=celsius|fahrenheit;
 \fB[Clock]\fR Format= (strftime format).
 .SH SEE ALSO
 \fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-settings\fR(1), \fBfl-osk\fR(1)

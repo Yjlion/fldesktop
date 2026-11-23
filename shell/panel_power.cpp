@@ -15,6 +15,11 @@
 #include "fld/util.h"
 #include "panel.h"
 #include "upclient.h"
+#ifdef FLD_HAVE_BACKLIGHT
+#include <FL/Fl_Slider.H>
+
+#include "backlight.h"
+#endif
 
 namespace {
 
@@ -129,7 +134,12 @@ void battery_cb(Fl_Widget *, void *) {
   std::vector<const up::Device *> others;
   for (auto &d : st.devices)
     if (!d.power_supply && d.percentage >= 0) others.push_back(&d);
-  int H = 64 + (st.profiles_available ? 36 + 30 * (int)st.profiles.size() : 0) + 26 * (int)others.size() + 46;
+  int bright = -1;
+#ifdef FLD_HAVE_BACKLIGHT
+  if (!bl::screen_get(bright)) bright = -1;
+#endif
+  int H = 64 + (bright >= 0 ? 62 : 0) + (st.profiles_available ? 36 + 30 * (int)st.profiles.size() : 0) +
+          26 * (int)others.size() + 46;
   PanelPopup pop(W, H);
   static std::string head, sub;
   head = "Battery " + std::to_string((int)std::lround(st.display.percentage)) + " %";
@@ -147,6 +157,25 @@ void battery_cb(Fl_Widget *, void *) {
   static std::vector<std::string> keep;
   keep.clear();
   keep.reserve(st.profiles.size() + others.size() + 1);
+#ifdef FLD_HAVE_BACKLIGHT
+  if (bright >= 0) {
+    Fl_Box *bl_label = new Fl_Box(10, y, W - 20, 28, "Brightness");
+    bl_label->labelfont(FL_HELVETICA_BOLD);
+    bl_label->labelsize(13);
+    bl_label->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+    Fl_Slider *sl = new Fl_Slider(16, y + 30, W - 32, 22);
+    sl->type(FL_HOR_NICE_SLIDER);
+    sl->bounds(1, 100);
+    sl->step(1);
+    sl->value(bright);
+    sl->when(FL_WHEN_CHANGED);
+    sl->callback([](Fl_Widget *w, void *) {
+      std::string err;
+      bl::screen_set((int)((Fl_Slider *)w)->value(), err);
+    });
+    y += 62;
+  }
+#endif
   if (st.profiles_available) {
     Fl_Box *pl = new Fl_Box(10, y, W - 20, 28, "Power Mode");
     pl->labelfont(FL_HELVETICA_BOLD);

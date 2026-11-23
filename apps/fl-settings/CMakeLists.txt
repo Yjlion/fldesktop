@@ -74,6 +74,10 @@ add_executable(fl-settings main.cpp settings_common.cpp ${FLD_SETTINGS_PAGE_SRCS
 target_include_directories(fl-settings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${FLD_PROTO_OUT})
 target_link_libraries(fl-settings PRIVATE fld fl-settings-xkb PkgConfig::WAYLAND_CLIENT ${FLD_SETTINGS_PAGE_LIBS})
 target_compile_definitions(fl-settings PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}/fldesktop")
+if(TARGET fld-backlight)
+  target_link_libraries(fl-settings PRIVATE fld-backlight)
+  target_compile_definitions(fl-settings PRIVATE FLD_HAVE_BACKLIGHT=1)
+endif()
 install(TARGETS fl-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # the root part of the Login Screen page, run through pkexec

@@ -1,0 +1,16 @@
+.TH FL-SCAN 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-scan \- scan documents and pictures
+.SH SYNOPSIS
+\fBfl-scan\fR
+.SH DESCRIPTION
+Scans with SANE through \fBscanimage\fR(1). Pick a scanner, the colours
+and the quality (resolution) and, if the scanner has one, the document
+feeder. \fBPreview\fR scans the whole glass quickly; drag on the preview to
+scan only that part. \fBScan\fR adds the page (from the feeder: every page)
+to the list on the right, where pages can be reordered, removed and shown.
+\fBSave\fR writes all pages as one PDF, or each page as a PNG picture.
+.PP
+Network scanners need the \fBsane-airscan\fR backend.
+.SH SEE ALSO
+\fBscanimage\fR(1), \fBsane\fR(7)

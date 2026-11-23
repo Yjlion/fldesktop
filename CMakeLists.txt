@@ -131,6 +131,9 @@ if(FLD_NEED_FLTK)
   if(FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
     add_subdirectory(common/power)
   endif()
+  if(FLD_BUILD_SHELL OR FLD_BUILD_SETTINGS)
+    add_subdirectory(common/backlight)
+  endif()
 endif()
 
 # ---- Wayland protocol code generation --------------------------------------

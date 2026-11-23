@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>fldesktop</vendor>
+  <vendor_url>https://github.com/Yjlion/fldesktop</vendor_url>
+  <action id="org.fldesktop.backlight">
+    <description>Change the screen brightness</description>
+    <message>Authentication is required to change the screen brightness</message>
+    <icon_name>display-brightness</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@CMAKE_INSTALL_FULL_LIBEXECDIR@/fldesktop/fl-backlight-helper</annotate>
+  </action>
+</policyconfig>

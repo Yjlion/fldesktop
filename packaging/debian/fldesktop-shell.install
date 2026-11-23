@@ -5,6 +5,8 @@ usr/bin/fl-autostart
 usr/bin/fl-nightlight
 etc/xdg/autostart/fl-nightlight.desktop
 usr/bin/fl-cliphist
+usr/libexec/fldesktop/fl-backlight-helper
+usr/share/polkit-1/actions/org.fldesktop.backlight.policy
 etc/xdg/autostart/fl-cliphist.desktop
 usr/bin/fl-session
 usr/bin/fl-screenshot

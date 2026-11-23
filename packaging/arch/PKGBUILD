@@ -118,6 +118,7 @@ package_fldesktop-shell() {
   _stage
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
     usr/bin/fl-nightlight etc/xdg/autostart/fl-nightlight.desktop \
+    usr/lib/fldesktop/fl-backlight-helper usr/share/polkit-1/actions/org.fldesktop.backlight.policy \
     usr/bin/fl-cliphist etc/xdg/autostart/fl-cliphist.desktop \
     usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \
     usr/share/applications/fl-snip.desktop usr/share/icons/hicolor/scalable/apps/fl-snip.svg \

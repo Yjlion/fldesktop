@@ -67,6 +67,7 @@ static bool parse_action(const char *action, enum flwm_action_type *type_out, ch
 		{"sticky", FLWM_ACTION_STICKY},
 		{"zoom-in", FLWM_ACTION_ZOOM_IN}, {"zoom-out", FLWM_ACTION_ZOOM_OUT},
 		{"zoom-reset", FLWM_ACTION_ZOOM_RESET},
+		{"portal-shortcut", FLWM_ACTION_PORTAL_SHORTCUT},
 	};
 	enum flwm_action_type type = FLWM_ACTION_NONE;
 	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
@@ -395,6 +396,60 @@ bool config_load(struct flwm_config *c, const char *path) {
 	}
 	fclose(f);
 	return true;
+}
+
+/* an id for the shell: letters, digits and . _ - only */
+static bool plain_id(const char *s) {
+	if (!*s || strlen(s) > 200) return false;
+	for (; *s; s++)
+		if (!isalnum((unsigned char)*s) && !strchr("._-", *s)) return false;
+	return true;
+}
+
+void config_load_global_shortcuts(struct flwm_config *c) {
+	char path[1024];
+	const char *xdg = getenv("XDG_CONFIG_HOME");
+	if (xdg && *xdg) snprintf(path, sizeof path, "%s/fldesktop/global-shortcuts.ini", xdg);
+	else snprintf(path, sizeof path, "%s/.config/fldesktop/global-shortcuts.ini", getenv("HOME") ? getenv("HOME") : "/");
+	FILE *f = fopen(path, "r");
+	if (!f) return;
+	char line[1024], app[256] = "";
+	while (fgets(line, sizeof line, f)) {
+		char *l = trim(line);
+		if (!*l || *l == '#' || *l == ';') continue;
+		if (*l == '[') {
+			char *e = strchr(l, ']');
+			if (e) *e = 0;
+			snprintf(app, sizeof app, "%s", l + 1);
+			continue;
+		}
+		char *eq = strchr(l, '=');
+		if (!eq || !*app) continue;
+		*eq = 0;
+		char *id = trim(l), *v = trim(eq + 1);
+		char *bar = strchr(v, '|');
+		if (bar) *bar = 0;
+		char *combo = trim(v);
+		if (!*combo || !plain_id(app) || !plain_id(id)) continue;
+		/* parse the combination like a binding, but keep what is bound already */
+		struct flwm_config probe;
+		memset(&probe, 0, sizeof probe);
+		add_binding(&probe, combo, "close");
+		if (probe.nbindings != 1) continue;
+		bool taken = false;
+		for (int i = 0; i < c->nbindings; i++)
+			if (c->bindings[i].modifiers == probe.bindings[0].modifiers && c->bindings[i].sym == probe.bindings[0].sym)
+				taken = true;
+		free(probe.bindings[0].arg);
+		if (taken) {
+			wlr_log(WLR_INFO, "global shortcut %s of %s: %s is taken", id, app, combo);
+			continue;
+		}
+		char action[512];
+		snprintf(action, sizeof action, "portal-shortcut %s\x1f%s", app, id);
+		add_binding(c, combo, action);
+	}
+	fclose(f);
 }
 
 void config_free(struct flwm_config *c) {

@@ -115,6 +115,7 @@ enum flwm_action_type {
 	FLWM_ACTION_ZOOM_IN,
 	FLWM_ACTION_ZOOM_OUT,
 	FLWM_ACTION_ZOOM_RESET,
+	FLWM_ACTION_PORTAL_SHORTCUT, /* arg "app_id\x1fshortcut_id": a global shortcut (portal) */
 };
 
 #define FLWM_MAX_WORKSPACES 9
@@ -487,6 +488,9 @@ void flwm_spawn(struct flwm_server *server, const char *cmd);
 /* config.c */
 void config_init_defaults(struct flwm_config *c);
 bool config_load(struct flwm_config *c, const char *path);
+/* global-shortcuts.ini next to the user's wm.ini: shortcuts applications
+ * bound through the GlobalShortcuts portal (never over existing bindings) */
+void config_load_global_shortcuts(struct flwm_config *c);
 void config_free(struct flwm_config *c);
 char *config_default_path(void);
 

@@ -3,6 +3,7 @@
 #include <linux/input-event-codes.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <unistd.h>
 #include <string.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/interfaces/wlr_keyboard.h>
@@ -92,6 +93,7 @@ static void reload_config(struct flwm_server *server) {
 	config_free(&server->config);
 	config_init_defaults(&server->config);
 	if (!config_load(&server->config, path)) wlr_log(WLR_INFO, "reload: no config at %s", path);
+	config_load_global_shortcuts(&server->config);
 	free(path);
 	input_apply_config(server);
 	output_apply_config(server);
@@ -210,6 +212,17 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	case FLWM_ACTION_ZOOM_RESET:
 		zoom_step(server, 0);
 		return true;
+	case FLWM_ACTION_PORTAL_SHORTCUT: {
+		/* the portal tells the application (ids are plain: see config.c) */
+		const char *sep = arg ? strchr(arg, '\x1f') : NULL;
+		if (!sep) return true;
+		char portal[4200], cmd[4800];
+		snprintf(portal, sizeof portal, "%s/xdg-desktop-portal-fl", server->exe_dir);
+		if (access(portal, X_OK) != 0) snprintf(portal, sizeof portal, "%s", FLD_PORTAL_EXEC);
+		snprintf(cmd, sizeof cmd, "'%s' --activate-shortcut '%.*s' '%s'", portal, (int)(sep - arg), arg, sep + 1);
+		flwm_spawn(server, cmd);
+		return true;
+	}
 	default:
 		return false;
 	}

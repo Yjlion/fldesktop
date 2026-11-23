@@ -177,6 +177,7 @@ int main(int argc, char *argv[]) {
 		if (i == 0) wlr_log(WLR_ERROR, "cannot read %s", candidates[i]);
 	}
 	if (!server.config.path) server.config.path = strdup(default_path);
+	config_load_global_shortcuts(&server.config);
 	free(default_path);
 
 	/* children get a clean environment describing this session */

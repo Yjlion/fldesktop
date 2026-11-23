@@ -12,7 +12,10 @@
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 #include <algorithm>
+#include <functional>
 
+#include "fld/desktop_entry.h"
+#include "fld/ini.h"
 #include "fld/menus.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -147,6 +150,67 @@ public:
   }
 };
 
+// Global shortcuts of applications (global-shortcuts.ini, written by the
+// GlobalShortcuts portal): [app id] shortcut id = combo|description
+void app_shortcuts_dialog() {
+  std::string path = fld_config_dir() + "/global-shortcuts.ini";
+  Fl_Double_Window d(560, 360, "Application Shortcuts");
+  d.set_modal();
+  Fl_Box note(16, 10, 528, 40, "Shortcuts that applications asked for. They work in every window; removing one "
+                               "lets the application ask again.");
+  note.align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_WRAP);
+  note.labelsize(12);
+  Fl_Hold_Browser list(16, 56, 528, 244);
+  list.textsize(13);
+  static int widths[] = {170, 150, 0};
+  list.column_widths(widths);
+  list.column_char('\t');
+  list.format_char(0);
+  std::vector<std::pair<std::string, std::string>> rows; // app, id
+  auto fill = [&] {
+    Ini ini;
+    ini.load(path);
+    list.clear();
+    rows.clear();
+    for (auto &app : ini.groups())
+      for (auto &id : ini.keys(app)) {
+        std::string v = ini.get(app, id);
+        size_t bar = v.find('|');
+        std::string combo = trim(v.substr(0, bar)), desc = bar == std::string::npos ? id : v.substr(bar + 1);
+        DesktopEntry e;
+        std::string name = find_application(app, e) && !e.name.empty() ? e.name : app;
+        list.add((name + "\t" + (combo.empty() ? "(none)" : combo) + "\t" + desc).c_str());
+        rows.push_back({app, id});
+      }
+    if (rows.empty()) list.add("No application has asked for shortcuts.");
+  };
+  fill();
+  Fl_Button rm(16, 314, 110, 30, "Remove");
+  Fl_Button close(434, 314, 110, 30, "Close");
+  struct Ctx {
+    Fl_Hold_Browser *list;
+    std::vector<std::pair<std::string, std::string>> *rows;
+    std::string path;
+    std::function<void()> fill;
+  } ctx{&list, &rows, path, fill};
+  rm.callback([](Fl_Widget *, void *v) {
+    Ctx *c = (Ctx *)v;
+    int i = c->list->value() - 1;
+    if (i < 0 || i >= (int)c->rows->size()) return;
+    Ini ini;
+    ini.load(c->path);
+    ini.remove(c->rows->at((size_t)i).first, c->rows->at((size_t)i).second);
+    if (ini.keys(c->rows->at((size_t)i).first).empty()) ini.remove_group(c->rows->at((size_t)i).first);
+    ini.save(c->path);
+    reload_wm();
+    c->fill();
+  }, &ctx);
+  close.callback([](Fl_Widget *w, void *) { w->window()->hide(); });
+  d.end();
+  d.show();
+  while (d.shown()) Fl::wait();
+}
+
 class ShortcutsPage : public Fl_Group {
 public:
   ConfigFile wm{wm_ini_path()};
@@ -203,6 +267,9 @@ public:
       p->fill();
       p->save();
     }, this);
+    Fl_Button *apps = new Fl_Button(X + 342, by, 170, 30, "Application Shortcuts…");
+    apps->tooltip("Global shortcuts that applications asked for (through the desktop portal)");
+    apps->callback([](Fl_Widget *, void *) { app_shortcuts_dialog(); });
     Fl_Button *reset = new Fl_Button(X + 24 + lw - 140, by, 140, 30, "Reset to Defaults");
     fld::set_context_menu(list, [add, ed, rm, reset](fld::Menu &m) {
       m.button(add).button(ed).button(rm).divider().button(reset);

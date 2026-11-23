@@ -3,6 +3,8 @@
 xdg-desktop-portal-fl \- fldesktop backend for xdg-desktop-portal
 .SH SYNOPSIS
 \fBxdg-desktop-portal-fl\fR [\fB\-\-replace\fR]
+.br
+\fBxdg-desktop-portal-fl \-\-activate\-shortcut\fR \fIAPP_ID\fR \fISHORTCUT_ID\fR
 .SH DESCRIPTION
 Implements the desktop side of the XDG desktop portals for fldesktop
 sessions, so that sandboxed (Flatpak, Snap) and portal aware programs get
@@ -38,6 +40,30 @@ screen or a single window, which is then sent as a PipeWire video stream.
 Applications may ask to remember the choice. Windows can be shared when
 \fBfl-wm\fR(1) is built with wlroots 0.20 or newer; with wlroots 0.18 only
 whole screens can be shared (through wlr-screencopy).
+.TP
+\fBRemoteDesktop\fR
+remote control: after asking, the application moves the pointer, clicks,
+scrolls and types (through a virtual pointer and keyboard with the session's
+keyboard layout), usually together with screen sharing. Touch input is not
+offered.
+.TP
+\fBInhibit\fR
+keeps the screen on (an idle inhibitor \fBfl-wm\fR(1) honours) and the computer
+from suspending (a logind inhibitor lock) while an application asks.
+.TP
+\fBBackground\fR
+running in the background is allowed; starting with the session writes
+\fI~/.config/autostart/APP_ID.desktop\fR, which \fBfl-autostart\fR(1) starts.
+.TP
+\fBGlobalShortcuts\fR
+asks once which keys to use for the shortcuts an application wants and stores
+them in \fI~/.config/fldesktop/global-shortcuts.ini\fR; \fBfl-wm\fR(1) binds
+them (never over a binding of its own) and runs
+\fBxdg-desktop-portal-fl \-\-activate\-shortcut\fR when one is pressed. Settings >
+Shortcuts > Application Shortcuts lists and removes them.
+.TP
+\fBPrint\fR
+a print dialog (printer, copies, pages, sides) and printing through CUPS.
 .PP
 Other portals are left to the GTK backend (and xdg-desktop-portal-wlr is
 the fallback for screen casting), as listed in
@@ -48,5 +74,8 @@ activated programs at login.
 .TP
 \fB\-r\fR, \fB\-\-replace\fR
 Take over from a running instance.
+.TP
+\fB\-\-activate\-shortcut\fR \fIAPP_ID\fR \fISHORTCUT_ID\fR
+Tell the running portal that a global shortcut was pressed (\fBfl-wm\fR(1) does).
 .SH SEE ALSO
 \fBfl-notifyd\fR(1), \fBflatpak\fR(1), \fBgrim\fR(1), \fBslurp\fR(1)

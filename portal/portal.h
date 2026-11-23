@@ -40,6 +40,14 @@ void notification_call(const std::string &method, GVariant *params, GDBusMethodI
 void wallpaper_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
 void screencast_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
 GVariant *screencast_property(const std::string &prop);
+void remotedesktop_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
+GVariant *remotedesktop_property(const std::string &prop);
+void inhibit_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
+void background_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
+void shortcuts_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
+// org.fldesktop.GlobalShortcuts.Activate (from fl-wm, through --activate-shortcut)
+void shortcuts_activate(const std::string &app_id, const std::string &id);
+void print_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv, GUnixFDList *fds);
 
 // display name of an application (dialogs.cpp)
 std::string app_name(const std::string &app_id);
@@ -92,5 +100,23 @@ std::vector<CastSource> cast_parse_restore(GVariant *restore_data); // empty if 
 // indices into `available` for every restored source, or empty when any is missing
 std::vector<int> cast_match_restore(const std::vector<CastSource> &wanted, const std::vector<CastSource> &available);
 bool cast_embed_cursor(guint32 cursor_mode);
+
+// Background (portal_misc.cpp): ~/.config/autostart/<file> for an app id
+// ("" for an id that is not a plain name) and its contents
+std::string autostart_file_name(const std::string &app_id);
+std::string autostart_entry(const std::string &app_id, const std::vector<std::string> &argv, unsigned flags);
+
+// GlobalShortcuts (portal_misc.cpp): a trigger as applications write it
+// ("CTRL+ALT+k", "<Control>k") to an fl-wm key combination ("Ctrl+Alt+k");
+// "" when it cannot be bound
+std::string trigger_to_combo(const std::string &trigger);
+// ~/.config/fldesktop/global-shortcuts.ini: [app id] shortcut id = combo|description;
+// fl-wm binds them and the Shortcuts page lists them
+struct StoredShortcut {
+  std::string id, combo, description;
+};
+std::string shortcuts_path();
+std::vector<StoredShortcut> shortcuts_load(const std::string &path, const std::string &app_id);
+void shortcuts_save(const std::string &path, const std::string &app_id, const std::vector<StoredShortcut> &list);
 
 } // namespace portal

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Passwords and Keys
+GenericName=Password Manager
+Comment=See and change the passwords programs keep, and your SSH and GPG keys
+Exec=fl-keyring
+Icon=fl-keyring
+Categories=Utility;Security;
+Keywords=password;keyring;secret;ssh;gpg;pgp;key;keys;credentials;
+StartupWMClass=fl-keyring

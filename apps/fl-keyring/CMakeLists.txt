@@ -1,0 +1,11 @@
+# fl-keyring: passwords (Secret Service) and SSH and GPG keys
+add_library(fl-keyring-util STATIC keyring_util.cpp)
+target_include_directories(fl-keyring-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-keyring-util PUBLIC fld)
+if(NOT TARGET fld-glib)
+  message(STATUS "glib/gio not found: fl-keyring is not built")
+  return()
+endif()
+add_executable(fl-keyring main.cpp secret.cpp)
+target_link_libraries(fl-keyring PRIVATE fl-keyring-util fld-glib)
+install(TARGETS fl-keyring RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

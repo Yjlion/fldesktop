@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Paint
+GenericName=Drawing Program
+Comment=Draw and edit pictures
+Exec=fl-paint %f
+Icon=fl-paint
+Categories=Graphics;2DGraphics;RasterGraphics;
+Keywords=paint;draw;drawing;picture;image;brush;edit;sketch;
+MimeType=image/png;image/jpeg;image/bmp;image/gif;
+StartupWMClass=fl-paint

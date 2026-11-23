@@ -1,0 +1,18 @@
+.TH FL-REMOTE 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-remote \- VNC and RDP remote desktop viewer
+.SH SYNOPSIS
+\fBfl-remote\fR [vnc://\fIhost\fR[:\fIport\fR] | rdp://[\fIuser\fR@]\fIhost\fR[:\fIport\fR] | \fIhost\fR[:\fIport\fR]]
+.SH DESCRIPTION
+Keeps a list of connections to other computers. VNC connections open in a
+window of their own (fl-remote speaks the RFB protocol itself: no password
+or a VNC password; the screen scales to the window): the mouse and the
+keyboard go to the remote computer, its clipboard text comes here, and
+\fBF8\fR opens a menu to scale, send the clipboard, send Ctrl+Alt+Delete or
+disconnect. RDP connections (Windows) open in the FreeRDP client
+(\fBwlfreerdp\fR, \fBsdl-freerdp\fR or \fBxfreerdp\fR), which must be
+installed. Passwords are asked for and never saved.
+.SH FILES
+\fI~/.config/fldesktop/remote.ini\fR: the saved connections.
+.SH SEE ALSO
+\fBxfreerdp\fR(1), \fBwayvnc\fR(1)

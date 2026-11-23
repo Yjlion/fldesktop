@@ -1,7 +1,10 @@
 #include <cstdlib>
+#include <memory>
+#include <vector>
 #include <unistd.h>
 
 #include "fld/accents.h"
+#include "fld/avatar.h"
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -323,8 +326,11 @@ int main() {
     CHECK(next > 0 && next <= 60);
     CHECK_NEAR(fld::strftime_next_change("%H:%M:%S", 1000000.25), 0.75);
   }
-  // power actions: loginctl (logind, elogind), then systemctl
-  CHECK_EQ(fld::power_command("poweroff", true, true)[0], std::string("loginctl"));
+  // power actions without logind on the bus: systemctl (systemd's loginctl has
+  // no power verbs), then elogind's loginctl
+  CHECK_EQ(fld::power_command("poweroff", true, true)[0], std::string("systemctl"));
+  CHECK_EQ(fld::power_command("reboot", true, false)[0], std::string("loginctl"));
+  CHECK_EQ(fld::power_command("reboot", true, false)[1], std::string("reboot"));
   CHECK_EQ(fld::power_command("suspend", false, true)[0], std::string("systemctl"));
   CHECK_EQ(fld::power_command("suspend", false, true)[1], std::string("suspend"));
   CHECK(fld::power_command("reboot", false, false).empty());
@@ -385,5 +391,31 @@ int main() {
     CHECK(c.argb != b.argb); // the copy badge
   }
 
+  // user pictures: a stable color, the initial, a round copy, square PNGs
+  {
+    CHECK_EQ(fld::avatar_color_hex("alice"), fld::avatar_color_hex("alice"));
+    CHECK(fld::accent_index(fld::avatar_color_hex("bob")) >= 0);
+    CHECK_EQ(fld::avatar_initial("alice", ""), std::string("A"));
+    CHECK_EQ(fld::avatar_initial("alice", "  émile Zola"), std::string("\xc3\x89")); // É
+    CHECK_EQ(fld::avatar_initial("", ""), std::string("?"));
+    // a 40x20 red picture: covered, cropped to 16x16, round
+    std::vector<uchar> px(40 * 20 * 3);
+    for (size_t i = 0; i < px.size(); i += 3) px[i] = 255;
+    Fl_RGB_Image src(px.data(), 40, 20, 3);
+    std::unique_ptr<Fl_RGB_Image> r(fld::avatar_image(&src, 16));
+    CHECK(r && r->w() == 16 && r->h() == 16 && r->d() == 4);
+    if (r) {
+      const uchar *d = (const uchar *)r->data()[0];
+      CHECK_EQ((int)d[3], 0);                           // corner: outside the circle
+      CHECK_EQ((int)d[(8 * 16 + 8) * 4 + 3], 255);      // middle: opaque
+      CHECK_EQ((int)d[(8 * 16 + 8) * 4 + 0], 255);      // and red
+    }
+    std::string png;
+    CHECK(fld::avatar_png(&src, 32, png));
+    CHECK(png.size() > 8 && png.compare(1, 3, "PNG") == 0);
+    CHECK(png.size() > 24 && (uchar)png[19] == 32 && (uchar)png[23] == 32); // IHDR 32x32
+    CHECK(fld::initial_avatar_png("alice", "Alice", 64, png));
+    CHECK(png.size() > 24 && png.compare(1, 3, "PNG") == 0 && (uchar)png[19] == 64);
+  }
   return test_result("libfld");
 }

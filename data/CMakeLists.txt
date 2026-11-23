@@ -10,6 +10,9 @@ file(GLOB _themes LIST_DIRECTORIES true ${CMAKE_CURRENT_SOURCE_DIR}/icons/fldesk
 option(FLD_INSTALL_ARTWORK "Install the fldesktop icon and cursor themes" ON)
 if(FLD_INSTALL_ARTWORK)
   install(DIRECTORY ${_themes} DESTINATION ${FLD_SHARE}/icons)
+  # stock user pictures (tools/artwork/faces.py), offered by Settings > Users;
+  # in a folder of their own so they never clash with other desktops' faces
+  install(DIRECTORY faces/ DESTINATION ${FLD_SHARE}/pixmaps/faces/fldesktop FILES_MATCHING PATTERN "*.png")
 endif()
 file(GLOB _backgrounds backgrounds/*.svg)
 install(FILES ${_backgrounds} DESTINATION ${FLD_SHARE}/fldesktop/backgrounds)
@@ -29,6 +32,7 @@ file(MAKE_DIRECTORY ${_out}/applications ${_out}/fldesktop/backgrounds ${_out}/w
 file(COPY ${_apps} DESTINATION ${_out}/applications)
 file(COPY icons/hicolor ${_themes} DESTINATION ${_out}/icons)
 file(COPY ${_backgrounds} DESTINATION ${_out}/fldesktop/backgrounds)
+file(COPY faces/ DESTINATION ${_out}/pixmaps/faces/fldesktop)
 file(COPY charmap/Blocks.txt DESTINATION ${_out}/fldesktop/charmap)
 file(COPY wm.ini.example DESTINATION ${_out}/fldesktop)
 file(COPY wayland-sessions/fldesktop.desktop DESTINATION ${_out}/wayland-sessions)

@@ -18,6 +18,7 @@ const std::vector<GreeterKey> &greeter_keys() {
       {"Greeter", "Keyboard", GreeterKey::Choice, 0, 0, "button|always|never"},
       {"Greeter", "KeyboardLayout", GreeterKey::Name, 0, 0, nullptr},
       {"Greeter", "RememberUser", GreeterKey::Bool, 0, 0, nullptr},
+      {"Greeter", "ShowUserPictures", GreeterKey::Bool, 0, 0, nullptr},
       {"Greeter", "Clock24", GreeterKey::Bool, 0, 0, nullptr},
       {"Greeter", "ShowPowerButtons", GreeterKey::Bool, 0, 0, nullptr},
       {"Appearance", "Theme", GreeterKey::Choice, 0, 0, "light|dark"},

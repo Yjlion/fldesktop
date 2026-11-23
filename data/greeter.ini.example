@@ -9,6 +9,8 @@
 #HideUsers=guest,test
 # preselect the user (and session) used last
 #RememberUser=true
+# the users' pictures (Settings > Users) on the login card
+#ShowUserPictures=true
 #Clock24=true
 #ShowPowerButtons=true
 # on-screen keyboard: button | always | never; layout us, de, fr

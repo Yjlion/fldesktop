@@ -28,6 +28,7 @@
 #include "fld/theme.h"
 #include "fld/session.h"
 #include "fld/util.h"
+#include "fld/avatar.h"
 #include "fld/widgets.h"
 #include "greetd_ipc.h"
 
@@ -46,6 +47,7 @@ static std::vector<Session> g_sessions;
 static std::unique_ptr<GreetdClient> g_greetd;
 static bool g_demo = false;
 static bool g_clock24 = true, g_remember = true;
+static bool g_pictures = true; // [Greeter] ShowUserPictures
 
 static Fl_Double_Window *g_win;
 static Fl_Choice *g_user_choice;
@@ -286,31 +288,26 @@ public:
   void draw() override {
     fl_color(fl_rgb_color(0x10, 0x16, 0x22));
     fl_rounded_rectf(x(), y(), w(), h(), 14);
-    // avatar circle with the user's initial
-    std::string u = selected_user();
+    if (!g_pictures) {
+      draw_children();
+      return;
+    }
+    // the user's picture, else a circle with the initial
+    std::string u = selected_user(), real;
     int cx = x() + w() / 2, cy = y() + 56;
     std::string pic;
     for (auto &usr : g_users)
-      if (usr.name == u) pic = usr.picture;
+      if (usr.name == u) pic = usr.picture, real = usr.real_name;
     if (pic != pic_path_) {
       pic_path_ = pic;
       pic_.reset();
       if (!pic.empty()) {
         std::unique_ptr<Fl_Image> full(fld::load_image(pic));
-        if (full && full->w() > 0 && full->h() > 0) pic_.reset(full->copy(72, 72));
+        if (full) pic_.reset(fld::avatar_image(full.get(), 72));
       }
     }
-    if (pic_) {
-      pic_->draw(cx - 36, cy - 36);
-      draw_children();
-      return;
-    }
-    fl_color(fld::palette().accent);
-    fl_pie(cx - 36, cy - 36, 72, 72, 0, 360);
-    std::string init = u.empty() ? "?" : std::string(1, (char)toupper((unsigned char)u[0]));
-    fl_font(FL_HELVETICA_BOLD, 34);
-    fl_color(FL_WHITE);
-    fl_draw(init.c_str(), cx - 36, cy - 36, 72, 72, FL_ALIGN_CENTER);
+    if (pic_) pic_->draw(cx - 36, cy - 36);
+    else fld::draw_initial_avatar(cx - 36, cy - 36, 72, u, real);
     draw_children();
   }
 };
@@ -371,6 +368,7 @@ int main(int argc, char **argv) {
   cfg.load(ini_path);
   g_clock24 = cfg.get_bool("Greeter", "Clock24", true);
   g_remember = cfg.get_bool("Greeter", "RememberUser", true);
+  g_pictures = cfg.get_bool("Greeter", "ShowUserPictures", true);
   std::vector<std::string> hidden;
   for (auto &h : fld::split(cfg.get("Greeter", "HideUsers", ""), ',')) hidden.push_back(fld::trim(h));
   load_users(cfg.get_int("Greeter", "MinUid", 1000), hidden);
@@ -387,11 +385,13 @@ int main(int argc, char **argv) {
   Background *back = new Background(0, 0, W, H, bg);
   (void)back;
 
-  const int CW = 380, CH = 330;
+  // without user pictures the card leaves out the room for one
+  const int pic_room = g_pictures ? 82 : 0;
+  const int CW = 380, CH = 248 + pic_room;
   g_card_y = g_card_y_normal = std::max(150, (H - CH) / 2 + 30);
   Card *card = new Card((W - CW) / 2, g_card_y, CW, CH);
   g_card = card;
-  int cx = card->x() + 30, cy = card->y() + 106, iw = CW - 60;
+  int cx = card->x() + 30, cy = card->y() + 24 + pic_room, iw = CW - 60;
   g_user_choice = new Fl_Choice(cx, cy + 18, iw, 32, "User");
   style_input(g_user_choice);
   g_user_input = new Fl_Input(cx, cy + 18, iw, 32, "User name");
@@ -472,5 +472,7 @@ int main(int argc, char **argv) {
   else g_pass->take_focus();
   if (g_osk && kb_mode == "always") show_keyboard(true);
   Fl::add_timeout(30.0, tick);
-  return Fl::run();
+  int r = Fl::run();
+  fld::wait_power();
+  return r;
 }

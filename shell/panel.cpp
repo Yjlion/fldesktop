@@ -820,7 +820,7 @@ static void power_cb(Fl_Widget *, void *) {
   fld::Menu m;
   for (PowerAction a : {PowerAction::Lock, PowerAction::LogOut, PowerAction::Suspend, PowerAction::Reboot,
                         PowerAction::PowerOff}) {
-    int flags = a == PowerAction::Lock && !fld::can_lock() ? FL_MENU_INACTIVE : 0;
+    int flags = fld::can_power(a) ? 0 : FL_MENU_INACTIVE;
     m.item(fld::power_label(a), [a] { fld::confirm_power(a); }, flags);
     if (a == PowerAction::LogOut) m.divider();
   }
@@ -1250,7 +1250,7 @@ int main(int argc, char **argv) {
     for (PowerAction a : {PowerAction::Lock, PowerAction::LogOut, PowerAction::Suspend, PowerAction::Reboot,
                           PowerAction::PowerOff}) {
       m.item(fld::power_label(a), [a] { fld::confirm_power(a); },
-             a == PowerAction::Lock && !fld::can_lock() ? FL_MENU_INACTIVE : 0);
+             fld::can_power(a) ? 0 : FL_MENU_INACTIVE);
       if (a == PowerAction::LogOut) m.divider();
     }
     m.divider();

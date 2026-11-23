@@ -444,7 +444,7 @@ static void make_power_bar(int X, int Y, int W, int H) {
     b->icon_name(fld::power_icon(a), 20);
     b->color(p.bg);
     b->tooltip(fld::power_label(a));
-    if (a == PowerAction::Lock && !fld::can_lock()) b->deactivate();
+    if (!fld::can_power(a)) b->deactivate();
     b->callback([](Fl_Widget *, void *d) {
       PowerAction a = (PowerAction)(long)d;
       g_modal++;
@@ -512,6 +512,7 @@ int main(int argc, char **argv) {
   g_search->take_focus();
   Fl::add_check(focus_check);
   int r = Fl::run();
+  fld::wait_power(); // a refused restart still shows why
   unlink(pidfile().c_str());
   return r;
 }

@@ -169,7 +169,7 @@ package_fldesktop-plymouth-theme() {
 }
 
 package_fldesktop-icon-theme() {
-  pkgdesc="fldesktop icon themes (accent colors, monochrome) and cursor themes"
+  pkgdesc="fldesktop icon themes (accent colors, monochrome), cursor themes and user pictures"
   arch=(any)
   depends=(hicolor-icon-theme)
   _stage
@@ -177,6 +177,7 @@ package_fldesktop-icon-theme() {
   for t in "$srcdir"/stage/usr/share/icons/fldesktop*; do
     _install_files usr/share/icons/$(basename "$t")
   done
+  _install_files usr/share/pixmaps/faces/fldesktop
 }
 
 _app() {

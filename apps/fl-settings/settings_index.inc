@@ -193,6 +193,7 @@
 {"users", "Groups"},
 {"login", "Other Image"},
 {"login", "Preselect the user who logged in last"},
+{"login", "Show user pictures"},
 {"login", "24-hour clock"},
 {"login", "Restart and Shut Down buttons"},
 {"login", "Apply"},

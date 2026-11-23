@@ -22,6 +22,7 @@ add_library(fld STATIC
   drag.cpp
   tab_move.cpp
   atspi_model.cpp
+  avatar.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Threads REQUIRED)
@@ -46,11 +47,12 @@ if(FLD_LIBFLD_WP_DIR AND FLD_LIBFLD_SCANNER)
   target_compile_definitions(fld PRIVATE FLD_HAVE_PRIMARY_PROTO=1)
 endif()
 
-# screen readers: an AT-SPI2 bridge over GDBus (GLib comes with Pango anyway)
+# screen readers: an AT-SPI2 bridge over GDBus (GLib comes with Pango anyway);
+# power actions ask logind over GDBus too
 pkg_check_modules(FLD_ATSPI_GIO IMPORTED_TARGET gio-2.0)
 if(FLD_ATSPI_GIO_FOUND)
   target_sources(fld PRIVATE atspi.cpp)
-  target_compile_definitions(fld PRIVATE FLD_HAVE_ATSPI=1)
+  target_compile_definitions(fld PRIVATE FLD_HAVE_ATSPI=1 FLD_HAVE_GIO=1)
   target_link_libraries(fld PUBLIC PkgConfig::FLD_ATSPI_GIO)
 endif()
 

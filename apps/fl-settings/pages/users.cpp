@@ -12,15 +12,18 @@
 #include <FL/Fl_Image.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Return_Button.H>
+#include <FL/Fl_Scroll.H>
 #include <FL/Fl_Secret_Input.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 
 #include <algorithm>
+#include <set>
 #include <memory>
 #include <thread>
 #include <unistd.h>
 
+#include "fld/avatar.h"
 #include "fld/file_dialog.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
@@ -259,29 +262,23 @@ bool ask_remove(const Account &a, bool &remove_home) {
 class Picture : public Fl_Box {
 public:
   std::unique_ptr<Fl_Image> img;
-  std::string initial;
+  std::string user, real_name;
   Picture(int x, int y, int w, int h) : Fl_Box(x, y, w, h) {}
-  void set(const std::string &path, const std::string &name) {
+  void set(const std::string &path, const std::string &u, const std::string &real) {
     img.reset();
-    initial = name.empty() ? "?" : std::string(1, (char)toupper((unsigned char)name[0]));
+    user = u;
+    real_name = real;
     if (!path.empty()) {
       std::unique_ptr<Fl_Image> full(load_image(path));
-      if (full && full->w() > 0 && full->h() > 0) img.reset(full->copy(w(), h()));
+      if (full) img.reset(avatar_image(full.get(), w()));
     }
     redraw();
   }
   void draw() override {
     fl_color(palette().bg2);
     fl_rectf(x(), y(), w(), h());
-    if (img) {
-      img->draw(x(), y());
-      return;
-    }
-    fl_color(palette().accent);
-    fl_pie(x(), y(), w(), h(), 0, 360);
-    fl_color(palette().accent_fg);
-    fl_font(FL_HELVETICA_BOLD, h() / 2);
-    fl_draw(initial.c_str(), x(), y(), w(), h(), FL_ALIGN_CENTER);
+    if (img) img->draw(x(), y());
+    else if (!user.empty()) draw_initial_avatar(x(), y(), w(), user, real_name);
   }
 };
 
@@ -289,6 +286,95 @@ std::string find_picture(const Account &a) {
   for (std::string p : {picture_path(a.name), a.home + "/.face", a.home + "/.face.icon"})
     if (file_exists(p) && !is_dir(p) && access(p.c_str(), R_OK) == 0) return p;
   return "";
+}
+
+// The stock pictures: fldesktop's (/usr/share/pixmaps/faces/fldesktop), then
+// any others in /usr/share/pixmaps/faces (other desktops put theirs there).
+std::vector<std::string> stock_pictures() {
+  std::vector<std::string> dirs, out;
+  for (auto &d : data_dirs()) dirs.push_back(path_join(d, "pixmaps/faces/fldesktop"));
+  for (auto &d : data_dirs()) dirs.push_back(path_join(d, "pixmaps/faces"));
+  std::set<std::string> seen_dirs, seen;
+  for (auto &d : dirs) {
+    if (!is_dir(d) || !seen_dirs.insert(abs_path(d)).second) continue;
+    std::vector<std::string> names = list_dir(d);
+    std::sort(names.begin(), names.end());
+    for (auto &n : names) {
+      std::string p = path_join(d, n), e = extension(n);
+      if (is_dir(p) || (e != "png" && e != "jpg" && e != "jpeg" && e != "svg")) continue;
+      if (seen.insert(d.substr(d.rfind('/') + 1) + "/" + n).second) out.push_back(p);
+    }
+  }
+  return out;
+}
+
+std::string browse_picture() {
+  FileDialogOptions o;
+  o.title = "User Picture";
+  o.folder = user_dir("PICTURES");
+  o.filters.push_back({"Images", {"*.png", "*.jpg", "*.jpeg", "*.svg"}, {}});
+  FileDialogResult r = run_file_dialog(o);
+  return r.ok && !r.paths.empty() ? r.paths[0] : "";
+}
+
+// A grid of the stock pictures and "Browse…" for a photo of your own.
+// Returns the chosen file, "" when cancelled.
+std::string pick_picture() {
+  std::vector<std::string> faces = stock_pictures();
+  if (faces.empty()) return browse_picture();
+  struct Ctx {
+    bool done = false, browse = false;
+    int chosen = -1;
+  } c;
+  struct Slot {
+    Ctx *c;
+    int i;
+  };
+  const int cols = 5, cell = 84, pic = 72, pad = 12;
+  int rows = ((int)faces.size() + cols - 1) / cols, shown = std::min(rows, 4);
+  int sb = rows > shown ? Fl::scrollbar_size() : 0;
+  int W = 2 * pad + cols * cell + sb, H = pad + 28 + shown * cell + 12 + 28 + pad;
+  Fl_Double_Window w(W, H, "User Picture");
+  Fl_Box head(pad, pad, W - 2 * pad, 24, "Choose a picture, or a photo of your own:");
+  head.align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
+  Fl_Scroll sc(pad, pad + 28, cols * cell + sb, shown * cell);
+  sc.type(Fl_Scroll::VERTICAL);
+  sc.box(FL_NO_BOX);
+  std::vector<std::unique_ptr<Fl_Image>> imgs;
+  std::vector<Slot> slots(faces.size());
+  for (size_t i = 0; i < faces.size(); i++) {
+    int bx = sc.x() + (int)(i % cols) * cell, by = sc.y() + (int)(i / cols) * cell;
+    Fl_Button *b = new Fl_Button(bx, by, cell - 4, cell - 4);
+    b->box(FL_FLAT_BOX);
+    b->down_box(FL_FLAT_BOX);
+    b->color(palette().bg);
+    b->selection_color(palette().accent);
+    std::string name = basename(faces[i]);
+    b->copy_tooltip(name.substr(0, name.rfind('.')).c_str());
+    std::unique_ptr<Fl_Image> full(load_image(faces[i]));
+    if (full) {
+      imgs.emplace_back(avatar_image(full.get(), pic));
+      b->image(imgs.back().get());
+    }
+    slots[i] = {&c, (int)i};
+    b->callback([](Fl_Widget *, void *d) {
+      Slot *s = (Slot *)d;
+      s->c->chosen = s->i;
+      s->c->done = true;
+    }, &slots[i]);
+  }
+  sc.end();
+  Fl_Button browse(pad, H - pad - 28, 120, 28, "Browse…");
+  browse.callback([](Fl_Widget *, void *d) {
+    ((Ctx *)d)->browse = true;
+    ((Ctx *)d)->done = true;
+  }, &c);
+  Fl_Button cancel(W - pad - 100, H - pad - 28, 100, 28, "Cancel");
+  cancel.callback([](Fl_Widget *, void *d) { ((Ctx *)d)->done = true; }, &c);
+  w.end();
+  run_modal(&w, &c.done);
+  if (c.browse) return browse_picture();
+  return c.chosen >= 0 ? faces[c.chosen] : "";
 }
 
 #ifdef FLD_HAVE_FPRINT
@@ -504,7 +590,7 @@ public:
     if (!a) {
       uname->label("");
       full->value("");
-      pic->set("", "");
+      pic->set("", "", "");
       apply->deactivate();
       revert->deactivate();
       return;
@@ -519,7 +605,7 @@ public:
       auto_b->tooltip("Automatic login needs greetd (/etc/greetd/config.toml)");
     }
     for (auto &gname : editable) grp->add(gname.c_str(), a->in(gname) ? 1 : 0);
-    pic->set(find_picture(*a), a->real_name.empty() ? a->name : a->real_name);
+    pic->set(find_picture(*a), a->name, a->real_name);
     if (a->uid == getuid()) remove_b->deactivate();
     // others' fingers need an administrator (fprintd asks polkit)
     if (fp_b) a->uid == getuid() || !admin.empty() ? fp_b->activate() : fp_b->deactivate();
@@ -654,18 +740,14 @@ public:
   void choose_picture() {
     const Account *a = current();
     if (!a) return;
-    FileDialogOptions o;
-    o.title = "User Picture";
-    std::string faces = "/usr/share/pixmaps/faces";
-    o.folder = is_dir(faces) ? faces : user_dir("PICTURES");
-    o.filters.push_back({"Images", {"*.png", "*.jpg", "*.jpeg"}, {}});
-    FileDialogResult r = run_file_dialog(o);
-    if (!r.ok || r.paths.empty()) return;
-    // a square copy the helper can read: ours, small, PNG
-    std::unique_ptr<Fl_Image> img(load_image(r.paths[0]));
+    std::string path = pick_picture();
+    if (path.empty()) return;
+    // the helper gets a 256 px square PNG: small, and the same in every place
+    // it is shown (the greeter and the lock screen clip it to a circle)
+    std::unique_ptr<Fl_Image> img(load_image(path));
     std::string data;
-    if (!img || !read_file(r.paths[0], data, 8u << 20)) {
-      fl_alert("Cannot read %s", r.paths[0].c_str());
+    if (!img || !avatar_png(img.get(), 256, data)) {
+      fl_alert("Cannot read %s", path.c_str());
       return;
     }
     std::string tmp = getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-settings-picture";

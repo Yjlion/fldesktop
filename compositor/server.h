@@ -683,5 +683,17 @@ void input_update_pointer_focus(struct flwm_server *server, uint32_t time);
 struct flwm_node_desc *input_desc_at(struct flwm_server *server, double lx, double ly,
 		struct wlr_surface **surface, double *sx, double *sy);
 bool input_run_action(struct flwm_server *server, enum flwm_action_type action, const char *arg);
+/* a pointer for pens over programs without tablet support (protocols.c) */
+void input_emulate_motion(struct flwm_server *server, uint32_t time);
+void input_emulate_button(struct flwm_server *server, uint32_t time, uint32_t button, bool pressed);
+
+/* protocols.c */
+void protocols_init(struct flwm_server *server);
+void protocols_finish(struct flwm_server *server);
+void protocols_new_tablet(struct wlr_input_device *device);
+bool protocols_offer_lease(struct wlr_output *output); /* true: a non-desktop output, not for the layout */
+bool protocols_wants_tearing(struct wlr_surface *surface);
+bool protocols_is_video_or_game(struct wlr_surface *surface);
+bool protocols_client_sandboxed(struct wl_client *client);
 
 #endif

@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
@@ -13,11 +14,40 @@
 
 #include "server.h"
 
+/* the fullscreen window on this output, if any */
+static struct flwm_view *output_fullscreen_view(struct flwm_output *output) {
+	struct wlr_box ob;
+	wlr_output_layout_get_box(output->server->output_layout, output->wlr_output, &ob);
+	struct flwm_view *v;
+	wl_list_for_each(v, &output->server->views, link) {
+		if (!v->mapped || !v->fullscreen || v->minimized || !view_on_current(v)) continue;
+		struct wlr_box g;
+		view_get_geometry(v, &g);
+		if (wlr_box_contains_point(&ob, g.x + g.width / 2.0, g.y + g.height / 2.0)) return v;
+	}
+	return NULL;
+}
+
 static void output_frame(struct wl_listener *listener, void *data) {
 	struct flwm_output *output = wl_container_of(listener, output, frame);
 	struct wlr_scene_output *scene_output = output->scene_output;
 	if (!scene_output) return;
-	if (!zoom_output_frame(output)) wlr_scene_output_commit(scene_output, NULL);
+	if (!zoom_output_frame(output)) {
+		/* a fullscreen window that asks for tearing (games) gets async flips */
+		struct flwm_view *fs = output_fullscreen_view(output);
+		if (fs && protocols_wants_tearing(view_surface(fs))) {
+			struct wlr_output_state state;
+			wlr_output_state_init(&state);
+			if (wlr_scene_output_build_state(scene_output, &state, NULL)) {
+				state.tearing_page_flip = true;
+				if (!wlr_output_test_state(output->wlr_output, &state)) state.tearing_page_flip = false;
+				wlr_output_commit_state(output->wlr_output, &state);
+			}
+			wlr_output_state_finish(&state);
+		} else {
+			wlr_scene_output_commit(scene_output, NULL);
+		}
+	}
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	wlr_scene_output_send_frame_done(scene_output, &now);
@@ -87,6 +117,8 @@ static void configure_output(struct flwm_server *server, struct wlr_output *wlr_
 static void server_new_output(struct wl_listener *listener, void *data) {
 	struct flwm_server *server = wl_container_of(listener, server, new_output);
 	struct wlr_output *wlr_output = data;
+	/* VR headsets and the like: for leasing, not for the desktop */
+	if (protocols_offer_lease(wlr_output)) return;
 
 	wlr_output_init_render(wlr_output, server->allocator, server->renderer);
 

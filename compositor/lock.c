@@ -257,14 +257,29 @@ static void new_ext_lock(struct wl_listener *l, void *data) {
 
 /* ---- idle timeout --------------------------------------------------------- */
 
+/* a fullscreen video or game (content-type) keeps the screen on too */
+static bool watching(struct flwm_server *server) {
+	struct flwm_view *v = view_focused(server);
+	return v && v->fullscreen && protocols_is_video_or_game(view_surface(v));
+}
+
 static int idle_timeout(void *data) {
 	struct flwm_server *server = data;
+	if (watching(server)) {
+		int min = server->config.lock_idle_minutes;
+		wl_event_source_timer_update(server->idle_timer, min > 0 ? min * 60000 : 0);
+		return 0;
+	}
 	if (server->idle_inhibitors == 0 && !server->locked) lock_request(server);
 	return 0;
 }
 
 static int blank_timeout(void *data) {
 	struct flwm_server *server = data;
+	if (watching(server)) {
+		wl_event_source_timer_update(server->blank_timer, server->config.blank_ms);
+		return 0;
+	}
 	if (server->idle_inhibitors == 0) output_idle_blank(server);
 	return 0;
 }

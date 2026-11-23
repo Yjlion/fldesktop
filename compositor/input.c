@@ -570,9 +570,12 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 	case WLR_INPUT_DEVICE_KEYBOARD:
 		server_new_keyboard(server, device, false);
 		break;
+	case WLR_INPUT_DEVICE_TABLET:
+		protocols_new_tablet(device);
+		/* the cursor follows the pen */
+		/* fall through */
 	case WLR_INPUT_DEVICE_POINTER:
 	case WLR_INPUT_DEVICE_TOUCH:
-	case WLR_INPUT_DEVICE_TABLET:
 		server_new_pointer(server, device);
 		break;
 	default:
@@ -985,6 +988,19 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	}
 
 	wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
+}
+
+void input_emulate_motion(struct flwm_server *server, uint32_t time) {
+	process_cursor_motion(server, time);
+}
+
+void input_emulate_button(struct flwm_server *server, uint32_t time, uint32_t button, bool pressed) {
+	struct wlr_pointer_button_event ev = {0};
+	ev.time_msec = time;
+	ev.button = button;
+	ev.state = pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED;
+	server_cursor_button(&server->cursor_button, &ev);
+	wlr_seat_pointer_notify_frame(server->seat);
 }
 
 static void server_cursor_axis(struct wl_listener *listener, void *data) {

@@ -265,6 +265,7 @@ int main(int argc, char *argv[]) {
 	gesture_init(&server);
 	im_init(&server);
 	inhibit_init(&server);
+	protocols_init(&server);
 	xwayland_init(&server); /* sets DISPLAY for the programs we start */
 
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
@@ -328,6 +329,7 @@ int main(int argc, char *argv[]) {
 	im_finish();
 	inhibit_finish();
 	view_finish(&server);
+	protocols_finish(&server);
 	input_finish(&server);
 	gesture_finish();
 	output_finish(&server);

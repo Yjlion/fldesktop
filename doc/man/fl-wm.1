@@ -64,6 +64,16 @@ the keys go to it (key bindings still work); its candidate window is placed
 below the text cursor. Settings > Keyboard chooses the input method and sets
 up the session environment for programs that use IM modules instead
 (XMODIFIERS, QT_IM_MODULE, GTK_IM_MODULE for IBus).
+.SH PROTOCOLS
+Besides the usual ones, fl-wm offers tearing-control (a fullscreen game
+that asks for it gets asynchronous page flips), content-type (a fullscreen
+video or game keeps the screen from blanking and locking), xdg-foreign,
+alpha-modifier, ext-data-control, color-management (wlroots 0.20),
+drm-lease (VR headsets are offered for leasing instead of joining the
+desktop) and tablet-v2 (pens: pressure and tilt for programs that know
+tablets, a pointer for the others). Sandboxed programs (security-context-v1,
+as Flatpak sets it up) do not see the privileged protocols: screen capture,
+clipboard managers, input injection, the layer shell, output management.
 .SH MEDIA KEYS
 The volume, microphone, brightness, keyboard light and media keys
 (XF86AudioRaiseVolume, XF86MonBrightnessUp, XF86AudioPlay, ...) run

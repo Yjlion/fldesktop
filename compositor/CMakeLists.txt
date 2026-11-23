@@ -26,7 +26,14 @@ fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-
 fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-output-power-management-unstable-v1.xml server)
 fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml server)
 
-add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c zoom.c a11y.c)
+foreach(p staging/tearing-control/tearing-control-v1 staging/content-type/content-type-v1
+          staging/security-context/security-context-v1 staging/drm-lease/drm-lease-v1)
+  if(EXISTS ${WAYLAND_PROTOCOLS_DIR}/${p}.xml)
+    fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/${p}.xml server)
+  endif()
+endforeach()
+
+add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c zoom.c a11y.c protocols.c)
 
 # X11 programs through Xwayland, when wlroots was built with it
 option(FLD_XWAYLAND "Run X11 programs in fl-wm through Xwayland (if wlroots supports it)" ON)

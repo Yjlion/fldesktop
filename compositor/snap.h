@@ -12,6 +12,12 @@ enum flwm_snap {
 	FLWM_SNAP_BOTTOM_RIGHT,
 	FLWM_SNAP_MAXIMIZED,
 	FLWM_SNAP_MINIMIZED, /* only from flwm_snap_next: Super+Down on a free window */
+	/* thirds: Super+Left / Right again on a half, Super+Alt+Left / Right */
+	FLWM_SNAP_LEFT_THIRD,
+	FLWM_SNAP_CENTER_THIRD,
+	FLWM_SNAP_RIGHT_THIRD,
+	FLWM_SNAP_LEFT_TWO_THIRDS,
+	FLWM_SNAP_RIGHT_TWO_THIRDS,
 };
 
 enum flwm_snap_dir { FLWM_SNAP_DIR_LEFT, FLWM_SNAP_DIR_RIGHT, FLWM_SNAP_DIR_UP, FLWM_SNAP_DIR_DOWN };
@@ -28,6 +34,12 @@ struct flwm_rect flwm_snap_rect(enum flwm_snap snap, struct flwm_rect area);
  * to its quarters, from a free window to maximized / minimized and from
  * maximized back to free. */
 enum flwm_snap flwm_snap_next(enum flwm_snap cur, enum flwm_snap_dir dir);
+/* Super+Alt+Left / Right: through the thirds (left, center, right) */
+enum flwm_snap flwm_snap_next_third(enum flwm_snap cur, enum flwm_snap_dir dir);
+/* The snap that fills the rest of the screen next to `snap` (for snap
+ * assist): left half -> right half, left third -> right two thirds, ...;
+ * NONE when there is none. */
+enum flwm_snap flwm_snap_complement(enum flwm_snap snap);
 
 /* Dragging a window: the snap for the pointer at px, py on an output whose
  * full area is out. Within edge pixels of the left, right or top border;

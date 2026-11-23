@@ -25,6 +25,15 @@ drag_snap=true
 xwayland=true
 # number of workspaces (1-9); all outputs switch together
 workspaces=4
+# after snapping a window to a side (or a third), offer the other windows
+# for the rest of the screen
+snap_assist=true
+# hot corners: an action when the pointer is pushed into a corner
+# (overview, launcher, show-desktop, lock, exec ..., or none)
+#hot_corner_top_left=overview
+#hot_corner_top_right=none
+#hot_corner_bottom_left=none
+#hot_corner_bottom_right=show-desktop
 
 [keyboard]
 # xkb names, e.g. layout=us,de  options=grp:alt_shift_toggle
@@ -115,6 +124,9 @@ Super+Down=snap-down
 Super+r=resize-mode
 Super+Left=snap-left
 Super+Right=snap-right
+Super+Alt+Left=snap-third-left
+Super+Alt+Right=snap-third-right
+Super+Tab=overview
 Super+f=fullscreen
 Super+equal=zoom-in
 Super+minus=zoom-out

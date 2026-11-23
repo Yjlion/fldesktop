@@ -1,5 +1,8 @@
 /* Alt+Tab window switcher: a panel in the middle of the screen with the
- * windows (icon and title) in focus order. Tab / Shift+Tab and the arrow
+ * windows (icon and title) in focus order. The same panel is snap assist
+ * (after a window snapped to a side: the other windows, to fill the rest)
+ * and the overview (Super+Tab: the workspace's windows over a dimmed
+ * screen). Tab / Shift+Tab and the arrow
  * keys move the selection while Alt is held; releasing Alt (or Enter, or a
  * click) switches to it, Escape cancels. Drawn with cairo/pango into a scene
  * buffer, like the title bars. */
@@ -309,6 +312,15 @@ static void sw_layout(struct flwm_switcher *s, int out_w, int *cols, int *rows, 
 	*H = *rows * CELL_H + 2 * PAD + TITLE_H;
 }
 
+/* where the panel goes: the middle of the output, or of the free side */
+static struct wlr_box sw_area(struct flwm_switcher *s) {
+	struct flwm_output *o = s->output;
+	if (s->mode != FLWM_SW_ASSIST) return o->full_area;
+	struct flwm_rect ua = {o->usable_area.x, o->usable_area.y, o->usable_area.width, o->usable_area.height};
+	struct flwm_rect r = flwm_snap_rect(s->slot, ua);
+	return (struct wlr_box){r.x, r.y, r.width, r.height};
+}
+
 static void sw_render(struct flwm_server *server) {
 	struct flwm_switcher *s = &server->switcher;
 	if (!s->node || s->n == 0) return;
@@ -316,7 +328,12 @@ static void sw_render(struct flwm_server *server) {
 	if (!o) return;
 	float scale = o->wlr_output->scale > 0 ? o->wlr_output->scale : 1;
 	int cols, rows, W, H;
-	sw_layout(s, o->full_area.width, &cols, &rows, &W, &H);
+	struct wlr_box area = sw_area(s);
+	sw_layout(s, area.width, &cols, &rows, &W, &H);
+	if (s->mode != FLWM_SW_SWITCH) {
+		H += TITLE_H; /* a heading */
+		if (W < 300) W = 300;
+	}
 	int pw = (int)ceil(W * scale), ph = (int)ceil(H * scale);
 	struct sw_buffer *buf = calloc(1, sizeof *buf);
 	buf->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, pw, ph);
@@ -339,6 +356,13 @@ static void sw_render(struct flwm_server *server) {
 
 	uint32_t accent = flwm_accent_color();
 	const char *font = server->config.font ? server->config.font : "Sans Bold 10";
+	int top = 0;
+	if (s->mode != FLWM_SW_SWITCH) {
+		cairo_set_source_rgba(cr, 1, 1, 1, 0.75);
+		draw_text(cr, font, s->mode == FLWM_SW_ASSIST ? "Which window goes here?" : "Windows", PAD, PAD - 4,
+			W - 2 * PAD, 1, true);
+		top = TITLE_H;
+	}
 	/* the item font: the configured family, regular weight */
 	PangoFontDescription *fd = pango_font_description_from_string(font);
 	pango_font_description_set_weight(fd, PANGO_WEIGHT_NORMAL);
@@ -350,7 +374,7 @@ static void sw_render(struct flwm_server *server) {
 
 	for (int i = 0; i < s->n; i++) {
 		struct flwm_view *v = s->views[i];
-		int cx = PAD + (i % cols) * CELL_W, cy = PAD + (i / cols) * CELL_H;
+		int cx = PAD + (i % cols) * CELL_W, cy = top + PAD + (i / cols) * CELL_H;
 		if (i == s->sel) {
 			rounded_rect(cr, cx + 4, cy + 2, CELL_W - 8, CELL_H - 4, 10);
 			set_argb(cr, accent, 0.85);
@@ -399,8 +423,9 @@ static void sw_render(struct flwm_server *server) {
 	wlr_scene_buffer_set_buffer(s->node, &buf->base);
 	wlr_scene_buffer_set_dest_size(s->node, W, H);
 	wlr_buffer_drop(&buf->base);
-	s->box.x = o->full_area.x + (o->full_area.width - W) / 2;
-	s->box.y = o->full_area.y + (o->full_area.height - H) / 2;
+	s->box.x = area.x + (area.width - W) / 2;
+	s->box.y = area.y + (area.height - H) / 2;
+	s->top = top;
 	s->box.width = W;
 	s->box.height = H;
 	s->cols = cols;
@@ -426,6 +451,7 @@ bool switcher_step(struct flwm_server *server, int dir) {
 		if (!s->output) return false;
 		/* the focused window is first: start on the one before it */
 		s->sel = 0;
+		s->mode = FLWM_SW_SWITCH;
 		s->node = wlr_scene_buffer_create(server->layer_popups, NULL);
 		wlr_scene_node_raise_to_top(&s->node->node);
 	}
@@ -448,6 +474,8 @@ void switcher_step_row(struct flwm_server *server, int dir) {
 static void sw_close(struct flwm_server *server) {
 	struct flwm_switcher *s = &server->switcher;
 	if (s->node) wlr_scene_node_destroy(&s->node->node);
+	if (s->backdrop) wlr_scene_node_destroy(&s->backdrop->node);
+	s->backdrop = NULL;
 	s->node = NULL;
 	s->n = 0;
 	s->output = NULL;
@@ -458,9 +486,15 @@ void switcher_finish(struct flwm_server *server, bool commit) {
 	struct flwm_switcher *s = &server->switcher;
 	if (!s->node) return;
 	struct flwm_view *v = commit && s->sel >= 0 && s->sel < s->n ? s->views[s->sel] : NULL;
+	enum flwm_switcher_mode mode = s->mode;
+	enum flwm_snap slot = s->slot;
 	sw_close(server);
 	server->cycling = false;
 	server->cycle_current = NULL;
+	if (v && v->mapped && mode == FLWM_SW_ASSIST) {
+		if (v->minimized) view_set_minimized(v, false);
+		view_set_snap(v, slot);
+	}
 	if (v && v->mapped) {
 		view_focus(v); /* also un-minimizes */
 		wl_list_remove(&v->link);
@@ -473,7 +507,7 @@ void switcher_finish(struct flwm_server *server, bool commit) {
 void switcher_click(struct flwm_server *server, double lx, double ly) {
 	struct flwm_switcher *s = &server->switcher;
 	if (!s->node) return;
-	int x = (int)lx - s->box.x - PAD, y = (int)ly - s->box.y - PAD;
+	int x = (int)lx - s->box.x - PAD, y = (int)ly - s->box.y - PAD - s->top;
 	if (x >= 0 && y >= 0 && s->cols > 0) {
 		int i = (y / CELL_H) * s->cols + x / CELL_W;
 		if (x / CELL_W < s->cols && i < s->n) {
@@ -498,7 +532,7 @@ void switcher_view_gone(struct flwm_server *server, struct flwm_view *view) {
 		s->views[j++] = s->views[i];
 	}
 	s->n = j;
-	if (s->n < 2) {
+	if (s->n < (s->mode == FLWM_SW_SWITCH ? 2 : 1)) {
 		sw_close(server);
 		server->cycling = false;
 		return;
@@ -513,4 +547,54 @@ void switcher_output_gone(struct flwm_server *server, struct flwm_output *o) {
 		sw_close(server);
 		server->cycling = false;
 	}
+}
+
+/* ---- snap assist and the overview ---------------------------------------- */
+
+static bool sw_open(struct flwm_server *server, enum flwm_switcher_mode mode, struct flwm_output *o,
+		struct flwm_view *except) {
+	struct flwm_switcher *s = &server->switcher;
+	if (s->node) switcher_finish(server, false);
+	s->n = 0;
+	struct flwm_view *v;
+	wl_list_for_each(v, &server->views, link)
+		if (v != except && view_is_cyclable(v) && view_on_current(v) && s->n < FLWM_SWITCHER_MAX) s->views[s->n++] = v;
+	if (s->n == 0 || !o) return false;
+	s->output = o;
+	s->mode = mode;
+	s->sel = 0;
+	if (mode == FLWM_SW_OVERVIEW) {
+		/* the screen dimmed under the panel of windows */
+		static const float dim[4] = {0, 0, 0, 0.55f};
+		s->backdrop = wlr_scene_rect_create(server->layer_popups, o->full_area.width, o->full_area.height, dim);
+		wlr_scene_node_set_position(&s->backdrop->node, o->full_area.x, o->full_area.y);
+	}
+	s->node = wlr_scene_buffer_create(server->layer_popups, NULL);
+	wlr_scene_node_raise_to_top(&s->node->node);
+	sw_render(server);
+	return true;
+}
+
+void switcher_overview(struct flwm_server *server) {
+	struct flwm_switcher *s = &server->switcher;
+	if (s->node && s->mode == FLWM_SW_OVERVIEW) {
+		switcher_finish(server, false);
+		return;
+	}
+	struct flwm_output *o = output_at(server, server->cursor->x, server->cursor->y);
+	if (!o) o = output_primary(server);
+	sw_open(server, FLWM_SW_OVERVIEW, o, NULL);
+}
+
+void switcher_snap_assist(struct flwm_server *server, struct flwm_view *view) {
+	if (!server->config.snap_assist || !view) return;
+	enum flwm_snap rest = flwm_snap_complement(view->snap);
+	if (rest == FLWM_SNAP_NONE) return;
+	struct wlr_box g;
+	view_get_geometry(view, &g);
+	struct flwm_output *o = output_at(server, g.x + g.width / 2.0, g.y + g.height / 2.0);
+	if (!o) return;
+	struct flwm_switcher *s = &server->switcher;
+	s->slot = rest;
+	sw_open(server, FLWM_SW_ASSIST, o, view);
 }

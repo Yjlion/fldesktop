@@ -211,6 +211,38 @@ void app_shortcuts_dialog() {
   while (d.shown()) Fl::wait();
 }
 
+// [behaviour] hot_corner_top_left= ... in wm.ini
+void hot_corners_dialog() {
+  static const char *keys[] = {"hot_corner_top_left", "hot_corner_top_right", "hot_corner_bottom_left",
+                               "hot_corner_bottom_right"};
+  static const char *labels[] = {"Top left:", "Top right:", "Bottom left:", "Bottom right:"};
+  static const char *acts[] = {"", "overview", "launcher", "show-desktop", "lock", "workspace-next"};
+  ConfigFile wm(wm_ini_path());
+  Fl_Double_Window d(400, 230, "Hot Corners");
+  d.set_modal();
+  Fl_Choice *ch[4];
+  for (int i = 0; i < 4; i++) {
+    ch[i] = new Fl_Choice(130, 16 + i * 38, 250, 28, labels[i]);
+    ch[i]->add("Nothing|Overview of the windows|Applications|Show the desktop|Lock the screen|Next workspace");
+    std::string cur = wm.ini.get("behaviour", keys[i], "");
+    ch[i]->value(0);
+    for (int k = 1; k < 6; k++)
+      if (cur == acts[k]) ch[i]->value(k);
+  }
+  Fl_Button close(280, 186, 100, 30, "Close");
+  close.callback([](Fl_Widget *w, void *) { w->window()->hide(); });
+  d.end();
+  d.show();
+  while (d.shown()) Fl::wait();
+  wm.ini.load(wm.path);
+  for (int i = 0; i < 4; i++) {
+    if (ch[i]->value() <= 0) wm.ini.remove("behaviour", keys[i]);
+    else wm.ini.set("behaviour", keys[i], acts[ch[i]->value()]);
+    delete ch[i];
+  }
+  save_wm(wm);
+}
+
 class ShortcutsPage : public Fl_Group {
 public:
   ConfigFile wm{wm_ini_path()};
@@ -230,6 +262,16 @@ public:
       ShortcutsPage *p = (ShortcutsPage *)d;
       p->wm.ini.load(p->wm.path);
       p->wm.ini.set_bool("behaviour", "switcher", ((Fl_Check_Button *)w)->value());
+      save_wm(p->wm);
+    }, this);
+    cy += 30;
+    Fl_Check_Button *assist = new Fl_Check_Button(X + 24, cy, lw, 28,
+                                                  "Snap assist: after snapping a window to a side, offer the others for the rest");
+    assist->value(wm.ini.get_bool("behaviour", "snap_assist", true));
+    assist->callback([](Fl_Widget *w, void *d) {
+      ShortcutsPage *p = (ShortcutsPage *)d;
+      p->wm.ini.load(p->wm.path);
+      p->wm.ini.set_bool("behaviour", "snap_assist", ((Fl_Check_Button *)w)->value());
       save_wm(p->wm);
     }, this);
     cy += 36;
@@ -267,6 +309,9 @@ public:
       p->fill();
       p->save();
     }, this);
+    Fl_Button *corners = new Fl_Button(X + 518, by, 120, 30, "Hot Corners…");
+    corners->tooltip("What pushing the pointer into a corner of the screen does");
+    corners->callback([](Fl_Widget *, void *) { hot_corners_dialog(); });
     Fl_Button *apps = new Fl_Button(X + 342, by, 170, 30, "Application Shortcuts…");
     apps->tooltip("Global shortcuts that applications asked for (through the desktop portal)");
     apps->callback([](Fl_Widget *, void *) { app_shortcuts_dialog(); });

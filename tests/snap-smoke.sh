@@ -65,8 +65,15 @@ wtype -M logo -k Right -m logo
 expect "Super+Right" "640 $top 640 $((h / 2))"
 wtype -M logo -k Down -m logo
 expect "Super+Down" "640 $top 640 $h"
+# Super+Right again: two thirds, one third; Super+Alt+arrows: the thirds
 wtype -M logo -k Right -m logo
-expect "Super+Right on the right half" "640 $top 640 $h"
+expect "Super+Right on the right half" "426 $top 854 $h"
+wtype -M logo -k Right -m logo
+expect "Super+Right on two thirds" "854 $top 426 $h"
+wtype -M logo -M alt -k Left -m alt -m logo
+expect "Super+Alt+Left on the right third" "426 $top 428 $h"
+wtype -M logo -k Right -m logo
+expect "Super+Right on the center third" "854 $top 426 $h"
 wtype -M logo -k Left -m logo
 settle
 set -- $(geo)

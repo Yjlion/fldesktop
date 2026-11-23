@@ -115,6 +115,9 @@ enum flwm_action_type {
 	FLWM_ACTION_ZOOM_IN,
 	FLWM_ACTION_ZOOM_OUT,
 	FLWM_ACTION_ZOOM_RESET,
+	FLWM_ACTION_OVERVIEW,
+	FLWM_ACTION_SNAP_THIRD_LEFT,
+	FLWM_ACTION_SNAP_THIRD_RIGHT,
 	FLWM_ACTION_PORTAL_SHORTCUT, /* arg "app_id\x1fshortcut_id": a global shortcut (portal) */
 };
 
@@ -166,6 +169,7 @@ struct flwm_config {
 	int noutputs;
 	char *launcher_cmd;
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
+	bool snap_assist; /* after snapping to a side: offer the other windows */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
 	int workspaces; /* number of workspaces, 1..FLWM_MAX_WORKSPACES */
 	/* touchpad gestures (gesture.c) */
@@ -173,6 +177,8 @@ struct flwm_config {
 	int gesture_fingers;   /* 3..5 */
 	bool gesture_natural;  /* sideways: the workspaces follow the fingers */
 	struct flwm_gesture_action { enum flwm_action_type type; char *arg; } gesture_up, gesture_down;
+	/* hot corners: top-left, top-right, bottom-left, bottom-right */
+	struct flwm_gesture_action hot_corner[4];
 	/* [accessibility] (a11y.c) */
 	bool sticky_keys;
 	int bounce_keys_ms;
@@ -191,11 +197,15 @@ struct flwm_config {
 
 #define FLWM_SWITCHER_MAX 64
 
-/* the Alt+Tab switcher (switcher.c) */
+/* the Alt+Tab switcher (switcher.c); also snap assist and the overview */
+enum flwm_switcher_mode { FLWM_SW_SWITCH, FLWM_SW_ASSIST, FLWM_SW_OVERVIEW };
 struct flwm_switcher {
 	struct wlr_scene_buffer *node; /* NULL when closed */
+	enum flwm_switcher_mode mode;
+	enum flwm_snap slot;            /* snap assist: where the chosen window goes */
+	struct wlr_scene_rect *backdrop; /* the overview dims the screen */
 	struct flwm_view *views[FLWM_SWITCHER_MAX];
-	int n, sel, cols;
+	int n, sel, cols, top;
 	struct flwm_output *output;
 	struct wlr_box box; /* layout coordinates */
 };
@@ -291,6 +301,7 @@ struct flwm_server {
 	uint32_t cycle_modifier;
 	struct flwm_view *cycle_current;
 	struct flwm_switcher switcher;
+	int hot_corner_fired; /* the corner whose action ran, -1 none */
 
 	struct flwm_layer_surface *focused_layer; /* exclusive keyboard focus */
 
@@ -500,6 +511,10 @@ struct flwm_output *output_at(struct flwm_server *server, double lx, double ly);
 
 /* switcher.c */
 bool switcher_active(struct flwm_server *server);
+/* Super+Tab: every window of the workspace to pick from (toggles) */
+void switcher_overview(struct flwm_server *server);
+/* after `view` snapped: the other windows for the rest of the screen */
+void switcher_snap_assist(struct flwm_server *server, struct flwm_view *view);
 bool switcher_step(struct flwm_server *server, int dir);
 void switcher_step_row(struct flwm_server *server, int dir);
 void switcher_finish(struct flwm_server *server, bool commit);

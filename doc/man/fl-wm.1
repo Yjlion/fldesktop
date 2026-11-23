@@ -28,6 +28,21 @@ opposite arrow gives it back the size and place it had. Snapped windows stay
 snapped when the panel or the screen changes. \fBSuper+R\fR resizes the focused
 window with the arrow keys (Shift for small steps); Enter keeps the size and
 Escape goes back.
+.PP
+Super+Left (or Right) again on a half goes to two thirds, then one third, then
+back to the half; Super+Alt+Left and Super+Alt+Right move a window through the
+left, center and right thirds. After a window snaps to a side or a third,
+\fBsnap assist\fR offers the other windows of the workspace for the rest of the
+screen (arrows and Enter or a click choose, Escape or Super leaves it;
+\fBsnap_assist=false\fR turns it off).
+.SH OVERVIEW AND HOT CORNERS
+\fBSuper+Tab\fR shows the windows of the workspace over a dimmed screen (the
+\fBoverview\fR action); a click, or the arrows and Enter, picks one. Hot
+corners run an action when the pointer is pushed into a corner of a screen:
+\fBhot_corner_top_left=\fR (and top_right, bottom_left, bottom_right) in
+\fB[behaviour]\fR take any action, e.g. overview, launcher, show-desktop or
+lock. The touchpad swipes (\fB[gestures]\fR swipe_up, swipe_down) can be set to
+\fBoverview\fR as well.
 .SH WORKSPACES
 There are four workspaces by default (\fBworkspaces=\fR1 to 9 in the \fB[behaviour]\fR section of
 \fIwm.ini\fR); all outputs switch together. Super+1 to Super+9 go to a workspace and

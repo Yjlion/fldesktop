@@ -129,10 +129,21 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 		if (v) view_set_fullscreen(v, !v->fullscreen);
 		return true;
 	case FLWM_ACTION_SNAP_LEFT:
-		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_LEFT));
-		return true;
 	case FLWM_ACTION_SNAP_RIGHT:
-		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_RIGHT));
+	case FLWM_ACTION_SNAP_THIRD_LEFT:
+	case FLWM_ACTION_SNAP_THIRD_RIGHT: {
+		if (!v) return true;
+		enum flwm_snap_dir d = action == FLWM_ACTION_SNAP_LEFT || action == FLWM_ACTION_SNAP_THIRD_LEFT
+			? FLWM_SNAP_DIR_LEFT : FLWM_SNAP_DIR_RIGHT;
+		bool third = action == FLWM_ACTION_SNAP_THIRD_LEFT || action == FLWM_ACTION_SNAP_THIRD_RIGHT;
+		enum flwm_snap n = third ? flwm_snap_next_third(view_snap_state(v), d) : flwm_snap_next(view_snap_state(v), d);
+		view_set_snap(v, n);
+		/* the rest of the screen: one of the other windows */
+		switcher_snap_assist(server, v);
+		return true;
+	}
+	case FLWM_ACTION_OVERVIEW:
+		switcher_overview(server);
 		return true;
 	case FLWM_ACTION_SNAP_UP:
 		if (v) view_set_snap(v, flwm_snap_next(view_snap_state(v), FLWM_SNAP_DIR_UP));
@@ -356,6 +367,19 @@ static void handle_key(struct flwm_keyboard *keyboard, struct wlr_keyboard_key_e
 				view_resize_to(rv, *w, *h);
 			/* everything but modifiers stays here */
 			if (!(sym >= XKB_KEY_Shift_L && sym <= XKB_KEY_Hyper_R)) handled = true;
+		}
+		/* snap assist and the overview close on Super+anything (snapping on
+		 * with Super+Left again, Super+Tab closing the overview) */
+		if (!handled && switcher_active(server) && server->switcher.mode != FLWM_SW_SWITCH &&
+				(mods & WLR_MODIFIER_LOGO)) {
+			xkb_layout_index_t layout = xkb_state_key_get_layout(state, keycode);
+			nsyms = xkb_keymap_key_get_syms_by_level(keyboard->wlr_keyboard->keymap, keycode, layout, 0, &syms);
+			bool tab = nsyms > 0 && syms[0] == XKB_KEY_Tab;
+			bool overview = server->switcher.mode == FLWM_SW_OVERVIEW;
+			if (!(nsyms > 0 && syms[0] >= XKB_KEY_Shift_L && syms[0] <= XKB_KEY_Hyper_R)) {
+				switcher_finish(server, false);
+				if (overview && tab) handled = true;
+			}
 		}
 		/* the switcher has the keyboard while it is open */
 		if (!handled && switcher_active(server)) {
@@ -821,6 +845,30 @@ void input_update_pointer_focus(struct flwm_server *server, uint32_t time) {
 	}
 }
 
+/* Hot corners: the pointer pushed into a corner runs its action, once until
+ * it leaves the corner again. */
+static void hot_corners(struct flwm_server *server) {
+	if (server->locked) return;
+	struct flwm_output *o = output_at(server, server->cursor->x, server->cursor->y);
+	if (!o) return;
+	struct wlr_box b = o->full_area;
+	double x = server->cursor->x, y = server->cursor->y;
+	bool left = x <= b.x + 1, right = x >= b.x + b.width - 2;
+	bool top = y <= b.y + 1, bottom = y >= b.y + b.height - 2;
+	int corner = top && left ? 0 : top && right ? 1 : bottom && left ? 2 : bottom && right ? 3 : -1;
+	if (corner < 0) {
+		/* away from all corners: armed again */
+		bool near = (x < b.x + 24 || x > b.x + b.width - 24) && (y < b.y + 24 || y > b.y + b.height - 24);
+		if (!near) server->hot_corner_fired = -1;
+		return;
+	}
+	if (corner == server->hot_corner_fired) return;
+	struct flwm_gesture_action *a = &server->config.hot_corner[corner];
+	if (a->type == FLWM_ACTION_NONE) return;
+	server->hot_corner_fired = corner;
+	input_run_action(server, a->type, a->arg);
+}
+
 static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
 	zoom_cursor_moved(server);
 	if (server->drag_icon)
@@ -841,6 +889,7 @@ static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
 		}
 		return;
 	default:
+		hot_corners(server);
 		input_update_pointer_focus(server, time);
 	}
 }
@@ -904,6 +953,7 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 			view_set_snap(dropped, snap);
 			/* unsnapping brings it back where the drag began */
 			dropped->saved = server->drag_from;
+			switcher_snap_assist(server, dropped);
 		}
 		if (mode == FLWM_CURSOR_PASSTHROUGH)
 			wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);

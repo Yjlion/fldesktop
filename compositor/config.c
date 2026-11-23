@@ -68,6 +68,8 @@ static bool parse_action(const char *action, enum flwm_action_type *type_out, ch
 		{"zoom-in", FLWM_ACTION_ZOOM_IN}, {"zoom-out", FLWM_ACTION_ZOOM_OUT},
 		{"zoom-reset", FLWM_ACTION_ZOOM_RESET},
 		{"portal-shortcut", FLWM_ACTION_PORTAL_SHORTCUT},
+		{"overview", FLWM_ACTION_OVERVIEW},
+		{"snap-third-left", FLWM_ACTION_SNAP_THIRD_LEFT}, {"snap-third-right", FLWM_ACTION_SNAP_THIRD_RIGHT},
 	};
 	enum flwm_action_type type = FLWM_ACTION_NONE;
 	for (size_t i = 0; i < sizeof actions / sizeof actions[0]; i++)
@@ -176,6 +178,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->default_scale = 1.0f;
 	c->launcher_cmd = strdup("fl-launcher");
 	c->switcher = true;
+	c->snap_assist = true;
 	c->xwayland = true;
 	c->workspaces = 4;
 	c->gestures = true;
@@ -199,6 +202,9 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+r", "resize-mode");
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
+	add_binding(c, "Super+Alt+Left", "snap-third-left");
+	add_binding(c, "Super+Alt+Right", "snap-third-right");
+	add_binding(c, "Super+Tab", "overview");
 	add_binding(c, "Super+f", "fullscreen");
 	add_binding(c, "Super+equal", "zoom-in");
 	add_binding(c, "Super+plus", "zoom-in");
@@ -305,6 +311,18 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "drag_snap")) c->drag_snap = parse_bool(v);
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
+			else if (!strcmp(k, "snap_assist")) c->snap_assist = parse_bool(v);
+			else if (!strncmp(k, "hot_corner_", 11)) {
+				static const char *names[] = {"top_left", "top_right", "bottom_left", "bottom_right"};
+				for (int i = 0; i < 4; i++)
+					if (!strcmp(k + 11, names[i])) {
+						struct flwm_gesture_action *h = &c->hot_corner[i];
+						free(h->arg);
+						h->arg = NULL;
+						h->type = FLWM_ACTION_NONE;
+						if (*v && strcasecmp(v, "none")) parse_action(v, &h->type, &h->arg);
+					}
+			}
 			else if (!strcmp(k, "xwayland")) c->xwayland = parse_bool(v);
 			else if (!strcmp(k, "workspaces")) {
 				int n = atoi(v);
@@ -464,6 +482,7 @@ void config_free(struct flwm_config *c) {
 	free(c->scroll_method);
 	free(c->gesture_up.arg);
 	free(c->gesture_down.arg);
+	for (int i = 0; i < 4; i++) free(c->hot_corner[i].arg);
 	free(c->path);
 	for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);
 	for (int i = 0; i < c->nautostart; i++) free(c->autostart[i]);

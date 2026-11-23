@@ -201,6 +201,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGPIPE, SIG_IGN);
 
 	server.zoom = 1;
+	server.hot_corner_fired = -1;
 	server.wl_display = wl_display_create();
 	server.event_loop = wl_display_get_event_loop(server.wl_display);
 	server.backend = wlr_backend_autocreate(server.event_loop, &server.session);

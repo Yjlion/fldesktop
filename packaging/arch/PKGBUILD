@@ -215,8 +215,9 @@ package_fldesktop-docs() {
 
 package_fldesktop-web() {
   pkgdesc="fldesktop web browser (WPE WebKit)"
-  depends=(fltk glib2 wpewebkit)
-  optdepends=("xdg-utils: open other kinds of links" "gst-plugins-good: audio and video in pages")
+  depends=(fltk glib2 wpewebkit libxml2)
+  optdepends=("xdg-utils: open other kinds of links" "gst-plugins-good: audio and video in pages"
+              "gnome-keyring: saved passwords (or another Secret Service, e.g. keepassxc)")
   _app web
 }
 

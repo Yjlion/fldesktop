@@ -500,6 +500,12 @@ if(TARGET fl-files-search)
   add_test(NAME search COMMAND test_search)
 endif()
 
+if(TARGET fl-view-util)
+  add_executable(test_view test_view.cpp)
+  target_link_libraries(test_view PRIVATE fl-view-util)
+  add_test(NAME view COMMAND test_view)
+endif()
+
 if(TARGET fl-files-rename)
   add_executable(test_files_rename test_files_rename.cpp)
   target_link_libraries(test_files_rename PRIVATE fl-files-rename)

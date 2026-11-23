@@ -382,6 +382,8 @@ G["weather-showers"] = [S(CLOUD_HI), S("M5.5 11.75 l-1 2.5 M8.5 11.75 l-1 2.5 M1
 G["weather-snow"] = [S(CLOUD_HI), C(5, 12.75, 0.9, fill=True), C(8, 14, 0.9, fill=True), C(11, 12.75, 0.9, fill=True)]
 G["weather-storm"] = [S(CLOUD_HI), F("M8.75 10.25 l-2.75 3.25 h2.25 l-1 2.25 l3.25 -3.5 h-2.25 l1.25 -2 z")]
 G["weather-severe-alert"] = G["dialog-warning"]
+G["transform-crop"] = [S("M4.5 1.5 v10 h10 M1.5 4.5 h10 v10")]
+G["transform-scale"] = [R(1.75, 8.25, 6, 6, 1), S("M8.5 7.5 l5 -5 M9.75 2.5 h3.75 v3.75")]
 G["user-available"] = [C(8, 8, 5.5, fill=True)]
 G["user-offline"] = [C(8, 8, 5.25)]
 G["user-busy"] = [C(8, 8, 6, fill=True), ]

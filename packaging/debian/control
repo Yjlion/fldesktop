@@ -34,6 +34,7 @@ Build-Depends: debhelper-compat (= 13),
                libarchive-dev,
                libpoppler-cpp-dev,
                libxml2-dev,
+               libjpeg-dev,
                libgstreamer1.0-dev,
                libgstreamer-plugins-base1.0-dev,
                libpam0g-dev,
@@ -210,7 +211,7 @@ Package: fldesktop-web
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: www-browser
-Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils
+Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils, gnome-keyring | keepassxc
 Description: fldesktop web browser
  fl-web is a web browser built with FLTK and WPE WebKit: tabs, an address
  bar that searches and completes from bookmarks and history, downloads,

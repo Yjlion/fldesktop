@@ -7,5 +7,23 @@ fl-view \- image viewer
 Shows images and lets you step through the
 other images of the same folder with the arrow keys. +/\- zoom, 1 original size, F fit,
 L/R rotate, H flip, F5 slideshow, F11 fullscreen, Delete moves to the trash.
+.PP
+Photos are shown upright as the camera recorded them (the EXIF orientation).
+\fBI\fR shows the image information: the file, its size and dimensions, and for photos the
+camera, lens, date, exposure, focal length, flash and the place where it was taken
+(\fBShow on Map\fR opens it on OpenStreetMap).
+.PP
+A strip of thumbnails of the folder runs along the bottom; a click shows a picture, the
+mouse wheel scrolls it and \fBT\fR hides or shows it.
+.SS Editing
+\fBC\fR crops: drag over the part to keep, then Enter (Escape cancels). Ctrl+R resizes, with
+the proportions kept unless turned off. Rotating and flipping are edits too. Ctrl+S saves the
+changed picture over the file (after asking), Ctrl+Shift+S saves it under another name, as PNG
+or JPEG by the name's ending; leaving a changed picture asks first. Saving a JPEG does not
+keep its camera information.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/view.ini\fR
+\fB[View]\fR Thumbnails=true|false.
 .SH SEE ALSO
 \fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)

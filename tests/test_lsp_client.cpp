@@ -44,7 +44,8 @@ int main(int argc, char **argv) {
 
   got.clear();
   lspc::change(c, file, "int main2;\n");
-  CHECK(wait_for([&] { return !got.empty(); }));
+  // the answer to the change (late answers to the opening may come first)
+  CHECK(wait_for([&] { return !got.empty() && got[0].message == "fake: 10 characters"; }));
   CHECK_EQ(got[0].end_col, 10);
 
   std::vector<lsp::CompletionItem> items;

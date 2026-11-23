@@ -5,7 +5,12 @@
 
 #include <FL/Fl.H>
 #include <FL/Fl_Image.H>
+#include <FL/Fl_BMP_Image.H>
+#include <FL/Fl_GIF_Image.H>
+#include <FL/Fl_ICO_Image.H>
+#include <FL/Fl_JPEG_Image.H>
 #include <FL/Fl_PNG_Image.H>
+#include <FL/Fl_PNM_Image.H>
 #include <FL/Fl_SVG_Image.H>
 #include <FL/Fl_Shared_Image.H>
 #include <FL/Fl_XPM_Image.H>
@@ -249,6 +254,13 @@ Fl_Image *load_image(const std::string &path) {
   if (ext == "svg" || ext == "svgz") img = new Fl_SVG_Image(path.c_str());
   else if (ext == "xpm") img = new Fl_XPM_Image(path.c_str());
   else if (ext == "png") img = new Fl_PNG_Image(path.c_str());
+  // the usual formats directly: Fl_Shared_Image keeps a list of loaded files
+  // that copies made from it must not outlive
+  else if (ext == "jpg" || ext == "jpeg" || ext == "jpe") img = new Fl_JPEG_Image(path.c_str());
+  else if (ext == "gif") img = new Fl_GIF_Image(path.c_str());
+  else if (ext == "bmp") img = new Fl_BMP_Image(path.c_str());
+  else if (ext == "ico") img = new Fl_ICO_Image(path.c_str());
+  else if (ext == "pnm" || ext == "pbm" || ext == "pgm" || ext == "ppm") img = new Fl_PNM_Image(path.c_str());
   else {
     Fl_Shared_Image *s = Fl_Shared_Image::get(path.c_str());
     if (!s) return nullptr;

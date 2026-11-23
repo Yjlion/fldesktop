@@ -1,0 +1,40 @@
+name: Live image
+
+# Builds a Debian trixie live ISO with fldesktop from the published apt
+# repository (packaging/live). Started by hand; the ISO is kept as a build
+# artifact, not published.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which fldesktop packages: stable (trixie) or devel (trixie-devel)"
+        type: choice
+        options: [stable, devel]
+        default: stable
+
+jobs:
+  iso:
+    name: Live ISO (amd64, ${{ inputs.channel }})
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+      # live-build mounts /proc and /dev in its chroots
+      options: --privileged
+    steps:
+      - name: Install live-build
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            live-build debootstrap ca-certificates git xorriso squashfs-tools \
+            grub-pc-bin grub-efi-amd64-bin mtools dosfstools isolinux syslinux-common
+      - uses: actions/checkout@v4
+      - name: Build
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: packaging/live/build.sh "$CHANNEL" "$GITHUB_WORKSPACE/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fldesktop-live-${{ inputs.channel }}
+          path: out/*.iso
+          compression-level: 0
+          retention-days: 14

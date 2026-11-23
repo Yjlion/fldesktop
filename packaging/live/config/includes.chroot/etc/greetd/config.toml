@@ -1,0 +1,12 @@
+# The live system: logs the live user straight in; after logging out,
+# fl-greet (password "live").
+[terminal]
+vt = 7
+
+[initial_session]
+command = "fl-session"
+user = "user"
+
+[default_session]
+command = "fl-greet-session"
+user = "_greetd"

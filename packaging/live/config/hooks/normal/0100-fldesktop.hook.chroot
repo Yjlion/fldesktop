@@ -1,0 +1,13 @@
+#!/bin/sh
+# Runs in the live system's chroot while the image is built.
+set -e
+# the fldesktop boot splash
+if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+	plymouth-set-default-theme fldesktop
+fi
+# greetd starts the session on VT 7 (config.toml above)
+systemctl enable greetd.service
+systemctl set-default graphical.target
+# the greeter lists the live user (uid 1000) like any other
+mkdir -p /etc/fldesktop
+[ -f /etc/fldesktop/greeter.ini ] || printf '[Greeter]\nMinUid=1000\n' >/etc/fldesktop/greeter.ini

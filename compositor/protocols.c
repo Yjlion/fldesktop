@@ -175,7 +175,11 @@ static struct wlr_surface *pen_moved(struct wlr_tablet *tablet, double x, double
 	struct wlr_surface *surface = NULL;
 	input_desc_at(server, server->cursor->x, server->cursor->y, &surface, sx, sy);
 	struct flwm_tablet *t = tablet_of(tablet);
+#if FLWM_WLR_AT_LEAST(0, 19)
 	if (surface && t && wlr_surface_accepts_tablet_v2(surface, t->v2)) return surface;
+#else
+	if (surface && t && wlr_surface_accepts_tablet_v2(t->v2, surface)) return surface; /* 0.18: tablet first */
+#endif
 	return NULL;
 }
 

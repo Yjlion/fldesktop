@@ -2,7 +2,7 @@
 .SH NAME
 fl-term \- terminal emulator
 .SH SYNOPSIS
-\fBfl-term\fR [\fB\-d\fR \fIDIR\fR] [\fB\-T\fR \fITITLE\fR] [\fB\-g\fR \fICOLS\fRx\fIROWS\fR] [\fB\-\-hold\fR] [\fB\-\-scheme\fR \fINAME\fR] [\fB\-e\fR \fICOMMAND\fR...]
+\fBfl-term\fR [\fB\-d\fR \fIDIR\fR] [\fB\-T\fR \fITITLE\fR] [\fB\-g\fR \fICOLS\fRx\fIROWS\fR] [\fB\-\-hold\fR] [\fB\-\-scheme\fR \fINAME\fR] [\fB\-\-profile\fR \fINAME\fR] [\fB\-e\fR \fICOMMAND\fR...]
 .br
 \fBfl-term\fR \fB\-\-ssh\fR \fIPROFILE\fR|\fIUSER\fR@\fIHOST\fR[:\fIPORT\fR]
 .SH DESCRIPTION
@@ -16,6 +16,21 @@ Alt+1...9 switch tabs and Ctrl+Shift+PageUp/PageDown move the current tab. In th
 on the cross or a middle click closes a tab, the \fB+\fR button or a double click opens one and the
 mouse wheel switches tabs. By default the tab bar shows when two or more tabs are open; View >
 Show Tabs shows it always or never. Ctrl+Shift+N opens a new window, Ctrl+Shift+Q closes it.
+.SS Split panes
+Ctrl+Shift+E splits the current terminal side by side, Ctrl+Shift+O one above the other; the new
+pane runs a shell in the same directory. Ctrl+Shift+arrows move between panes (a click does too;
+a line along the top marks the current one), dragging the gap between two panes resizes them and
+Ctrl+Shift+W closes the current pane (the last one closes the tab).
+.SS Searching the scrollback
+Ctrl+Shift+F opens a search bar at the bottom. Enter (or the up arrow) finds the text further up,
+towards older output, Shift+Enter (or the down arrow) further down; the match is selected and
+scrolled into view. The search ignores case unless \fBMatch case\fR is on. Escape closes the
+bar and goes back to the live screen.
+.SS Profiles
+A profile is a named way to start a terminal: a command (empty: the shell), a starting folder, a
+color scheme and a font size. File > Profiles (or the right-click menu) edits them, opens a tab
+with one, and makes one the default for new tabs and windows; \fB\-\-profile\fR \fINAME\fR
+starts a window with it.
 .SS Menu bar and preferences
 View > Show Menu Bar (Ctrl+Shift+M) shows the File, Edit, View, Tabs, SSH and Help menus.
 Edit > Preferences (Ctrl+Shift+P) sets the color scheme, font size, scrollback length, background
@@ -58,12 +73,17 @@ Connect to a saved connection, an \fI~/.ssh/config\fR host, or \fIuser\fR@\fIhos
 .TP
 \fB\-\-scheme NAME\fR
 Color scheme for this window.
+.TP
+\fB\-\-profile NAME\fR
+Start with a saved profile.
 .SH FILES
 .TP
 \fI~/.config/fldesktop/term.ini\fR
 [Terminal] \fBColorScheme\fR (dark, light, red, green, blue), \fBFontSize\fR, \fBScrollback\fR,
 \fBOpacity\fR (0.2 to 1, background opacity), \fBShowMenuBar\fR (true/false) and \fBShowTabs\fR
-(auto, always, never). Written by the Preferences dialog and the View menu.
+(auto, always, never), \fBDefaultProfile\fR. Written by the Preferences dialog and the View menu.
+[Profile \fIname\fR] \fBCommand\fR, \fBWorkingDirectory\fR, \fBColorScheme\fR, \fBFontSize\fR,
+\fBOpacity\fR: the profiles.
 .TP
 \fI~/.config/fldesktop/ssh.ini\fR
 Saved SSH connections, one [Profile \fIname\fR] section each.

@@ -55,9 +55,18 @@ public:
   bool has_children() const;        // a program other than the shell runs in the foreground
   const std::string &title() const { return title_; }
 
+  // search: every line (scrollback, oldest first, then the screen), one
+  // char32 per column; the selection shows a match and scrolls it into view
+  std::vector<std::u32string> all_lines() const;
+  void show_match(long line, int col, int len);
+  bool selection_start(long &line, int &col) const; // false without a selection
+  void clear_selection();
+  long line_count() const { return (long)sb_.size() + rows_; }
+
   void (*on_title)(TermWidget *, const char *, void *) = nullptr;
   void (*on_exit)(TermWidget *, int status, void *) = nullptr;
   void (*on_menu)(TermWidget *, void *) = nullptr;
+  void (*on_focus)(TermWidget *, void *) = nullptr; // the widget took the keyboard focus
   void *cb_data = nullptr;
 
   void do_handle_flush(); // internal: retry pending pty writes

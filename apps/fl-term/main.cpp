@@ -1,12 +1,16 @@
 #include "fld/json.h" // first: X11 headers define Bool
 // fl-term: terminal emulator for fldesktop
 #include <FL/Fl.H>
+#include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Hor_Value_Slider.H>
+#include <FL/Fl_Input.H>
+#include <FL/fl_draw.H>
 #include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Return_Button.H>
@@ -33,6 +37,7 @@
 #include "fld/menus.h"
 #include "fld/tab_bar.h"
 #include "fld/tab_move.h"
+#include "term_panes.h"
 #include "term_settings.h"
 #include "term_widget.h"
 
@@ -46,8 +51,11 @@ static const char *kUsage =
     "      --ssh PROFILE       connect to a saved SSH connection, an ~/.ssh/config host\n"
     "                          or user@host[:port]\n"
     "      --scheme NAME       color scheme: dark, light, red, green, blue\n"
+    "      --profile NAME      start with a saved profile (Profiles in the menu)\n"
     "  -v, --version           show the version\n"
-    "Tabs: Ctrl+Shift+T new tab, Ctrl+Shift+W close tab, Ctrl+PgUp/PgDn switch tabs.\n"
+    "Tabs: Ctrl+Shift+T new tab, Ctrl+Shift+W close tab (or pane), Ctrl+PgUp/PgDn switch tabs.\n"
+    "Panes: Ctrl+Shift+E side by side, Ctrl+Shift+O above and below, Ctrl+Shift+arrows move.\n"
+    "Search: Ctrl+Shift+F.\n"
     "  -h, --help              show this help\n";
 
 struct Scheme {
@@ -93,16 +101,19 @@ static const TermColors *find_scheme(const std::string &name) {
 
 struct TabSpec {
   std::vector<std::string> cmd;
-  std::string cwd, title, scheme;
+  std::string cwd, title, scheme, profile;
   bool hold = false, hold_on_error = false;
 };
 
 struct Tab {
-  TermWidget *term;
+  TermWidget *term;   // the pane with the focus
   bool own_scheme; // keeps its colour scheme (SSH profiles, --scheme)
   TabSpec spec;       // how it was started (Duplicate Tab)
   std::string custom; // a name given with Rename Tab (wins over the title)
+  std::vector<TermWidget *> panes{}; // all of the tab's terminals
+  term::PaneTree tree{0};            // how they share the tab
 };
+static const int PANE_GAP = 4;
 
 struct App {
   Fl_Double_Window *win = nullptr;
@@ -114,6 +125,12 @@ struct App {
   std::string fixed_title;
   term::Settings set;
   bool hold = false, hold_on_error = false;
+  std::vector<term::Profile> profiles;
+  // the search bar (Ctrl+Shift+F)
+  Fl_Group *search = nullptr;
+  Fl_Input *search_in = nullptr;
+  Fl_Check_Button *search_case = nullptr;
+  Fl_Box *search_msg = nullptr;
 };
 
 static App g;
@@ -145,8 +162,24 @@ static TermWidget *cur() {
 
 static int index_of(TermWidget *t) {
   for (size_t i = 0; i < g.tabs.size(); i++)
-    if (g.tabs[i].term == t) return (int)i;
+    for (TermWidget *p : g.tabs[i].panes)
+      if (p == t) return (int)i;
   return -1;
+}
+
+static term::Rect area_rect() { return {g.area->x(), g.area->y(), g.area->w(), g.area->h()}; }
+
+static void layout_tab(Tab &tb) {
+  for (auto &pr : tb.tree.layout(area_rect(), PANE_GAP)) {
+    TermWidget *t = (TermWidget *)pr.first;
+    t->resize(pr.second.x, pr.second.y, std::max(1, pr.second.w), std::max(1, pr.second.h));
+  }
+}
+
+static void load_profiles() {
+  fld::Ini ini;
+  ini.load(term::config_path());
+  g.profiles = term::load_profiles(ini);
 }
 
 static const TermColors *scheme_colors(const std::string &name) {
@@ -196,8 +229,25 @@ static void relayout() {
   } else {
     g.tabbar->hide();
   }
-  g.area->resize(0, y, W, std::max(1, H - y));
-  for (auto &tb : g.tabs) tb.term->resize(0, y, W, std::max(1, H - y));
+  int sh = g.search && g.search->visible() ? 34 : 0;
+  g.area->resize(0, y, W, std::max(1, H - y - sh));
+  if (sh) {
+    g.search->resize(0, H - sh, W, sh);
+    int bx = W - 8;
+    // the right side: close, case, next, previous; the input takes the rest
+    Fl_Widget *close = g.search->child(4), *cs = g.search->child(2), *nx = g.search->child(5), *pv = g.search->child(1);
+    close->resize(bx - 28, H - sh + 4, 28, 26);
+    bx -= 34;
+    cs->resize(bx - 110, H - sh + 4, 110, 26);
+    bx -= 116;
+    nx->resize(bx - 34, H - sh + 4, 34, 26);
+    pv->resize(bx - 70, H - sh + 4, 34, 26);
+    bx -= 76;
+    g.search_msg->resize(bx - 120, H - sh + 4, 120, 26);
+    bx -= 124;
+    g.search_in->resize(8, H - sh + 4, std::max(60, bx - 8), 26);
+  }
+  for (auto &tb : g.tabs) layout_tab(tb);
   // Only a minimum size: cell-sized resize steps made maximized and full
   // screen windows round down and leave a gap. Sent again only when it changes.
   if (TermWidget *t = cur()) {
@@ -240,10 +290,11 @@ static void select_tab(int i) {
   if (g.tabs.empty()) return;
   i = (i % (int)g.tabs.size() + (int)g.tabs.size()) % (int)g.tabs.size();
   g.current = i;
-  for (size_t k = 0; k < g.tabs.size(); k++) {
-    if ((int)k == i) g.tabs[k].term->show();
-    else g.tabs[k].term->hide();
-  }
+  for (size_t k = 0; k < g.tabs.size(); k++)
+    for (TermWidget *p : g.tabs[k].panes) {
+      if ((int)k == i) p->show();
+      else p->hide();
+    }
   update_title();
   cur()->take_focus();
   g.win->redraw();
@@ -255,10 +306,12 @@ static void close_tab(int i) {
     g.win->hide();
     return;
   }
-  TermWidget *t = g.tabs[(size_t)i].term;
+  std::vector<TermWidget *> panes = g.tabs[(size_t)i].panes;
   g.tabs.erase(g.tabs.begin() + i);
-  g.area->remove(t);
-  Fl::delete_widget(t); // the destructor ends the child process
+  for (TermWidget *t : panes) {
+    g.area->remove(t);
+    Fl::delete_widget(t); // the destructor ends the child process
+  }
   if (g.current >= (int)g.tabs.size() || g.current > i) g.current = std::max(0, g.current - 1);
   if (g.current == i && i < (int)g.tabs.size()) g.current = i;
   relayout();
@@ -281,29 +334,65 @@ static void on_title(TermWidget *t, const char *, void *) {
   update_title();
 }
 
+static void close_pane(TermWidget *t);
+
 static void on_exit(TermWidget *t, int, void *) {
   // closing from inside the terminal's own callback: defer
-  Fl::add_timeout(0, [](void *v) { close_tab(index_of((TermWidget *)v)); }, t);
+  Fl::add_timeout(0, [](void *v) { close_pane((TermWidget *)v); }, t);
+}
+
+// a click (or Ctrl+Shift+arrow) in a pane makes it the tab's focused one
+static void on_focus(TermWidget *t, void *) {
+  int i = index_of(t);
+  if (i < 0) return;
+  if (g.tabs[(size_t)i].term != t) {
+    g.tabs[(size_t)i].term = t;
+    update_title();
+    g.area->redraw();
+  }
 }
 
 static void show_menu(TermWidget *, void *);
 
-
-static TermWidget *add_tab(const TabSpec &spec) {
-  g.area->begin();
-  TermWidget *t = new TermWidget(g.area->x(), g.area->y(), g.area->w(), g.area->h());
-  g.area->end();
-  if (g.set.font_size > 0) t->set_font_size(g.set.font_size);
-  t->set_colors(*scheme_colors(spec.scheme.empty() ? g.set.scheme : spec.scheme));
-  t->set_opacity(g.set.opacity);
+// font, colours and callbacks for a new terminal
+static void setup_term(TermWidget *t, const TabSpec &spec) {
+  const term::Profile *pr = term::find_profile(g.profiles, spec.profile);
+  int fs = pr && pr->font_size > 0 ? pr->font_size : g.set.font_size;
+  if (fs > 0) t->set_font_size(fs);
+  std::string scheme = !spec.scheme.empty() ? spec.scheme : pr && !pr->scheme.empty() ? pr->scheme : g.set.scheme;
+  t->set_colors(*scheme_colors(scheme));
+  t->set_opacity(pr && pr->opacity > 0 ? pr->opacity : g.set.opacity);
   t->set_scrollback_limit((size_t)g.set.scrollback);
   t->set_hold(spec.hold);
   t->set_hold_on_error(spec.hold_on_error);
   t->on_title = on_title;
   t->on_exit = on_exit;
   t->on_menu = show_menu;
+  t->on_focus = on_focus;
   if (!spec.title.empty()) t->set_title(spec.title);
-  g.tabs.push_back({t, !spec.scheme.empty(), spec, ""});
+}
+
+// a profile's command and folder go into a tab's spec
+static void apply_profile(TabSpec &s, const std::string &name) {
+  const term::Profile *p = term::find_profile(g.profiles, name);
+  if (!p) return;
+  s.profile = name;
+  if (s.cmd.empty() && !p->command.empty()) {
+    bool shell = p->command.find_first_of("|&;<>()$`*?~\"'") != std::string::npos;
+    s.cmd = shell ? std::vector<std::string>{"/bin/sh", "-c", p->command} : fld::shell_split(p->command);
+  }
+  if (!p->cwd.empty()) s.cwd = fld::expand_tilde(p->cwd);
+}
+
+
+static TermWidget *add_tab(const TabSpec &spec) {
+  g.area->begin();
+  TermWidget *t = new TermWidget(g.area->x(), g.area->y(), g.area->w(), g.area->h());
+  g.area->end();
+  setup_term(t, spec);
+  g.tabs.push_back({t, !spec.scheme.empty() || !spec.profile.empty(), spec, ""});
+  g.tabs.back().panes = {t};
+  g.tabs.back().tree.reset((intptr_t)t);
   g.current = (int)g.tabs.size() - 1;
   relayout();
   if (!t->start(spec.cmd, spec.cwd)) {
@@ -315,10 +404,324 @@ static TermWidget *add_tab(const TabSpec &spec) {
   return t;
 }
 
-static void new_tab() {
+static void new_tab(const std::string &profile = "") {
   TabSpec s;
   if (TermWidget *t = cur()) s.cwd = t->current_dir();
+  apply_profile(s, profile.empty() ? g.set.default_profile : profile);
   add_tab(s);
+}
+
+// ---- split panes ----------------------------------------------------------------
+
+// Ctrl+Shift+E (side by side) and Ctrl+Shift+O (above and below): a shell in
+// the focused pane's folder, sharing its place
+static void split_pane(bool side_by_side) {
+  if (g.tabs.empty()) return;
+  Tab &tb = g.tabs[(size_t)g.current];
+  TermWidget *from = tb.term;
+  TabSpec s;
+  s.cwd = from->current_dir();
+  s.profile = tb.spec.profile;
+  if (!s.profile.empty()) apply_profile(s, s.profile);
+  g.area->begin();
+  TermWidget *t = new TermWidget(g.area->x(), g.area->y(), 100, 100);
+  g.area->end();
+  setup_term(t, s);
+  if (tb.own_scheme && !tb.spec.scheme.empty()) t->set_colors(*scheme_colors(tb.spec.scheme));
+  tb.tree.split((intptr_t)from, (intptr_t)t, side_by_side);
+  tb.panes.push_back(t);
+  tb.term = t;
+  layout_tab(tb);
+  if (!t->start(s.cmd, s.cwd)) {
+    close_pane(t);
+    return;
+  }
+  t->show();
+  t->take_focus();
+  g.area->redraw();
+}
+
+static void close_pane(TermWidget *t) {
+  int i = index_of(t);
+  if (i < 0) return;
+  Tab &tb = g.tabs[(size_t)i];
+  if (tb.panes.size() <= 1) {
+    close_tab(i);
+    return;
+  }
+  // the focus goes to the pane that takes the place, or the first one
+  tb.tree.remove((intptr_t)t);
+  tb.panes.erase(std::remove(tb.panes.begin(), tb.panes.end(), t), tb.panes.end());
+  if (tb.term == t) tb.term = (TermWidget *)tb.tree.ids().front();
+  g.area->remove(t);
+  Fl::delete_widget(t);
+  layout_tab(tb);
+  g.area->redraw();
+  if (i == g.current) {
+    tb.term->take_focus();
+    update_title();
+  }
+}
+
+static void focus_pane(term::Dir d) {
+  if (g.tabs.empty()) return;
+  Tab &tb = g.tabs[(size_t)g.current];
+  auto id = tb.tree.neighbor((intptr_t)tb.term, d, area_rect(), PANE_GAP);
+  if (id) ((TermWidget *)id)->take_focus();
+}
+
+// The terminals' group: paints the gaps between panes and drags them
+class PaneArea : public Fl_Group {
+public:
+  PaneArea(int x, int y, int w, int h) : Fl_Group(x, y, w, h) {}
+  void draw() override {
+    Fl_Group::draw();
+    if (g.tabs.empty()) return;
+    Tab &tb = g.tabs[(size_t)g.current];
+    if (tb.panes.size() < 2) return;
+    for (auto &r : tb.tree.dividers(area_rect(), PANE_GAP)) fl_rectf(r.x, r.y, r.w, r.h, fld::palette().bg);
+    // the focused pane gets a line along its top
+    fl_color(fld::palette().accent);
+    fl_rectf(tb.term->x(), tb.term->y(), tb.term->w(), 2);
+  }
+  int handle(int e) override {
+    if (!g.tabs.empty()) {
+      Tab &tb = g.tabs[(size_t)g.current];
+      bool vbar = false;
+      switch (e) {
+        case FL_PUSH:
+          if (tb.tree.drag_begin(area_rect(), PANE_GAP, Fl::event_x(), Fl::event_y())) return 1;
+          break;
+        case FL_DRAG:
+          if (tb.tree.dragging()) {
+            tb.tree.drag_to(Fl::event_x(), Fl::event_y());
+            layout_tab(tb);
+            redraw();
+            return 1;
+          }
+          break;
+        case FL_RELEASE:
+          if (tb.tree.dragging()) {
+            tb.tree.drag_end();
+            return 1;
+          }
+          break;
+        case FL_MOVE:
+        case FL_ENTER:
+          if (tb.panes.size() > 1 && tb.tree.divider_at(area_rect(), PANE_GAP, Fl::event_x(), Fl::event_y(), &vbar)) {
+            window()->cursor(vbar ? FL_CURSOR_WE : FL_CURSOR_NS);
+            return 1;
+          }
+          window()->cursor(FL_CURSOR_DEFAULT);
+          break;
+      }
+    }
+    return Fl_Group::handle(e);
+  }
+};
+
+// ---- search in the scrollback ----------------------------------------------------
+
+static void search_bar(bool on) {
+  if (on == (bool)g.search->visible()) {
+    if (on) {
+      g.search_in->take_focus();
+      g.search_in->insert_position(0, g.search_in->size());
+    }
+    return;
+  }
+  if (on) g.search->show();
+  else {
+    g.search->hide();
+    if (TermWidget *t = cur()) {
+      t->clear_selection();
+      t->scroll_to(0);
+      t->take_focus();
+    }
+  }
+  relayout();
+  if (on) g.search_in->take_focus();
+}
+
+// older: towards the start of the scrollback
+static void search_step(bool older) {
+  TermWidget *t = cur();
+  if (!t || !*g.search_in->value()) return;
+  std::u32string needle = term::to_u32(g.search_in->value());
+  auto lines = t->all_lines();
+  long line;
+  int col;
+  if (!t->selection_start(line, col)) {
+    // from the end of the text for older, from the start for newer
+    line = older ? (long)lines.size() - 1 : 0;
+    col = older ? (int)(lines.empty() ? 0 : lines.back().size() + 1) : -1;
+  }
+  term::Match m = term::find_in_lines(lines, needle, line, col, older, !g.search_case->value());
+  if (m.line < 0) {
+    g.search_msg->label("No matches");
+    t->clear_selection();
+    return;
+  }
+  g.search_msg->label("");
+  t->show_match(m.line, m.col, m.len);
+}
+
+static void make_search_bar(int W, int H) {
+  g.search = new Fl_Group(0, H - 34, W, 34);
+  g.search->box(FL_FLAT_BOX);
+  g.search->color(fld::palette().bg);
+  g.search_in = new Fl_Input(8, H - 30, 200, 26);                         // 0
+  g.search_in->when(FL_WHEN_ENTER_KEY_ALWAYS);
+  g.search_in->callback([](Fl_Widget *, void *) { search_step(!(Fl::event_state() & FL_SHIFT)); });
+  g.search_in->tooltip("Enter: older, Shift+Enter: newer, Escape: close");
+  auto *prev = new Fl_Button(0, H - 30, 34, 26, "@8->");                  // 1
+  prev->tooltip("Older (Enter)");
+  prev->callback([](Fl_Widget *, void *) { search_step(true); });
+  g.search_case = new Fl_Check_Button(0, H - 30, 110, 26, "Match case");  // 2
+  g.search_msg = new Fl_Box(0, H - 30, 120, 26);                           // 3
+  g.search_msg->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
+  g.search_msg->labelcolor(fld::palette().fg_dim);
+  auto *close = new Fl_Button(0, H - 30, 28, 26, "@1+");                  // 4
+  close->label("\u00d7");
+  close->tooltip("Close (Escape)");
+  close->callback([](Fl_Widget *, void *) { search_bar(false); });
+  auto *next = new Fl_Button(0, H - 30, 34, 26, "@2->");                  // 5
+  next->tooltip("Newer (Shift+Enter)");
+  next->callback([](Fl_Widget *, void *) { search_step(false); });
+  g.search->end();
+  g.search->hide();
+}
+
+// ---- profiles --------------------------------------------------------------------
+
+static void save_profiles() {
+  fld::Ini ini;
+  ini.load(term::config_path());
+  term::store_profiles(g.profiles, ini);
+  term::store(g.set, ini);
+  if (!ini.save(term::config_path())) fl_alert("Could not save %s", term::config_path().c_str());
+}
+
+namespace {
+struct ProfileDlg {
+  Fl_Hold_Browser *list;
+  Fl_Input *name, *command, *cwd;
+  Fl_Choice *scheme;
+  Fl_Spinner *font;
+  Fl_Check_Button *def;
+  std::vector<term::Profile> ps;
+  std::string def_name;
+  int sel = -1;
+};
+const char *kProfileSchemes[] = {"", "dark", "light", "red", "green", "blue"};
+} // namespace
+
+static void profile_store(ProfileDlg &d) {
+  if (d.sel < 0 || d.sel >= (int)d.ps.size()) return;
+  term::Profile &p = d.ps[(size_t)d.sel];
+  std::string n = fld::trim(d.name->value());
+  if (!n.empty() && n.find(']') == std::string::npos) {
+    if (d.def_name == p.name) d.def_name = n;
+    p.name = n;
+  }
+  p.command = d.command->value();
+  p.cwd = d.cwd->value();
+  p.scheme = kProfileSchemes[std::max(0, d.scheme->value())];
+  p.font_size = (int)d.font->value();
+  if (d.def->value()) d.def_name = p.name;
+  else if (d.def_name == p.name) d.def_name.clear();
+}
+
+static void profile_show(ProfileDlg &d) {
+  d.list->clear();
+  for (auto &p : d.ps) d.list->add(fld::escape_at(p.name + (p.name == d.def_name ? "  (default)" : "")).c_str());
+  bool have = d.sel >= 0 && d.sel < (int)d.ps.size();
+  for (Fl_Widget *w : std::initializer_list<Fl_Widget *>{d.name, d.command, d.cwd, d.scheme, d.font, d.def})
+    if (have) w->activate(); else w->deactivate();
+  if (!have) return;
+  d.list->value(d.sel + 1);
+  const term::Profile &p = d.ps[(size_t)d.sel];
+  d.name->value(p.name.c_str());
+  d.command->value(p.command.c_str());
+  d.cwd->value(p.cwd.c_str());
+  d.scheme->value(0);
+  for (int k = 0; k < 6; k++)
+    if (p.scheme == kProfileSchemes[k]) d.scheme->value(k);
+  d.font->value(p.font_size);
+  d.def->value(p.name == d.def_name);
+}
+
+static void profiles_dialog() {
+  ProfileDlg d;
+  load_profiles();
+  d.ps = g.profiles;
+  d.def_name = g.set.default_profile;
+  d.sel = d.ps.empty() ? -1 : 0;
+  const int W = 560, H = 330;
+  Fl_Double_Window *w = new Fl_Double_Window(W, H, "Terminal Profiles");
+  d.list = new Fl_Hold_Browser(12, 12, 170, H - 96);
+  auto *add = new Fl_Button(12, H - 78, 82, 28, "Add");
+  auto *del = new Fl_Button(100, H - 78, 82, 28, "Remove");
+  int lx = 300, fw = W - lx - 12, y = 12;
+  d.name = new Fl_Input(lx, y, fw, 28, "Name:");
+  y += 36;
+  d.command = new Fl_Input(lx, y, fw, 28, "Command:");
+  d.command->tooltip("Empty: your shell. A command line, e.g. tmux new -A -s main");
+  y += 36;
+  d.cwd = new Fl_Input(lx, y, fw, 28, "Start in:");
+  d.cwd->tooltip("Empty: the current tab's folder");
+  y += 36;
+  d.scheme = new Fl_Choice(lx, y, fw, 28, "Color scheme:");
+  d.scheme->add("The general one|Dark|Light|Dark red|Dark green|Dark blue");
+  y += 36;
+  d.font = new Fl_Spinner(lx, y, 80, 28, "Font size:");
+  d.font->range(0, 48);
+  d.font->tooltip("0: the general size");
+  y += 36;
+  d.def = new Fl_Check_Button(lx, y, fw, 28, "Use for new tabs and windows");
+  auto *ok = new Fl_Return_Button(W - 112, H - 42, 100, 30, "Close");
+  ok->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
+  d.list->callback([](Fl_Widget *, void *v) {
+    ProfileDlg &d = *(ProfileDlg *)v;
+    profile_store(d);
+    d.sel = d.list->value() - 1;
+    profile_show(d);
+  }, &d);
+  add->callback([](Fl_Widget *, void *v) {
+    ProfileDlg &d = *(ProfileDlg *)v;
+    profile_store(d);
+    term::Profile p;
+    for (int n = 1;; n++) {
+      p.name = n == 1 ? "New Profile" : "New Profile " + std::to_string(n);
+      if (!term::find_profile(d.ps, p.name)) break;
+    }
+    d.ps.push_back(p);
+    d.sel = (int)d.ps.size() - 1;
+    profile_show(d);
+    d.name->take_focus();
+  }, &d);
+  del->callback([](Fl_Widget *, void *v) {
+    ProfileDlg &d = *(ProfileDlg *)v;
+    if (d.sel < 0) return;
+    if (d.ps[(size_t)d.sel].name == d.def_name) d.def_name.clear();
+    d.ps.erase(d.ps.begin() + d.sel);
+    d.sel = std::min(d.sel, (int)d.ps.size() - 1);
+    profile_show(d);
+  }, &d);
+  w->end();
+  w->set_modal();
+  profile_show(d);
+  w->show();
+  while (w->shown()) Fl::wait();
+  profile_store(d);
+  // names must be unique: later duplicates get a number
+  for (size_t i = 0; i < d.ps.size(); i++)
+    for (size_t k = 0; k < i; k++)
+      if (d.ps[k].name == d.ps[i].name) d.ps[i].name += " " + std::to_string(i + 1);
+  g.profiles = d.ps;
+  g.set.default_profile = term::find_profile(g.profiles, d.def_name) ? d.def_name : "";
+  save_profiles();
+  Fl::delete_widget(w);
 }
 
 static void new_window() {
@@ -342,12 +745,13 @@ static void open_ssh_tab(const std::vector<std::string> &cmd, const std::string 
 }
 
 static void apply_settings() {
-  for (auto &tb : g.tabs) {
-    if (!tb.own_scheme) tb.term->set_colors(*scheme_colors(g.set.scheme));
-    tb.term->set_font_size(g.set.font_size > 0 ? g.set.font_size : fld::mono_size());
-    tb.term->set_scrollback_limit((size_t)g.set.scrollback);
-    tb.term->set_opacity(g.set.opacity);
-  }
+  for (auto &tb : g.tabs)
+    for (TermWidget *t : tb.panes) {
+      if (!tb.own_scheme) t->set_colors(*scheme_colors(g.set.scheme));
+      t->set_font_size(g.set.font_size > 0 ? g.set.font_size : fld::mono_size());
+      t->set_scrollback_limit((size_t)g.set.scrollback);
+      t->set_opacity(g.set.opacity);
+    }
   update_opaque_region();
   relayout();
 }
@@ -415,7 +819,8 @@ static void preferences_dialog() {
   // live preview of the opacity
   op->callback([](Fl_Widget *w, void *) {
     double o = ((Fl_Valuator *)w)->value() / 100.0;
-    for (auto &tb : g.tabs) tb.term->set_opacity(o);
+    for (auto &tb : g.tabs)
+      for (TermWidget *t : tb.panes) t->set_opacity(o);
     double saved = g.set.opacity;
     g.set.opacity = o;
     update_opaque_region();
@@ -446,6 +851,8 @@ enum MenuId {
   M_COPY = 1, M_PASTE, M_NEW_WINDOW, M_ZOOM_IN, M_ZOOM_OUT, M_ZOOM_RESET, M_OPEN_FOLDER, M_ABOUT,
   M_CLOSE_WINDOW, M_NEW_TAB, M_CLOSE_TAB, M_NEXT_TAB, M_PREV_TAB, M_MOVE_LEFT, M_MOVE_RIGHT,
   M_TOGGLE_MENUBAR, M_TABS_AUTO, M_TABS_ALWAYS, M_TABS_NEVER, M_PREFS,
+  M_SPLIT_H, M_SPLIT_V, M_CLOSE_PANE, M_FIND, M_PROFILES,
+  M_PROFILE = 100, // + index: New Tab with that profile
   M_SSH_CONNECT = 40, M_SSH_MANAGE, M_SSH_COPY_KEY, M_SSH_GEN_KEY, M_SSH_BROWSE,
 };
 
@@ -477,6 +884,14 @@ static void menu_action(long id) {
     case M_TABS_ALWAYS: set_tabs_mode(term::TABS_ALWAYS); break;
     case M_TABS_NEVER: set_tabs_mode(term::TABS_NEVER); break;
     case M_PREFS: preferences_dialog(); break;
+    case M_SPLIT_H: split_pane(true); break;
+    case M_SPLIT_V: split_pane(false); break;
+    case M_CLOSE_PANE: if (t) close_pane(t); break;
+    case M_FIND: search_bar(true); break;
+    case M_PROFILES: profiles_dialog(); break;
+    default:
+      if (id >= M_PROFILE && id < M_PROFILE + (long)g.profiles.size()) new_tab(g.profiles[(size_t)(id - M_PROFILE)].name);
+      break;
     case M_SSH_CONNECT: ssh_ui::connect_dialog(); break;
     case M_SSH_MANAGE: ssh_ui::manage_dialog(); break;
     case M_SSH_COPY_KEY: ssh_ui::copy_key_dialog(); break;
@@ -559,6 +974,26 @@ static void view_items(Items &m) {
   item(m, "Normal Size", FL_CTRL + '0', M_ZOOM_RESET);
 }
 
+static void pane_items(Items &m) {
+  bool split = !g.tabs.empty() && g.tabs[(size_t)g.current].panes.size() > 1;
+  item(m, "Split Side by Side", FL_CTRL + FL_SHIFT + 'e', M_SPLIT_H);
+  item(m, "Split Above and Below", FL_CTRL + FL_SHIFT + 'o', M_SPLIT_V);
+  item(m, "Close Pane", split ? FL_CTRL + FL_SHIFT + 'w' : 0, M_CLOSE_PANE, split ? 0 : FL_MENU_INACTIVE);
+}
+
+static void profile_items(Items &m) {
+  load_profiles();
+  if (!g.profiles.empty()) {
+    m.push_back({"New Tab with Profile", 0, nullptr, nullptr, FL_SUBMENU});
+    for (size_t i = 0; i < g.profiles.size() && i < 30; i++) {
+      g_menu_labels.push_back(menu_escape(g.profiles[i].name));
+      m.push_back({g_menu_labels.back().c_str(), 0, menu_cb, (void *)(long)(M_PROFILE + (long)i)});
+    }
+    end_menu(m);
+  }
+  item(m, "Profiles…", 0, M_PROFILES, FL_MENU_DIVIDER);
+}
+
 static void tab_items(Items &m) {
   bool many = g.tabs.size() > 1;
   item(m, "Next Tab", FL_CTRL + FL_Page_Down, M_NEXT_TAB, many ? 0 : FL_MENU_INACTIVE);
@@ -575,13 +1010,17 @@ static Items build_menubar_items() {
   m.push_back({"&File", 0, nullptr, nullptr, FL_SUBMENU});
   item(m, "New Tab", FL_CTRL + FL_SHIFT + 't', M_NEW_TAB);
   item(m, "New Window", FL_CTRL + FL_SHIFT + 'n', M_NEW_WINDOW, FL_MENU_DIVIDER);
+  profile_items(m);
+  pane_items(m);
+  m.back().flags |= FL_MENU_DIVIDER;
   item(m, "Open Folder", 0, M_OPEN_FOLDER, FL_MENU_DIVIDER);
-  item(m, "Close Tab", FL_CTRL + FL_SHIFT + 'w', M_CLOSE_TAB);
+  item(m, "Close Tab", 0, M_CLOSE_TAB);
   item(m, "Close Window", FL_CTRL + FL_SHIFT + 'q', M_CLOSE_WINDOW);
   end_menu(m);
   m.push_back({"&Edit", 0, nullptr, nullptr, FL_SUBMENU});
   item(m, "Copy", FL_CTRL + FL_SHIFT + 'c', M_COPY);
   item(m, "Paste", FL_CTRL + FL_SHIFT + 'v', M_PASTE, FL_MENU_DIVIDER);
+  item(m, "Find…", FL_CTRL + FL_SHIFT + 'f', M_FIND, FL_MENU_DIVIDER);
   item(m, "Preferences…", FL_CTRL + FL_SHIFT + 'p', M_PREFS);
   end_menu(m);
   m.push_back({"&View", 0, nullptr, nullptr, FL_SUBMENU});
@@ -631,6 +1070,12 @@ static void show_menu(TermWidget *t, void *) {
   item(m, "Paste", FL_CTRL + FL_SHIFT + 'v', M_PASTE, FL_MENU_DIVIDER);
   item(m, "New Tab", FL_CTRL + FL_SHIFT + 't', M_NEW_TAB);
   item(m, "New Window", FL_CTRL + FL_SHIFT + 'n', M_NEW_WINDOW);
+  item(m, "Find…", FL_CTRL + FL_SHIFT + 'f', M_FIND, FL_MENU_DIVIDER);
+  pane_items(m);
+  m.back().flags |= FL_MENU_DIVIDER;
+  m.push_back({"Profiles", 0, nullptr, nullptr, FL_SUBMENU});
+  profile_items(m);
+  end_menu(m);
   item(m, "Open Folder", 0, M_OPEN_FOLDER, FL_MENU_DIVIDER);
   m.push_back({"SSH", 0, nullptr, nullptr, FL_SUBMENU | FL_MENU_DIVIDER});
   ssh_items(m);
@@ -816,7 +1261,17 @@ static int global_shortcuts(int e) {
     switch (key) {
       case 'n': new_window(); return 1;
       case 't': new_tab(); return 1;
-      case 'w': close_tab(g.current); return 1;
+      case 'w':
+        if (!g.tabs.empty() && g.tabs[(size_t)g.current].panes.size() > 1) close_pane(cur());
+        else close_tab(g.current);
+        return 1;
+      case 'e': split_pane(true); return 1;
+      case 'o': split_pane(false); return 1;
+      case 'f': search_bar(true); return 1;
+      case FL_Left: focus_pane(term::Dir::Left); return 1;
+      case FL_Right: focus_pane(term::Dir::Right); return 1;
+      case FL_Up: focus_pane(term::Dir::Up); return 1;
+      case FL_Down: focus_pane(term::Dir::Down); return 1;
       case 'q': g.win->hide(); return 1;
       case 's': ssh_ui::connect_dialog(); return 1;
       case 'm': toggle_menubar(); return 1;
@@ -824,6 +1279,11 @@ static int global_shortcuts(int e) {
       case FL_Page_Up: move_tab(-1); return 1;
       case FL_Page_Down: move_tab(1); return 1;
     }
+  }
+  if (key == FL_Escape && !ctrl && !alt && g.search->visible() && Fl::focus() &&
+      Fl::focus()->inside(g.search)) {
+    search_bar(false);
+    return 1;
   }
   if (ctrl && !shift && !alt) {
     if (key == FL_Page_Up) { select_tab(g.current - 1); return 1; }
@@ -842,7 +1302,7 @@ static void close_cb(Fl_Widget *w, void *) { w->hide(); }
 int main(int argc, char **argv) {
   fld::init_app("fl-term", argc, argv);
   std::vector<std::string> cmd;
-  std::string workdir, title, ssh_arg, scheme_arg, adopted_name;
+  std::string workdir, title, ssh_arg, scheme_arg, adopted_name, profile_arg;
   int cols = 90, rows = 26;
   bool hold = false, hold_on_error = false;
   for (int i = 1; i < argc; i++) {
@@ -866,6 +1326,8 @@ int main(int argc, char **argv) {
       ssh_arg = a.substr(6);
     } else if (a == "--scheme" && i + 1 < argc) {
       scheme_arg = argv[++i];
+    } else if (a == "--profile" && i + 1 < argc) {
+      profile_arg = argv[++i];
     } else if (a == "--adopt-tab" && i + 1 < argc) {
       // a tab dragged out of another window
       std::string state;
@@ -895,6 +1357,11 @@ int main(int argc, char **argv) {
   }
 
   g.set = term::load_file();
+  load_profiles();
+  if (!profile_arg.empty() && !term::find_profile(g.profiles, profile_arg)) {
+    fprintf(stderr, "fl-term: no profile \"%s\"\n", profile_arg.c_str());
+    return 1;
+  }
   std::string scheme_override;
   if (!ssh_arg.empty()) {
     ssh::Profile p = ssh_ui::resolve(ssh_arg);
@@ -942,9 +1409,10 @@ int main(int argc, char **argv) {
       Fl::add_timeout(0, [](void *v) { close_tab((int)(long)v); }, (void *)(long)i);
     else fld::discard_tab_file(file);
   };
-  g.area = new Fl_Group(0, 0, 800, 500);
+  g.area = new PaneArea(0, 0, 800, 500);
   g.area->box(FL_NO_BOX);
   g.area->end();
+  make_search_bar(800, 500);
   g.win->resizable(g.area);
   g.win->callback(close_cb);
   g.win->end();
@@ -956,21 +1424,21 @@ int main(int argc, char **argv) {
   first.scheme = scheme_override;
   first.hold = hold;
   first.hold_on_error = hold_on_error;
+  // a profile for a plain start (no command, SSH or adopted tab)
+  if (!profile_arg.empty()) apply_profile(first, profile_arg);
+  else if (cmd.empty() && ssh_arg.empty() && adopted_name.empty() && !g.set.default_profile.empty())
+    apply_profile(first, g.set.default_profile);
   g.area->begin();
   // the first terminal is created before the window is shown so the window
   // gets the size for cols x rows
   TermWidget *t = new TermWidget(0, 0, 800, 500);
   g.area->end();
-  if (g.set.font_size > 0) t->set_font_size(g.set.font_size);
-  t->set_colors(*scheme_colors(scheme_override.empty() ? g.set.scheme : scheme_override));
-  t->set_opacity(g.set.opacity);
-  t->set_scrollback_limit((size_t)g.set.scrollback);
-  t->set_hold(hold);
-  t->set_hold_on_error(hold_on_error);
-  t->on_title = on_title;
-  t->on_exit = on_exit;
-  t->on_menu = show_menu;
-  g.tabs.push_back({t, !scheme_override.empty(), first, adopted_name});
+  TabSpec look = first;
+  look.title.clear();
+  setup_term(t, look);
+  g.tabs.push_back({t, !scheme_override.empty() || !first.profile.empty(), first, adopted_name});
+  g.tabs.back().panes = {t};
+  g.tabs.back().tree.reset((intptr_t)t);
   g.current = 0;
 
   int ww, wh;

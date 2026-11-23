@@ -1,6 +1,7 @@
 // fl-term settings: ~/.config/fldesktop/term.ini [Terminal]
 #pragma once
 #include <string>
+#include <vector>
 
 namespace fld { class Ini; }
 
@@ -15,7 +16,24 @@ struct Settings {
   double opacity = 1.0;       // background opacity, 0.2 .. 1
   bool show_menubar = false;
   TabsMode tabs = TABS_AUTO;  // auto: the tab bar shows with two or more tabs
+  std::string default_profile; // new tabs and windows use it; "" the settings above
 };
+
+// A named way to start a terminal: [Profile NAME] in term.ini. Empty or
+// zero fields take the general settings.
+struct Profile {
+  std::string name;
+  std::string command; // "" the user's shell
+  std::string cwd;     // "" the current tab's folder
+  std::string scheme;
+  int font_size = 0;
+  double opacity = 0; // 0: the general opacity
+};
+
+std::vector<Profile> load_profiles(const fld::Ini &ini);
+// replaces all [Profile ...] groups
+void store_profiles(const std::vector<Profile> &p, fld::Ini &ini);
+const Profile *find_profile(const std::vector<Profile> &p, const std::string &name);
 
 const char *tabs_mode_name(TabsMode m);
 TabsMode parse_tabs_mode(const std::string &s);

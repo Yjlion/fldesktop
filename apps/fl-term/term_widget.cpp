@@ -509,6 +509,55 @@ bool TermWidget::in_selection(long line, int col) const {
   return true;
 }
 
+std::vector<std::u32string> TermWidget::all_lines() const {
+  std::vector<std::u32string> out;
+  long n = line_count();
+  out.reserve((size_t)n);
+  VTermScreenCell cell;
+  for (long l = 0; l < n; l++) {
+    std::u32string line;
+    for (int c = 0; c < cols_; c++) {
+      if (!get_cell(l, c, cell)) break;
+      // the second column of a wide character holds nothing
+      line += cell.chars[0] == (uint32_t)-1 ? (char32_t)0 : cell.chars[0] ? (char32_t)cell.chars[0] : U' ';
+    }
+    while (!line.empty() && line.back() == U' ') line.pop_back();
+    out.push_back(std::move(line));
+  }
+  return out;
+}
+
+void TermWidget::show_match(long line, int col, int len) {
+  has_sel_ = len > 0;
+  sel_a_line_ = sel_b_line_ = line;
+  sel_a_col_ = col;
+  sel_b_col_ = col + std::max(1, len) - 1;
+  // the live screen when the line is on it, else scrolled back to a few lines above it
+  long first_shown = (long)sb_.size() - scroll_;
+  if (line < first_shown || line >= first_shown + rows_) {
+    long want = (long)sb_.size() - line + rows_ / 3;
+    scroll_to((int)std::max(0L, std::min(want, (long)sb_.size())));
+    if (line >= (long)sb_.size()) scroll_to(0);
+  }
+  mark_all();
+  schedule_repaint();
+  redraw();
+}
+
+bool TermWidget::selection_start(long &line, int &col) const {
+  if (!has_sel_) return false;
+  bool a_first = sel_a_line_ < sel_b_line_ || (sel_a_line_ == sel_b_line_ && sel_a_col_ <= sel_b_col_);
+  line = a_first ? sel_a_line_ : sel_b_line_;
+  col = a_first ? sel_a_col_ : sel_b_col_;
+  return true;
+}
+
+void TermWidget::clear_selection() {
+  if (!has_sel_) return;
+  has_sel_ = false;
+  mark_all();
+  schedule_repaint();
+}
 
 // ---- repainting -------------------------------------------------------------------
 
@@ -859,6 +908,7 @@ int TermWidget::handle(int e) {
         else vterm_state_focus_out(state_);
       }
       has_focus_ = e == FL_FOCUS;
+      if (has_focus_ && on_focus) on_focus(this, cb_data);
       mark_cursor(); // drawn as an outline without the focus
       if (has_focus_) reset_blink();
       else stop_blink();
@@ -875,9 +925,12 @@ int TermWidget::handle(int e) {
           case 'c': copy_selection(1); return 1;
           case 'v': paste(1); return 1;
           // window shortcuts: new window / tab, close tab / window, SSH,
-          // menu bar, preferences, moving tabs
+          // menu bar, preferences, moving tabs, split panes, find, moving
+          // between panes
           case 'n': case 't': case 'w': case 'q': case 's': case 'm': case 'p':
+          case 'e': case 'o': case 'f':
           case FL_Page_Up: case FL_Page_Down:
+          case FL_Left: case FL_Right: case FL_Up: case FL_Down:
             return 0;
         }
       }

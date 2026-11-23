@@ -75,6 +75,20 @@ target_link_libraries(fl-nightlight PRIVATE fl-nightlight-util fld PkgConfig::WA
 install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-nightlight.desktop
         DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
 
+# auto-rotation of the built-in screen (iio-sensor-proxy, wlr-output-management)
+add_library(fl-rotate-util STATIC rotate_util.cpp)
+target_include_directories(fl-rotate-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if(TARGET fld-glib)
+  set(ROTATE_PROTO)
+  fld_wayland_protocol(ROTATE_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-management-unstable-v1.xml client)
+  add_executable(fl-autorotate autorotate.cpp ${ROTATE_PROTO})
+  target_include_directories(fl-autorotate PRIVATE ${FLD_PROTO_OUT})
+  target_link_libraries(fl-autorotate PRIVATE fl-rotate-util fld-glib PkgConfig::WAYLAND_CLIENT)
+  install(TARGETS fl-autorotate RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-autorotate.desktop
+          DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
+endif()
+
 # clipboard history: the store (also in fl-panel) and the recorder
 add_library(fl-cliphist-store STATIC cliphist_store.cpp)
 target_include_directories(fl-cliphist-store PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

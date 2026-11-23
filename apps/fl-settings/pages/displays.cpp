@@ -301,6 +301,19 @@ public:
     status->labelcolor(palette().fg_dim);
 
     int ny = cy + 450;
+    {
+      // convertibles and tablets: fl-autorotate follows the accelerometer
+      Fl_Check_Button *rot = new Fl_Check_Button(X + 24, ny, lw, 26, "Turn the built-in screen with the device");
+      rot->tooltip("For convertibles and tablets with a rotation sensor (iio-sensor-proxy)");
+      ConfigFile d(desktop_ini_path());
+      rot->value(d.ini.get_bool("Display", "AutoRotate", true));
+      rot->callback([](Fl_Widget *w, void *) {
+        ConfigFile d(desktop_ini_path());
+        d.ini.set_bool("Display", "AutoRotate", ((Fl_Check_Button *)w)->value());
+        d.save();
+      });
+      ny += 34;
+    }
 #ifdef FLD_HAVE_BACKLIGHT
     // the built-in screen's backlight (laptops)
     int pct;

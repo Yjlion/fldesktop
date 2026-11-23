@@ -1,0 +1,20 @@
+.TH FL-AUTOROTATE 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-autorotate \- turn the built-in screen with the device
+.SH SYNOPSIS
+\fBfl-autorotate\fR [\fB\-\-set\fR normal|left-up|right-up|bottom-up]
+.SH DESCRIPTION
+On convertibles and tablets, follows the accelerometer of
+\fBiio-sensor-proxy\fR and turns the built-in screen (eDP, LVDS or DSI) with
+the device, through wlr-output-management. It starts with the session and
+quits at once on computers without a rotation sensor. Settings > Displays >
+"Turn the built-in screen with the device" switches it off
+(\fB[Display] AutoRotate=false\fR in \fIdesktop.ini\fR). \fB\-\-set\fR turns the
+screen once and exits.
+.PP
+In tablet mode (a convertible folded back) \fBfl-wm\fR(1) brings up the
+on-screen keyboard when a text field has the focus.
+.SH ENVIRONMENT
+\fBFLD_ROTATE_OUTPUT\fR names the output to turn instead of the built-in one.
+.SH SEE ALSO
+\fBfl-wm\fR(1), \fBfl-osk\fR(1)

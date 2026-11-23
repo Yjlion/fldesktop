@@ -117,6 +117,7 @@ package_fldesktop-shell() {
               'networkmanager: network indicator and Wi-Fi passwords'
               'upower: battery indicator and low battery warnings'
               'power-profiles-daemon: power modes'
+              'iio-sensor-proxy: turning the screen of convertibles and tablets'
               'udisks2: mounting drives as they are plugged in'
               'fldesktop-polkit-agent: administrator password prompts'
               'fldesktop-notifyd: notifications and their history'
@@ -128,12 +129,13 @@ package_fldesktop-shell() {
   _install_files usr/bin/fl-panel usr/bin/fl-launcher usr/bin/fl-desktop usr/bin/fl-autostart \
     usr/bin/fl-nightlight etc/xdg/autostart/fl-nightlight.desktop \
     usr/lib/fldesktop/fl-backlight-helper usr/share/polkit-1/actions/org.fldesktop.backlight.policy \
+    usr/bin/fl-autorotate etc/xdg/autostart/fl-autorotate.desktop \
     usr/bin/fl-cliphist etc/xdg/autostart/fl-cliphist.desktop \
     usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \
     usr/share/applications/fl-snip.desktop usr/share/icons/hicolor/scalable/apps/fl-snip.svg \
     usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
   local m
-  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip fl-nightlight fl-cliphist; do
+  for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip fl-nightlight fl-cliphist fl-autorotate; do
     _install_files usr/share/man/man1/$m.1
   done
 }

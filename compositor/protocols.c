@@ -23,6 +23,7 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_security_context_v1.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_switch.h>
 #include <wlr/types/wlr_tablet_tool.h>
 #include <wlr/types/wlr_tablet_v2.h>
 #include <wlr/types/wlr_tearing_control_v1.h>
@@ -270,6 +271,63 @@ static void tool_button(struct wl_listener *l, void *data) {
 	/* the pen's lower button is a right click */
 	input_emulate_button(P.server, ev->time_msec, ev->button == BTN_STYLUS ? BTN_RIGHT : BTN_MIDDLE,
 		ev->state == WLR_BUTTON_PRESSED);
+}
+
+/* ---- tablet mode --------------------------------------------------------------------- */
+
+/* A convertible folded into a tablet (libinput's tablet mode switch): the
+ * on-screen keyboard comes up when a text field is focused and goes when
+ * none is ([behaviour] osk_in_tablet_mode). */
+static bool tablet_mode;
+static struct wl_event_source *osk_hide_timer;
+
+static int osk_hide(void *data) {
+	flwm_spawn(P.server, "fl-osk --hide");
+	return 0;
+}
+
+void protocols_text_input(bool focused) {
+	if (!tablet_mode || !P.server->config.osk_in_tablet_mode) return;
+	if (!osk_hide_timer) osk_hide_timer = wl_event_loop_add_timer(P.server->event_loop, osk_hide, NULL);
+	if (focused) {
+		wl_event_source_timer_update(osk_hide_timer, 0);
+		flwm_spawn(P.server, "fl-osk --show");
+	} else {
+		/* focus going from one field to the next: no flicker */
+		wl_event_source_timer_update(osk_hide_timer, 400);
+	}
+}
+
+bool protocols_tablet_mode(void) { return tablet_mode; }
+
+struct flwm_switch {
+	struct wl_listener toggle, destroy;
+};
+
+static void switch_toggle(struct wl_listener *l, void *data) {
+	struct wlr_switch_toggle_event *ev = data;
+	if (ev->switch_type != WLR_SWITCH_TYPE_TABLET_MODE) return;
+	bool on = ev->switch_state == WLR_SWITCH_STATE_ON;
+	if (on == tablet_mode) return;
+	tablet_mode = on;
+	wlr_log(WLR_INFO, "tablet mode %s", on ? "on" : "off");
+	if (!on && P.server->config.osk_in_tablet_mode) flwm_spawn(P.server, "fl-osk --hide");
+}
+
+static void switch_destroy(struct wl_listener *l, void *data) {
+	struct flwm_switch *s = wl_container_of(l, s, destroy);
+	wl_list_remove(&s->toggle.link);
+	wl_list_remove(&s->destroy.link);
+	free(s);
+}
+
+void protocols_new_switch(struct wlr_input_device *device) {
+	struct wlr_switch *sw = wlr_switch_from_input_device(device);
+	struct flwm_switch *s = calloc(1, sizeof *s);
+	s->toggle.notify = switch_toggle;
+	wl_signal_add(&sw->events.toggle, &s->toggle);
+	s->destroy.notify = switch_destroy;
+	wl_signal_add(&device->events.destroy, &s->destroy);
 }
 
 /* ---- setup --------------------------------------------------------------------------- */

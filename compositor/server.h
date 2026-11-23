@@ -170,6 +170,7 @@ struct flwm_config {
 	char *launcher_cmd;
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	bool snap_assist; /* after snapping to a side: offer the other windows */
+	bool osk_in_tablet_mode; /* the on-screen keyboard for text fields in tablet mode */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
 	int workspaces; /* number of workspaces, 1..FLWM_MAX_WORKSPACES */
 	/* touchpad gestures (gesture.c) */
@@ -710,5 +711,8 @@ bool protocols_offer_lease(struct wlr_output *output); /* true: a non-desktop ou
 bool protocols_wants_tearing(struct wlr_surface *surface);
 bool protocols_is_video_or_game(struct wlr_surface *surface);
 bool protocols_client_sandboxed(struct wl_client *client);
+void protocols_new_switch(struct wlr_input_device *device);
+void protocols_text_input(bool focused); /* tablet mode: the on-screen keyboard */
+bool protocols_tablet_mode(void);
 
 #endif

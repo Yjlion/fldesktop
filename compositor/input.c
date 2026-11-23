@@ -594,6 +594,9 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 	case WLR_INPUT_DEVICE_KEYBOARD:
 		server_new_keyboard(server, device, false);
 		break;
+	case WLR_INPUT_DEVICE_SWITCH:
+		protocols_new_switch(device);
+		break;
 	case WLR_INPUT_DEVICE_TABLET:
 		protocols_new_tablet(device);
 		/* the cursor follows the pen */

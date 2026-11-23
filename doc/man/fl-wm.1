@@ -35,6 +35,11 @@ left, center and right thirds. After a window snaps to a side or a third,
 \fBsnap assist\fR offers the other windows of the workspace for the rest of the
 screen (arrows and Enter or a click choose, Escape or Super leaves it;
 \fBsnap_assist=false\fR turns it off).
+.SH TABLET MODE
+When a convertible is folded into a tablet (libinput's tablet mode switch),
+the on-screen keyboard (\fBfl-osk\fR(1)) comes up when a text field gets the
+focus and goes away when none has it (\fBosk_in_tablet_mode=false\fR in
+\fB[behaviour]\fR turns this off). \fBfl-autorotate\fR(1) turns the screen.
 .SH OVERVIEW AND HOT CORNERS
 \fBSuper+Tab\fR shows the windows of the workspace over a dimmed screen (the
 \fBoverview\fR action); a click, or the arrows and Enter, picks one. Hot

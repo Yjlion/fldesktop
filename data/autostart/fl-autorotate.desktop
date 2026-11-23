@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Screen rotation
+Comment=Turns the built-in screen with the device (convertibles, tablets)
+Exec=fl-autorotate
+OnlyShowIn=fldesktop;
+NoDisplay=true

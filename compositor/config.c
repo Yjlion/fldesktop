@@ -179,6 +179,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->launcher_cmd = strdup("fl-launcher");
 	c->switcher = true;
 	c->snap_assist = true;
+	c->osk_in_tablet_mode = true;
 	c->xwayland = true;
 	c->workspaces = 4;
 	c->gestures = true;
@@ -312,6 +313,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
 			else if (!strcmp(k, "snap_assist")) c->snap_assist = parse_bool(v);
+			else if (!strcmp(k, "osk_in_tablet_mode")) c->osk_in_tablet_mode = parse_bool(v);
 			else if (!strncmp(k, "hot_corner_", 11)) {
 				static const char *names[] = {"top_left", "top_right", "bottom_left", "bottom_right"};
 				for (int i = 0; i < 4; i++)

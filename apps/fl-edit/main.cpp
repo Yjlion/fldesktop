@@ -16,7 +16,10 @@
 
 #include <algorithm>
 #include <cstring>
+#include <cctype>
 #include <functional>
+#include <map>
+#include <strings.h>
 #include <memory>
 #include <string>
 #include <sys/stat.h>
@@ -29,6 +32,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "lsp.h"
 #include "syntax.h"
 
 static Fl_Double_Window *g_win;
@@ -39,7 +43,7 @@ static Fl_Box *g_status;
 
 struct Settings {
   bool line_numbers = true, wrap = false, highlight = true, spaces = false, auto_indent = true;
-  bool brackets = true;
+  bool brackets = true, minimap = true, lsp = true, restore_session = true;
   int font_size = 14, tab_width = 4;
   std::string theme = "auto";
   std::vector<std::string> recent;
@@ -49,7 +53,9 @@ static const int MAX_HIGHLIGHT = 4 << 20; // skip highlighting huge files
 
 // ---- style table ---------------------------------------------------------------
 
-static Fl_Text_Display::Style_Table_Entry g_styles[syntax::STYLE_COUNT];
+// each style three times: plain, with an error underline and with a warning underline
+static const int NSTYLES = syntax::STYLE_COUNT * 3;
+static Fl_Text_Display::Style_Table_Entry g_styles[NSTYLES];
 
 static Fl_Color rgb(unsigned v) { return fl_rgb_color((v >> 16) & 255, (v >> 8) & 255, v & 255); }
 static const syntax::Theme &cur_theme() { return syntax::theme(S.theme, fld::palette().dark); }
@@ -65,6 +71,12 @@ static void make_styles() {
   // the matching bracket gets a background
   g_styles[syntax::BRACKET - 'A'].attr = Fl_Text_Display::ATTR_BGCOLOR;
   g_styles[syntax::BRACKET - 'A'].bgcolor = rgb(th.bracket_bg);
+  for (int i = 0; i < syntax::STYLE_COUNT; i++) {
+    g_styles[i + syntax::STYLE_COUNT] = g_styles[i];
+    g_styles[i + syntax::STYLE_COUNT].attr |= Fl_Text_Display::ATTR_SPELLING;
+    g_styles[i + 2 * syntax::STYLE_COUNT] = g_styles[i];
+    g_styles[i + 2 * syntax::STYLE_COUNT].attr |= Fl_Text_Display::ATTR_GRAMMAR;
+  }
 }
 
 // ---- documents --------------------------------------------------------------------
@@ -74,12 +86,41 @@ static std::vector<Doc *> g_docs;
 static void update_status();
 static void update_tab_label(Doc *d);
 
+// more carets than the editor's own one (Ctrl+D, Alt+click, Ctrl+Alt+Up/Down):
+// typing, deleting and moving happen at all of them
+struct Caret {
+  int pos, anchor;
+};
+
 class Editor : public Fl_Text_Editor {
 public:
   Doc *doc;
+  std::vector<Caret> extra;
+  int last_top = -1;
   Editor(int x, int y, int w, int h, Doc *d) : Fl_Text_Editor(x, y, w, h), doc(d) {}
   int handle(int e) override;
+  void draw() override;
+  int handle_carets(int k, int st);
+  void multi_edit(const std::string &text, int dir);
+  void move_carets(int k);
+  void add_next_occurrence();
+  void add_caret_vertical(int dir);
+  bool xy_of(int pos, int &X, int &Y) const { return position_to_xy(pos, &X, &Y) != 0; }
+  int line_height() const { return mMaxsize; }
+  int visible_lines() const { return mNVisibleLines; }
+  int text_x() const { return text_area.x; }
 };
+
+// a picture of the whole document beside the text; click or drag to scroll
+class Minimap : public Fl_Widget {
+public:
+  Doc *doc;
+  int first = 0; // the first line drawn
+  Minimap(int x, int y, int w, int h, Doc *d) : Fl_Widget(x, y, w, h), doc(d) {}
+  void draw() override;
+  int handle(int e) override;
+};
+static const int MINIMAP_W = 96;
 
 class Doc : public Fl_Group {
 public:
@@ -94,6 +135,10 @@ public:
   std::string lexed, lexed_styles; // text and styles of the last rehighlight
   bool dirty = true;               // edited since then
   std::vector<int> marks;          // positions styled as BRACKET
+  std::string shown_styles;        // lexed_styles with the diagnostics' underlines
+  Minimap *mini = nullptr;
+  lspc::Client *lsp = nullptr;     // the language server, when there is one
+  std::vector<lsp::Diagnostic> diags;
 
   Doc(int x, int y, int w, int h) : Fl_Group(x, y, w, h) {
     buf = new Fl_Text_Buffer();
@@ -108,6 +153,7 @@ public:
     ed->linenumber_font(fld::mono_font());
     ed->linenumber_size(S.font_size - 2);
     ed->scrollbar_size(12);
+    mini = new Minimap(x + w - MINIMAP_W, y, MINIMAP_W, h, this);
     resizable(ed);
     end();
     fld::no_edit_menu(ed); // the editor has its own menu
@@ -115,6 +161,8 @@ public:
     apply_settings();
   }
   ~Doc() override {
+    Fl::remove_timeout(lsp_change_later, this);
+    if (lsp) lspc::closed(lsp, path_open);
     buf->remove_modify_callback(modify_cb, this);
     ed->buffer(nullptr);
     ed->highlight_data(nullptr, nullptr, 0, 0, nullptr, nullptr);
@@ -126,8 +174,21 @@ public:
   bool styled() const { return (S.highlight || S.brackets) && buf->length() < MAX_HIGHLIGHT; }
   syntax::Language effective_lang() const { return S.highlight ? lang : syntax::NONE; }
 
+  void layout() {
+    bool m = S.minimap && buf->length() < MAX_HIGHLIGHT;
+    ed->resize(x(), y(), w() - (m ? MINIMAP_W : 0), h());
+    mini->resize(x() + w() - MINIMAP_W, y(), MINIMAP_W, h());
+    if (m) mini->show(); else mini->hide();
+    redraw();
+  }
+  void resize(int X, int Y, int W, int H) override {
+    Fl_Widget::resize(X, Y, W, H);
+    layout();
+  }
+
   void apply_settings() {
     make_styles();
+    layout();
     const syntax::Theme &th = cur_theme();
     ed->color(rgb(th.bg));
     ed->textcolor(rgb(th.colors[0]));
@@ -141,7 +202,7 @@ public:
     ed->wrap_mode(S.wrap ? Fl_Text_Display::WRAP_AT_BOUNDS : Fl_Text_Display::WRAP_NONE, 0);
     buf->tab_distance(S.tab_width);
     if (styled())
-      ed->highlight_data(style, g_styles, syntax::STYLE_COUNT, 'A', nullptr, nullptr);
+      ed->highlight_data(style, g_styles, NSTYLES, 'A', nullptr, nullptr);
     else
       ed->highlight_data(nullptr, nullptr, 0, 0, nullptr, nullptr);
     rehighlight();
@@ -155,8 +216,10 @@ public:
     lexed = text;
     free(text);
     syntax::highlight(effective_lang(), lexed, lexed_styles);
-    style->text(lexed_styles.c_str());
     dirty = false;
+    shown_styles = lexed_styles;
+    overlay_diagnostics();
+    style->text(shown_styles.c_str());
     ed->redisplay_range(0, buf->length());
     update_brackets();
   }
@@ -165,8 +228,8 @@ public:
   void update_brackets() {
     if (!styled()) return;
     for (int p : marks)
-      if (p < style->length() && p < (int)lexed_styles.size()) {
-        char o[2] = {lexed_styles[p], 0};
+      if (p < style->length() && p < (int)shown_styles.size()) {
+        char o[2] = {shown_styles[p], 0};
         style->replace(p, p + 1, o);
         ed->redisplay_range(p, p + 1);
       }
@@ -189,6 +252,80 @@ public:
   }
 
   static void highlight_later(void *d) { static_cast<Doc *>(d)->rehighlight(); }
+
+  // ---- language server
+
+  // a buffer position for an LSP (line, UTF-16 column)
+  int pos_of(int line, int col16) const {
+    int ls = buf->skip_lines(0, line);
+    char *t = buf->line_text(ls);
+    int b = lsp::byte_col(t, col16);
+    free(t);
+    return std::min(ls + b, buf->length());
+  }
+  void lsp_position(int pos, int &line, int &col16) const {
+    line = buf->count_lines(0, pos);
+    int ls = buf->line_start(pos);
+    char *t = buf->text_range(ls, pos);
+    col16 = lsp::utf16_col(t, pos - ls);
+    free(t);
+  }
+  std::string lsp_lang() const { return lsp::language_id(syntax::language_name(lang)); }
+  void lsp_open() {
+    if (lsp || !S.lsp || path.empty() || buf->length() >= MAX_HIGHLIGHT) return;
+    char *t = buf->text();
+    lsp = lspc::attach(path, lsp_lang(), t);
+    free(t);
+  }
+  void lsp_reopen() { // after a new path or language
+    if (lsp) lspc::closed(lsp, path_open);
+    lsp = nullptr;
+    diags.clear();
+    lsp_open();
+    path_open = path;
+  }
+  std::string path_open; // the path the server knows the document by
+  static void lsp_change_later(void *v) {
+    Doc *d = static_cast<Doc *>(v);
+    if (!d->lsp) return;
+    char *t = d->buf->text();
+    lspc::change(d->lsp, d->path, t);
+    free(t);
+  }
+  void lsp_flush() {
+    if (Fl::has_timeout(lsp_change_later, this)) {
+      Fl::remove_timeout(lsp_change_later, this);
+      lsp_change_later(this);
+    }
+  }
+  // underlines the diagnostics in shown_styles
+  void overlay_diagnostics() {
+    for (auto &dg : diags) {
+      if (dg.severity > 2) continue;
+      int a = pos_of(dg.line, dg.col), b = pos_of(dg.end_line, dg.end_col);
+      if (b <= a) b = std::min(buf->word_end(a) > a ? buf->word_end(a) : a + 1, buf->length());
+      int add = dg.severity == 1 ? syntax::STYLE_COUNT : 2 * syntax::STYLE_COUNT;
+      for (int p = a; p < b && p < (int)shown_styles.size(); p++) {
+        if (buf->byte_at(p) == '\n') continue;
+        int c = (shown_styles[(size_t)p] - 'A') % syntax::STYLE_COUNT;
+        shown_styles[(size_t)p] = (char)('A' + c + add);
+      }
+    }
+  }
+  void set_diagnostics(const std::vector<lsp::Diagnostic> &d) {
+    diags = d;
+    std::sort(diags.begin(), diags.end(), [](const lsp::Diagnostic &x, const lsp::Diagnostic &y) {
+      return x.line != y.line ? x.line < y.line : x.col < y.col;
+    });
+    if (!styled() || dirty) return; // the next rehighlight shows them
+    shown_styles = lexed_styles;
+    overlay_diagnostics();
+    style->text(shown_styles.c_str());
+    marks.clear();
+    update_brackets();
+    ed->redisplay_range(0, buf->length());
+    mini->redraw();
+  }
 
   static void modify_cb(int pos, int ins, int del, int, const char *deleted, void *data) {
     Doc *d = static_cast<Doc *>(data);
@@ -214,6 +351,11 @@ public:
     }
     Fl::remove_timeout(highlight_later, d);
     Fl::add_timeout(0.15, highlight_later, d);
+    if (d->lsp) {
+      Fl::remove_timeout(lsp_change_later, d);
+      Fl::add_timeout(0.4, lsp_change_later, d);
+    }
+    d->mini->redraw();
     if (!d->modified) {
       d->modified = true;
       update_tab_label(d);
@@ -240,6 +382,7 @@ public:
     if (!lang_forced) lang = syntax::detect(path, first);
     apply_settings();
     update_tab_label(this);
+    lsp_reopen();
     return true;
   }
 
@@ -258,6 +401,10 @@ public:
       free(t);
       if (!lang_forced) lang = syntax::detect(path, s.substr(0, s.find('\n')));
       apply_settings();
+      lsp_reopen();
+    } else if (lsp) {
+      lsp_flush();
+      lspc::saved(lsp, path);
     }
     modified = false;
     update_tab_label(this);
@@ -267,6 +414,280 @@ public:
 
 static Doc *g_current = nullptr;
 static Doc *current() { return g_current; }
+
+// ---- minimap -----------------------------------------------------------------------------
+
+static const int MINI_LH = 2; // pixels per line
+
+void Minimap::draw() {
+  const syntax::Theme &th = cur_theme();
+  Fl_Text_Buffer *buf = doc->buf, *style = doc->style;
+  Editor *ed = doc->ed;
+  Fl_Color bg = rgb(th.bg);
+  fl_push_clip(x(), y(), w(), h());
+  fl_rectf(x(), y(), w(), h(), bg);
+  fl_color(rgb(th.line_bg));
+  fl_yxline(x(), y(), y() + h() - 1);
+  int lines = buf->count_lines(0, buf->length()) + 1;
+  int rows = h() / MINI_LH;
+  int vis = std::max(1, ed->visible_lines());
+  int top = std::max(0, ed->scroll_row() - 1);
+  if (lines <= rows) first = 0;
+  else first = (int)((long long)top * (lines - rows) / std::max(1, lines - vis));
+  first = std::max(0, std::min(first, std::max(0, lines - rows)));
+  // the part that shows in the editor
+  fl_rectf(x() + 1, y() + (top - first) * MINI_LH, w() - 1, vis * MINI_LH, rgb(th.line_bg));
+  bool styled = doc->styled() && style->length() == buf->length();
+  int pos = buf->skip_lines(0, first), len = buf->length();
+  for (int r = 0; r < rows && pos < len; r++) {
+    int col = 0, X0 = x() + 4;
+    int end = buf->line_end(pos);
+    int run_start = -1, run_style = -1;
+    auto flush = [&](int upto) {
+      if (run_start < 0) return;
+      fl_color(rgb(th.colors[run_style % syntax::STYLE_COUNT]));
+      fl_rectf(X0 + run_start, y() + r * MINI_LH, upto - run_start, MINI_LH - 1 > 0 ? MINI_LH - 1 : 1);
+      run_start = -1;
+    };
+    for (int p = pos; p < end && col < w() - 6; p++) {
+      unsigned char c = (unsigned char)buf->byte_at(p);
+      if ((c & 0xC0) == 0x80) continue; // UTF-8 continuation
+      if (c == '\t') {
+        flush(col);
+        col += S.tab_width - col % S.tab_width;
+        continue;
+      }
+      if (c == ' ') {
+        flush(col);
+        col++;
+        continue;
+      }
+      int st = styled ? style->byte_at(p) - 'A' : 0;
+      if (st < 0 || st >= NSTYLES) st = 0;
+      if (run_start >= 0 && st != run_style) flush(col);
+      if (run_start < 0) {
+        run_start = col;
+        run_style = st;
+      }
+      col++;
+    }
+    flush(std::min(col, w() - 6));
+    pos = end + 1;
+  }
+  // problems: marks at the right edge
+  for (auto &dg : doc->diags) {
+    if (dg.severity > 2) continue;
+    int yy = lines <= rows ? dg.line * MINI_LH : (int)((long long)dg.line * h() / lines);
+    fl_rectf(x() + w() - 4, y() + yy, 4, 3, dg.severity == 1 ? FL_RED : fl_rgb_color(230, 160, 0));
+  }
+  fl_pop_clip();
+}
+
+int Minimap::handle(int e) {
+  switch (e) {
+    case FL_PUSH:
+    case FL_DRAG: {
+      int lines = doc->buf->count_lines(0, doc->buf->length()) + 1;
+      int vis = std::max(1, doc->ed->visible_lines());
+      int line = first + (Fl::event_y() - y()) / MINI_LH - vis / 2;
+      line = std::max(0, std::min(line, lines - vis));
+      doc->ed->scroll(line + 1, 0);
+      redraw();
+      return 1;
+    }
+    case FL_MOUSEWHEEL:
+      return doc->ed->handle(e);
+    case FL_RELEASE: return 1;
+  }
+  return Fl_Widget::handle(e);
+}
+
+// ---- carets ----------------------------------------------------------------------------
+
+void Editor::draw() {
+  Fl_Text_Editor::draw();
+  if (scroll_row() != last_top) {
+    last_top = scroll_row();
+    if (doc->mini) doc->mini->redraw();
+  }
+  if (extra.empty()) return;
+  fl_push_clip(text_area.x, text_area.y, text_area.w, text_area.h);
+  Fl_Color cc = cursor_color();
+  for (auto &c : extra) {
+    int X, Y;
+    if (c.anchor != c.pos) {
+      int a = std::min(c.pos, c.anchor), b = std::max(c.pos, c.anchor), X2, Y2;
+      if (xy_of(a, X, Y) && xy_of(b, X2, Y2) && Y2 == Y) {
+        fl_color(selection_color());
+        fl_rectf(X, Y + mMaxsize - 3, X2 - X, 3);
+      }
+    }
+    if (xy_of(c.pos, X, Y)) {
+      fl_color(cc);
+      fl_rectf(X - 1, Y, 2, mMaxsize);
+    }
+  }
+  fl_pop_clip();
+}
+
+// the editor's own caret and selection as a Caret
+static Caret primary_caret(Editor *ed) {
+  int a, b, pos = ed->insert_position();
+  if (ed->buffer()->selection_position(&a, &b) && b > a) return {pos, pos == a ? b : a};
+  return {pos, pos};
+}
+
+void Editor::multi_edit(const std::string &text, int dir) {
+  Fl_Text_Buffer *b = buffer();
+  std::vector<std::pair<Caret, bool>> all; // the caret, is the primary one
+  all.push_back({primary_caret(this), true});
+  for (auto &c : extra) all.push_back({c, false});
+  std::sort(all.begin(), all.end(), [](const std::pair<Caret, bool> &x, const std::pair<Caret, bool> &y) {
+    return std::min(x.first.pos, x.first.anchor) < std::min(y.first.pos, y.first.anchor);
+  });
+  b->unselect();
+  int delta = 0, last_end = -1, primary = 0;
+  std::vector<Caret> out;
+  for (auto &ce : all) {
+    Caret &c = ce.first;
+    int s = std::min(c.pos, c.anchor) + delta, e = std::max(c.pos, c.anchor) + delta;
+    if (s < last_end) { // overlaps the one before: drop it
+      if (ce.second) primary = last_end;
+      continue;
+    }
+    int at = s;
+    if (e > s) {
+      b->remove(s, e);
+      delta -= e - s;
+    } else if (dir < 0 && s > 0) {
+      int p = b->prev_char(s);
+      b->remove(p, s);
+      delta -= s - p;
+      at = p;
+    } else if (dir > 0 && s < b->length()) {
+      int n = b->next_char(s);
+      b->remove(s, n);
+      delta -= n - s;
+    }
+    if (!text.empty()) {
+      b->insert(at, text.c_str());
+      delta += (int)text.size();
+      at += (int)text.size();
+    }
+    last_end = at;
+    if (ce.second) primary = at;
+    else out.push_back({at, at});
+  }
+  extra = out;
+  insert_position(primary);
+  show_insert_position();
+  redraw();
+}
+
+void Editor::move_carets(int k) {
+  Fl_Text_Buffer *b = buffer();
+  auto move = [&](int pos) {
+    switch (k) {
+      case FL_Left: return pos > 0 ? b->prev_char(pos) : 0;
+      case FL_Right: return pos < b->length() ? b->next_char(pos) : pos;
+      case FL_Home: return b->line_start(pos);
+      case FL_End: return b->line_end(pos);
+      case FL_Up:
+      case FL_Down: {
+        int ls = b->line_start(pos), col = pos - ls;
+        int nl = k == FL_Up ? (ls > 0 ? b->line_start(ls - 1) : -1) : (b->line_end(pos) < b->length() ? b->line_end(pos) + 1 : -1);
+        if (nl < 0) return pos;
+        return std::min(nl + col, b->line_end(nl));
+      }
+    }
+    return pos;
+  };
+  for (auto &c : extra) c.pos = c.anchor = move(c.pos);
+  int p = move(insert_position());
+  b->unselect();
+  insert_position(p);
+  // carets that meet become one
+  std::sort(extra.begin(), extra.end(), [](const Caret &x, const Caret &y) { return x.pos < y.pos; });
+  extra.erase(std::unique(extra.begin(), extra.end(), [](const Caret &x, const Caret &y) { return x.pos == y.pos; }),
+              extra.end());
+  extra.erase(std::remove_if(extra.begin(), extra.end(), [p](const Caret &c) { return c.pos == p; }), extra.end());
+  show_insert_position();
+  redraw();
+}
+
+// keys while there are more carets; returns 1 when handled
+int Editor::handle_carets(int k, int st) {
+  bool mods = st & (FL_CTRL | FL_ALT | FL_META);
+  if (k == FL_Escape) {
+    extra.clear();
+    redraw();
+    return 1;
+  }
+  if (k == FL_BackSpace && !mods) { multi_edit("", -1); return 1; }
+  if (k == FL_Delete && !mods) { multi_edit("", 1); return 1; }
+  if ((k == FL_Enter || k == FL_KP_Enter) && !mods) { multi_edit("\n", 0); return 1; }
+  if (k == FL_Tab && !mods) { multi_edit(S.spaces ? std::string(S.tab_width, ' ') : "\t", 0); return 1; }
+  if ((k == FL_Left || k == FL_Right || k == FL_Home || k == FL_End || k == FL_Up || k == FL_Down) &&
+      !(st & (FL_SHIFT | FL_CTRL | FL_ALT))) {
+    move_carets(k);
+    return 1;
+  }
+  if (!mods && Fl::event_length() > 0 && (unsigned char)Fl::event_text()[0] >= 32 && Fl::event_text()[0] != 127) {
+    multi_edit(std::string(Fl::event_text(), (size_t)Fl::event_length()), 0);
+    return 1;
+  }
+  // Ctrl+D and the others are menu shortcuts; anything else ends the extra carets
+  if (!((st & FL_CTRL) && (k == 'd' || k == FL_Up || k == FL_Down)) && !(k >= FL_Shift_L && k <= FL_Meta_R)) {
+    extra.clear();
+    redraw();
+  }
+  return 0;
+}
+
+// Ctrl+D: selects the word at the caret; with a selection, also the next place with the same text
+void Editor::add_next_occurrence() {
+  Fl_Text_Buffer *b = buffer();
+  int a, e;
+  if (!b->selection_position(&a, &e) || e <= a) {
+    int pos = insert_position();
+    a = b->word_start(pos);
+    e = b->word_end(pos);
+    if (e > a) {
+      b->select(a, e);
+      insert_position(e);
+    }
+    redraw();
+    return;
+  }
+  char *t = b->text_range(a, e);
+  std::string needle(t);
+  free(t);
+  int from = e;
+  for (auto &c : extra) from = std::max(from, std::max(c.pos, c.anchor));
+  int found;
+  bool ok = b->search_forward(from, needle.c_str(), &found, 1) != 0;
+  if (!ok) ok = b->search_forward(0, needle.c_str(), &found, 1) != 0;
+  if (!ok || found == a) return;
+  for (auto &c : extra)
+    if (std::min(c.pos, c.anchor) == found) return; // all are taken
+  extra.push_back(primary_caret(this));
+  b->select(found, found + (int)needle.size());
+  insert_position(found + (int)needle.size());
+  show_insert_position();
+  redraw();
+}
+
+void Editor::add_caret_vertical(int dir) {
+  Fl_Text_Buffer *b = buffer();
+  int pos = insert_position(), ls = b->line_start(pos), col = pos - ls;
+  int nl = dir < 0 ? (ls > 0 ? b->line_start(ls - 1) : -1) : (b->line_end(pos) < b->length() ? b->line_end(pos) + 1 : -1);
+  if (nl < 0) return;
+  extra.push_back({pos, pos});
+  b->unselect();
+  insert_position(std::min(nl + col, b->line_end(nl)));
+  show_insert_position();
+  redraw();
+}
 
 static int doc_index(Doc *d) {
   auto it = std::find(g_docs.begin(), g_docs.end(), d);
@@ -306,8 +727,26 @@ static void update_status() {
   char buf[200];
   snprintf(buf, sizeof buf, "Ln %d, Col %d    %s    %s    %s", line, col, syntax::language_name(d->lang),
            S.spaces ? ("Spaces: " + std::to_string(S.tab_width)).c_str() : ("Tab width: " + std::to_string(S.tab_width)).c_str(),
-           d->buf->selected() ? "Selection" : "");
-  g_status->copy_label(buf);
+           !d->ed->extra.empty() ? (std::to_string(d->ed->extra.size() + 1) + " carets").c_str()
+           : d->buf->selected()  ? "Selection"
+                                 : "");
+  std::string st = buf;
+  // the language server, its problem count and the problem on this line
+  std::string server = lspc::name(d->lsp);
+  if (!server.empty()) {
+    int errs = 0, warns = 0;
+    const lsp::Diagnostic *here = nullptr;
+    for (auto &dg : d->diags) {
+      if (dg.severity == 1) errs++;
+      else if (dg.severity == 2) warns++;
+      if (!here && dg.line <= line - 1 && dg.end_line >= line - 1 && dg.severity <= 2) here = &dg;
+    }
+    st += "    " + server;
+    if (errs || warns) st += ": " + std::to_string(errs) + (errs == 1 ? " error, " : " errors, ") +
+                             std::to_string(warns) + (warns == 1 ? " warning" : " warnings");
+    if (here) st += "    " + here->message.substr(0, here->message.find('\n'));
+  }
+  g_status->copy_label(fld::escape_at(st).c_str());
 }
 
 static void editor_menu(Doc *d);
@@ -324,6 +763,29 @@ int Editor::handle(int e) {
     }
     editor_menu(doc);
     return 1;
+  }
+  if (e == FL_PUSH && Fl::event_button() == FL_LEFT_MOUSE) {
+    if (Fl::event_state() & FL_ALT) {
+      // Alt+click adds a caret
+      Caret c = primary_caret(this);
+      int pos = xy_to_position(Fl::event_x(), Fl::event_y(), CURSOR_POS);
+      if (pos != c.pos) extra.push_back(c);
+      buffer()->unselect();
+      insert_position(pos);
+      if (Fl::focus() != this) take_focus();
+      redraw();
+      return 1;
+    }
+    if (!extra.empty()) {
+      extra.clear();
+      redraw();
+    }
+  }
+  if (e == FL_KEYBOARD && !extra.empty()) {
+    if (handle_carets(Fl::event_key(), Fl::event_state())) {
+      update_status();
+      return 1;
+    }
   }
   if (e == FL_KEYBOARD) {
     int k = Fl::event_key();
@@ -406,6 +868,9 @@ static void save_settings() {
   cfg.set_bool("Editor", "InsertSpaces", S.spaces);
   cfg.set_bool("Editor", "AutoIndent", S.auto_indent);
   cfg.set_bool("Editor", "MatchBrackets", S.brackets);
+  cfg.set_bool("Editor", "Minimap", S.minimap);
+  cfg.set_bool("Editor", "LanguageServers", S.lsp);
+  cfg.set_bool("Editor", "RestoreSession", S.restore_session);
   cfg.set("Editor", "ColorTheme", S.theme);
   cfg.set_int("Editor", "FontSize", S.font_size);
   cfg.set_int("Editor", "TabWidth", S.tab_width);
@@ -422,6 +887,17 @@ static void load_settings() {
   S.spaces = cfg.get_bool("Editor", "InsertSpaces", false);
   S.auto_indent = cfg.get_bool("Editor", "AutoIndent", true);
   S.brackets = cfg.get_bool("Editor", "MatchBrackets", true);
+  S.minimap = cfg.get_bool("Editor", "Minimap", true);
+  S.lsp = cfg.get_bool("Editor", "LanguageServers", true);
+  S.restore_session = cfg.get_bool("Editor", "RestoreSession", true);
+  // [LanguageServers] cpp=clangd --background-index, python=pyright-langserver --stdio, ...
+  std::map<std::string, std::string> servers;
+  for (auto &k : cfg.keys("LanguageServers")) servers[k] = cfg.get("LanguageServers", k, "");
+  lspc::set_command_resolver([servers](const std::string &id) {
+    auto it = servers.find(id);
+    if (it != servers.end()) return fld::shell_split(it->second);
+    return lsp::default_server(id);
+  });
   S.theme = cfg.get("Editor", "ColorTheme", "auto");
   S.font_size = cfg.get_int("Editor", "FontSize", fld::mono_size());
   S.tab_width = std::max(1, std::min(16, cfg.get_int("Editor", "TabWidth", 4)));
@@ -535,12 +1011,188 @@ static void close_doc(Doc *d) {
   else refresh_tabbar();
 }
 
+// ---- session: the open files come back at the next start ----------------------------------
+
+static std::string session_path() { return fld::fld_config_dir() + "/edit-session.ini"; }
+
+static void save_session() {
+  fld::Ini ini;
+  int n = 0;
+  for (auto d : g_docs) {
+    if (d->path.empty() || !fld::file_exists(d->path)) continue;
+    std::string sec = "File" + std::to_string(n++);
+    ini.set(sec, "Path", d->path);
+    ini.set_int(sec, "Cursor", d->ed->insert_position());
+    ini.set_int(sec, "Top", d->ed->scroll_row());
+    if (d == current()) ini.set_int("Session", "Current", n - 1);
+  }
+  ini.set_int("Session", "Count", n);
+  ini.save(session_path());
+}
+
+static void open_file(const std::string &p);
+
+static int restore_session() {
+  fld::Ini ini;
+  if (!ini.load(session_path())) return 0;
+  int n = ini.get_int("Session", "Count", 0), cur = ini.get_int("Session", "Current", 0), opened = 0;
+  Doc *show = nullptr;
+  for (int i = 0; i < n && i < 100; i++) {
+    std::string sec = "File" + std::to_string(i), p = ini.get(sec, "Path", "");
+    if (p.empty() || !fld::file_exists(p)) continue;
+    open_file(p);
+    Doc *d = current();
+    if (!d || d->path != p) continue;
+    d->ed->insert_position(std::max(0, std::min(ini.get_int(sec, "Cursor", 0), d->buf->length())));
+    d->ed->scroll(std::max(1, ini.get_int(sec, "Top", 1)), 0);
+    if (i == cur) show = d;
+    opened++;
+  }
+  if (show) show_doc(show);
+  return opened;
+}
+
 static void quit() {
   for (auto d : std::vector<Doc *>(g_docs))
     if (!confirm_close(d)) return;
   for (auto d : g_docs) d->modified = false;
   save_settings();
+  if (S.restore_session) save_session();
+  lspc::shutdown_all();
   g_win->hide();
+}
+
+// ---- language server commands ----------------------------------------------------------
+
+static void status_back(void *) { update_status(); }
+
+static void status_note(const std::string &msg) {
+  g_status->copy_label(fld::escape_at(msg).c_str());
+  Fl::remove_timeout(status_back);
+  Fl::add_timeout(3, status_back);
+}
+
+static bool need_server(Doc *d) {
+  if (d && d->lsp && !lspc::name(d->lsp).empty()) return true;
+  if (!S.lsp) status_note("Language servers are turned off (Options menu)");
+  else if (d && d->path.empty()) status_note("Save the file first: language servers work on files");
+  else {
+    std::vector<std::string> cmd = lsp::default_server(d ? d->lsp_lang() : "");
+    status_note(cmd.empty() ? "No language server is known for this language"
+                            : "No language server running (is " + cmd[0] + " installed?)");
+  }
+  return false;
+}
+
+static void show_completion(Doc *d, int pos, const std::vector<lsp::CompletionItem> &items) {
+  Fl_Text_Buffer *b = d->buf;
+  int ws = pos;
+  while (ws > 0) {
+    char c = b->byte_at(ws - 1);
+    if (!(isalnum((unsigned char)c) || c == '_' || (unsigned char)c >= 0x80)) break;
+    ws--;
+  }
+  char *t = b->text_range(ws, pos);
+  std::string prefix(t);
+  free(t);
+  std::vector<const lsp::CompletionItem *> shown;
+  for (auto &it : items) {
+    if (!prefix.empty() && strncasecmp(it.insert.c_str(), prefix.c_str(), prefix.size()) != 0 &&
+        strncasecmp(it.label.c_str(), prefix.c_str(), prefix.size()) != 0)
+      continue;
+    shown.push_back(&it);
+    if (shown.size() >= 40) break;
+  }
+  if (shown.empty()) {
+    status_note("No completions");
+    return;
+  }
+  std::vector<std::string> labels;
+  for (auto *it : shown) {
+    std::string l;
+    for (char c : it->label) {
+      if (c == '&' || c == '@') l += c;
+      l += c;
+    }
+    if (!it->detail.empty()) l += "   " + it->detail.substr(0, 40);
+    labels.push_back(l);
+  }
+  std::vector<Fl_Menu_Item> menu;
+  for (size_t i = 0; i < shown.size(); i++) menu.push_back({labels[i].c_str(), 0, nullptr, (void *)i});
+  menu.push_back({nullptr});
+  int X, Y;
+  if (!d->ed->xy_of(pos, X, Y)) {
+    X = d->ed->x() + 40;
+    Y = d->ed->y() + 20;
+  }
+  const Fl_Menu_Item *r = menu[0].popup(X, Y + d->ed->line_height());
+  if (!r) return;
+  const lsp::CompletionItem *it = shown[(size_t)(long)r->user_data()];
+  b->replace(ws, pos, it->insert.c_str());
+  d->ed->insert_position(ws + (int)it->insert.size());
+  d->ed->show_insert_position();
+}
+
+// Ctrl+Space
+static void complete() {
+  Doc *d = current();
+  if (!need_server(d)) return;
+  d->lsp_flush();
+  int pos = d->ed->insert_position(), line, col;
+  d->lsp_position(pos, line, col);
+  lspc::complete(d->lsp, d->path, line, col, [d, pos](const std::vector<lsp::CompletionItem> &items) {
+    // the answer is late: only when nothing moved
+    if (doc_index(d) < 0 || current() != d || d->ed->insert_position() != pos) return;
+    show_completion(d, pos, items);
+  });
+}
+
+static void go_to(Doc *d, int line, int col16) {
+  int p = d->pos_of(line, col16);
+  d->buf->unselect();
+  d->ed->insert_position(p);
+  d->ed->show_insert_position();
+  update_status();
+}
+
+// F12
+static void go_to_definition() {
+  Doc *d = current();
+  if (!need_server(d)) return;
+  d->lsp_flush();
+  int line, col;
+  d->lsp_position(d->ed->insert_position(), line, col);
+  lspc::definition(d->lsp, d->path, line, col, [](const std::vector<lsp::Location> &locs) {
+    if (locs.empty()) {
+      status_note("No definition found");
+      return;
+    }
+    const lsp::Location &l = locs[0];
+    open_file(l.path);
+    Doc *t = current();
+    if (t && t->path == fld::abs_path(l.path)) go_to(t, l.line, l.col);
+  });
+}
+
+// F8 and Shift+F8
+static void next_problem(bool back) {
+  Doc *d = current();
+  if (!d || d->diags.empty()) {
+    status_note("No problems");
+    return;
+  }
+  int pos = d->ed->insert_position();
+  const lsp::Diagnostic *pick = nullptr;
+  if (!back) {
+    for (auto &dg : d->diags)
+      if (d->pos_of(dg.line, dg.col) > pos) { pick = &dg; break; }
+    if (!pick) pick = &d->diags.front();
+  } else {
+    for (auto it = d->diags.rbegin(); it != d->diags.rend(); ++it)
+      if (d->pos_of(it->line, it->col) < pos) { pick = &*it; break; }
+    if (!pick) pick = &d->diags.back();
+  }
+  go_to(d, pick->line, pick->col);
 }
 
 // ---- find / replace -------------------------------------------------------------------------
@@ -710,6 +1362,28 @@ static void menu_cb(Fl_Widget *, void *v) {
     case 37: S.auto_indent = !S.auto_indent; apply_all(); break;
     case 41: S.brackets = !S.brackets; apply_all(); break;
     case 38: case 39: case 40: S.tab_width = id == 38 ? 2 : id == 39 ? 4 : 8; apply_all(); break;
+    case 21: if (d) d->ed->add_next_occurrence(); break;
+    case 22: if (d) d->ed->add_caret_vertical(-1); break;
+    case 23: if (d) d->ed->add_caret_vertical(1); break;
+    case 24: complete(); break;
+    case 25: go_to_definition(); break;
+    case 26: next_problem(false); break;
+    case 27: next_problem(true); break;
+    case 42: S.minimap = !S.minimap; apply_all(); break;
+    case 43:
+      S.lsp = !S.lsp;
+      save_settings();
+      if (!S.lsp) {
+        lspc::shutdown_all();
+        for (auto x : g_docs) {
+          x->lsp = nullptr;
+          x->set_diagnostics({});
+        }
+      } else
+        for (auto x : g_docs) x->lsp_reopen();
+      update_status();
+      break;
+    case 44: S.restore_session = !S.restore_session; save_settings(); break;
     case 50: fld::about_dialog("Text Editor", "fl-edit", "A text and code editor built with FLTK."); break;
     case 60: if (d) { if (!d->path.empty()) fld::spawn({"fl-term", "--workdir", fld::dirname(d->path)}); else fld::spawn({"fl-term"}); } break;
   }
@@ -735,6 +1409,7 @@ static void language_cb(Fl_Widget *, void *v) {
     d->lang = (syntax::Language)l;
   }
   d->apply_settings();
+  d->lsp_reopen();
   sync_menus();
   update_status();
 }
@@ -1018,11 +1693,20 @@ int main(int argc, char **argv) {
   g_menu->add("&Edit/Find &Next", FL_F + 3, menu_cb, (void *)17);
   g_menu->add("&Edit/Find Pre&vious", FL_SHIFT + FL_F + 3, menu_cb, (void *)18);
   g_menu->add("&Edit/R&eplace…", FL_CTRL + 'h', menu_cb, (void *)19);
-  g_menu->add("&Edit/&Go to Line…", FL_CTRL + 'g', menu_cb, (void *)20);
+  g_menu->add("&Edit/&Go to Line…", FL_CTRL + 'g', menu_cb, (void *)20, FL_MENU_DIVIDER);
+  g_menu->add("&Edit/Add Next &Occurrence", FL_CTRL + 'd', menu_cb, (void *)21);
+  g_menu->add("&Edit/Add Caret A&bove", FL_CTRL + FL_ALT + FL_Up, menu_cb, (void *)22);
+  g_menu->add("&Edit/Add Caret Be&low", FL_CTRL + FL_ALT + FL_Down, menu_cb, (void *)23);
+  g_menu->add("&Code/&Complete", FL_CTRL + ' ', menu_cb, (void *)24);
+  g_menu->add("&Code/Go to &Definition", FL_F + 12, menu_cb, (void *)25, FL_MENU_DIVIDER);
+  g_menu->add("&Code/&Next Problem", FL_F + 8, menu_cb, (void *)26);
+  g_menu->add("&Code/&Previous Problem", FL_SHIFT + FL_F + 8, menu_cb, (void *)27, FL_MENU_DIVIDER);
+  g_menu->add("&Code/&Language Servers", 0, menu_cb, (void *)43, FL_MENU_TOGGLE | (S.lsp ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Line Numbers", 0, menu_cb, (void *)30, FL_MENU_TOGGLE | (S.line_numbers ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Word Wrap", FL_ALT + 'z', menu_cb, (void *)31, FL_MENU_TOGGLE | (S.wrap ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Syntax Highlighting", 0, menu_cb, (void *)32, FL_MENU_TOGGLE | (S.highlight ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Highlight Matching Brackets", 0, menu_cb, (void *)41, FL_MENU_TOGGLE | (S.brackets ? FL_MENU_VALUE : 0));
+  g_menu->add("&View/&Minimap", 0, menu_cb, (void *)42, FL_MENU_TOGGLE | (S.minimap ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Language/&Automatic", 0, language_cb, (void *)-1L, FL_MENU_RADIO | FL_MENU_DIVIDER);
   for (auto l : syntax::all_languages()) {
     std::string label = std::string("&View/&Language/") + syntax::language_name(l);
@@ -1043,7 +1727,9 @@ int main(int argc, char **argv) {
   g_menu->add("&View/Zoom &Out", FL_CTRL + '-', menu_cb, (void *)34);
   g_menu->add("&View/&Normal Size", FL_CTRL + '0', menu_cb, (void *)35);
   g_menu->add("&Options/Insert &Spaces for Tab", 0, menu_cb, (void *)36, FL_MENU_TOGGLE | (S.spaces ? FL_MENU_VALUE : 0));
-  g_menu->add("&Options/&Auto Indent", 0, menu_cb, (void *)37, FL_MENU_TOGGLE | (S.auto_indent ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER);
+  g_menu->add("&Options/&Auto Indent", 0, menu_cb, (void *)37, FL_MENU_TOGGLE | (S.auto_indent ? FL_MENU_VALUE : 0));
+  g_menu->add("&Options/&Reopen Files at Start", 0, menu_cb, (void *)44,
+              FL_MENU_TOGGLE | (S.restore_session ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER);
   g_menu->add("&Options/Tab Width/2", 0, menu_cb, (void *)38, FL_MENU_RADIO | (S.tab_width == 2 ? FL_MENU_VALUE : 0));
   g_menu->add("&Options/Tab Width/4", 0, menu_cb, (void *)39, FL_MENU_RADIO | (S.tab_width == 4 ? FL_MENU_VALUE : 0));
   g_menu->add("&Options/Tab Width/8", 0, menu_cb, (void *)40, FL_MENU_RADIO | (S.tab_width == 8 ? FL_MENU_VALUE : 0));
@@ -1107,6 +1793,16 @@ int main(int argc, char **argv) {
     if (opened == 0 && g_docs.empty()) new_doc();
     open_file(a);
     opened++;
+  }
+  lspc::set_diagnostics_handler([](const std::string &path, const std::vector<lsp::Diagnostic> &dg) {
+    if (Doc *d = find_doc(path)) {
+      d->set_diagnostics(dg);
+      if (d == current()) update_status();
+    }
+  });
+  if (opened == 0 && S.restore_session) {
+    new_doc();
+    restore_session();
   }
   if (g_docs.empty()) new_doc();
   sync_menus();

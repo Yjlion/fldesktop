@@ -17,9 +17,36 @@ Meson, Perl, PHP, Python, Ruby, Rust, Shell, SQL, TOML, TypeScript, XML and YAML
 dark theme), Default Light, Default Dark, Solarized Light, Solarized Dark, Monokai or High Contrast.
 \fBView \(-> Highlight Matching Brackets\fR marks the bracket next to the cursor and its partner;
 brackets inside strings and comments are ignored.
+.SS Language servers
+When a language server for the file's language is installed, fl-edit starts it and talks to it
+(the Language Server Protocol): problems are underlined (red for errors, blue for warnings), counted
+in the status bar with the message for the current line, and marked in the minimap. F8 and
+Shift+F8 go to the next and previous problem, Ctrl+Space completes the word at the cursor and F12
+goes to the definition of the name at the cursor. One server runs per project folder (the nearest
+folder up with \fB.git\fR, \fBcompile_commands.json\fR, \fBCargo.toml\fR, \fBgo.mod\fR,
+\fBpackage.json\fR, \fBpyproject.toml\fR and the like). The servers used: \fBclangd\fR (C/C++),
+\fBpylsp\fR (Python), \fBrust-analyzer\fR, \fBgopls\fR, \fBtypescript-language-server\fR
+(JavaScript, TypeScript), \fBbash-language-server\fR, \fBlua-language-server\fR and others;
+\fB[LanguageServers]\fR in the settings file chooses another, e.g.
+\fBpython=pyright-langserver --stdio\fR. \fBCode \(-> Language Servers\fR turns them off.
+.SS Multiple carets
+Ctrl+D selects the word at the cursor, then adds the next place with the same text as another
+selection. Alt+click adds a caret, Ctrl+Alt+Up and Ctrl+Alt+Down add one on the line above or
+below. Typing, Backspace, Delete, Enter and the arrow keys then work at every caret; Escape (or
+a click) goes back to one.
+.SS Minimap and session
+\fBView \(-> Minimap\fR shows the whole document beside the text, with the visible part shaded;
+click or drag in it to scroll. The open files, their cursors and scroll positions are saved at
+quit and opened again when fl-edit starts without files (\fBOptions \(-> Reopen Files at
+Start\fR).
 .SH FILES
 .TP
 \fI~/.config/fldesktop/edit.ini\fR
-Settings: \fBColorTheme\fR, \fBMatchBrackets\fR, \fBHighlight\fR, \fBFontSize\fR, \fBTabWidth\fR and others.
+Settings: \fBColorTheme\fR, \fBMatchBrackets\fR, \fBHighlight\fR, \fBFontSize\fR, \fBTabWidth\fR,
+\fBMinimap\fR, \fBLanguageServers\fR, \fBRestoreSession\fR and others; \fB[LanguageServers]\fR
+\fIlanguage-id\fR=\fIcommand\fR.
+.TP
+\fI~/.config/fldesktop/edit-session.ini\fR
+The files open at the last quit.
 .SH SEE ALSO
 \fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)

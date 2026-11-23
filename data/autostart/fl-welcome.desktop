@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome tour
+Comment=Shows the fldesktop tour at the first login
+Exec=fl-welcome --first-run
+NoDisplay=true
+OnlyShowIn=fldesktop;

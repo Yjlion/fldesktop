@@ -1,0 +1,16 @@
+.TH FL-WELCOME 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-welcome \- the first-login tour
+.SH SYNOPSIS
+\fBfl-welcome\fR [\fB\-\-first\-run\fR]
+.SH DESCRIPTION
+A few pages that set up the desktop: light or dark and the accent colour, a
+wallpaper, the panel at the top or the bottom, the keyboard layout (guessed
+from the language), and Flathub for more applications. Each choice is saved
+at once in the same files as \fBfl-settings\fR(1) uses.
+.PP
+It starts at the first login (\fI/etc/xdg/autostart/fl-welcome.desktop\fR
+runs \fBfl-welcome \-\-first\-run\fR, which does nothing once
+\fI~/.config/fldesktop/welcome-done\fR exists).
+.SH SEE ALSO
+\fBfl-settings\fR(1)

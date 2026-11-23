@@ -1,0 +1,5 @@
+usr/bin/fl-welcome
+usr/share/applications/fl-welcome.desktop
+usr/share/icons/hicolor/scalable/apps/fl-welcome.svg
+usr/share/man/man1/fl-welcome.1
+etc/xdg/autostart/fl-welcome.desktop

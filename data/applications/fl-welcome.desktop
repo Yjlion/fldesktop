@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome
+GenericName=Welcome Tour
+Comment=Set up the look, the panel and the keyboard
+Exec=fl-welcome
+Icon=fl-welcome
+Categories=Settings;DesktopSettings;
+Keywords=welcome;tour;first;setup;start;
+StartupWMClass=fl-welcome

@@ -1,8 +1,10 @@
-// fl-video: video and audio player for fldesktop, built on GStreamer
+// fl-media-player: video and music player for fldesktop, built on GStreamer
+// (fl-video before 0.1.4)
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_File_Chooser.H>
+#include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Slider.H>
 #include <FL/fl_ask.H>
@@ -21,22 +23,34 @@
 #include "fld/widgets.h"
 #include "idle_inhibit.h"
 #include "gst_player.h"
+#include "playlist_util.h"
 #include "video_util.h"
+#ifdef FLD_HAVE_MPRIS
+#include "mpris_server.h"
+#endif
 
 static const int BAR = 46;
+static const int SIDE = 300; // the playlist sidebar
 
 struct Settings {
   double volume = 100;
   bool resume = true;
+  bool playlist = false; // the sidebar shows
+  bool shuffle = false;
+  int repeat = 0;        // media::Repeat
 } S;
 
-static std::string settings_path() { return fld::fld_config_dir() + "/video.ini"; }
+static std::string settings_path() { return fld::fld_config_dir() + "/media-player.ini"; }
 
 static void load_settings() {
   fld::Ini c;
-  c.load(settings_path());
+  // fl-video kept its settings in video.ini
+  if (!c.load(settings_path())) c.load(fld::fld_config_dir() + "/video.ini");
   S.volume = std::max(0.0, std::min(130.0, c.get_double("Video", "Volume", 100)));
   S.resume = c.get_bool("Video", "ResumePlayback", true);
+  S.playlist = c.get_bool("Player", "ShowPlaylist", false);
+  S.shuffle = c.get_bool("Player", "Shuffle", false);
+  S.repeat = std::max(0, std::min(2, c.get_int("Player", "Repeat", 0)));
 }
 
 static void save_settings() {
@@ -44,6 +58,9 @@ static void save_settings() {
   c.load(settings_path());
   c.set_int("Video", "Volume", (int)std::lround(S.volume));
   c.set_bool("Video", "ResumePlayback", S.resume);
+  c.set_bool("Player", "ShowPlaylist", S.playlist);
+  c.set_bool("Player", "Shuffle", S.shuffle);
+  c.set_int("Player", "Repeat", S.repeat);
   c.save(settings_path());
 }
 
@@ -59,6 +76,12 @@ static Fl_Box *g_time;
 static fld::FlatButton *g_play, *g_prev, *g_next, *g_mute, *g_full;
 static bool g_fullscreen = false, g_bar_visible = true, g_force_sw = false;
 static bool g_seeking = false;
+// the playlist sidebar
+static Fl_Group *g_side;
+static Fl_Hold_Browser *g_list;
+static fld::FlatButton *g_shuffle_btn, *g_repeat_btn, *g_list_btn;
+static void fill_playlist();
+static void update_mpris();
 
 static void layout();
 static void update_play_button();
@@ -98,6 +121,7 @@ static std::string g_last_dir;
 
 static void open_dialog(bool append) {
   std::string dir = g_last_dir.empty() ? fld::user_dir("VIDEOS") : g_last_dir;
+  if (g_last_dir.empty() && S.playlist && fld::is_dir(fld::user_dir("MUSIC"))) dir = fld::user_dir("MUSIC");
   if (dir.empty() || !fld::is_dir(dir)) dir = fld::home_dir();
   Fl_File_Chooser fc(dir.c_str(), kMediaFilter, Fl_File_Chooser::MULTI, append ? "Add to Playlist" : "Open Media");
   fc.show();
@@ -151,6 +175,10 @@ static void update_play_button() {
   g_play->tooltip(paused ? "Play (Space)" : "Pause (Space)");
   bool playing = !paused && g_player->has_media();
   idle::inhibit(g_win ? (Fl_Window *)g_win : nullptr, playing && g_player->has_video());
+#ifdef FLD_HAVE_MPRIS
+  // music: no automatic suspend while it plays (the screen may blank)
+  mprisd::inhibit_idle(playing && !g_player->has_video());
+#endif
   // audio only: a placeholder with the title instead of a black picture
   std::string ph = g_player->has_media() && !g_player->has_video() ? g_player->title() : "";
   if (ph != g_surface->osd().placeholder) {
@@ -163,11 +191,13 @@ static void update_title() {
   std::string t = g_player->title();
   long n = g_player->count(), i = g_player->current();
   if (n > 1 && i >= 0) t += " (" + std::to_string(i + 1) + "/" + std::to_string(n) + ")";
-  t = t.empty() ? "Video Player" : t + " – Video Player";
+  t = t.empty() ? "Media Player" : t + " – Media Player";
   extern void set_window_title(const std::string &);
   set_window_title(t);
   if (n > 1) { g_prev->activate(); g_next->activate(); }
   else { g_prev->deactivate(); g_next->deactivate(); }
+  fill_playlist();
+  update_mpris();
 }
 
 static void toggle_pause() {
@@ -250,7 +280,23 @@ static void layout() {
   int W = g_win->w(), H = g_win->h();
   bool bar = !g_fullscreen || g_bar_visible;
   int vh = bar ? H - BAR : H;
-  g_surface->widget()->resize(0, 0, W, std::max(1, vh));
+  bool side = S.playlist && !g_fullscreen && W >= SIDE + 240;
+  int sw = side ? SIDE : 0;
+  g_surface->widget()->resize(0, 0, std::max(1, W - sw), std::max(1, vh));
+  g_side->resize(W - sw, 0, SIDE, std::max(1, vh));
+  if (side) {
+    g_side->show();
+    // the list above a row of buttons
+    int sx = W - sw, sy = 0, sh = std::max(1, vh);
+    g_list->resize(sx, sy, SIDE, std::max(1, sh - 40));
+    int bx = sx + 4, by = sy + sh - 38;
+    for (int i = 1; i < g_side->children(); i++) {
+      g_side->child(i)->resize(bx, by, 34, 34);
+      bx += 36;
+    }
+  } else {
+    g_side->hide();
+  }
   g_bar->resize(0, H - BAR, W, BAR);
   if (bar) g_bar->show();
   else g_bar->hide();
@@ -262,7 +308,8 @@ static void layout() {
   int right = W - 8;
   fld::FlatButton *menu = (fld::FlatButton *)g_bar->child(g_bar->children() - 1);
   menu->resize(right - 36, y, 36, 36); right -= 38;
-  g_full->resize(right - 36, y, 36, 36); right -= 44;
+  g_full->resize(right - 36, y, 36, 36); right -= 38;
+  g_list_btn->resize(right - 36, y, 36, 36); right -= 44;
   g_vol->resize(right - 90, y + 10, 90, 16); right -= 94;
   g_mute->resize(right - 36, y, 36, 36); right -= 46;
   g_time->resize(right - 130, y, 130, 36); right -= 138;
@@ -289,7 +336,221 @@ static void quit() {
   S.volume = g_player->volume();
   save_settings();
   idle::inhibit(g_win, false);
+#ifdef FLD_HAVE_MPRIS
+  mprisd::inhibit_idle(false);
+#endif
   g_win->hide();
+}
+
+// ---- playlist sidebar ---------------------------------------------------------------------
+
+static std::vector<std::string> g_list_labels;
+
+static std::string item_name(const Player::Item &it) {
+  if (!it.title.empty()) return it.title;
+  if (video::is_url(it.location)) return it.location;
+  return fld::basename(it.location);
+}
+
+static void fill_playlist() {
+  if (!g_list) return;
+  const auto &pl = g_player->playlist();
+  int top = g_list->topline();
+  g_list->clear();
+  for (size_t i = 0; i < pl.size(); i++) {
+    std::string name = (int)i == g_player->current() && !g_player->track_title().empty()
+                           ? (g_player->artist().empty() ? g_player->track_title()
+                                                         : g_player->artist() + " – " + g_player->track_title())
+                           : item_name(pl[i]);
+    std::string len = pl[i].length > 0 ? video::format_time(pl[i].length) : "";
+    std::string line = std::string((int)i == g_player->current() ? "@b" : "") + std::to_string(i + 1) + ". " + name +
+                       "\t@r" + len;
+    g_list->add(line.c_str());
+  }
+  if (pl.empty()) g_list->add("@iDrop files here or press + to add");
+  g_list->topline(std::max(1, std::min(top, g_list->size())));
+  if (g_player->current() >= 0) g_list->select(g_player->current() + 1);
+}
+
+static void update_order_buttons() {
+  g_shuffle_btn->value(g_player->shuffle());
+  g_shuffle_btn->tooltip(g_player->shuffle() ? "Shuffle: on" : "Shuffle: off");
+  static const char *rep[] = {"Repeat: off", "Repeat: all", "Repeat: one"};
+  media::Repeat r = g_player->repeat();
+  g_repeat_btn->value(r != media::Repeat::Off);
+  g_repeat_btn->tooltip(rep[(int)r]);
+  set_icon(g_repeat_btn, "media-playlist-repeat",
+           r == media::Repeat::One ? "🔂" : "🔁");
+  g_shuffle_btn->redraw();
+  g_repeat_btn->redraw();
+}
+
+static void set_shuffle(bool on) {
+  g_player->set_shuffle(on);
+  S.shuffle = on;
+  save_settings();
+  update_order_buttons();
+  update_mpris();
+}
+
+static void set_repeat(media::Repeat r) {
+  g_player->set_repeat(r);
+  S.repeat = (int)r;
+  save_settings();
+  update_order_buttons();
+  update_mpris();
+}
+
+static void toggle_playlist() {
+  S.playlist = !S.playlist;
+  save_settings();
+  g_list_btn->value(S.playlist);
+  layout();
+}
+
+static void save_playlist() {
+  std::string dir = fld::user_dir("MUSIC");
+  if (dir.empty() || !fld::is_dir(dir)) dir = fld::home_dir();
+  Fl_File_Chooser fc((dir + "/Playlist.m3u").c_str(), "M3U playlist (*.{m3u,m3u8})\tPLS playlist (*.pls)",
+                     Fl_File_Chooser::CREATE, "Save Playlist");
+  fc.show();
+  while (fc.shown()) Fl::wait();
+  if (!fc.value()) return;
+  std::string path = fc.value();
+  if (!media::is_playlist(path)) path += ".m3u";
+  std::string err;
+  if (g_player->save_playlist(path, err)) g_surface->show_message("Saved " + fld::basename(path));
+  else fl_alert("%s", err.c_str());
+}
+
+static void playlist_menu(int mx, int my) {
+  int sel = g_list->value() - 1;
+  bool have = sel >= 0 && sel < g_player->count();
+  Fl_Menu_Item m[] = {
+      {"Play", 0, nullptr, (void *)1, have ? 0 : FL_MENU_INACTIVE},
+      {"Remove", FL_Delete, nullptr, (void *)2, have ? 0 : FL_MENU_INACTIVE},
+      {"Move Up", 0, nullptr, (void *)3, have && sel > 0 ? 0 : FL_MENU_INACTIVE},
+      {"Move Down", 0, nullptr, (void *)4, (have && sel + 1 < g_player->count() ? 0 : FL_MENU_INACTIVE) | FL_MENU_DIVIDER},
+      {"Add Files…", 0, nullptr, (void *)5},
+      {"Open Playlist…", 0, nullptr, (void *)6},
+      {"Save Playlist…", 0, nullptr, (void *)7, g_player->count() ? 0 : FL_MENU_INACTIVE},
+      {"Clear", 0, nullptr, (void *)8, g_player->count() ? 0 : FL_MENU_INACTIVE},
+      {nullptr}};
+  const Fl_Menu_Item *r = m->popup(mx, my);
+  if (!r) return;
+  switch ((long)r->user_data()) {
+    case 1: g_player->play_index(sel); break;
+    case 2: g_player->remove(sel); break;
+    case 3: g_player->move(sel, sel - 1); g_list->select(sel); break;
+    case 4: g_player->move(sel, sel + 1); g_list->select(sel + 2); break;
+    case 5: open_dialog(true); break;
+    case 6: open_dialog(false); break;
+    case 7: save_playlist(); break;
+    case 8: g_player->clear(); break;
+  }
+}
+
+class PlaylistBrowser : public Fl_Hold_Browser {
+public:
+  using Fl_Hold_Browser::Fl_Hold_Browser;
+  int handle(int e) override {
+    if (e == FL_PUSH && Fl::event_button() == FL_RIGHT_MOUSE) {
+      int line = find_index(Fl::event_y());
+      if (line > 0) select(line);
+      playlist_menu(Fl::event_x(), Fl::event_y());
+      return 1;
+    }
+    if (e == FL_KEYBOARD && Fl::event_key() == FL_Delete && value() > 0) {
+      g_player->remove(value() - 1);
+      return 1;
+    }
+    if (e == FL_KEYBOARD && (Fl::event_key() == FL_Enter || Fl::event_key() == FL_KP_Enter) && value() > 0) {
+      g_player->play_index(value() - 1);
+      return 1;
+    }
+    // drop files onto the list: add them
+    if (e == FL_DND_ENTER || e == FL_DND_DRAG || e == FL_DND_RELEASE) return 1;
+    if (e == FL_PASTE) {
+      char cwd[4096];
+      auto files = video::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()),
+                                         getcwd(cwd, sizeof cwd) ? cwd : "/");
+      open_files(files, true);
+      return 1;
+    }
+    return Fl_Hold_Browser::handle(e);
+  }
+  int find_index(int y) {
+    void *it = find_item(y);
+    return it ? lineno(it) : 0;
+  }
+};
+
+// ---- MPRIS ------------------------------------------------------------------------------
+
+static void update_mpris() {
+#ifdef FLD_HAVE_MPRIS
+  mprisd::Status s;
+  if (g_player->has_media()) {
+    s.playback = g_player->at_end() ? "Stopped" : g_player->paused() ? "Paused" : "Playing";
+    s.track_id = "/org/fldesktop/MediaPlayer/track/" + std::to_string(g_player->current());
+    s.title = g_player->track_title().empty() ? g_player->title() : g_player->track_title();
+    s.artist = g_player->artist();
+    s.album = g_player->album();
+    if (!g_player->cover_path().empty()) s.art_url = "file://" + g_player->cover_path();
+    const auto &it = g_player->playlist()[(size_t)g_player->current()];
+    s.url = video::is_url(it.location) ? it.location : video::to_uri(it.location);
+    s.length = g_player->duration();
+    s.position = std::max(0.0, g_player->position());
+    s.can_seek = g_player->seekable();
+  }
+  s.volume = g_player->muted() ? 0 : g_player->volume() / 100.0;
+  s.rate = g_player->rate();
+  s.can_next = g_player->has_next();
+  s.can_prev = g_player->has_prev();
+  s.shuffle = g_player->shuffle();
+  s.loop = g_player->repeat() == media::Repeat::One ? "Track" : g_player->repeat() == media::Repeat::All ? "Playlist" : "None";
+  mprisd::update(s);
+#endif
+}
+
+static void start_mpris() {
+#ifdef FLD_HAVE_MPRIS
+  mprisd::Handlers h;
+  h.command = [](const std::string &m) {
+    if (m == "PlayPause") toggle_pause();
+    else if (m == "Play") { if (g_player->paused() || g_player->at_end()) toggle_pause(); }
+    else if (m == "Pause") { if (!g_player->paused()) g_player->pause(); }
+    else if (m == "Stop") { g_player->pause(); g_player->seek(0, false); }
+    else if (m == "Next") g_player->next();
+    else if (m == "Previous") g_player->prev();
+  };
+  h.seek = [](double d) {
+    g_player->seek_relative(d);
+    mprisd::seeked(g_player->position());
+  };
+  h.set_position = [](double p) {
+    g_player->seek(p, true);
+    mprisd::seeked(p);
+  };
+  h.open = [](const std::string &uri) {
+    char cwd[4096];
+    open_files(video::parse_uri_list(uri, getcwd(cwd, sizeof cwd) ? cwd : "/"), false);
+  };
+  h.set_volume = [](double v) {
+    S.volume = v * 100;
+    g_player->set_volume(S.volume);
+    g_player->set_mute(false);
+    update_volume();
+    update_mpris();
+  };
+  h.set_shuffle = [](bool b) { set_shuffle(b); };
+  h.set_loop = [](const std::string &l) {
+    set_repeat(l == "Track" ? media::Repeat::One : l == "Playlist" ? media::Repeat::All : media::Repeat::Off);
+  };
+  h.raise = [] { g_win->show(); };
+  h.quit = [] { quit(); };
+  mprisd::start(h);
+#endif
 }
 
 // ---- menu -------------------------------------------------------------------------------
@@ -323,8 +584,10 @@ static void take_screenshot() {
 }
 
 static void toggle_loop() {
-  g_player->set_loop(!g_player->loop());
-  g_surface->show_message(g_player->loop() ? "Repeat: on" : "Repeat: off");
+  // off, all, one
+  set_repeat(media::next_repeat(g_player->repeat()));
+  static const char *names[] = {"Repeat: off", "Repeat: the playlist", "Repeat: this item"};
+  g_surface->show_message(names[(int)g_player->repeat()]);
 }
 
 static void toggle_mute() {
@@ -333,6 +596,7 @@ static void toggle_mute() {
 }
 
 enum { M_OPEN = 1, M_ADD, M_URL, M_SUBS, M_SHOT, M_FULL, M_RESUME, M_LOOP, M_ABOUT, M_QUIT, M_SUB_OFF,
+       M_SIDEBAR, M_SHUFFLE, M_SAVE_LIST, M_REPEAT_OFF, M_REPEAT_ALL, M_REPEAT_ONE,
        M_TRACK = 1000, M_SPEED = 2000, M_PLAYLIST = 3000 };
 
 static void show_menu(int mx, int my) {
@@ -341,7 +605,7 @@ static void show_menu(int mx, int my) {
   const auto &playlist = g_player->playlist();
   g_labels.reserve(g_tracks.size() + playlist.size() + 20);
   double speed = g_player->rate();
-  bool loop = g_player->loop();
+  media::Repeat rep = g_player->repeat();
   std::vector<Fl_Menu_Item> m = {
       {"Open…", FL_CTRL + 'o', nullptr, (void *)M_OPEN},
       {"Add to Playlist…", 0, nullptr, (void *)M_ADD},
@@ -390,8 +654,16 @@ static void show_menu(int mx, int my) {
                  FL_MENU_RADIO | ((int)i == g_player->current() ? FL_MENU_VALUE : 0)});
   }
   if (playlist.empty()) m.push_back({"(empty)", 0, nullptr, nullptr, FL_MENU_INACTIVE});
+  else m.back().flags |= FL_MENU_DIVIDER;
+  m.push_back({"Show Playlist", 'l', nullptr, (void *)M_SIDEBAR, FL_MENU_TOGGLE | (S.playlist ? FL_MENU_VALUE : 0)});
+  m.push_back({"Save Playlist…", 0, nullptr, (void *)M_SAVE_LIST, playlist.empty() ? FL_MENU_INACTIVE : 0});
   m.push_back({nullptr});
-  m.push_back({"Repeat", FL_CTRL + 'r', nullptr, (void *)M_LOOP, FL_MENU_TOGGLE | (loop ? FL_MENU_VALUE : 0)});
+  m.push_back({"Shuffle", 0, nullptr, (void *)M_SHUFFLE, FL_MENU_TOGGLE | (g_player->shuffle() ? FL_MENU_VALUE : 0)});
+  m.push_back({"Repeat", 0, nullptr, nullptr, FL_SUBMENU});
+  m.push_back({"Off", 0, nullptr, (void *)M_REPEAT_OFF, FL_MENU_RADIO | (rep == media::Repeat::Off ? FL_MENU_VALUE : 0)});
+  m.push_back({"The Playlist", 0, nullptr, (void *)M_REPEAT_ALL, FL_MENU_RADIO | (rep == media::Repeat::All ? FL_MENU_VALUE : 0)});
+  m.push_back({"This Item", FL_CTRL + 'r', nullptr, (void *)M_REPEAT_ONE, FL_MENU_RADIO | (rep == media::Repeat::One ? FL_MENU_VALUE : 0)});
+  m.push_back({nullptr});
   m.push_back({"Resume Where I Left Off", 0, nullptr, (void *)M_RESUME,
                FL_MENU_TOGGLE | (S.resume ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER});
   m.push_back({"Take Screenshot", 's', nullptr, (void *)M_SHOT});
@@ -419,14 +691,20 @@ static void show_menu(int mx, int my) {
       case M_SHOT: take_screenshot(); break;
       case M_FULL: toggle_fullscreen(); break;
       case M_LOOP: toggle_loop(); break;
+      case M_SIDEBAR: toggle_playlist(); break;
+      case M_SHUFFLE: set_shuffle(!g_player->shuffle()); break;
+      case M_SAVE_LIST: save_playlist(); break;
+      case M_REPEAT_OFF: set_repeat(media::Repeat::Off); break;
+      case M_REPEAT_ALL: set_repeat(media::Repeat::All); break;
+      case M_REPEAT_ONE: set_repeat(media::Repeat::One); break;
       case M_RESUME:
         S.resume = !S.resume;
         g_player->set_resume(S.resume);
         save_settings();
         break;
       case M_ABOUT:
-        fld::about_dialog("Video Player", "fl-video",
-                          ("A video and audio player built with FLTK and GStreamer.\nRendering: " +
+        fld::about_dialog("Media Player", "fl-media-player",
+                          ("A video and music player built with FLTK and GStreamer.\nRendering: " +
                            std::string(g_surface->kind()))
                               .c_str());
         break;
@@ -439,7 +717,7 @@ static void show_menu(int mx, int my) {
 
 static int global_keys(int e) {
   if (getenv("FLD_VIDEO_DEBUG") && (e == FL_SHORTCUT || e == FL_KEYBOARD))
-    fprintf(stderr, "fl-video: key event %d key %d focus %p\n", e, Fl::event_key(), (void *)Fl::focus());
+    fprintf(stderr, "fl-media-player: key event %d key %d focus %p\n", e, Fl::event_key(), (void *)Fl::focus());
   if (e != FL_SHORTCUT) return 0;
   // let text fields in dialogs have their keys
   if (Fl::focus() && Fl::focus()->top_window() != g_win) return 0;
@@ -479,6 +757,7 @@ static int global_keys(int e) {
     case '.': g_player->frame_step(1); return 1;
     case ',': g_player->frame_step(-1); return 1;
     case 'i': g_surface->show_message(g_player->info(), 4); return 1;
+    case 'l': toggle_playlist(); return 1;
     case FL_Menu: show_menu(g_win->w() / 2, g_win->h() / 2); return 1;
   }
   return 0;
@@ -537,7 +816,7 @@ static void make_surface(int W, int H) {
 }
 
 int main(int argc, char **argv) {
-  fld::init_app("fl-video", argc, argv);
+  fld::init_app("fl-media-player", argc, argv);
   Fl::lock(); // Fl::awake from GStreamer threads
   load_settings();
   std::vector<std::string> files;
@@ -547,7 +826,7 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-video [--fullscreen] [--software] [FILE|URL...]\n");
+      printf("Usage: fl-media-player [--fullscreen] [--software] [FILE|URL|PLAYLIST...]\n");
       return 0;
     }
     if (a == "--fullscreen" || a == "-f") { start_fs = true; continue; }
@@ -569,13 +848,68 @@ int main(int argc, char **argv) {
   }
   g_player->set_resume(S.resume);
   g_player->set_volume(S.volume);
+  g_player->set_shuffle(S.shuffle);
+  g_player->set_repeat((media::Repeat)S.repeat);
 
   const fld::Palette &pal = fld::palette();
   const int W = 960, H = 600;
-  g_win = new VideoWindow(W, H, "Video Player");
+  g_win = new VideoWindow(W, H, "Media Player");
   g_win->color(FL_BLACK);
   make_surface(W, H);
   g_win->begin();
+  // the playlist sidebar: the list, then its buttons
+  g_side = new Fl_Group(W - SIDE, 0, SIDE, H - BAR);
+  g_side->box(FL_FLAT_BOX);
+  g_side->color(pal.bg2);
+  g_list = new PlaylistBrowser(W - SIDE, 0, SIDE, H - BAR - 40);
+  g_list->box(FL_FLAT_BOX);
+  g_list->color(pal.bg2);
+  g_list->textsize(13);
+  static int list_cols[] = {SIDE - 70, 0};
+  g_list->column_widths(list_cols);
+  g_list->column_char('\t');
+  g_list->callback([](Fl_Widget *w, void *) {
+    Fl_Hold_Browser *b = (Fl_Hold_Browser *)w;
+    if (Fl::event_clicks() && Fl::event() == FL_RELEASE && b->value() > 0) g_player->play_index(b->value() - 1);
+  });
+  auto side_btn = [&](const char *icon, const char *fallback, const char *tip, Fl_Callback *cb) {
+    fld::FlatButton *b = new fld::FlatButton(0, 0, 34, 34);
+    set_icon(b, icon, fallback);
+    b->tooltip(tip);
+    b->callback(cb);
+    b->clear_visible_focus();
+    return b;
+  };
+  side_btn("list-add", "+", "Add files", [](Fl_Widget *, void *) { open_dialog(true); });
+  side_btn("list-remove", "−", "Remove (Delete)", [](Fl_Widget *, void *) {
+    if (g_list->value() > 0) g_player->remove(g_list->value() - 1);
+  });
+  side_btn("go-up", "↑", "Move up", [](Fl_Widget *, void *) {
+    int i = g_list->value() - 1;
+    if (i > 0) {
+      g_player->move(i, i - 1);
+      g_list->select(i);
+    }
+  });
+  side_btn("go-down", "↓", "Move down", [](Fl_Widget *, void *) {
+    int i = g_list->value() - 1;
+    if (i >= 0 && i + 1 < g_player->count()) {
+      g_player->move(i, i + 1);
+      g_list->select(i + 2);
+    }
+  });
+  g_shuffle_btn = side_btn("media-playlist-shuffle", "🔀", "Shuffle", [](Fl_Widget *, void *) {
+    set_shuffle(!g_player->shuffle());
+  });
+  g_shuffle_btn->type(FL_TOGGLE_BUTTON);
+  g_repeat_btn = side_btn("media-playlist-repeat", "🔁", "Repeat", [](Fl_Widget *, void *) {
+    set_repeat(media::next_repeat(g_player->repeat()));
+  });
+  g_repeat_btn->type(FL_TOGGLE_BUTTON);
+  side_btn("document-save", "💾", "Save the playlist", [](Fl_Widget *, void *) { save_playlist(); });
+  side_btn("open-menu", "☰", "More", [](Fl_Widget *w, void *) { playlist_menu(w->x(), w->y()); });
+  g_side->end();
+  g_side->resizable(nullptr);
   g_bar = new Fl_Group(0, H - BAR, W, BAR);
   g_bar->box(FL_FLAT_BOX);
   g_bar->color(pal.dark ? pal.bg : fl_rgb_color(0x23, 0x25, 0x2a));
@@ -630,6 +964,10 @@ int main(int argc, char **argv) {
     g_player->set_mute(false);
     update_volume();
   });
+  g_list_btn = button("Playlist (L)", [](Fl_Widget *, void *) { toggle_playlist(); });
+  set_icon(g_list_btn, "view-list", "☰");
+  g_list_btn->type(FL_TOGGLE_BUTTON);
+  g_list_btn->value(S.playlist);
   g_full = button("Full screen (F, double-click)", [](Fl_Widget *, void *) { toggle_fullscreen(); });
   set_icon(g_full, "view-fullscreen", "⛶");
   fld::FlatButton *menu = button("Menu (right-click)", [](Fl_Widget *w, void *) { show_menu(w->x(), w->y()); });
@@ -643,7 +981,7 @@ int main(int argc, char **argv) {
     if (Fl::event() == FL_SHORTCUT && Fl::event_key() == FL_Escape) return;
     quit();
   });
-  fld::set_window_icon(g_win, "fl-video");
+  fld::set_window_icon(g_win, "fl-media-player");
   Fl::add_handler(global_keys);
 
   g_player->frames().on_frame = [] { g_surface->redraw(); };
@@ -651,6 +989,13 @@ int main(int argc, char **argv) {
   g_player->on_state = [] {
     update_play_button();
     update_time();
+    update_mpris();
+  };
+  g_player->on_playlist = [] { fill_playlist(); update_title(); };
+  g_player->on_tags = [] {
+    fill_playlist();
+    update_play_button();
+    update_mpris();
   };
   g_player->on_media = [] {
     update_title();
@@ -672,6 +1017,8 @@ int main(int argc, char **argv) {
   update_volume();
   update_play_button();
   update_title();
+  update_order_buttons();
+  start_mpris();
   g_win->show();
   g_surface->start();
   if (start_fs) toggle_fullscreen();

@@ -3,7 +3,7 @@
 # Build from a git checkout:  makepkg -si   (uses the repository the PKGBUILD lives in)
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
-         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-sysinfo fldesktop-disks fldesktop-video fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
+         fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-sysinfo fldesktop-disks fldesktop-media-player fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
          fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
@@ -77,7 +77,7 @@ package_fldesktop() {
               'fldesktop-packages: software updates through PackageKit'
               'fldesktop-flatpak: Flatpak app store'
               'fldesktop-firewall: firewall settings'
-              'fldesktop-video: video player'
+              'fldesktop-media-player: video and music player'
               'fldesktop-webcam: camera app'
               'fldesktop-archive: archive manager'
               'fldesktop-disks: disk and partition manager'
@@ -208,12 +208,16 @@ package_fldesktop-web() {
   _app web
 }
 
-package_fldesktop-video() {
-  pkgdesc="fldesktop video player"
-  depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland)
+package_fldesktop-media-player() {
+  pkgdesc="fldesktop video and music player"
+  depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland glib2)
   optdepends=("gst-plugins-bad: more formats" "gst-libav: more codecs (FFmpeg)"
               "gst-plugin-pipewire: sound through PipeWire" "yt-dlp: play videos from web sites")
-  _app video
+  provides=(fldesktop-video)
+  replaces=(fldesktop-video)
+  conflicts=(fldesktop-video)
+  _app media-player
+  _install_files usr/bin/fl-video usr/share/man/man1/fl-video.1
 }
 package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app calc; }
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }

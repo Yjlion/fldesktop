@@ -1,12 +1,18 @@
 #include "gst_player.h"
 
 #include <FL/Fl.H>
+#include <FL/Fl_JPEG_Image.H>
+#include <FL/Fl_PNG_Image.H>
+#include <unistd.h>
 #include <gst/audio/streamvolume.h>
 #include <gst/gst.h>
 #include <gst/pbutils/pbutils.h>
 #include <gst/tag/tag.h>
 #include <gst/video/video.h>
 
+#include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 #include <ctime>
@@ -47,16 +53,51 @@ Player::~Player() {
 
 // ---- playlist ---------------------------------------------------------------------------
 
-void Player::load(const std::string &loc, bool append) {
-  Item it;
-  it.location = loc;
-  if (!append) {
+void Player::append(const Item &it) {
+  list_.push_back(it);
+  int i = (int)list_.size() - 1;
+  // shuffled: the new item goes somewhere after the current one
+  if (shuffle_ && !order_.empty()) {
+    auto pos = std::find(order_.begin(), order_.end(), cur_);
+    size_t after = pos == order_.end() ? 0 : (size_t)(pos - order_.begin()) + 1;
+    size_t at = after + (size_t)rand() % (order_.size() - after + 1);
+    order_.insert(order_.begin() + (long)at, i);
+  } else {
+    order_.push_back(i);
+  }
+}
+
+void Player::load(const std::string &loc, bool append_it) {
+  std::vector<Item> items;
+  if (media::is_playlist(loc) && !video::is_url(loc)) {
+    std::string text;
+    if (fld::read_file(loc, text, 8u << 20)) {
+      bool pls = fld::lower(fld::extension(loc)) == "pls";
+      for (const media::Entry &e : media::parse_playlist(text, fld::dirname(loc), pls)) {
+        Item it;
+        it.location = e.location;
+        it.title = e.title;
+        it.length = e.length;
+        items.push_back(it);
+      }
+    }
+  } else {
+    Item it;
+    it.location = loc;
+    items.push_back(it);
+  }
+  if (items.empty()) return;
+  if (!append_it) {
     save_position();
     list_.clear();
+    order_.clear();
     cur_ = -1;
   }
-  list_.push_back(it);
-  if (!append || cur_ < 0) start_item((int)list_.size() - 1, true);
+  int first = (int)list_.size();
+  for (const Item &it : items) append(it);
+  if (shuffle_ && !append_it) rebuild_order();
+  if (on_playlist) on_playlist();
+  if (!append_it || cur_ < 0) start_item(shuffle_ && !append_it ? order_.front() : first, true);
   else if (on_media) on_media();
 }
 
@@ -66,14 +107,171 @@ void Player::play_index(int i) {
   start_item(i, true);
 }
 
+bool Player::has_next() const {
+  return cur_ >= 0 && (repeat_ == media::Repeat::All ? list_.size() > 1 : media::step(order_, cur_, 1, media::Repeat::Off) >= 0);
+}
+
+bool Player::has_prev() const { return cur_ >= 0; }
+
 void Player::next() {
-  if (cur_ + 1 < (int)list_.size()) play_index(cur_ + 1);
+  // Next always moves on, even when the item repeats
+  media::Repeat r = repeat_ == media::Repeat::One ? media::Repeat::Off : repeat_;
+  int n = media::step(order_, cur_, 1, r);
+  if (n >= 0) play_index(n);
 }
 
 void Player::prev() {
   // like most players: back to the start first, then the previous item
-  if (position() > 3 || cur_ == 0) seek(0, false);
-  else play_index(cur_ - 1);
+  media::Repeat r = repeat_ == media::Repeat::One ? media::Repeat::Off : repeat_;
+  int p = media::step(order_, cur_, -1, r);
+  if (position() > 3 || p < 0) seek(0, false);
+  else play_index(p);
+}
+
+void Player::rebuild_order() {
+  order_.clear();
+  if (shuffle_) {
+    order_ = media::shuffle_order((int)list_.size(), cur_,
+                                  (unsigned)std::chrono::steady_clock::now().time_since_epoch().count());
+  } else {
+    for (int i = 0; i < (int)list_.size(); i++) order_.push_back(i);
+  }
+}
+
+void Player::set_shuffle(bool s) {
+  shuffle_ = s;
+  rebuild_order();
+}
+
+void Player::remove(int i) {
+  if (i < 0 || i >= (int)list_.size()) return;
+  bool was_current = i == cur_;
+  list_.erase(list_.begin() + i);
+  // the order loses i; later indices move down
+  order_.erase(std::remove(order_.begin(), order_.end(), i), order_.end());
+  for (int &o : order_)
+    if (o > i) o--;
+  if (cur_ > i) cur_--;
+  if (was_current) {
+    if (list_.empty()) {
+      clear();
+      return;
+    }
+    // the item that took its place plays
+    start_item(std::min(i, (int)list_.size() - 1), !paused_);
+  }
+  if (on_playlist) on_playlist();
+  if (on_media) on_media();
+}
+
+void Player::move(int from, int to) {
+  int n = (int)list_.size();
+  if (from < 0 || from >= n || to < 0 || to >= n || from == to) return;
+  Item it = list_[(size_t)from];
+  list_.erase(list_.begin() + from);
+  list_.insert(list_.begin() + to, it);
+  auto remap = [from, to](int k) {
+    if (k == from) return to;
+    if (from < to && k > from && k <= to) return k - 1;
+    if (from > to && k >= to && k < from) return k + 1;
+    return k;
+  };
+  cur_ = cur_ >= 0 ? remap(cur_) : cur_;
+  if (shuffle_) {
+    for (int &o : order_) o = remap(o);
+  } else {
+    rebuild_order();
+  }
+  if (on_playlist) on_playlist();
+  if (on_media) on_media();
+}
+
+void Player::clear() {
+  save_position();
+  gst_element_set_state(playbin_, GST_STATE_READY);
+  list_.clear();
+  order_.clear();
+  cur_ = -1;
+  paused_ = true;
+  eos_ = false;
+  tag_title_.clear();
+  tag_artist_.clear();
+  tag_album_.clear();
+  tag_track_.clear();
+  cover_path_.clear();
+  slot_.clear();
+  if (on_playlist) on_playlist();
+  if (on_media) on_media();
+  if (on_state) on_state();
+}
+
+bool Player::save_playlist(const std::string &path, std::string &err) const {
+  std::vector<media::Entry> entries;
+  for (const Item &it : list_) {
+    media::Entry e;
+    e.location = it.location;
+    e.title = it.title;
+    e.length = it.length;
+    entries.push_back(e);
+  }
+  bool pls = fld::lower(fld::extension(path)) == "pls";
+  if (!fld::write_file(path, pls ? media::write_pls(entries) : media::write_m3u(entries))) {
+    err = "Could not write " + path;
+    return false;
+  }
+  return true;
+}
+
+// ---- cover art ------------------------------------------------------------------------
+
+void Player::set_cover(const std::string &bytes, const std::string &mime, bool from_tags) {
+  Fl_RGB_Image *img = nullptr;
+  bool png = mime.find("png") != std::string::npos || bytes.compare(0, 4, "\x89PNG") == 0;
+  if (png) img = new Fl_PNG_Image(nullptr, (const unsigned char *)bytes.data(), (int)bytes.size());
+  else img = new Fl_JPEG_Image(nullptr, (const unsigned char *)bytes.data());
+  if (!img || img->fail() || img->w() <= 0 || img->h() <= 0 || img->d() < 1) {
+    delete img;
+    return;
+  }
+  auto f = std::make_shared<fgst::Frame>();
+  f->w = img->w();
+  f->h = img->h();
+  f->rgba.resize((size_t)f->w * f->h * 4);
+  const unsigned char *src = (const unsigned char *)img->data()[0];
+  int d = img->d(), ld = img->ld() ? img->ld() : img->w() * d;
+  for (int y = 0; y < f->h; y++)
+    for (int x = 0; x < f->w; x++) {
+      const unsigned char *p = src + (size_t)y * ld + (size_t)x * d;
+      uint8_t *o = &f->rgba[((size_t)y * f->w + x) * 4];
+      o[0] = d >= 3 ? p[0] : p[0];
+      o[1] = d >= 3 ? p[1] : p[0];
+      o[2] = d >= 3 ? p[2] : p[0];
+      o[3] = 255;
+    }
+  delete img;
+  slot_.set(f);
+  cover_from_tags_ = from_tags;
+  // a file for MPRIS (mpris:artUrl)
+  const char *rt = getenv("XDG_RUNTIME_DIR");
+  std::string path = std::string(rt && *rt ? rt : "/tmp") + "/fl-media-player-" + std::to_string(getpid()) +
+                     (png ? "-cover.png" : "-cover.jpg");
+  if (fld::write_file(path, bytes)) cover_path_ = path;
+  if (on_tags) on_tags();
+}
+
+void Player::find_folder_cover() {
+  if (cur_ < 0) return;
+  const std::string &loc = list_[(size_t)cur_].location;
+  if (video::is_url(loc)) return;
+  std::string dir = fld::dirname(loc);
+  for (const char *n : {"cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "Cover.jpg", "Folder.jpg",
+                        "album.jpg", "AlbumArt.jpg"}) {
+    std::string data;
+    if (fld::read_file(dir + "/" + n, data, 16u << 20) && !data.empty()) {
+      set_cover(data, fld::ends_with(n, ".png") ? "image/png" : "image/jpeg", false);
+      return;
+    }
+  }
 }
 
 void Player::start_item(int i, bool play) {
@@ -86,6 +284,11 @@ void Player::start_item(int i, bool play) {
   eos_ = false;
   seekable_ = false;
   tag_title_.clear();
+  tag_artist_.clear();
+  tag_album_.clear();
+  tag_track_.clear();
+  cover_path_.clear();
+  cover_from_tags_ = false;
   last_pos_ = last_dur_ = -1;
   rate_ = 1.0;
   slot_.clear();
@@ -107,6 +310,7 @@ void Player::start_item(int i, bool play) {
   set_mute(muted_);
   set_state_playing(play);
   if (on_media) on_media();
+  if (on_tags) on_tags();
 }
 
 // Web pages of video sites go through yt-dlp (in a thread) for a stream URL.
@@ -448,7 +652,7 @@ bool Player::screenshot(const std::string &dir, std::string &saved, std::string 
     char stamp[32];
     time_t t = time(nullptr);
     strftime(stamp, sizeof stamp, "%Y-%m-%d_%H-%M-%S", localtime(&t));
-    std::string base = dir + "/fl-video-" + stamp;
+    std::string base = dir + "/fl-media-player-" + stamp;
     saved = base + ".png";
     for (int n = 2; fld::file_exists(saved); n++) saved = base + "-" + std::to_string(n) + ".png";
     ok = fld::write_file(saved, std::string((const char *)map.data, map.size));
@@ -474,10 +678,14 @@ void Player::save_position() {
 
 void Player::finish_item() {
   // EOS: repeat, next item, or stay at the end
-  if (loop_) {
+  if (repeat_ == media::Repeat::One) {
     seek(0, false);
     set_state_playing(true);
     return;
+  }
+  if (cur_ >= 0) {
+    double d = duration();
+    if (d > 0) list_[(size_t)cur_].length = d;
   }
   if (resume_ && cur_ >= 0) {
     fld::Ini ini;
@@ -485,8 +693,9 @@ void Player::finish_item() {
     video::resume_put(ini, list_[(size_t)cur_].location, 0, 0);
     ini.save(positions_path());
   }
-  if (cur_ + 1 < (int)list_.size()) {
-    start_item(cur_ + 1, true);
+  int n = media::step(order_, cur_, 1, repeat_);
+  if (n >= 0) {
+    start_item(n, true);
     return;
   }
   eos_ = true;
@@ -505,7 +714,7 @@ void Player::handle(GstMessage *m) {
       gchar *dbg = nullptr;
       gst_message_parse_error(m, &e, &dbg);
       std::string msg = e ? e->message : "playback error";
-      if (getenv("FLD_VIDEO_DEBUG") && dbg) fprintf(stderr, "fl-video: %s\n%s\n", msg.c_str(), dbg);
+      if (getenv("FLD_VIDEO_DEBUG") && dbg) fprintf(stderr, "fl-media-player: %s\n%s\n", msg.c_str(), dbg);
       if (e) g_error_free(e);
       g_free(dbg);
       gst_element_set_state(playbin_, GST_STATE_READY);
@@ -527,7 +736,30 @@ void Player::handle(GstMessage *m) {
       gst_message_parse_tag(m, &tags);
       std::string t = tag_string(tags, GST_TAG_TITLE);
       std::string artist = tag_string(tags, GST_TAG_ARTIST);
+      std::string album = tag_string(tags, GST_TAG_ALBUM);
+      bool changed = false;
+      if (!artist.empty() && artist != tag_artist_) tag_artist_ = artist, changed = true;
+      if (!album.empty() && album != tag_album_) tag_album_ = album, changed = true;
+      if (!t.empty() && t != tag_track_) tag_track_ = t, changed = true;
+      // the embedded cover (front cover first), once per item
+      if (!cover_from_tags_ && tags) {
+        GstSample *img = nullptr;
+        if (!gst_tag_list_get_sample(tags, GST_TAG_IMAGE, &img)) gst_tag_list_get_sample(tags, GST_TAG_PREVIEW_IMAGE, &img);
+        if (img) {
+          GstBuffer *b = gst_sample_get_buffer(img);
+          GstCaps *caps = gst_sample_get_caps(img);
+          std::string mime;
+          if (caps && gst_caps_get_size(caps) > 0) mime = gst_structure_get_name(gst_caps_get_structure(caps, 0));
+          GstMapInfo map;
+          if (b && gst_buffer_map(b, &map, GST_MAP_READ)) {
+            set_cover(std::string((const char *)map.data, map.size), mime, true);
+            gst_buffer_unmap(b, &map);
+          }
+          gst_sample_unref(img);
+        }
+      }
       if (tags) gst_tag_list_unref(tags);
+      if (changed && on_tags) on_tags();
       if (!t.empty()) {
         std::string full = artist.empty() ? t : artist + " – " + t;
         if (full != tag_title_) {
@@ -562,6 +794,8 @@ void Player::handle(GstMessage *m) {
         seekable_ = s;
       }
       gst_query_unref(q);
+      // music without an embedded cover: cover.jpg and the like in its folder
+      if (cover_path_.empty() && !has_video()) find_folder_cover();
       if (pending_seek_ > 0) {
         double p = pending_seek_;
         pending_seek_ = -1;

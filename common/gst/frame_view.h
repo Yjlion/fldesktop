@@ -32,6 +32,8 @@ struct Frame {
 class FrameSlot {
 public:
   void put(GstSample *sample); // streaming thread
+  // a picture of its own (a music file's cover), until the next frame
+  void set(std::shared_ptr<Frame> frame);
   std::shared_ptr<const Frame> get() const;
   void clear();
   // called in the FLTK thread after a new frame arrived

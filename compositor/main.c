@@ -78,7 +78,7 @@ static int handle_signal(int sig, void *data) {
  * handle on the render node and closing that handle. vmwgfx (VMware's virtual
  * GPU) gives back handles GEM_CLOSE refuses (EINVAL), so every buffer of a
  * client using the GPU is rejected and the client dies of a protocol error
- * ("importing the supplied dmabufs failed": fl-video, fl-webcam, any OpenGL
+ * ("importing the supplied dmabufs failed": fl-media-player, fl-webcam, any OpenGL
  * app). There, check by importing the buffer into the renderer instead. */
 static bool check_dmabuf_by_texture(struct wlr_dmabuf_attributes *attribs, void *data) {
 	struct wlr_texture *tex = wlr_texture_from_dmabuf(data, attribs);

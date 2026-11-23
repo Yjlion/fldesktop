@@ -68,13 +68,13 @@ NAME=files-search; session "fl-panel & fl-files $HOME/Documents/fldesktop-apps &
 printf '[Appearance]\nScheme=fld-rounded\n' > "$HOME/.config/fldesktop/desktop.ini"
 NAME=styles; session "fl-panel & fl-settings appearance" 3.5 x
 rm -f "$HOME/.config/fldesktop/desktop.ini"
-if command -v ffmpeg >/dev/null 2>&1 && [ -x "$BUILD/bin/fl-video" ]; then
+if command -v ffmpeg >/dev/null 2>&1 && [ -x "$BUILD/bin/fl-media-player" ]; then
 	ffmpeg -loglevel error -y -f lavfi -i testsrc2=duration=20:size=1280x720:rate=30 -f lavfi -i sine=frequency=440:duration=20 \
 		-c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$HOME/clip.mkv"
-	printf '1\n00:00:00,500 --> 00:00:19,000\nHello from fl-video subtitles\n' > "$HOME/clip.srt"
-	NAME=video; session "fl-panel & fl-video $HOME/clip.mkv" 6 x
+	printf '1\n00:00:00,500 --> 00:00:19,000\nHello from fl-media-player subtitles\n' > "$HOME/clip.srt"
+	NAME=video; session "fl-panel & fl-media-player $HOME/clip.mkv" 6 x
 else
-	echo "no ffmpeg or fl-video: skipping the video screenshot" >&2
+	echo "no ffmpeg or fl-media-player: skipping the video screenshot" >&2
 fi
 # tabs, the menu bar and a selection; then the other settings again (the menu bar is off by default)
 NAME=files-tabs; session "fl-panel & fl-files $HOME/Pictures & sleep 1.5; wtype -M ctrl t -m ctrl; sleep 0.4; \

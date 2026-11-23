@@ -86,6 +86,15 @@ std::shared_ptr<const Frame> FrameSlot::get() const {
   return frame_;
 }
 
+void FrameSlot::set(std::shared_ptr<Frame> f) {
+  {
+    std::lock_guard<std::mutex> l(mu_);
+    f->serial = ++serial_;
+    frame_ = f;
+  }
+  if (on_frame) on_frame();
+}
+
 void FrameSlot::clear() {
   std::lock_guard<std::mutex> l(mu_);
   frame_.reset();

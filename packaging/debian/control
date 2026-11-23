@@ -72,7 +72,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-icon-theme (>= ${source:Version}),
          fldesktop-lock (>= ${source:Version}),
          ${misc:Depends}
-Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-video,
+Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-media-player,
             fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
             plymouth, fldesktop-plymouth-theme
@@ -216,15 +216,21 @@ Description: fldesktop web browser
  EasyPrivacy filter lists, and the pages' password, file, permission and
  notification requests.
 
-Package: fldesktop-video
+Package: fldesktop-media-player
 Architecture: any
 Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, ${shlibs:Depends}, ${misc:Depends}
 Recommends: gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pipewire | gstreamer1.0-pulseaudio
 Suggests: yt-dlp
-Description: fldesktop video player
- fl-video plays video and audio files, playlists and network streams with
- GStreamer: subtitles, audio and subtitle track selection, playback speed,
- screenshots, full screen and resuming where playback stopped.
+Provides: fldesktop-video
+Replaces: fldesktop-video (<< 0.1.4~)
+Breaks: fldesktop-video (<< 0.1.4~)
+Description: fldesktop video and music player
+ fl-media-player (formerly fl-video) plays video and audio files, playlists
+ and network streams with GStreamer: a playlist sidebar (reorder, shuffle,
+ repeat, M3U and PLS files), music with cover art and tags, subtitles,
+ audio and subtitle track selection, playback speed, screenshots, full screen
+ and resuming where playback stopped. Other programs and the media keys
+ control it through MPRIS.
 
 Package: fldesktop-docs
 Architecture: any

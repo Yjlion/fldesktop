@@ -1,4 +1,4 @@
-# GStreamer video in FLTK: used by fl-video and fl-webcam
+# GStreamer video in FLTK: used by fl-media-player and fl-webcam
 pkg_check_modules(GST IMPORTED_TARGET gstreamer-1.0>=1.20 gstreamer-video-1.0 gstreamer-app-1.0 gstreamer-pbutils-1.0 gstreamer-tag-1.0 gstreamer-audio-1.0)
 if(GST_FOUND)
   find_package(OpenGL REQUIRED)
@@ -15,5 +15,5 @@ if(GST_FOUND)
   endif()
   message(STATUS "GStreamer ${GST_gstreamer-1.0_VERSION}: building fld-gst")
 else()
-  message(STATUS "GStreamer (gstreamer-1.0 and its base plugin libraries) not found: no fl-video and no fl-webcam")
+  message(STATUS "GStreamer (gstreamer-1.0 and its base plugin libraries) not found: no fl-media-player and no fl-webcam")
 endif()

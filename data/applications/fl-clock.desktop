@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Name=Clock
+GenericName=Clocks, Alarms and Timers
+Comment=World clocks, alarms, a timer and a stopwatch
+Exec=fl-clock
+Icon=fl-clock
+Categories=Utility;Clock;
+Keywords=clock;alarm;timer;stopwatch;world;time;zone;countdown;
+StartupWMClass=fl-clock
+Actions=timer;alarms;
+
+[Desktop Action timer]
+Name=Timer
+Exec=fl-clock --page timer
+
+[Desktop Action alarms]
+Name=Alarms
+Exec=fl-clock --page alarms

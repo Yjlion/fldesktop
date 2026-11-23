@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Services
+GenericName=Service Manager
+Comment=Start, stop, enable and disable system services (systemd or OpenRC)
+Exec=fl-services
+Icon=fl-services
+Categories=System;Settings;
+Keywords=service;services;daemon;systemd;systemctl;openrc;rc-service;startup;boot;
+StartupWMClass=fl-services

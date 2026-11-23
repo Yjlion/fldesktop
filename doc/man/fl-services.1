@@ -1,0 +1,16 @@
+.TH FL-SERVICES 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-services \- start, stop, enable and disable system services
+.SH SYNOPSIS
+\fBfl-services\fR
+.SH DESCRIPTION
+Lists the system's services with their state (running, stopped, failed)
+and whether they start at boot, from systemd or OpenRC. Start, Stop and
+Restart act now; Enable and Disable decide about the boot (with systemd
+they also start or stop the service). The status of the selected service is
+shown below the list. With systemd your user services are listed too.
+.PP
+Changing system services needs an administrator: systemd asks through
+polkit; with OpenRC \fBfl-services-helper\fR runs through \fBpkexec\fR(1).
+.SH SEE ALSO
+\fBsystemctl\fR(1), \fBrc-service\fR(8), \fBrc-update\fR(8), \fBfl-logs\fR(1)

@@ -1,0 +1,6 @@
+usr/bin/fl-services
+usr/share/applications/fl-services.desktop
+usr/share/icons/hicolor/scalable/apps/fl-services.svg
+usr/share/man/man1/fl-services.1
+usr/libexec/fldesktop/fl-services-helper
+usr/share/polkit-1/actions/org.fldesktop.services.policy

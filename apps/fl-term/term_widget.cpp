@@ -22,6 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "fld/primary.h"
 #include "fld/theme.h"
 
 #if defined(FLTK_USE_WAYLAND)
@@ -838,10 +839,16 @@ std::string TermWidget::selection_text() const {
 
 void TermWidget::copy_selection(int clipboard) {
   std::string s = selection_text();
-  if (!s.empty()) Fl::copy(s.c_str(), (int)s.size(), clipboard);
+  if (s.empty()) return;
+  // the selection is shared with other programs (FLTK keeps it in-process on Wayland)
+  if (clipboard == 0) fld::primary_copy(s);
+  else Fl::copy(s.c_str(), (int)s.size(), clipboard);
 }
 
-void TermWidget::paste(int clipboard) { Fl::paste(*this, clipboard); }
+void TermWidget::paste(int clipboard) {
+  if (clipboard == 0) fld::primary_paste(*this);
+  else Fl::paste(*this, clipboard);
+}
 
 static bool word_char(uint32_t ch) {
   if (ch == 0) return false;

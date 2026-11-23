@@ -5,12 +5,17 @@
 title_height=30
 border_width=1
 font=Sans Bold 10
-# colors: #rrggbb or #rrggbbaa
-active_title=#2b2d31
-inactive_title=#e8e9eb
-active_text=#ffffff
-inactive_text=#6b6f76
-border_color=#7a7f87
+# colors: #rrggbb or #rrggbbaa. Unset, they follow the desktop theme
+# (desktop.ini [Appearance] Theme): light title bars on the light theme.
+#active_title=#2b2d31
+#inactive_title=#e8e9eb
+#active_text=#ffffff
+#inactive_text=#6b6f76
+#border_color=#7a7f87
+# the focused window's border in the accent colour
+accent_border=true
+# a soft shadow under windows that are not maximized or snapped
+shadows=true
 
 [behaviour]
 # bottom or top

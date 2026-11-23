@@ -18,6 +18,10 @@ struct Palette {
 // (should match the program's .desktop file name without extension).
 void init_app(const char *app_id, int argc = 0, char **argv = nullptr);
 const Palette &palette();
+class Ini;
+// Whether the panel is light: desktop.ini [Appearance] PanelTheme = light |
+// dark | auto (the default: the same as Theme). High contrast ignores it.
+bool panel_is_light_theme(const Ini &desktop);
 // Monospace font index (FL_COURIER mapped to the configured mono font).
 Fl_Font mono_font();
 int mono_size();

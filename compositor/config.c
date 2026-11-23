@@ -164,11 +164,22 @@ void config_init_defaults(struct flwm_config *c) {
 	memset(c, 0, sizeof *c);
 	c->title_height = 30;
 	c->border_width = 1;
-	c->active_title = 0xff2b2d31;
-	c->inactive_title = 0xffe8e9eb;
-	c->active_text = 0xffffffff;
-	c->inactive_text = 0xff6b6f76;
-	c->border_color = 0xff7a7f87;
+	/* title bars match the desktop theme unless wm.ini [appearance] sets them */
+	if (flwm_desktop_dark()) {
+		c->active_title = 0xff2b2d31;
+		c->inactive_title = 0xff1e1f22;
+		c->active_text = 0xffffffff;
+		c->inactive_text = 0xff8a8f98;
+		c->border_color = 0xff45484e;
+	} else {
+		c->active_title = 0xfff2f3f5;
+		c->inactive_title = 0xffe3e5e8;
+		c->active_text = 0xff222428;
+		c->inactive_text = 0xff8a8f98;
+		c->border_color = 0xffb0b4ba;
+	}
+	c->accent_border = true;
+	c->shadows = true;
 	c->font = strdup("Sans Bold 10");
 	c->repeat_rate = 25;
 	c->repeat_delay = 600;
@@ -306,6 +317,8 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "active_text")) c->active_text = parse_color(v, c->active_text);
 			else if (!strcmp(k, "inactive_text")) c->inactive_text = parse_color(v, c->inactive_text);
 			else if (!strcmp(k, "border_color")) c->border_color = parse_color(v, c->border_color);
+			else if (!strcmp(k, "accent_border")) c->accent_border = parse_bool(v);
+			else if (!strcmp(k, "shadows")) c->shadows = parse_bool(v);
 		} else if (!strcasecmp(section, "behaviour") || !strcasecmp(section, "behavior")) {
 			if (!strcmp(k, "panel_position")) c->panel_top = !strcasecmp(v, "top");
 			else if (!strcmp(k, "focus_follows_mouse")) c->focus_follows_mouse = parse_bool(v);

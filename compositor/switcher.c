@@ -106,6 +106,15 @@ static char *ini_get(const char *path, const char *group, const char *key) {
 	return res;
 }
 
+bool flwm_desktop_dark(void) {
+	char *path = config_home();
+	char *v = path ? ini_get(path, "Appearance", "Theme") : NULL;
+	bool dark = v && !strcasecmp(v, "dark");
+	free(v);
+	free(path);
+	return dark;
+}
+
 uint32_t flwm_accent_color(void) {
 	uint32_t c = 0xff3584e4;
 	char *path = config_home();
@@ -133,6 +142,84 @@ static int data_dirs(char dirs[][512], int max) {
 		snprintf(dirs[n++], 512, "%s", t);
 	free(copy);
 	return n;
+}
+
+/* the icon theme in effect: with IconsFollowAccent the accent theme nearest
+ * the accent (same rules as fld::effective_icon_theme in libfld/accents.cpp) */
+static const char *const accent_ids[] = {"blue", "teal", "green", "orange", "red", "purple", "pink", "graphite"};
+static const uint32_t accent_hex[] = {0x3584e4, 0x2190a4, 0x3a944a, 0xed5b00, 0xe62d42, 0x9141ac, 0xd56199, 0x6f8396};
+#define N_ACCENTS 8
+
+static void hue_sat(uint32_t c, double *h, double *s) {
+	double r = ((c >> 16) & 255) / 255.0, g = ((c >> 8) & 255) / 255.0, b = (c & 255) / 255.0;
+	double mx = fmax(r, fmax(g, b)), mn = fmin(r, fmin(g, b)), d = mx - mn;
+	*s = mx > 0 ? d / mx : 0;
+	if (d <= 0) { *h = 0; return; }
+	if (mx == r) *h = 60 * fmod((g - b) / d, 6.0);
+	else if (mx == g) *h = 60 * ((b - r) / d + 2);
+	else *h = 60 * ((r - g) / d + 4);
+	if (*h < 0) *h += 360;
+}
+
+static int nearest_accent(uint32_t c) {
+	c &= 0xffffff;
+	for (int i = 0; i < N_ACCENTS; i++)
+		if (accent_hex[i] == c) return i;
+	double h, s;
+	hue_sat(c, &h, &s);
+	if (s < 0.25) return N_ACCENTS - 1;
+	int best = 0;
+	double best_d = 1e9;
+	for (int i = 0; i < N_ACCENTS - 1; i++) {
+		double ph, ps;
+		hue_sat(accent_hex[i], &ph, &ps);
+		double d = fabs(h - ph);
+		if (360 - d < d) d = 360 - d;
+		if (d < best_d) { best_d = d; best = i; }
+	}
+	return best;
+}
+
+static bool is_accent_theme(const char *t) {
+	if (!t) return false;
+	if (!strcmp(t, "fldesktop")) return true;
+	if (strncmp(t, "fldesktop-", 10)) return false;
+	for (int i = 1; i < N_ACCENTS; i++)
+		if (!strcmp(t + 10, accent_ids[i])) return true;
+	return false;
+}
+
+static char *effective_icon_theme(const char *cfg) {
+	char *stored = ini_get(cfg, "General", "IconTheme");
+	char *follow = ini_get(cfg, "Appearance", "IconsFollowAccent");
+	char *accent = ini_get(cfg, "Appearance", "Accent");
+	bool on = follow ? (!strcasecmp(follow, "true") || !strcmp(follow, "1") || !strcasecmp(follow, "yes"))
+		: (!stored || !*stored || is_accent_theme(stored));
+	free(follow);
+	if (on && accent && accent[0] == '#' && strlen(accent) == 7) {
+		int i = nearest_accent((uint32_t)strtoul(accent + 1, NULL, 16));
+		char want[64];
+		if (i == 0) snprintf(want, sizeof want, "fldesktop");
+		else snprintf(want, sizeof want, "fldesktop-%s", accent_ids[i]);
+		/* only when that theme is installed */
+		char dirs[16][512];
+		int nd = data_dirs(dirs, 16);
+		const char *home = getenv("HOME");
+		for (int k = -1; k < nd; k++) {
+			char *p = NULL;
+			int n = k < 0 ? asprintf(&p, "%s/.icons/%s/index.theme", home ? home : "", want)
+				: asprintf(&p, "%s/icons/%s/index.theme", dirs[k], want);
+			bool found = n >= 0 && file_exists(p);
+			if (n >= 0) free(p);
+			if (found) {
+				free(stored);
+				stored = strdup(want);
+				break;
+			}
+		}
+	}
+	free(accent);
+	return stored;
 }
 
 /* Icon= of the application's .desktop file (malloc'ed), or NULL */
@@ -255,7 +342,7 @@ static const char *icon_for(const char *app_id, const char *icon_name) {
 	char dirs[16][512];
 	int nd = data_dirs(dirs, 16);
 	char *cfg = config_home();
-	char *theme = ini_get(cfg, "General", "IconTheme");
+	char *theme = effective_icon_theme(cfg);
 	free(cfg);
 	char *name = icon_name ? strdup(icon_name) : desktop_icon(app_id, dirs, nd);
 	char *path = find_icon_file(name ? name : key, dirs, nd, theme);

@@ -63,10 +63,6 @@ public:
       Fl_Color bg = ws->active ? fld::palette().accent : (int)i == hover ? panel_hover() : panel_bg();
       fl_color(bg);
       fl_rounded_rectf(cx + 1, cy, kCell - 2, 22, 4);
-      if (!ws->active) {
-        fl_color(fl_color_average(panel_fg(), panel_bg(), 0.35f));
-        fl_rounded_rect(cx + 1, cy, kCell - 2, 22, 4);
-      }
       fl_color(ws->active ? fld::palette().accent_fg : panel_fg());
       std::string label = ws->name.empty() ? std::to_string(i + 1) : ws->name;
       fl_draw(fld::escape_at(label).c_str(), cx, cy, kCell, 22, FL_ALIGN_CENTER | FL_ALIGN_CLIP);

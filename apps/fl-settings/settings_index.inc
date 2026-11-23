@@ -13,6 +13,7 @@
 {"appearance", "Widget style"},
 {"appearance", "Preview"},
 {"appearance", "Title bars"},
+{"appearance", "Panel"},
 {"appearance", "Fonts"},
 {"appearance", "Interface"},
 {"appearance", "Appearance"},

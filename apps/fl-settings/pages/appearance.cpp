@@ -12,6 +12,7 @@
 #include <FL/Fl_Spinner.H>
 #include <FL/fl_draw.H>
 
+#include <algorithm>
 #include <memory>
 #include <set>
 
@@ -77,7 +78,7 @@ std::string choice_text(Fl_Choice *c, const std::vector<std::string> &items) {
 class AppearancePage : public Fl_Group {
 public:
   ConfigFile desk{desktop_ini_path()}, wm{wm_ini_path()};
-  Fl_Choice *theme, *style, *ui_font, *mono_font, *icons, *cursors, *titlebar, *wp_mode;
+  Fl_Choice *theme, *style, *ui_font, *mono_font, *icons, *cursors, *titlebar, *panel_theme, *wp_mode;
   Fl_Spinner *radius, *ui_size, *mono_size, *cursor_size;
   AccentSwatches *accent;
   Fl_Check_Button *icons_follow;
@@ -153,12 +154,25 @@ public:
     update_radius();
     f.row("Title bars:", 28, wx, wy, ww);
     titlebar = new Fl_Choice(wx, wy, 200, 28);
+    titlebar->add("Match theme");
     titlebar->add("Dark");
     titlebar->add("Light");
     titlebar->add("Accent color");
-    std::string at = lower(wm.ini.get("appearance", "active_title", "#2b2d31"));
-    titlebar->value(at == "#2b2d31" ? 0 : at == "#f2f3f5" ? 1 : 2);
+    if (!wm.ini.has("appearance", "active_title")) titlebar->value(0);
+    else {
+      std::string at = lower(wm.ini.get("appearance", "active_title", ""));
+      titlebar->value(at == "#2b2d31" ? 1 : at == "#f2f3f5" ? 2 : 3);
+    }
     titlebar->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
+    // the panel can be dark with light windows, or the other way round
+    f.row("Panel:", 28, wx, wy, ww);
+    panel_theme = new Fl_Choice(wx, wy, 200, 28);
+    panel_theme->add("Match theme");
+    panel_theme->add("Dark");
+    panel_theme->add("Light");
+    std::string pt = lower(desk.ini.get("Appearance", "PanelTheme", "auto"));
+    panel_theme->value(pt == "dark" ? 1 : pt == "light" ? 2 : 0);
+    panel_theme->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
 
     f.heading("Fonts");
     fonts = font_families();
@@ -183,7 +197,11 @@ public:
     icon_themes = theme_dirs(false);
     f.row("Icon theme:", 28, wx, wy, ww);
     icons = new Fl_Choice(wx, wy, ww, 28);
-    std::string cur_icons = desk.ini.get("General", "IconTheme", default_icon_theme());
+    // the theme in effect: a stale IconTheme that disagrees with the accent is corrected
+    std::string cur_icons = effective_icon_theme(desk.ini, [this](const std::string &t) {
+      return std::find(icon_themes.begin(), icon_themes.end(), t) != icon_themes.end();
+    });
+    if (cur_icons.empty()) cur_icons = default_icon_theme();
     fill_choice(icons, icon_themes, cur_icons);
     icons->callback([](Fl_Widget *, void *d) {
       AppearancePage *p = (AppearancePage *)d;
@@ -286,6 +304,8 @@ public:
     desk.ini.load(desk.path); // pick up changes made elsewhere first
     wm.ini.load(wm.path);
     desk.ini.set("Appearance", "Theme", theme->value() == 1 ? "dark" : "light");
+    const char *panel_themes[] = {"auto", "dark", "light"};
+    desk.ini.set("Appearance", "PanelTheme", panel_themes[std::max(0, std::min(2, panel_theme->value()))]);
     uchar r, g, b;
     Fl::get_color(accent_color, r, g, b);
     char hex[8];
@@ -314,13 +334,18 @@ public:
     wm.ini.set("cursor", "theme", choice_text(cursors, cursor_themes));
     wm.ini.set_int("cursor", "size", (int)cursor_size->value());
     switch (titlebar->value()) {
-      case 1:
+      case 0:
+        // match the theme: fl-wm picks the colours from desktop.ini
+        for (const char *k : {"active_title", "active_text", "inactive_title", "inactive_text"})
+          wm.ini.remove("appearance", k);
+        break;
+      case 2:
         wm.ini.set("appearance", "active_title", "#f2f3f5");
         wm.ini.set("appearance", "active_text", "#222428");
         wm.ini.set("appearance", "inactive_title", "#e3e5e8");
         wm.ini.set("appearance", "inactive_text", "#8a8f98");
         break;
-      case 2:
+      case 3:
         wm.ini.set("appearance", "active_title", hex);
         wm.ini.set("appearance", "active_text", "#ffffff");
         wm.ini.set("appearance", "inactive_title", "#e8e9eb");
@@ -342,7 +367,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new AppearancePage(x, y, w
 
 PageInfo page_appearance() {
   return {"appearance", "Appearance", "preferences-desktop-theme", "Personal",
-          "theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar", create};
+          "theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar panel taskbar", create};
 }
 
 } // namespace fld

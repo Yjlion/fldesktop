@@ -148,6 +148,8 @@ struct flwm_config {
 	int title_height;
 	int border_width;
 	uint32_t active_title, inactive_title, active_text, inactive_text, border_color;
+	bool accent_border; /* the focused window's border in the accent colour */
+	bool shadows;       /* soft shadows under windows */
 	char *font; /* pango font description, e.g. "Sans Bold 10" */
 	bool panel_top;
 	bool focus_follows_mouse;
@@ -376,10 +378,12 @@ struct flwm_decor {
 	struct wlr_scene_buffer *title;     /* rendered title bar */
 	struct wlr_scene_rect *border[4];   /* visible 1px border: top/bottom/left/right */
 	struct wlr_scene_rect *handle[8];   /* invisible resize handles */
+	struct wlr_scene_rect *shadow[3];   /* soft drop shadow, below everything */
 	struct flwm_node_desc title_desc;
 	struct flwm_node_desc handle_desc[8];
 	int width, height;                  /* content size the decor was built for */
 	bool active;
+	bool shadowed;                      /* shadow shown (not maximized or snapped) */
 	char *title_text;
 	float scale;
 	int hover_button; /* enum flwm_decor_part under the pointer */
@@ -400,6 +404,8 @@ struct flwm_view {
 	bool minimized, maximized, fullscreen;
 	enum flwm_snap snap; /* half or quarter of the screen (never MAXIMIZED: see maximized) */
 	bool placed;       /* initial position chosen */
+	struct wl_event_source *close_timer; /* a close waiting for the menus to go */
+	int close_tries;
 	bool hidden_by_show_desktop;
 	bool no_taskbar;   /* not in the panel's window list (X11 menus, splash screens) */
 	int workspace;     /* 0-based; see view_on_current() */
@@ -553,12 +559,17 @@ void view_raise(struct flwm_view *view);
 void view_set_position(struct flwm_view *view, int x, int y);
 void view_get_geometry(struct flwm_view *view, struct wlr_box *box);
 void view_close(struct flwm_view *view);
+/* Closes the client's open menus (popups without a grab, as FLTK makes
+ * them): such a client ignores everything else until its menu is gone. */
+void view_dismiss_menus(struct flwm_view *view);
+bool view_has_menus(struct flwm_view *view);
 void view_set_maximized(struct flwm_view *view, bool maximized);
 void view_set_minimized(struct flwm_view *view, bool minimized);
 void view_set_fullscreen(struct flwm_view *view, bool fullscreen);
 /* snaps to a half or quarter, maximizes, minimizes or (NONE) frees the window */
 void view_set_snap(struct flwm_view *view, enum flwm_snap snap);
 enum flwm_snap view_snap_state(struct flwm_view *view); /* MAXIMIZED when maximized */
+bool flwm_desktop_dark(void); /* switcher.c: [Appearance] Theme=dark in desktop.ini */
 uint32_t flwm_accent_color(void); /* switcher.c: [Appearance] Accent of desktop.ini, 0xRRGGBB */
 /* keyboard resize mode: asks for a content size (at least 64x64) */
 void view_resize_to(struct flwm_view *view, int w, int h);

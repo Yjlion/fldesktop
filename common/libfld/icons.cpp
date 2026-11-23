@@ -1,4 +1,5 @@
 #include "fld/icons.h"
+#include "fld/accents.h"
 #include "fld/ini.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -191,7 +192,12 @@ std::string icon_theme_name() {
   if (name.empty()) {
     Ini cfg;
     cfg.load(desktop_config_path());
-    name = cfg.get("General", "IconTheme", "");
+    // follows the accent even when the stored IconTheme went stale
+    name = effective_icon_theme(cfg, [](const std::string &t) {
+      for (auto &b : icon_bases())
+        if (file_exists(path_join(path_join(b, t), "index.theme"))) return true;
+      return false;
+    });
     if (name.empty()) name = default_icon_theme();
   }
   return name;

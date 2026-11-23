@@ -8,6 +8,7 @@
 #include "fld/json.h"
 #include "fld/mime.h"
 #include "fld/styles.h"
+#include "fld/theme.h"
 #include "fld/tab_bar.h"
 #include "fld/menus.h"
 #include "fld/session.h"
@@ -195,6 +196,38 @@ static void test_accents() {
   CHECK_EQ(accent_icon_theme(5), std::string("fldesktop-purple"));
   CHECK(is_accent_icon_theme("fldesktop-teal"));
   CHECK(!is_accent_icon_theme("fldesktop-mono"));
+
+  // the icon theme in effect follows the accent, even with a stale IconTheme
+  auto eff = [](const char *text) {
+    Ini i;
+    i.parse(text);
+    return effective_icon_theme(i);
+  };
+  CHECK_EQ(eff("[Appearance]\nAccent=#e62d42\nIconsFollowAccent=true\n[General]\nIconTheme=fldesktop-teal\n"),
+           std::string("fldesktop-red"));
+  // follow defaults to on for an accent theme
+  CHECK_EQ(eff("[Appearance]\nAccent=#e62d42\n[General]\nIconTheme=fldesktop-teal\n"), std::string("fldesktop-red"));
+  CHECK_EQ(eff("[Appearance]\nAccent=#e62d42\nIconsFollowAccent=false\n[General]\nIconTheme=fldesktop-teal\n"),
+           std::string("fldesktop-teal"));
+  CHECK_EQ(eff("[Appearance]\nAccent=#e62d42\n[General]\nIconTheme=fldesktop-mono\n"), std::string("fldesktop-mono"));
+  CHECK_EQ(eff("[Appearance]\nAccent=#3584e4\n[General]\nIconTheme=fldesktop-red\n"), std::string("fldesktop"));
+  CHECK_EQ(eff("[General]\nIconTheme=fldesktop-teal\n"), std::string("fldesktop-teal")); // no accent set
+  Ini miss;
+  miss.parse("[Appearance]\nAccent=#e62d42\n[General]\nIconTheme=fldesktop-teal\n");
+  CHECK_EQ(effective_icon_theme(miss, [](const std::string &) { return false; }), std::string("fldesktop-teal"));
+}
+
+static void test_panel_theme() {
+  auto light = [](const char *text) {
+    fld::Ini i;
+    i.parse(text);
+    return fld::panel_is_light_theme(i);
+  };
+  CHECK(light(""));                                                  // light theme by default
+  CHECK(!light("[Appearance]\nTheme=dark\n"));                      // auto follows the theme
+  CHECK(!light("[Appearance]\nTheme=light\nPanelTheme=dark\n"));    // dark panel, light windows
+  CHECK(light("[Appearance]\nTheme=dark\nPanelTheme=Light\n"));
+  CHECK(light("[Appearance]\nTheme=light\nPanelTheme=bogus\n"));
 }
 
 static void test_session_env() {
@@ -270,6 +303,7 @@ int main() {
   test_styles();
   test_trash_and_copy();
   test_accents();
+  test_panel_theme();
   test_session_env();
   test_tabs();
   test_symbolic_recolor();

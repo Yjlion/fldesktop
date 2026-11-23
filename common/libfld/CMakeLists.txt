@@ -28,6 +28,24 @@ find_package(Threads REQUIRED)
 pkg_check_modules(FLD_CAIRO REQUIRED IMPORTED_TARGET cairo)
 target_link_libraries(fld PUBLIC fltk::images fltk::fltk Threads::Threads PkgConfig::FLD_CAIRO PkgConfig::WAYLAND_CLIENT)
 
+# the primary selection (middle-click paste) over Wayland, which FLTK lacks.
+# Generated here: libfld comes before the top-level protocol helper.
+target_sources(fld PRIVATE primary.cpp)
+pkg_get_variable(FLD_LIBFLD_WP_DIR wayland-protocols pkgdatadir)
+find_program(FLD_LIBFLD_SCANNER wayland-scanner)
+if(FLD_LIBFLD_WP_DIR AND FLD_LIBFLD_SCANNER)
+  set(_ps_xml ${FLD_LIBFLD_WP_DIR}/unstable/primary-selection/primary-selection-unstable-v1.xml)
+  set(_ps_out ${CMAKE_CURRENT_BINARY_DIR}/proto)
+  file(MAKE_DIRECTORY ${_ps_out})
+  execute_process(COMMAND ${FLD_LIBFLD_SCANNER} client-header ${_ps_xml}
+                  ${_ps_out}/primary-selection-unstable-v1-client-protocol.h COMMAND_ERROR_IS_FATAL ANY)
+  execute_process(COMMAND ${FLD_LIBFLD_SCANNER} private-code ${_ps_xml}
+                  ${_ps_out}/primary-selection-unstable-v1-protocol.c COMMAND_ERROR_IS_FATAL ANY)
+  target_sources(fld PRIVATE ${_ps_out}/primary-selection-unstable-v1-protocol.c)
+  target_include_directories(fld PRIVATE ${_ps_out})
+  target_compile_definitions(fld PRIVATE FLD_HAVE_PRIMARY_PROTO=1)
+endif()
+
 # screen readers: an AT-SPI2 bridge over GDBus (GLib comes with Pango anyway)
 pkg_check_modules(FLD_ATSPI_GIO IMPORTED_TARGET gio-2.0)
 if(FLD_ATSPI_GIO_FOUND)

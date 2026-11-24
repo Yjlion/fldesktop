@@ -43,6 +43,9 @@ const Action kActions[] = {
     {"snap-right", "Snap to the right", kNoArg},
     {"snap-up", "Snap up (quarter, maximize)", kNoArg},
     {"snap-down", "Snap down (quarter, restore, minimize)", kNoArg},
+    {"snap-third-left", "Snap to the left third", kNoArg},
+    {"snap-third-right", "Snap to the right third", kNoArg},
+    {"overview", "Overview of the windows", kNoArg},
     {"resize-mode", "Resize with the keyboard", kNoArg},
     {"cycle", "Next window", kNoArg},
     {"cycle-back", "Previous window", kNoArg},
@@ -73,6 +76,7 @@ std::pair<std::string, std::string> split_action(const std::string &action) {
 std::string describe(const std::string &action) {
   auto [id, arg] = split_action(action);
   if (id == "exec") return "Run: " + arg;
+  if (id == "portal-shortcut") return "Application shortcut (portal)";
   for (auto &x : kActions)
     if (id == x.id) return x.arg == kWorkspace ? std::string(x.label) + " " + arg : x.label;
   return trim(action);
@@ -289,18 +293,36 @@ public:
       save_wm(p->wm);
     }, this);
     cy += 36;
-    list = new Fl_Hold_Browser(X + 24, cy, lw, H - (cy - Y) - 64);
+    // the buttons: Add / Edit / Remove on the left, the rest on the right;
+    // the right group goes on a second row when both don't fit
+    fl_font(FL_HELVETICA, FL_NORMAL_SIZE);
+    auto bw = [](const char *l) { return std::max(72, (int)fl_width(l) + 20); };
+    const char *left_l[] = {"Add…", "Edit…", "Remove"};
+    const char *right_l[] = {"Application Shortcuts…", "Hot Corners…", "Reset to Defaults"};
+    const int gap = 6;
+    int left_w = -gap, right_w = -gap;
+    for (const char *l : left_l) left_w += bw(l) + gap;
+    for (const char *l : right_l) right_w += bw(l) + gap;
+    bool two_rows = left_w + 24 + right_w > lw;
+    int rows_h = two_rows ? 72 : 36;
+    list = new Fl_Hold_Browser(X + 24, cy, lw, H - (cy - Y) - 28 - rows_h);
     list->textsize(13);
     static int widths[] = {220, 0};
     list->column_widths(widths);
     list->column_char('\t');
     list->callback([](Fl_Widget *, void *d) { if (Fl::event_clicks()) ((ShortcutsPage *)d)->edit(false); }, this);
-    int by = Y + H - 50;
-    Fl_Button *add = new Fl_Button(X + 24, by, 100, 30, "Add…");
+    int by = Y + H - 14 - rows_h;
+    int bx = X + 24;
+    auto place = [&](const char *l, int &x, int y) {
+      Fl_Button *b = new Fl_Button(x, y, bw(l), 30, l);
+      x += bw(l) + gap;
+      return b;
+    };
+    Fl_Button *add = place(left_l[0], bx, by);
     add->callback([](Fl_Widget *, void *d) { ((ShortcutsPage *)d)->edit(true); }, this);
-    Fl_Button *ed = new Fl_Button(X + 130, by, 100, 30, "Edit…");
+    Fl_Button *ed = place(left_l[1], bx, by);
     ed->callback([](Fl_Widget *, void *d) { ((ShortcutsPage *)d)->edit(false); }, this);
-    Fl_Button *rm = new Fl_Button(X + 236, by, 100, 30, "Remove");
+    Fl_Button *rm = place(left_l[2], bx, by);
     rm->callback([](Fl_Widget *, void *d) {
       ShortcutsPage *p = (ShortcutsPage *)d;
       int i = p->list->value() - 1;
@@ -309,13 +331,15 @@ public:
       p->fill();
       p->save();
     }, this);
-    Fl_Button *corners = new Fl_Button(X + 518, by, 120, 30, "Hot Corners…");
-    corners->tooltip("What pushing the pointer into a corner of the screen does");
-    corners->callback([](Fl_Widget *, void *) { hot_corners_dialog(); });
-    Fl_Button *apps = new Fl_Button(X + 342, by, 170, 30, "Application Shortcuts…");
+    int ry = two_rows ? by + 36 : by;
+    int rx = two_rows ? X + 24 : X + 24 + lw - right_w;
+    Fl_Button *apps = place(right_l[0], rx, ry);
     apps->tooltip("Global shortcuts that applications asked for (through the desktop portal)");
     apps->callback([](Fl_Widget *, void *) { app_shortcuts_dialog(); });
-    Fl_Button *reset = new Fl_Button(X + 24 + lw - 140, by, 140, 30, "Reset to Defaults");
+    Fl_Button *corners = place(right_l[1], rx, ry);
+    corners->tooltip("What pushing the pointer into a corner of the screen does");
+    corners->callback([](Fl_Widget *, void *) { hot_corners_dialog(); });
+    Fl_Button *reset = place(right_l[2], rx, ry);
     fld::set_context_menu(list, [add, ed, rm, reset](fld::Menu &m) {
       m.button(add).button(ed).button(rm).divider().button(reset);
     });

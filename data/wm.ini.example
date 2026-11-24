@@ -26,6 +26,9 @@ launcher=fl-launcher
 switcher=true
 # dragging a window to a screen edge or corner snaps it (half, quarter, top: maximized)
 drag_snap=true
+# how the screen is drawn: auto (the graphics card, else software), gles2,
+# vulkan or pixman (software: slow, for machines whose driver fails); read at startup
+renderer=auto
 # run X11 programs through Xwayland (started with the first one); read at startup
 xwayland=true
 # number of workspaces (1-9); all outputs switch together
@@ -33,6 +36,9 @@ workspaces=4
 # after snapping a window to a side (or a third), offer the other windows
 # for the rest of the screen
 snap_assist=true
+# the key that turns a click into moving (left button) or resizing (right
+# button) the window under the pointer: super, alt, super+alt or none
+drag_modifier=super+alt
 # hot corners: an action when the pointer is pushed into a corner
 # (overview, launcher, show-desktop, lock, exec ..., or none)
 #hot_corner_top_left=overview

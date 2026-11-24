@@ -190,6 +190,7 @@ void config_init_defaults(struct flwm_config *c) {
 	c->launcher_cmd = strdup("fl-launcher");
 	c->switcher = true;
 	c->snap_assist = true;
+	c->drag_mods = WLR_MODIFIER_LOGO | WLR_MODIFIER_ALT;
 	c->osk_in_tablet_mode = true;
 	c->xwayland = true;
 	c->workspaces = 4;
@@ -326,6 +327,13 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
 			else if (!strcmp(k, "snap_assist")) c->snap_assist = parse_bool(v);
+			else if (!strcmp(k, "drag_modifier")) {
+				/* super, alt, super+alt (or none) */
+				uint32_t m = 0;
+				if (strcasestr(v, "super") || strcasestr(v, "logo")) m |= WLR_MODIFIER_LOGO;
+				if (strcasestr(v, "alt")) m |= WLR_MODIFIER_ALT;
+				c->drag_mods = m;
+			}
 			else if (!strcmp(k, "osk_in_tablet_mode")) c->osk_in_tablet_mode = parse_bool(v);
 			else if (!strncmp(k, "hot_corner_", 11)) {
 				static const char *names[] = {"top_left", "top_right", "bottom_left", "bottom_right"};
@@ -339,6 +347,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 					}
 			}
 			else if (!strcmp(k, "xwayland")) c->xwayland = parse_bool(v);
+			else if (!strcmp(k, "renderer")) snprintf(c->renderer, sizeof c->renderer, "%s", v);
 			else if (!strcmp(k, "workspaces")) {
 				int n = atoi(v);
 				c->workspaces = n < 1 ? 1 : n > FLWM_MAX_WORKSPACES ? FLWM_MAX_WORKSPACES : n;
@@ -511,4 +520,22 @@ char *config_default_path(void) {
 	if (xdg && *xdg) snprintf(buf, sizeof buf, "%s/fldesktop/wm.ini", xdg);
 	else snprintf(buf, sizeof buf, "%s/.config/fldesktop/wm.ini", getenv("HOME") ? getenv("HOME") : "/");
 	return strdup(buf);
+}
+
+void config_load_first(struct flwm_config *c, const char *cli_path) {
+	char *default_path = config_default_path();
+	const char *candidates[] = {cli_path, default_path, "/etc/xdg/fldesktop/wm.ini",
+		FLD_DATADIR "/wm.ini"};
+	for (size_t i = 0; i < sizeof candidates / sizeof candidates[0]; i++) {
+		if (!candidates[i]) continue;
+		if (config_load(c, candidates[i])) {
+			wlr_log(WLR_INFO, "loaded configuration %s", candidates[i]);
+			break;
+		}
+		if (i == 0) wlr_log(WLR_ERROR, "cannot read %s", candidates[i]);
+	}
+	/* the user's file, even when the system one was read: that is where
+	 * fl-settings writes, and what a reload reads first */
+	if (!c->path) c->path = strdup(cli_path ? cli_path : default_path);
+	free(default_path);
 }

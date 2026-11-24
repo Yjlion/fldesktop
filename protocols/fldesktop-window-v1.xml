@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="fldesktop_window_v1">
+  <copyright>
+    Copyright (C) 2026 fldesktop contributors. GPL-2.0-or-later.
+  </copyright>
+  <description summary="window requests of fldesktop's own toolkits">
+    Lets a client start moving one of its toplevels from a press on its own
+    widgets (an empty part of a toolbar, menu bar or tab strip), as
+    xdg_toplevel.move does, for toolkits that don't expose their
+    xdg_toplevel object (FLTK).
+  </description>
+  <interface name="fld_window_manager_v1" version="1">
+    <request name="destroy" type="destructor"/>
+    <request name="move">
+      <description summary="start an interactive move">
+        Starts moving the toplevel whose surface this is, as long as a
+        pointer button is held. Ignored for surfaces that are not mapped
+        toplevels, and when no button is pressed.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+  </interface>
+</protocol>

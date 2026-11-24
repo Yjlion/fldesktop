@@ -326,7 +326,7 @@ package_fldesktop-files() {
 }
 package_fldesktop-edit()  {
   pkgdesc="fldesktop text editor"
-  depends=(fltk enchant)
+  depends=(fltk enchant hunspell) # enchant only optionally pulls in its Hunspell backend
   optdepends=('hunspell-en_us: English spell checking' 'hunspell-de: German spell checking')
   _app edit
 }

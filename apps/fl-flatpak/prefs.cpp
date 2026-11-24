@@ -171,7 +171,7 @@ public:
     {
       Fl_Group *g = new Fl_Group(8, 36, w() - 16, h() - 84, "Sources");
       list = new Fl_Hold_Browser(20, 48, w() - 40, h() - 150);
-      static int cols[] = {130, 200, 250, 0};
+      static int cols[] = {110, 150, 230, 0};
       list->column_widths(cols);
       list->column_char('\t');
       list->textsize(13);

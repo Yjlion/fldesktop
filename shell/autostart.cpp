@@ -6,6 +6,7 @@
 #include <string>
 #include <unistd.h>
 
+#include "fld/toolkit_theme.h"
 #include "fld/desktop_entry.h"
 #include "fld/util.h"
 
@@ -55,6 +56,18 @@ int main(int argc, char **argv) {
       cmd.erase(cmd.begin() + 1);
       fld::run_capture(cmd, out);
     }
+  }
+  // GTK and Qt programs get the desktop's colours, also after desktop.ini
+  // was edited by hand or by an older version
+  if (!dry) fld::export_toolkit_theme();
+  // fl-wm could not use the graphics card (fl-wm or fl-session fell back)
+  std::string sw = fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fldesktop-software-rendering";
+  if (!dry && fld::file_exists(sw) && !fld::which("notify-send").empty()) {
+    unlink(sw.c_str());
+    fld::spawn({"notify-send", "-a", "fldesktop", "-i", "video-display",
+                "Software rendering",
+                "The graphics driver could not be used, so the desktop is drawn by the processor. "
+                "It works, but slower. System Info > Graphics shows the details."});
   }
   std::map<std::string, std::string> entries; // id -> path, user config wins
   auto dirs = fld::config_dirs();

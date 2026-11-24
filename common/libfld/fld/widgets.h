@@ -41,6 +41,7 @@ public:
   // Adds an arbitrary widget of width w at the current position.
   void add_widget(Fl_Widget *w);
   int next_x() const { return next_x_; }
+  int handle(int event) override; // empty parts move the window
 protected:
   void draw() override;
 private:
@@ -54,6 +55,7 @@ private:
 class Tabs : public Fl_Tabs {
 public:
   Tabs(int x, int y, int w, int h, const char *label = nullptr);
+  int handle(int event) override; // the strip right of the last tab moves the window
 protected:
   void draw() override;
   void draw_tab(int x1, int x2, int W, int H, Fl_Widget *o, int flags, int what) override;

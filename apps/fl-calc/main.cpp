@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "calc_engine.h"
+#include "fld/window_move.h"
 #include "fld/ini.h"
 #include "fld/menus.h"
 #include "fld/theme.h"
@@ -304,7 +305,7 @@ int main(int argc, char **argv) {
   S.opt.degrees = cfg.get_bool("Calc", "Degrees", true);
 
   g_win = new Fl_Double_Window(320, 520, "Calculator");
-  g_menu = new Fl_Menu_Bar(0, 0, 320, MENU_H);
+  g_menu = new fld::MenuBar(0, 0, 320, MENU_H);
   g_menu->box(FL_FLAT_BOX);
   g_menu->add("&Calculator/&Basic", FL_CTRL + 'b', menu_cb, (void *)1, FL_MENU_RADIO | (S.scientific ? 0 : FL_MENU_VALUE));
   g_menu->add("&Calculator/&Scientific", FL_CTRL + 's', menu_cb, (void *)2, FL_MENU_RADIO | (S.scientific ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER);

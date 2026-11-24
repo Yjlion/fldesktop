@@ -26,6 +26,7 @@ add_library(fld STATIC
   tab_move.cpp
   atspi_model.cpp
   avatar.cpp
+  toolkit_theme.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Threads REQUIRED)
@@ -48,7 +49,17 @@ if(FLD_LIBFLD_WP_DIR AND FLD_LIBFLD_SCANNER)
   target_sources(fld PRIVATE ${_ps_out}/primary-selection-unstable-v1-protocol.c)
   target_include_directories(fld PRIVATE ${_ps_out})
   target_compile_definitions(fld PRIVATE FLD_HAVE_PRIMARY_PROTO=1)
+  # fl-wm's own protocol: moving a window from a toolbar or menu bar
+  set(_fw_xml ${CMAKE_SOURCE_DIR}/protocols/fldesktop-window-v1.xml)
+  set_property(DIRECTORY ${CMAKE_SOURCE_DIR} APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_fw_xml})
+  execute_process(COMMAND ${FLD_LIBFLD_SCANNER} client-header ${_fw_xml}
+                  ${_ps_out}/fldesktop-window-v1-client-protocol.h COMMAND_ERROR_IS_FATAL ANY)
+  execute_process(COMMAND ${FLD_LIBFLD_SCANNER} private-code ${_fw_xml}
+                  ${_ps_out}/fldesktop-window-v1-protocol.c COMMAND_ERROR_IS_FATAL ANY)
+  target_sources(fld PRIVATE ${_ps_out}/fldesktop-window-v1-protocol.c)
+  target_compile_definitions(fld PRIVATE FLD_HAVE_WINDOW_PROTO=1)
 endif()
+target_sources(fld PRIVATE window_move.cpp)
 
 # screen readers: an AT-SPI2 bridge over GDBus (GLib comes with Pango anyway);
 # power actions ask logind over GDBus too

@@ -1,3 +1,4 @@
+#include "fld/window_move.h"
 #include "fld/json.h" // first: X11 headers define Bool
 // fl-web: a web browser built with FLTK and WPE WebKit
 //
@@ -1588,11 +1589,11 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
 }
 
 // The menu bar is built again each time it opens (bookmarks, toggles)
-class WebMenuBar : public Fl_Menu_Bar {
+class WebMenuBar : public fld::MenuBar {
 public:
   Browser *b;
   fld::Menu menu;
-  WebMenuBar(int x, int y, int w, int h, Browser *br) : Fl_Menu_Bar(x, y, w, h), b(br) { rebuild(); }
+  WebMenuBar(int x, int y, int w, int h, Browser *br) : fld::MenuBar(x, y, w, h), b(br) { rebuild(); }
   void rebuild() {
     menu = fld::Menu();
     b->build_menu(menu, true);
@@ -1607,7 +1608,7 @@ public:
     if (e == FL_PUSH) rebuild();
     // shortcuts are the browser's own (they also work with the bar hidden)
     if (e == FL_SHORTCUT) return 0;
-    return Fl_Menu_Bar::handle(e);
+    return fld::MenuBar::handle(e);
   }
 
 private:

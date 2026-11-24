@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+	update-alternatives --remove pinentry /usr/bin/pinentry-fldesktop
+	update-alternatives --remove pinentry-x11 /usr/bin/pinentry-fldesktop
+fi
+
+#DEBHELPER#
+
+exit 0

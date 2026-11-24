@@ -562,3 +562,40 @@ if(TARGET fl-vptr AND FLD_BUILD_WM)
            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-vptr>)
   set_tests_properties(dnd-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
 endif()
+
+# mDNS: service URLs from DNS-SD records
+if(TARGET fld-mdns-util)
+  add_executable(test_mdns test_mdns.cpp)
+  target_link_libraries(test_mdns PRIVATE fld-mdns-util)
+  add_test(NAME mdns COMMAND test_mdns)
+endif()
+
+# spell checking: the words that get checked
+if(TARGET fld-spell-util)
+  add_executable(test_spell test_spell.cpp)
+  target_link_libraries(test_spell PRIVATE fld-spell-util)
+  add_test(NAME spell COMMAND test_spell)
+endif()
+
+# pinentry: the Assuan protocol, and a whole session through the program
+if(TARGET fl-pinentry-util)
+  add_executable(test_pinentry test_pinentry.cpp)
+  target_link_libraries(test_pinentry PRIVATE fl-pinentry-util)
+  add_test(NAME pinentry COMMAND test_pinentry)
+  if(TARGET pinentry-fldesktop)
+    add_test(NAME pinentry-session COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/pinentry-session.sh $<TARGET_FILE:pinentry-fldesktop>)
+    set_tests_properties(pinentry-session PROPERTIES TIMEOUT 20)
+  endif()
+endif()
+
+# fl-secretd: keyring files and the Secret Service transport crypto; then the
+# whole service through libsecret's secret-tool on a private bus
+if(TARGET fl-secretd-store)
+  add_executable(test_secretd test_secretd.cpp)
+  target_link_libraries(test_secretd PRIVATE fl-secretd-store)
+  add_test(NAME secretd COMMAND test_secretd)
+  if(TARGET fl-secretd)
+    add_test(NAME secretd-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/secretd-smoke.sh $<TARGET_FILE:fl-secretd>)
+    set_tests_properties(secretd-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+  endif()
+endif()

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+	# below pinentry-gnome3 (90): installing it does not take over by itself
+	update-alternatives --install /usr/bin/pinentry pinentry /usr/bin/pinentry-fldesktop 85 \
+		--slave /usr/share/man/man1/pinentry.1.gz pinentry.1.gz /usr/share/man/man1/pinentry-fldesktop.1.gz
+	update-alternatives --install /usr/bin/pinentry-x11 pinentry-x11 /usr/bin/pinentry-fldesktop 85 \
+		--slave /usr/share/man/man1/pinentry-x11.1.gz pinentry-x11.1.gz /usr/share/man/man1/pinentry-fldesktop.1.gz
+fi
+
+#DEBHELPER#
+
+exit 0

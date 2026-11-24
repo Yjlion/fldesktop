@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Media Player Preparation
+Comment=Lets GStreamer find its plugins after an install or update, so that the Media Player starts at once
+Exec=sh -c "sleep 90; exec nice -n 19 fl-media-player --warm-registry"
+OnlyShowIn=fldesktop;
+NoDisplay=true

@@ -15,4 +15,11 @@ struct Rect {
 // result is empty when nothing changed.
 std::vector<Rect> clip_damage(const Rect *rects, unsigned n, int width, int height, bool &full, unsigned max = 8);
 
+// The parts that differ between two frames of the same size in 4-byte
+// pixels, `stride` bytes a row: bands of changed rows, each as wide as its
+// changes, at most `max` (neighbours merged). Empty when they are the same;
+// `full` when the whole frame changed.
+std::vector<Rect> diff_damage(const unsigned char *a, const unsigned char *b, int width, int height, int stride,
+                              bool &full, unsigned max = 8);
+
 } // namespace web

@@ -577,7 +577,7 @@ static void make_search_bar(int W, int H) {
   auto *prev = new Fl_Button(0, H - 30, 34, 26, "@8->");                  // 1
   prev->tooltip("Older (Enter)");
   prev->callback([](Fl_Widget *, void *) { search_step(true); });
-  g.search_case = new Fl_Check_Button(0, H - 30, 110, 26, "Match case");  // 2
+  g.search_case = new fld::CheckButton(0, H - 30, 110, 26, "Match case");  // 2
   g.search_msg = new Fl_Box(0, H - 30, 120, 26);                           // 3
   g.search_msg->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
   g.search_msg->labelcolor(fld::palette().fg_dim);
@@ -678,7 +678,7 @@ static void profiles_dialog() {
   d.font->range(0, 48);
   d.font->tooltip("0: the general size");
   y += 36;
-  d.def = new Fl_Check_Button(lx, y, fw, 28, "Use for new tabs and windows");
+  d.def = new fld::CheckButton(lx, y, fw, 28, "Use for new tabs and windows");
   auto *ok = new Fl_Return_Button(W - 112, H - 42, 100, 30, "Close");
   ok->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
   d.list->callback([](Fl_Widget *, void *v) {
@@ -802,7 +802,7 @@ static void preferences_dialog() {
   op->value((int)lround(g.set.opacity * 100));
   op->tooltip("Below 100% the desktop shows through the terminal background (in percent)");
   y += 38;
-  Fl_Check_Button *mb = new Fl_Check_Button(lx, y, 240, 28, "Show the menu bar");
+  Fl_Check_Button *mb = new fld::CheckButton(lx, y, 240, 28, "Show the menu bar");
   mb->value(g.set.show_menubar);
   y += 34;
   Fl_Choice *tabs = new Fl_Choice(lx, y, 240, 28, "Tab bar:");

@@ -27,6 +27,7 @@
 #include "fld/ini.h"
 #include "fld/theme.h"
 #include "fld/util.h"
+#include "fld/frame_watch.h"
 #include "fld/widgets.h"
 #include "procinfo.h"
 
@@ -46,7 +47,9 @@ static std::string settings_path() { return fld::fld_config_dir() + "/taskmgr.in
 static void load_settings() {
   fld::Ini c;
   c.load(settings_path());
-  S.interval = std::max(0.25, std::min(10.0, atof(c.get("TaskManager", "Interval", "1").c_str())));
+  // reading every process costs a slow CPU more: 2 s there unless chosen
+  const char *def = sysconf(_SC_NPROCESSORS_ONLN) <= 2 ? "2" : "1";
+  S.interval = std::max(0.25, std::min(10.0, atof(c.get("TaskManager", "Interval", def).c_str())));
   S.all_users = c.get_bool("TaskManager", "AllUsers", true);
   S.tree = c.get_bool("TaskManager", "Tree", false);
   S.kernel = c.get_bool("TaskManager", "KernelThreads", false);
@@ -92,6 +95,17 @@ public:
   std::function<void(pid_t)> on_menu;
   std::function<void()> on_select;
 
+  // the Command column takes the width the others leave
+  void fit_command() {
+    int used = 0;
+    for (int i = 0; i + 1 < kNumCols; i++) used += col_width(i);
+    col_width(kNumCols - 1, std::max(240, (tiw > 0 ? tiw : w() - 20) - used));
+  }
+  void resize(int X, int Y, int W, int H) override {
+    Fl_Table_Row::resize(X, Y, W, H);
+    fit_command();
+  }
+
   ProcTable(int x, int y, int w, int h) : Fl_Table_Row(x, y, w, h) {
     type(SELECT_SINGLE);
     cols(kNumCols);
@@ -101,6 +115,7 @@ public:
     col_resize(1);
     const int widths[] = {220, 70, 90, 70, 90, 70, 90, 50, 400};
     for (int i = 0; i < kNumCols; i++) col_width(i, widths[i]);
+    fit_command();
     color(fld::palette().bg2);
     selection_color(fld::palette().accent);
     end();
@@ -417,9 +432,9 @@ static Fl_Box *g_status;
 static Fl_Button *g_end_btn;
 
 // Down / Enter in the filter moves into the list and selects the first row
-class FilterInput : public Fl_Input {
+class FilterInput : public fld::SearchInput {
 public:
-  using Fl_Input::Fl_Input;
+  using fld::SearchInput::SearchInput;
   int handle(int e) override;
 };
 static FilterInput *g_filter;
@@ -445,18 +460,24 @@ static void update_status() {
   const procinfo::System &s = g_sampler.system();
   long up = (long)s.uptime;
   char b[256];
-  snprintf(b, sizeof b, "Processes: %zu shown, %d total    CPU: %.0f%%    Memory: %s / %s    Load: %.2f %.2f %.2f    Up: %ldd %02ld:%02ld",
+  snprintf(b, sizeof b, "Processes: %zu shown, %d total    CPU: %.0f%%    Memory: %s / %s    Load: %.2f %.2f %.2f    Up: %s",
            g_table->items.size(), s.procs_total, g_sampler.cpu_percent(), procinfo::human_bytes((double)s.mem.used()).c_str(),
-           procinfo::human_bytes((double)s.mem.total).c_str(), s.load[0], s.load[1], s.load[2], up / 86400,
-           (up / 3600) % 24, (up / 60) % 60);
+           procinfo::human_bytes((double)s.mem.total).c_str(), s.load[0], s.load[1], s.load[2],
+           procinfo::uptime_text((double)up).c_str());
   g_status->copy_label(b);
   if (g_table->selected_process()) g_end_btn->activate();
   else g_end_btn->deactivate();
 }
 
+static Fl_Tabs *g_tabs;
+static Fl_Group *g_procs_page;
+static fld::FrameWatch *g_watch;
+
 static void refresh() {
-  g_sampler.sample();
-  g_table->rebuild();
+  // the process list only while it is shown
+  bool procs = !g_tabs || g_tabs->value() == g_procs_page;
+  g_sampler.sample(procs);
+  if (procs) g_table->rebuild();
   const procinfo::System &s = g_sampler.system();
   // graphs
   if (g_cpu->series.size() != (g_per_core && g_sampler.cpu_count() > 1 ? (size_t)g_sampler.cpu_count() : 1u))
@@ -484,6 +505,9 @@ static void refresh() {
 }
 
 static void tick(void *) {
+  // nothing while nobody can see the window (minimised, another workspace);
+  // FrameWatch's on_shown starts it again
+  if (g_watch && !g_watch->visible()) return;
   refresh();
   Fl::repeat_timeout(S.interval, tick);
 }
@@ -556,8 +580,9 @@ static void show_properties() {
   t += "Nice: " + std::to_string(p->nice) + "    CPU: " + fmt("%.1f%%", p->cpu) + "\n";
   t += "Memory (resident): " + procinfo::human_bytes((double)p->rss) + "\n";
   t += "Virtual memory: " + procinfo::human_bytes((double)p->vsize) + "\n";
-  t += "Disk read: " + procinfo::human_bytes((double)p->read_bytes) + "    written: " +
-       procinfo::human_bytes((double)p->write_bytes) + "\n";
+  uint64_t rd = 0, wr = 0;
+  if (procinfo::read_process_io(p->pid, rd, wr))
+    t += "Disk read: " + procinfo::human_bytes((double)rd) + "    written: " + procinfo::human_bytes((double)wr) + "\n";
   double started = (double)p->start_ticks / (double)g_sampler.clock_ticks();
   long age = (long)(g_sampler.system().uptime - started);
   t += "Running for: " + std::to_string(age / 3600) + "h " + std::to_string((age / 60) % 60) + "m " +
@@ -682,12 +707,12 @@ int main(int argc, char **argv) {
   const int W = 900, H = 600, TB = 42, ST = 24;
   g_win = new Fl_Double_Window(W, H, "Task Manager");
 
-  Fl_Tabs *tabs = new Fl_Tabs(0, 0, W, H - ST);
+  Fl_Tabs *tabs = g_tabs = new fld::Tabs(0, 0, W, H - ST);
   // ---- processes
-  Fl_Group *pg = new Fl_Group(0, 30, W, H - ST - 30, "Processes");
+  Fl_Group *pg = g_procs_page = new Fl_Group(0, 30, W, H - ST - 30, "Processes");
   fld::Toolbar *bar = new fld::Toolbar(0, 30, W, TB);
   bar->color(pal.bg);
-  Fl_Input *filter = g_filter = new FilterInput(8, 37, 240, 28);
+  Fl_Input *filter = g_filter = new FilterInput(8, 37, 240, 28, "Filter processes");
   filter->tooltip("Filter by name, command, PID or user (Ctrl+F)");
   filter->when(FL_WHEN_CHANGED);
   filter->callback([](Fl_Widget *w, void *) {
@@ -696,7 +721,7 @@ int main(int argc, char **argv) {
     update_status();
   });
   bar->add_widget(filter);
-  Fl_Check_Button *all = new Fl_Check_Button(260, 37, 150, 28, "All users");
+  Fl_Check_Button *all = new fld::CheckButton(260, 37, 150, 28, "All users");
   all->value(S.all_users);
   all->callback([](Fl_Widget *w, void *) {
     S.all_users = ((Fl_Check_Button *)w)->value();
@@ -705,7 +730,7 @@ int main(int argc, char **argv) {
     update_status();
   });
   bar->add_widget(all);
-  Fl_Check_Button *tree = new Fl_Check_Button(410, 37, 140, 28, "Tree view");
+  Fl_Check_Button *tree = new fld::CheckButton(410, 37, 140, 28, "Tree view");
   tree->value(S.tree);
   tree->tooltip("Show child processes under their parents (while not filtering)");
   tree->callback([](Fl_Widget *w, void *) {
@@ -768,11 +793,18 @@ int main(int argc, char **argv) {
   fld::set_window_icon(g_win, "fl-taskmgr");
   Fl::add_handler(global_keys);
 
+  g_sampler.set_read_io(false); // only the properties show it
   g_sampler.sample();
   setup_cpu_series();
   refresh();
   restart_timer();
   g_win->show();
+  g_watch = new fld::FrameWatch(g_win);
+  g_watch->on_shown([](void *) {
+    refresh();
+    restart_timer();
+  }, nullptr);
+  tabs->callback([](Fl_Widget *, void *) { refresh(); });
   g_table->take_focus();
   return Fl::run();
 }

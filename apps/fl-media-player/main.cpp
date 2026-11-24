@@ -164,7 +164,7 @@ static void update_volume() {
   bool muted = g_player->muted();
   double v = g_player->volume();
   set_icon(g_mute, muted || v <= 0 ? "audio-volume-muted" : v < 40 ? "audio-volume-low" : v < 80 ? "audio-volume-medium" : "audio-volume-high",
-           muted ? "🔇" : "🔊");
+           muted ? "Muted" : "Vol");
   if (Fl::pushed() != g_vol) g_vol->value(v);
   g_mute->tooltip(muted ? "Unmute (M)" : "Mute (M)");
 }
@@ -179,10 +179,17 @@ static void update_play_button() {
   // music: no automatic suspend while it plays (the screen may blank)
   mprisd::inhibit_idle(playing && !g_player->has_video());
 #endif
-  // audio only: a placeholder with the title instead of a black picture
+  // audio only: a placeholder with the title instead of a black picture;
+  // nothing opened yet: how to open something
   std::string ph = g_player->has_media() && !g_player->has_video() ? g_player->title() : "";
-  if (ph != g_surface->osd().placeholder) {
+  const char *icon = "audio-x-generic";
+  if (!g_player->has_media()) {
+    ph = "Open a file or drop one here\n(click, or Ctrl+O)";
+    icon = "video-x-generic";
+  }
+  if (ph != g_surface->osd().placeholder || icon != g_surface->osd().placeholder_icon) {
     g_surface->osd().placeholder = ph;
+    g_surface->osd().placeholder_icon = icon;
     g_surface->redraw();
   }
 }
@@ -380,7 +387,7 @@ static void update_order_buttons() {
   g_repeat_btn->value(r != media::Repeat::Off);
   g_repeat_btn->tooltip(rep[(int)r]);
   set_icon(g_repeat_btn, "media-playlist-repeat",
-           r == media::Repeat::One ? "🔂" : "🔁");
+           r == media::Repeat::One ? "1" : "Rep");
   g_shuffle_btn->redraw();
   g_repeat_btn->redraw();
 }
@@ -770,6 +777,10 @@ static int surface_event(int e) {
         show_menu(Fl::event_x(), Fl::event_y());
         return 1;
       }
+      if (Fl::event_button() == FL_LEFT_MOUSE && !g_player->has_media()) {
+        open_dialog(false); // the empty player says "click"
+        return 1;
+      }
       if (Fl::event_button() == FL_LEFT_MOUSE) {
         if (Fl::event_clicks()) toggle_fullscreen();
         toggle_pause(); // the second click of a double click undoes the first
@@ -816,6 +827,12 @@ static void make_surface(int W, int H) {
 }
 
 int main(int argc, char **argv) {
+  // run once after an install or update (the autostart entry): GStreamer
+  // builds its plugin registry, which made the first start take 5 s
+  if (argc == 2 && !strcmp(argv[1], "--warm-registry")) {
+    fgst::init();
+    return 0;
+  }
   fld::init_app("fl-media-player", argc, argv);
   Fl::lock(); // Fl::awake from GStreamer threads
   load_settings();
@@ -898,15 +915,15 @@ int main(int argc, char **argv) {
       g_list->select(i + 2);
     }
   });
-  g_shuffle_btn = side_btn("media-playlist-shuffle", "🔀", "Shuffle", [](Fl_Widget *, void *) {
+  g_shuffle_btn = side_btn("media-playlist-shuffle", "Mix", "Shuffle", [](Fl_Widget *, void *) {
     set_shuffle(!g_player->shuffle());
   });
   g_shuffle_btn->type(FL_TOGGLE_BUTTON);
-  g_repeat_btn = side_btn("media-playlist-repeat", "🔁", "Repeat", [](Fl_Widget *, void *) {
+  g_repeat_btn = side_btn("media-playlist-repeat", "Rep", "Repeat", [](Fl_Widget *, void *) {
     set_repeat(media::next_repeat(g_player->repeat()));
   });
   g_repeat_btn->type(FL_TOGGLE_BUTTON);
-  side_btn("document-save", "💾", "Save the playlist", [](Fl_Widget *, void *) { save_playlist(); });
+  side_btn("document-save", "Save", "Save the playlist", [](Fl_Widget *, void *) { save_playlist(); });
   side_btn("open-menu", "☰", "More", [](Fl_Widget *w, void *) { playlist_menu(w->x(), w->y()); });
   g_side->end();
   g_side->resizable(nullptr);

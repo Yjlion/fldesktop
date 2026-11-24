@@ -212,6 +212,29 @@ int main() {
   CHECK_EQ(d[0].x, 0);
   CHECK_EQ(d[0].w, 47);
   CHECK_EQ(d[0].h, 11);
+  // damage from comparing two frames: none, one band, the whole frame
+  {
+    const int W = 20, H = 10, S = W * 4;
+    std::vector<unsigned char> f1(S * H, 0), f2 = f1;
+    CHECK(diff_damage(f1.data(), f2.data(), W, H, S, all).empty() && !all);
+    f2[(size_t)3 * S + 5 * 4] = 9; // pixel (5,3)
+    f2[(size_t)4 * S + 8 * 4 + 1] = 9; // pixel (8,4)
+    d = diff_damage(f1.data(), f2.data(), W, H, S, all);
+    CHECK(!all && d.size() == 1);
+    if (d.size() == 1) {
+      CHECK_EQ(d[0].x, 5);
+      CHECK_EQ(d[0].y, 3);
+      CHECK_EQ(d[0].w, 4);
+      CHECK_EQ(d[0].h, 2);
+    }
+    f2[(size_t)8 * S + 0] = 9; // a second band
+    d = diff_damage(f1.data(), f2.data(), W, H, S, all);
+    CHECK_EQ(d.size(), (size_t)2);
+    d = diff_damage(f1.data(), f2.data(), W, H, S, all, 1); // merged
+    CHECK(d.size() == 1 && d[0].y == 3 && d[0].h == 6 && d[0].x == 0);
+    std::vector<unsigned char> f3(S * H, 7);
+    CHECK(diff_damage(f1.data(), f3.data(), W, H, S, all).empty() && all);
+  }
   // saved logins
   CHECK_EQ(login_origin("https://Example.org/login?x=1"), std::string("https://example.org"));
   CHECK_EQ(login_origin("https://a.org:443/"), std::string("https://a.org"));

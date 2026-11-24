@@ -1,4 +1,5 @@
 usr/bin/fl-media-player
+etc/xdg/autostart/fl-media-player-warmup.desktop
 usr/bin/fl-video
 usr/share/applications/fl-media-player.desktop
 usr/share/icons/hicolor/scalable/apps/fl-media-player.svg

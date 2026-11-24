@@ -1,10 +1,13 @@
 #include "webview.h"
 
+#include <time.h>
+
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
 #include <FL/fl_draw.H>
 #include <FL/fl_utf8.h>
 
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <string>
@@ -78,7 +81,7 @@ WebView::WebView(int x, int y, int w, int h, WebKitWebView *related, WebKitSetti
       frame_pending_ = true;
     } else if (!frame_pending_) {
       // nothing to show: WebKit may go on at once
-      Fl::add_timeout(0, frame_done_cb, this);
+      schedule_frame_done();
     }
   };
   backend_->on_cursor = [this](const std::string &c) {
@@ -97,7 +100,7 @@ WebView::~WebView() {
 
 void WebView::activate_view(bool on) {
   active_ = on;
-  backend_->set_visible(on);
+  backend_->set_visible(on && !hidden_);
   if (!on) backend_->set_focus(false);
 }
 
@@ -107,8 +110,44 @@ void WebView::resize(int X, int Y, int W, int H) {
   if (sized) backend_->resize(W, H);
 }
 
+static double mono_now() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+void WebView::schedule_frame_done() {
+  if (done_scheduled_) return;
+  done_scheduled_ = true;
+  double delay = std::max(0.0, last_done_ + 1.0 / 60 - mono_now());
+  Fl_Window *top = top_window();
+  if (top != watched_) {
+    watched_ = top;
+    watch_.reset(top ? new fld::FrameWatch(top) : nullptr);
+    if (watch_) watch_->on_shown(window_shown_cb, this);
+  }
+  bool hidden = watch_ && !watch_->visible();
+  if (hidden != hidden_) {
+    hidden_ = hidden;
+    // WebKit stops animations and timers of pages that are not visible
+    if (active_) backend_->set_visible(!hidden);
+  }
+  if (hidden) delay = std::max(delay, 0.5);
+  Fl::add_timeout(delay, frame_done_cb, this);
+}
+
+void WebView::window_shown_cb(void *d) {
+  WebView *v = (WebView *)d;
+  if (!v->hidden_) return;
+  v->hidden_ = false;
+  if (v->active_) v->backend_->set_visible(true);
+  v->redraw();
+}
+
 void WebView::frame_done_cb(void *d) {
   WebView *v = (WebView *)d;
+  v->done_scheduled_ = false;
+  v->last_done_ = mono_now();
   v->backend_->frame_shown();
   glib_loop_poke();
 }
@@ -166,7 +205,7 @@ void WebView::draw() {
   if (frame_pending_) {
     frame_pending_ = false;
     // let WebKit render the next frame once this one is on screen
-    Fl::add_timeout(0, frame_done_cb, this);
+    schedule_frame_done();
   }
 }
 

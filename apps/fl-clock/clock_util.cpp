@@ -1,5 +1,7 @@
 #include "clock_util.h"
 
+#include <map>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -154,12 +156,22 @@ std::string city_of(const std::string &zone) {
   return c;
 }
 
-struct tm time_in(const std::string &zone, time_t t) {
+namespace {
+
+// a zone's offset from UTC over a stretch of time where it does not change
+struct ZoneSpan {
+  time_t from = 0, until = 0;
+  long gmtoff = 0;
+  int isdst = 0;
+  std::string abbr;
+};
+
+// Time zones change their offset on a quarter hour of UTC (all of tzdata's
+// transitions do), so one lookup holds until the next quarter hour.
+constexpr time_t kSpan = 15 * 60;
+
+struct tm slow_time_in(const std::string &zone, time_t t) {
   struct tm tm;
-  if (zone.empty()) {
-    localtime_r(&t, &tm);
-    return tm;
-  }
   // TZ for a moment (the program has one thread doing this)
   const char *old = getenv("TZ");
   std::string saved = old ? old : "";
@@ -169,6 +181,35 @@ struct tm time_in(const std::string &zone, time_t t) {
   if (old) setenv("TZ", saved.c_str(), 1);
   else unsetenv("TZ");
   tzset();
+  return tm;
+}
+
+} // namespace
+
+struct tm time_in(const std::string &zone, time_t t) {
+  struct tm tm;
+  if (zone.empty()) {
+    localtime_r(&t, &tm);
+    return tm;
+  }
+  // reading the zone's file again and again for every clock shown costs a
+  // lot of CPU, so remember its offset until it may change
+  static std::map<std::string, ZoneSpan> spans;
+  ZoneSpan &sp = spans[zone];
+  if (t < sp.from || t >= sp.until) {
+    tm = slow_time_in(zone, t);
+    sp.from = t - ((t % kSpan) + kSpan) % kSpan;
+    sp.until = sp.from + kSpan;
+    sp.gmtoff = tm.tm_gmtoff;
+    sp.isdst = tm.tm_isdst;
+    sp.abbr = tm.tm_zone ? tm.tm_zone : "";
+    return tm;
+  }
+  time_t local = t + sp.gmtoff;
+  gmtime_r(&local, &tm);
+  tm.tm_gmtoff = sp.gmtoff;
+  tm.tm_isdst = sp.isdst;
+  tm.tm_zone = sp.abbr.c_str();
   return tm;
 }
 

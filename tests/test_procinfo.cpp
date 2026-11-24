@@ -82,6 +82,9 @@ int main() {
   CHECK_EQ(human_bytes(1536), std::string("1.5 KiB"));
   CHECK_EQ(human_bytes(300.0 * 1024 * 1024), std::string("300 MiB"));
   CHECK_EQ(state_name('Z'), std::string("Zombie"));
+  CHECK_EQ(uptime_text(59), std::string("0 min"));
+  CHECK_EQ(uptime_text(82 * 60 + 5), std::string("1 h 22 min"));
+  CHECK_EQ(uptime_text(3 * 86400 + 4 * 3600 + 120), std::string("3 d 4 h"));
 
   // ---- a fake /proc
   char tmpl[] = "/tmp/fld-proc-XXXXXX";
@@ -123,6 +126,35 @@ int main() {
     if (pr.pid == 50) CHECK_NEAR(pr.cpu, 50.0); // 250 ticks of 500 per-CPU ticks
     if (pr.pid == 1) CHECK_NEAR(pr.cpu, 0.0);
   }
+
+  // the second sample kept the stat files open and read nothing else again
+  CHECK_EQ(s.opened_last(), 0);
+  // a process ended; another took pid 50 (another start time); a new one
+  CHECK_EQ(system(("rm -rf " + g_root + "/1").c_str()), 0);
+  write_proc(50, 1, "other", 10, std::string("other\0-x", 8));
+  put("50/stat", "50 (other) S 1 50 50 0 -1 0 10 0 0 0 10 5 0 0 20 0 1 0 9999 409600 25 1 2 3\n");
+  write_proc(60, 1, "new", 0, "new");
+  write_system(1500, 10500);
+  s.sample();
+  CHECK_EQ(s.processes().size(), (size_t)3);
+  bool saw_other = false;
+  for (auto &pr : s.processes()) {
+    CHECK(pr.pid != 1);
+    if (pr.pid == 50) {
+      saw_other = true;
+      CHECK_EQ(pr.name, std::string("other"));
+      CHECK_EQ(pr.cmdline, std::string("other -x"));
+      CHECK_EQ(pr.cpu, 0.0); // no earlier sample of this process
+    }
+  }
+  CHECK(saw_other);
+  CHECK(s.opened_last() > 0);
+  // without the list: the system figures only
+  write_system(1750, 11250);
+  s.sample(false);
+  CHECK_EQ(s.opened_last(), 0);
+  CHECK_NEAR(s.cpu_percent(), 25.0);
+  CHECK_EQ(s.processes().size(), (size_t)3);
 
   // ---- signals on a real child
   pid_t child = fork();

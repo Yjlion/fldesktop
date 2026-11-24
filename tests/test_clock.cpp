@@ -89,6 +89,19 @@ int main() {
     CHECK_EQ(offset_text("UTC", mon8), std::string("same time"));
     CHECK_EQ(time_in("Asia/Tokyo", mon8).tm_hour, 17);
     CHECK_EQ(time_in("", mon8).tm_hour, 8); // TZ is back
+    CHECK_EQ(time_in("Asia/Tokyo", mon8 + 61).tm_min, time_in("Asia/Tokyo", mon8).tm_min + 1); // remembered
+    CHECK_EQ(std::string(time_in("Asia/Tokyo", mon8 + 1).tm_zone), std::string("JST"));
+    // New York goes from EST to EDT at 07:00 UTC on 8 March 2026
+    const time_t dst = 1772953200;
+    struct tm before = time_in("America/New_York", dst - 60), after = time_in("America/New_York", dst + 60);
+    CHECK_EQ(before.tm_hour, 1);
+    CHECK_EQ(before.tm_min, 59);
+    CHECK_EQ(before.tm_gmtoff, -5 * 3600L);
+    CHECK_EQ(after.tm_hour, 3);
+    CHECK_EQ(after.tm_min, 1);
+    CHECK_EQ(after.tm_gmtoff, -4 * 3600L);
+    CHECK_EQ(time_in("America/New_York", dst - 1).tm_hour, 1); // back again: looked up anew
+    CHECK_EQ(offset_text("America/Sao_Paulo", mon8), std::string("-3 h"));
   }
   return test_result("clock");
 }

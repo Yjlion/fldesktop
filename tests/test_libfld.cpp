@@ -20,6 +20,7 @@
 #include "fld/tab_move.h"
 #include <FL/Fl_RGB_Image.H>
 #include <sys/stat.h>
+#include "fld/text.h"
 #include "fld/trash.h"
 #include "fld/util.h"
 #include "test.h"
@@ -295,9 +296,79 @@ static void test_symbolic_recolor() {
   CHECK_EQ(fld::recolor_symbolic_svg("<use href=\"#abc\" fill=\"url(#aaa)\"/>", W).find("url(#aaa)") != std::string::npos, true);
 }
 
+// 10 px per character (not byte), so the tests need no fonts
+static double mono10(const std::string &s) {
+  int n = 0;
+  for (unsigned char c : s) n += (c & 0xC0) != 0x80;
+  return n * 10.0;
+}
+
+static void test_text() {
+  CHECK_EQ(fld::ellipsize("short", 100, mono10), std::string("short"));
+  CHECK_EQ(fld::ellipsize("alsa-card-profile", 60, mono10), std::string("alsa-\u2026"));
+  CHECK_EQ(fld::ellipsize("\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9", 40, mono10), std::string("\u00e9\u00e9\u00e9\u2026"));
+  CHECK_EQ(fld::ellipsize("ab cdef", 40, mono10), std::string("ab\u2026")); // no space before "…"
+  // icon labels break at separators before characters
+  auto l = fld::wrap_label("alsa-card-profile", 100, 2, mono10);
+  CHECK_EQ(l.size(), 2u);
+  if (l.size() == 2) {
+    CHECK_EQ(l[0], std::string("alsa-card-"));
+    CHECK_EQ(l[1], std::string("profile"));
+  }
+  l = fld::wrap_label("bash-completion", 100, 2, mono10);
+  CHECK(l.size() == 2 && l[0] == "bash-" && l[1] == "completion");
+  l = fld::wrap_label("My Documents", 80, 2, mono10);
+  CHECK(l.size() == 2 && l[0] == "My" && l[1] == "Documen\u2026");
+  l = fld::wrap_label("abcdefghijkl", 50, 2, mono10); // no separator: between characters
+  CHECK(l.size() == 2 && l[0] == "abcde" && l[1] == "fghi\u2026");
+  l = fld::wrap_label("one two three four five", 50, 2, mono10);
+  CHECK(l.size() == 2 && l[0] == "one" && fld::ends_with(l[1], "\u2026"));
+  CHECK_EQ(fld::wrap_label("x", 50, 2, mono10).size(), 1u);
+  CHECK(fld::wrap_label("", 50, 2, mono10).empty());
+  // text colour on an accent: amber takes dark text, a deep blue white
+  CHECK(fld::text_on(fl_rgb_color(0xc8, 0x88, 0x00)) != FL_WHITE);
+  CHECK(fld::text_on(fl_rgb_color(0x1c, 0x71, 0xd8)) == FL_WHITE);
+  CHECK(fld::text_on(FL_WHITE) != FL_WHITE);
+  CHECK_NEAR(fld::contrast_ratio(FL_BLACK, FL_WHITE), 21.0);
+}
+
+// icon lookup in a theme listed once: the best size, the parent, a miss
+static void test_icon_lookup() {
+  std::string data = g_tmp + "/icondata";
+  std::string th = data + "/icons/fldtest-theme";
+  fld::mkdir_p(th + "/16x16/apps");
+  fld::mkdir_p(th + "/48x48/apps");
+  fld::mkdir_p(th + "/scalable/apps");
+  fld::write_file(th + "/index.theme",
+                  "[Icon Theme]\nName=T\nInherits=fldtest-parent\nDirectories=16x16/apps,48x48/apps,scalable/apps\n"
+                  "[16x16/apps]\nSize=16\nType=Fixed\n[48x48/apps]\nSize=48\nType=Fixed\n"
+                  "[scalable/apps]\nSize=48\nMinSize=8\nMaxSize=512\nType=Scalable\n");
+  const std::string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'/>";
+  fld::write_file(th + "/16x16/apps/foo.png", "x");
+  fld::write_file(th + "/48x48/apps/foo.png", "x");
+  fld::write_file(th + "/scalable/apps/bar.svg", svg);
+  fld::write_file(th + "/scalable/apps/masked.svg", "<svg><mask id='m'/></svg>");
+  std::string pt = data + "/icons/fldtest-parent";
+  fld::mkdir_p(pt + "/48x48/apps");
+  fld::write_file(pt + "/index.theme", "[Icon Theme]\nName=P\nDirectories=48x48/apps\n[48x48/apps]\nSize=48\nType=Fixed\n");
+  fld::write_file(pt + "/48x48/apps/inherited.png", "x");
+  setenv("XDG_DATA_HOME", data.c_str(), 1);
+  fld::set_icon_theme_name("fldtest-theme");
+  CHECK_EQ(fld::icon_path("foo", 48), th + "/48x48/apps/foo.png");
+  CHECK_EQ(fld::icon_path("foo", 16), th + "/16x16/apps/foo.png");
+  CHECK_EQ(fld::icon_path("foo.png", 20), th + "/16x16/apps/foo.png"); // the closest
+  CHECK_EQ(fld::icon_path("bar", 100), th + "/scalable/apps/bar.svg");
+  CHECK_EQ(fld::icon_path("inherited", 48), pt + "/48x48/apps/inherited.png");
+  CHECK_EQ(fld::icon_path("masked", 48), std::string("")); // nanosvg cannot draw it
+  CHECK_EQ(fld::icon_path("fldtest-no-such-icon", 48), std::string(""));
+  fld::set_icon_theme_name("");
+  unsetenv("XDG_DATA_HOME");
+}
+
 int main() {
   char tmpl[] = "/tmp/fld-test-XXXXXX";
   g_tmp = mkdtemp(tmpl);
+  test_icon_lookup();
   test_util();
   test_ini();
   test_desktop_entry();
@@ -310,6 +381,7 @@ int main() {
   test_session_env();
   test_tabs();
   test_symbolic_recolor();
+  test_text();
   fld::remove_recursive(g_tmp);
   // clock formats: seconds or not
   CHECK(!fld::strftime_has_seconds("%a %d %b  %H:%M"));

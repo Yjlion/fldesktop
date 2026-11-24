@@ -30,6 +30,7 @@
 
 #include "clock_util.h"
 #include "fld/config_watch.h"
+#include "fld/frame_watch.h"
 #include "fld/ini.h"
 #include "fld/notify.h"
 #include "fld/theme.h"
@@ -140,6 +141,8 @@ void set_background(bool on) {
 
 Fl_Double_Window *g_win;
 Fl_Tabs *g_tabs;
+// starts or stops the page timers after a change (clock running, page shown)
+void reschedule();
 
 // world clocks
 std::vector<std::string> g_zones; // "" = here
@@ -147,12 +150,14 @@ class ClockFace;
 class WorldPage : public Fl_Group {
 public:
   Fl_Hold_Browser *list;
+  int cols[5] = {260, 140, 160, 0, 0};
   WorldPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H, "World Clocks") {
     list = new Fl_Hold_Browser(X + 10, Y + 10, W - 20, H - 60);
     list->textsize(16);
-    static int cols[] = {260, 140, 160, 0};
-    list->column_widths(cols);
+    list->has_scrollbar(Fl_Browser_::VERTICAL);
     list->column_char('\t');
+    list->column_widths(cols);
+    fit_columns();
     Fl_Button *add = new Fl_Button(X + 10, Y + H - 42, 120, 30, "Add City…");
     add->callback([](Fl_Widget *, void *d) { ((WorldPage *)d)->add_zone(); }, this);
     Fl_Button *rm = new Fl_Button(X + 136, Y + H - 42, 100, 30, "Remove");
@@ -160,21 +165,42 @@ public:
     end();
     resizable(list);
   }
+  // the columns share the list's width: city, time, day, the offset last
+  void fit_columns() {
+    int w = list->w() - Fl::scrollbar_size() - 8;
+    cols[0] = w * 36 / 100;
+    cols[1] = w * 19 / 100;
+    cols[2] = w * 22 / 100;
+    cols[3] = 0;
+  }
+  void resize(int X, int Y, int W, int H) override {
+    Fl_Group::resize(X, Y, W, H);
+    fit_columns();
+    list->redraw();
+  }
   void refresh() {
-    int sel = list->value(), top = list->topline();
-    list->clear();
     time_t t = time(nullptr);
-    for (const std::string &z : g_zones) {
+    bool rebuild = list->size() != (int)g_zones.size();
+    int sel = list->value(), top = list->topline();
+    if (rebuild) list->clear();
+    for (size_t i = 0; i < g_zones.size(); i++) {
+      const std::string &z = g_zones[i];
       struct tm tm = clk::time_in(z, t);
       char hm[16], day[32];
       strftime(hm, sizeof hm, "%H:%M:%S", &tm);
       strftime(day, sizeof day, "%a %d %b", &tm);
       std::string name = z.empty() ? "Here" : clk::city_of(z);
       std::string off = z.empty() ? "" : clk::offset_text(z, t);
-      list->add(("@b" + name + "\t@b" + hm + "\t" + day + "\t" + off).c_str());
+      std::string line = "@b" + fld::escape_at(name) + "\t@b" + hm + "\t" + day + "\t" + off;
+      // rows are changed in place: rebuilding the list every second would
+      // lose the selection and the scroll position for a moment
+      if (rebuild) list->add(line.c_str());
+      else if (line != list->text((int)i + 1)) list->text((int)i + 1, line.c_str());
     }
-    list->topline(top);
-    if (sel) list->select(sel);
+    if (rebuild) {
+      list->topline(top);
+      if (sel) list->select(sel);
+    }
   }
   void save() {
     fld::Ini ini;
@@ -274,7 +300,7 @@ public:
     btn("Edit…", 80, [](Fl_Widget *, void *d) { ((AlarmsPage *)d)->edit(false); });
     btn("On / Off", 80, [](Fl_Widget *, void *d) { ((AlarmsPage *)d)->toggle(); });
     btn("Delete", 80, [](Fl_Widget *, void *d) { ((AlarmsPage *)d)->remove(); });
-    bg = new Fl_Check_Button(X + 10, Y + H - 40, W - 20, 28, "Ring alarms when Clock is closed (starts with the session)");
+    bg = new fld::CheckButton(X + 10, Y + H - 40, W - 20, 28, "Ring alarms when Clock is closed (starts with the session)");
     fld::Ini ini;
     ini.load(ini_path());
     bg->value(ini.get_bool("Clock", "RingWhenClosed", false));
@@ -339,7 +365,7 @@ public:
     Fl_Box dl(10, 96, 76, 26, "Repeat:");
     dl.align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
     for (int i = 0; i < 7; i++) {
-      days[i] = new Fl_Check_Button(90 + (i % 4) * 72, 96 + (i / 4) * 28, 70, 26, dn[i]);
+      days[i] = new fld::CheckButton(90 + (i % 4) * 72, 96 + (i / 4) * 28, 70, 26, dn[i]);
       days[i]->value((a.days >> bit[i]) & 1);
     }
     Fl_Box note(90, 154, 300, 40, "No days ticked: it rings once.");
@@ -451,6 +477,7 @@ public:
     end_at = 0;
     start->label("Start");
     tick();
+    reschedule();
   }
   void toggle() {
     if (end_at) {
@@ -462,6 +489,7 @@ public:
       end_at = now_mono() + left;
       start->label("Pause");
     }
+    reschedule();
   }
   void tick() {
     double l = end_at ? std::max(0.0, end_at - now_mono()) : left;
@@ -519,6 +547,7 @@ public:
       started = now_mono();
       start->label("Stop");
     }
+    reschedule();
   }
   void add_lap() {
     laps->insert(1, ("Lap " + std::to_string(laps->size() + 1) + "    " + clk::format_duration(elapsed(), true)).c_str());
@@ -531,11 +560,54 @@ AlarmsPage *g_alarms_page;
 TimerPage *g_timer;
 StopwatchPage *g_stopwatch;
 
-void tick(void *) {
-  if (g_tabs->value() == g_world) g_world->refresh();
+// The pages redraw only what is shown: the world clocks and a running timer
+// once a second, on the second; a running stopwatch ten times a second. Nothing
+// while the window is minimised or on another workspace.
+fld::FrameWatch *g_watch;
+
+double wall_now() {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+void fast_tick(void *);
+void second_tick(void *);
+
+bool shown(Fl_Widget *page) { return g_tabs->value() == page && g_watch->visible(); }
+
+void second_tick(void *) {
+  bool on_screen = g_watch->visible();
+  if (on_screen && g_tabs->value() == g_world) g_world->refresh();
+  if (on_screen && g_stopwatch->started && g_tabs->value() == g_stopwatch && !Fl::has_timeout(fast_tick))
+    Fl::add_timeout(0.1, fast_tick);
+  // a running timer keeps going (it rings when it ends) even when not shown
+  if (g_timer->end_at || (on_screen && g_tabs->value() == g_timer)) g_timer->tick();
+  double delay = 1.0 - std::fmod(wall_now(), 1.0) + 0.002;
+  if (g_timer->end_at) {
+    // the timer shows whole seconds left: change it as one passes
+    double left = g_timer->end_at - now_mono();
+    double frac = left - std::floor(left);
+    if (frac > 0.001 && frac < delay) delay = frac + 0.002;
+  }
+  Fl::repeat_timeout(delay, second_tick);
+}
+
+void fast_tick(void *) {
+  if (!g_stopwatch->started || !shown(g_stopwatch)) return; // second_tick checks back
+  g_stopwatch->tick();
+  Fl::repeat_timeout(0.1, fast_tick);
+}
+
+void reschedule() {
+  if (!g_tabs || !g_watch) return;
+  Fl::remove_timeout(second_tick);
+  Fl::remove_timeout(fast_tick);
+  g_world->refresh();
   g_timer->tick();
   g_stopwatch->tick();
-  Fl::repeat_timeout(0.1, tick);
+  Fl::add_timeout(1.0 - std::fmod(wall_now(), 1.0) + 0.002, second_tick);
+  if (g_stopwatch->started && g_tabs->value() == g_stopwatch) Fl::add_timeout(0.1, fast_tick);
 }
 
 } // namespace
@@ -579,7 +651,7 @@ int main(int argc, char **argv) {
 
   const int W = 640, H = 480;
   g_win = new Fl_Double_Window(W, H, "Clock");
-  g_tabs = new Fl_Tabs(0, 0, W, H);
+  g_tabs = new fld::Tabs(0, 0, W, H);
   g_world = new WorldPage(0, 30, W, H - 30);
   g_alarms_page = new AlarmsPage(0, 30, W, H - 30);
   g_alarms_page->hide();
@@ -598,7 +670,11 @@ int main(int argc, char **argv) {
   g_world->refresh();
   g_alarms_page->refresh();
   g_win->show();
-  Fl::add_timeout(0.1, tick);
+  g_watch = new fld::FrameWatch(g_win);
+  g_watch->on_shown([](void *) { reschedule(); }, nullptr);
+  g_tabs->when(FL_WHEN_CHANGED);
+  g_tabs->callback([](Fl_Widget *, void *) { reschedule(); });
+  reschedule();
   // the window rings alarms unless the background ringer runs
   if (!ini.get_bool("Clock", "RingWhenClosed", false)) Fl::add_timeout(1, check_alarms);
   return Fl::run();

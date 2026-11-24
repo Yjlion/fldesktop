@@ -254,7 +254,7 @@ public:
     Fl_Group *g = page_group(X, Y, W, H, "Shortcuts", cy);
     resizable(g);
     int lw = std::min(W - 48, 700);
-    Fl_Check_Button *sw = new Fl_Check_Button(X + 24, cy, lw, 28,
+    Fl_Check_Button *sw = new fld::CheckButton(X + 24, cy, lw, 28,
                                               "Window switching (Alt+Tab) shows a list of the windows");
     sw->tooltip("Off: each Alt+Tab raises the next window directly");
     sw->value(wm.ini.get_bool("behaviour", "switcher", true));
@@ -265,7 +265,7 @@ public:
       save_wm(p->wm);
     }, this);
     cy += 30;
-    Fl_Check_Button *assist = new Fl_Check_Button(X + 24, cy, lw, 28,
+    Fl_Check_Button *assist = new fld::CheckButton(X + 24, cy, lw, 28,
                                                   "Snap assist: after snapping a window to a side, offer the others for the rest");
     assist->value(wm.ini.get_bool("behaviour", "snap_assist", true));
     assist->callback([](Fl_Widget *w, void *d) {

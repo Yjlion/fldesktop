@@ -30,6 +30,9 @@
 #include <memory>
 #include <set>
 #include <thread>
+#include <cerrno>
+#include <sys/wait.h>
+#include <malloc.h>
 #include <string>
 #include <vector>
 
@@ -219,6 +222,12 @@ void apply(Action a, const std::vector<std::string> &ids, const std::string &tit
 #ifdef HAVE_APPSTREAM
 static std::map<std::string, appicons::AppInfo> g_apps; // pkgname -> app
 static bool g_apps_ready = false;
+class MainWindow;
+static MainWindow *g_main_win;
+// Reads the AppStream catalog for application names and icons, once, when
+// something needs them (the Software tab, a list of updates): it takes a
+// moment and about 90 MB while it is read.
+static void ensure_catalog();
 #endif
 
 static const char *app_name(const std::string &pkg) {
@@ -333,7 +342,7 @@ public:
 
   MainWindow() : Fl_Double_Window(980, 620, "Software Updates") {
     const int W = w(), H = h();
-    tabs = new Fl_Tabs(8, 8, W - 16, H - 40);
+    tabs = new fld::Tabs(8, 8, W - 16, H - 40);
     // --- updates
     upd_tab = new Fl_Group(8, 38, W - 16, H - 70, "Updates");
     upd_summary = new Fl_Box(20, 48, W - 300, 28);
@@ -352,8 +361,11 @@ public:
     upd_detail->buffer(upd_buf);
     upd_detail->wrap_mode(Fl_Text_Display::WRAP_AT_BOUNDS, 0);
     upd_none = new Fl_Box(20, 84, W - 40, H - 126, "There are no updates to install.");
-    upd_none->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER | FL_ALIGN_WRAP);
+    // a check mark above the sentence, so the page does not look empty
+    upd_none->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER | FL_ALIGN_WRAP | FL_ALIGN_IMAGE_OVER_TEXT);
     upd_none->labelcolor(fld::palette().fg_dim);
+    upd_none->labelsize(16);
+    if (Fl_Image *ok = fld::symbolic_icon("object-select", 64, fld::palette().accent)) upd_none->image(ok);
     upd_none->hide();
     upd_tab->resizable(upd_detail);
     upd_tab->end();
@@ -388,7 +400,7 @@ public:
     int dy = 84 + (H - 120) / 2 + 48;
     {
       int tx = 208, tw = W - 228 - 140, th = H - 36 - dy;
-      info_tabs = new Fl_Tabs(tx, dy, tw, th);
+      info_tabs = new fld::Tabs(tx, dy, tw, th);
       int cy = dy + 26, ch = th - 26;
       tab_details = new Fl_Group(tx, cy, tw, ch, "Details");
       sw_detail = new Fl_Text_Display(tx, cy, tw, ch);
@@ -413,7 +425,7 @@ public:
       tab_files->end();
       auto dep_tab = [&](const char *label, Fl_Hold_Browser *&list, Fl_Check_Button *&rec) {
         Fl_Group *g = new Fl_Group(tx, cy, tw, ch, label);
-        rec = new Fl_Check_Button(tx + 4, cy + 4, tw - 8, 26, "Include indirect ones");
+        rec = new fld::CheckButton(tx + 4, cy + 4, tw - 8, 26, "Include indirect ones");
         rec->callback([](Fl_Widget *w, void *d) { ((MainWindow *)d)->reload_deps(w); }, this);
         list = new Fl_Hold_Browser(tx, cy + 34, tw, ch - 34);
         list->format_char(0);
@@ -565,10 +577,23 @@ public:
   void show_update_list(bool on) {
     for (Fl_Widget *w : {(Fl_Widget *)upd_list, (Fl_Widget *)upd_detail}) on ? w->show() : w->hide();
     on ? upd_none->hide() : upd_none->show();
+    if (!on) {
+      // when the package lists were last fetched
+      pk::time_since_refresh([this](unsigned s) {
+        std::string when = s == 0 || s == ~0u ? ""
+                           : s < 3600         ? std::to_string(std::max(1u, s / 60)) + " min ago"
+                           : s < 2 * 86400    ? std::to_string(s / 3600) + " h ago"
+                                              : std::to_string(s / 86400) + " days ago";
+        upd_none->copy_label(("There are no updates to install." + (when.empty() ? "" : "\nLast checked " + when + "."))
+                                 .c_str());
+        upd_none->redraw();
+      });
+    }
   }
 
   void set_updates(const std::vector<pk::Package> &list) {
     updates = list;
+    if (!list.empty()) ensure_catalog(); // their names and icons
     std::sort(updates.begin(), updates.end(), [](const pk::Package &a, const pk::Package &b) {
       bool as = a.info == 9 /*SECURITY*/, bs = b.info == 9;
       if (as != bs) return as;
@@ -936,33 +961,52 @@ public:
 
   void tab_changed() {
     Fl_Widget *v = tabs->value();
+    if (v == sw_tab) ensure_catalog();
     if (v == repo_tab && repos.empty()) load_repos();
     if (v == hist_tab && !hist_list->size()) load_history();
     if (v == sw_tab) sw_search->take_focus();
   }
 };
 
+static void ensure_catalog() {
+#ifdef HAVE_APPSTREAM
+  static bool started = false;
+  if (started) return;
+  started = true;
+  std::thread([] {
+    auto *apps = new std::map<std::string, appicons::AppInfo>(appicons::load_catalog());
+    // the pool is freed: give its memory back to the system
+    malloc_trim(0);
+    Fl::awake([](void *d) {
+      auto *a = static_cast<std::map<std::string, appicons::AppInfo> *>(d);
+      g_apps.swap(*a);
+      delete a;
+      g_apps_ready = true;
+      if (g_main_win) g_main_win->refresh_icons();
+    }, apps);
+  }).detach();
+#endif
+}
+
 // ---- background update checker ----------------------------------------------------------
 
 std::string updates_ini() { return fld::fld_config_dir() + "/updates.ini"; }
 
-int check_updates_daemon(bool now) {
-  // first check a minute after login (unless --now), then every few hours
-  double wait = now ? 0 : 60;
+// One check: refresh the cache when it is old, and announce new updates.
+int check_updates_once() {
   std::string last_notified;
   {
     std::string s;
     fld::read_file(fld::cache_home() + "/fldesktop/updates-notified", s);
     last_notified = fld::trim(s);
   }
-  while (true) {
-    for (double t = 0; t < wait; t += 1) Fl::wait(1.0);
+  // (a loop of one round, so that `continue` ends the check)
+  for (int round = 0; round < 1; round++) {
     fld::Ini ini;
     ini.load(updates_ini());
     std::string freq = fld::lower(ini.get("Updates", "Check", "daily"));
     bool notify = ini.get_bool("Updates", "Notify", true);
     unsigned interval = freq == "weekly" ? 7 * 86400 : freq == "hourly" ? 3600 : 86400;
-    wait = 6 * 3600;
     if (freq == "never") continue;
     if (!pk::available()) continue;
     bool done = false;
@@ -1002,15 +1046,45 @@ int check_updates_daemon(bool now) {
                       : "Install them with Software Updates.";
     n.urgency = security ? 2 : 1;
     n.actions = {{"default", "Show Updates"}};
-    fld::notify(n, [](const std::string &) { fld::spawn({"fl-packages", "--updates"}); });
+    // the notification's button works only while this runs: wait a while
+    // for it (the notification stays in the list after that)
+    bool clicked = false;
+    fld::notify(n, [&clicked](const std::string &) {
+      clicked = true;
+      fld::spawn({"fl-packages", "--updates"});
+    });
+    for (int i = 0; i < 600 && !clicked; i++) Fl::wait(1.0);
   }
   return 0;
+}
+
+// The background checker sleeps between checks without any of the libraries
+// set up (a few hundred KB instead of a resident GUI program) and runs each
+// check as `fl-packages --check-updates --once`: first a minute after login
+// (at once with --now), then every few hours.
+int check_updates_scheduler(bool now) {
+  double wait = now ? 0 : 60;
+  for (;;) {
+    struct timespec ts = {(time_t)wait, 0};
+    while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
+    pid_t pid = fork();
+    if (pid == 0) {
+      execl("/proc/self/exe", "fl-packages", "--check-updates", "--once", (char *)nullptr);
+      execlp("fl-packages", "fl-packages", "--check-updates", "--once", (char *)nullptr);
+      _exit(127);
+    }
+    if (pid > 0) {
+      int st;
+      while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+    }
+    wait = 6 * 3600;
+  }
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
-  bool check = false, now = false, updates_first = false;
+  bool check = false, now = false, updates_first = false, once = false;
   std::string search, show, show_tab;
   std::vector<std::string> files;
   for (int i = 1; i < argc; i++) {
@@ -1021,6 +1095,7 @@ int main(int argc, char **argv) {
              "Installs, removes and updates software through PackageKit.\n");
       return 0;
     } else if (a == "--check-updates") check = true;
+    else if (a == "--once") once = true;
     else if (a == "--now") now = true;
     else if (a == "--updates") updates_first = true;
     else if (a == "--search" && i + 1 < argc) search = argv[++i];
@@ -1029,10 +1104,11 @@ int main(int argc, char **argv) {
     else if (fld::starts_with(a, "file://")) files.push_back(fld::uri_decode(a.substr(7)));
     else files.push_back(fld::abs_path(a));
   }
+  if (check && !once) return check_updates_scheduler(now);
   fld::init_app("fl-packages", argc, argv);
   Fl_Image::RGB_scaling(FL_RGB_SCALING_BILINEAR); // smooth scaled app icons
   Fl::lock();
-  if (check) return check_updates_daemon(now);
+  if (check) return check_updates_once();
   if (!pk::available()) {
     fl_alert("The PackageKit service is not available.\n\nInstall PackageKit (packagekit) to manage software here.");
     return 1;
@@ -1050,20 +1126,7 @@ int main(int argc, char **argv) {
     return ok ? 0 : 1;
   }
   MainWindow *w = new MainWindow;
-#ifdef HAVE_APPSTREAM
-  // application names and icons: the catalog takes a moment to read
-  static MainWindow *s_win = w;
-  std::thread([] {
-    auto *apps = new std::map<std::string, appicons::AppInfo>(appicons::load_catalog());
-    Fl::awake([](void *d) {
-      auto *a = static_cast<std::map<std::string, appicons::AppInfo> *>(d);
-      g_apps.swap(*a);
-      delete a;
-      g_apps_ready = true;
-      s_win->refresh_icons();
-    }, apps);
-  }).detach();
-#endif
+  g_main_win = w;
   w->show(); // not show(argc, argv): it resets the theme colors
   w->set_status(pk::backend_name());
   w->check_updates(false);

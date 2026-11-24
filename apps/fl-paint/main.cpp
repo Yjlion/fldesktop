@@ -32,6 +32,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "fld/window_size.h"
 #include "paint_util.h"
 
 using paint::Canvas;
@@ -44,7 +45,8 @@ const char *kToolNames[] = {"Brush (B)", "Eraser (E)", "Line (L)", "Rectangle (R
                             "Fill (F)", "Text (T)", "Select (S)", "Pick a colour (I)"};
 const char *kToolIcons[] = {"draw-brush", "draw-eraser", "draw-line", "draw-rectangle", "draw-ellipse",
                             "color-fill", "draw-text", "edit-select", "color-picker"};
-const char *kToolGlyphs[] = {"🖌", "⌫", "╱", "▭", "◯", "🪣", "T", "⬚", "💧"};
+// without the icons: the tool's key, as in its name
+const char *kToolKeys[] = {"B", "E", "L", "R", "O", "F", "T", "S", "I"};
 
 struct Doc {
   std::vector<paint::Layer> layers;
@@ -504,7 +506,7 @@ bool ask_size(const char *title, int &W, int &H, bool *keep_ratio) {
   }
   sw.value(W);
   sh.value(H);
-  Fl_Check_Button *keep = keep_ratio ? new Fl_Check_Button(110, 86, 200, 26, "Keep the proportions") : nullptr;
+  Fl_Check_Button *keep = keep_ratio ? new fld::CheckButton(110, 86, 200, 26, "Keep the proportions") : nullptr;
   if (keep) keep->value(1);
   struct Ctx {
     Fl_Spinner *w, *h;
@@ -582,7 +584,11 @@ void fill_layers() {
   // top layer first
   for (int i = (int)D.layers.size() - 1; i >= 0; i--) {
     const paint::Layer &l = D.layers[(size_t)i];
-    g_layers->add(((l.visible ? "👁 " : "    ") + l.name).c_str());
+    g_layers->add(fld::escape_at(l.name).c_str());
+    // shown or hidden: the theme's eye icons
+    const char *eye = l.visible ? "view-reveal" : "view-conceal";
+    Fl_Image *im = fld::symbolic_icon(eye, 16, l.visible ? fld::palette().fg : fld::palette().fg_dim);
+    if (im) g_layers->icon(g_layers->size(), im);
   }
   g_layers->select((int)D.layers.size() - D.active);
   if (!D.layers.empty()) g_opacity->value(D.layers[(size_t)D.active].opacity * 100);
@@ -753,8 +759,10 @@ int main(int argc, char **argv) {
   tools->box(FL_FLAT_BOX);
   for (int i = 0; i < N_TOOLS; i++) {
     fld::FlatButton *b = new fld::FlatButton(6 + (i % 2) * 42, 36 + (i / 2) * 42, 40, 40);
-    if (fld::icon(kToolIcons[i], 22)) b->icon_name(kToolIcons[i], 22);
-    else b->copy_label(kToolGlyphs[i]);
+    // the theme's symbolic icons, in the text colour (emoji need a font that
+    // is often not installed)
+    if (Fl_Image *im = fld::symbolic_icon(kToolIcons[i], 20, fld::palette().fg)) b->icon_image(im);
+    else b->copy_label(kToolKeys[i]);
     b->tooltip(kToolNames[i]);
     b->type(FL_TOGGLE_BUTTON);
     b->callback([](Fl_Widget *, void *t) { set_tool((Tool)(long)t); }, (void *)(long)i);
@@ -795,7 +803,7 @@ int main(int argc, char **argv) {
   size->value(g_size);
   size->callback([](Fl_Widget *w, void *) { g_size = ((Fl_Value_Slider *)w)->value(); });
   ty += 48;
-  Fl_Check_Button *fillck = new Fl_Check_Button(6, ty, 84, 24, "Filled");
+  Fl_Check_Button *fillck = new fld::CheckButton(6, ty, 84, 24, "Filled");
   fillck->tooltip("Rectangles and ellipses filled, not outlined");
   fillck->callback([](Fl_Widget *w, void *) { g_fill_shapes = ((Fl_Check_Button *)w)->value(); });
   tools->end();
@@ -871,6 +879,7 @@ int main(int argc, char **argv) {
   Fl::add_handler(keys);
   update_color_button();
   set_tool(BRUSH);
+  fld::remember_window_size(g_win, "fl-paint");
   g_win->show();
   if (file.empty() || !load(file)) new_doc(1024, 768, true);
   return Fl::run();

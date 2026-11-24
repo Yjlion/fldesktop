@@ -37,6 +37,19 @@ std::vector<std::string> power_command(const std::string &action, bool have_logi
 bool confirm_power(PowerAction a);
 
 const char *power_label(PowerAction a); // "Lock Screen", "Log Out", ...
+
+// The application launcher. `fl-launcher --daemon` (started with the session)
+// keeps one hidden and shows or hides it on SIGUSR1, so opening it costs one
+// frame instead of a program start. Its pid file says which kind runs:
+// "<pid>" for a launcher started for one use, "<pid> daemon" for the resident one.
+std::string launcher_pidfile();
+// written when the launcher closed because it lost the focus: a click on the
+// panel's button that took the focus should not open it again at once
+std::string launcher_closed_stamp();
+// the pid of the resident launcher, or 0
+int resident_launcher();
+// Opens the launcher, or closes it when it is open.
+void toggle_launcher();
 const char *power_icon(PowerAction a);  // icon theme name
 
 } // namespace fld

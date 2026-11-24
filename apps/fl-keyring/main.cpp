@@ -26,6 +26,7 @@
 
 #include "fld/menus.h"
 #include "fld/mime.h"
+#include "fld/icons.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -191,7 +192,9 @@ public:
       std::string text = it.label + " " + keyring::attributes_text(it.attributes);
       if (!q.empty() && fld::lower(text).find(q) == std::string::npos) continue;
       shown.push_back(&it);
-      list->add(((c->locked ? "🔒 " : "") + (it.label.empty() ? std::string("(no name)") : it.label)).c_str());
+      list->add(fld::escape_at(it.label.empty() ? std::string("(no name)") : it.label).c_str());
+      if (c->locked)
+        if (Fl_Image *lock = fld::symbolic_icon("changes-prevent", 16, fld::palette().fg_dim)) list->icon(list->size(), lock);
     }
     if (c->items.empty()) list->add(c->locked ? "Locked: unlock it to see the passwords." : "No passwords yet.");
     status(std::to_string(c->items.size()) + " passwords in " + (c->label.empty() ? "this keyring" : c->label));
@@ -595,7 +598,7 @@ int main(int argc, char **argv) {
   }
   const int W = 900, H = 580;
   g_win = new Fl_Double_Window(W, H, "Passwords and Keys");
-  g_tabs = new Fl_Tabs(0, 0, W, H - 26);
+  g_tabs = new fld::Tabs(0, 0, W, H - 26);
   g_pw = new PasswordsPage(0, 30, W, H - 56);
   g_ssh = new SshPage(0, 30, W, H - 56);
   g_ssh->hide();

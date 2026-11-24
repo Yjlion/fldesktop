@@ -106,7 +106,7 @@ public:
     accent->value(desk.ini.get("Appearance", "Accent", "#3584e4"));
     accent->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->accent_changed(); }, this);
     f.row("", 24, wx, wy, ww);
-    icons_follow = new Fl_Check_Button(wx, wy, ww, 24, "Folder icons follow the accent color");
+    icons_follow = new fld::CheckButton(wx, wy, ww, 24, "Folder icons follow the accent color");
     icons_follow->tooltip("Switches to the fldesktop icon theme in the accent color");
     f.row("Widget style:", 28, wx, wy, ww);
     style = new Fl_Choice(wx, wy, 200, 28);
@@ -138,9 +138,9 @@ public:
       def->selection_color(fl_darker(palette().bg));
       Fl_Input *in = new Fl_Input(wx + 196, wy, std::max(80, ww - 196), 28);
       in->value("Text field");
-      Fl_Check_Button *cb = new Fl_Check_Button(wx, wy + 34, 90, 26, "Check");
+      Fl_Check_Button *cb = new fld::CheckButton(wx, wy + 34, 90, 26, "Check");
       cb->value(1);
-      Fl_Round_Button *rb = new Fl_Round_Button(wx + 92, wy + 34, 80, 26, "Radio");
+      Fl_Round_Button *rb = new fld::RadioButton(wx + 92, wy + 34, 80, 26, "Radio");
       rb->type(FL_RADIO_BUTTON);
       rb->value(1);
       Fl_Slider *sl = new Fl_Slider(wx + 176, wy + 37, 110, 20);

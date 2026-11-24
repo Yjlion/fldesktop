@@ -139,6 +139,7 @@ void choose_place() {
 }
 
 void popup(Fl_Widget *w, void *) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   int rows = (int)g_w.days.size();
   PanelPopup pop(300, 150 + 26 * rows);
   Fl_Box *ic = new Fl_Box(12, 12, 64, 64);

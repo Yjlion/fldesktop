@@ -3,6 +3,10 @@
 // app_id "fldesktop.launcher": fl-wm places it next to the panel's menu button
 // and closes it when another window gets the focus. Starting it while it is
 // already open closes the running instance (so the panel button toggles).
+//
+// `fl-launcher --daemon` (started with the session) builds the window once and
+// keeps it hidden; SIGUSR1 (fld::toggle_launcher, fl-wm's Super+Space) shows
+// or hides it, so it opens in one frame instead of a program start.
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Double_Window.H>
@@ -12,6 +16,8 @@
 #include <FL/fl_draw.H>
 
 #include <algorithm>
+#include <memory>
+#include <sys/inotify.h>
 #include <csignal>
 #include <cstring>
 #include <ctime>
@@ -22,6 +28,7 @@
 #include <unistd.h>
 #include <vector>
 
+#include "fld/config_watch.h"
 #include "fld/desktop_entry.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -30,6 +37,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "fld/text.h"
 
 static std::vector<fld::DesktopEntry> g_apps;
 static std::vector<int> g_visible;         // indexes into g_apps
@@ -128,11 +136,14 @@ public:
       Fl_Color fg = i == sel ? p.accent_fg : p.fg;
       fl_font(FL_HELVETICA_BOLD, 14);
       fl_color(fg);
-      fl_draw(fld::escape_at(e.name).c_str(), x() + 54, ry + 4, w() - 64, 20, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+      // cut with "…" (the whole text is in the search, Enter starts it)
+      fl_draw(fld::escape_at(fld::ellipsize(e.name, w() - 64)).c_str(), x() + 54, ry + 4, w() - 64, 20,
+              FL_ALIGN_LEFT | FL_ALIGN_CLIP);
       std::string sub = !e.comment.empty() ? e.comment : e.generic_name;
       fl_font(FL_HELVETICA, 12);
       fl_color(i == sel ? fl_color_average(p.accent_fg, p.accent, 0.8f) : p.fg_dim);
-      fl_draw(fld::escape_at(sub).c_str(), x() + 54, ry + 23, w() - 64, 18, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+      fl_draw(fld::escape_at(fld::ellipsize(sub, w() - 64)).c_str(), x() + 54, ry + 23, w() - 64, 18,
+              FL_ALIGN_LEFT | FL_ALIGN_CLIP);
     }
     fl_pop_clip();
   }
@@ -292,7 +303,10 @@ int AppList::handle(int e) {
 class CategoryList : public Fl_Widget {
 public:
   std::vector<std::string> cats;
-  CategoryList(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
+  CategoryList(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) { fill(); }
+  // the categories that have applications
+  void fill() {
+    cats.clear();
     for (auto &c : kCategories) {
       std::string name = c[0];
       bool used = name == "All";
@@ -336,9 +350,9 @@ public:
 
 static CategoryList *g_cats;
 
-class SearchInput : public Fl_Input {
+class SearchInput : public fld::SearchInput {
 public:
-  using Fl_Input::Fl_Input;
+  using fld::SearchInput::SearchInput;
   int handle(int e) override {
     if (e == FL_KEYBOARD) {
       int k = Fl::event_key();
@@ -365,11 +379,13 @@ public:
 
 // ---- single instance toggle ------------------------------------------------------
 
-static std::string pidfile() {
-  return fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-launcher-" + std::to_string(getuid()) + ".pid";
-}
+static std::string pidfile() { return fld::launcher_pidfile(); }
 
+static bool g_daemon = false;
+
+// another fl-launcher is open: close it (a resident one is asked to toggle)
 static bool toggle_existing() {
+  if (int pid = fld::resident_launcher()) return kill(pid, SIGUSR1) == 0;
   std::string s;
   if (!fld::read_file(pidfile(), s)) return false;
   pid_t pid = atoi(s.c_str());
@@ -381,14 +397,15 @@ static bool toggle_existing() {
   return kill(pid, SIGTERM) == 0;
 }
 
-static void on_term(int) { _exit(0); }
+static void on_term(int) {
+  if (g_daemon) unlink(pidfile().c_str());
+  _exit(0);
+}
 
 // The launcher closes when another window gets the keyboard focus. Clicking the
 // panel's Apps button to close it would otherwise immediately start a new one,
 // so the time of such a close is remembered for a moment.
-static std::string closed_stamp() {
-  return fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-launcher-" + std::to_string(getuid()) + ".closed";
-}
+static std::string closed_stamp() { return fld::launcher_closed_stamp(); }
 
 static double now_s() {
   struct timespec ts;
@@ -403,11 +420,12 @@ static bool just_closed() {
   return now_s() - atof(s.c_str()) < 0.6;
 }
 
+static bool g_had_focus = false;
+
 static void focus_check(void *) {
-  static bool had_focus = false;
   if (g_modal) return;
-  if (Fl::focus()) had_focus = true;
-  else if (had_focus && g_win->shown()) {
+  if (Fl::focus()) g_had_focus = true;
+  else if (g_had_focus && g_win->shown()) {
     char buf[64];
     snprintf(buf, sizeof buf, "%.3f", now_s());
     fld::write_file(closed_stamp(), buf);
@@ -416,6 +434,17 @@ static void focus_check(void *) {
 }
 
 // ---- the bottom bar: settings and power ------------------------------------------------------
+
+static std::vector<std::pair<fld::PowerAction, Fl_Widget *>> g_power_buttons;
+
+// asks logind which power actions are possible: after the window is up (the
+// three D-Bus calls would hold up the first frame), or once for the resident one
+static void check_power(void *) {
+  for (auto &pb : g_power_buttons) {
+    if (fld::can_power(pb.first)) pb.second->activate();
+    else pb.second->deactivate();
+  }
+}
 
 static void make_power_bar(int X, int Y, int W, int H) {
   const fld::Palette &p = fld::palette();
@@ -444,7 +473,7 @@ static void make_power_bar(int X, int Y, int W, int H) {
     b->icon_name(fld::power_icon(a), 20);
     b->color(p.bg);
     b->tooltip(fld::power_label(a));
-    if (!fld::can_power(a)) b->deactivate();
+    g_power_buttons.push_back({a, b});
     b->callback([](Fl_Widget *, void *d) {
       PowerAction a = (PowerAction)(long)d;
       g_modal++;
@@ -457,9 +486,71 @@ static void make_power_bar(int X, int Y, int W, int H) {
   }
 }
 
+// "All" starts with recently used applications first
+static void order_by_recent() {
+  std::vector<fld::DesktopEntry> ordered;
+  for (auto &id : g_recent)
+    for (auto &a : g_apps) if (a.id == id) ordered.push_back(a);
+  for (auto &a : g_apps)
+    if (std::find(g_recent.begin(), g_recent.end(), a.id) == g_recent.end()) ordered.push_back(a);
+  g_apps = ordered;
+}
+
+// ---- the resident launcher ----------------------------------------------------------
+
+static int g_wake[2] = {-1, -1};
+static bool g_apps_changed = false;
+static bool g_restart = false; // the appearance changed: start afresh when hidden
+static double g_hidden_at = 0;
+static int g_argc;
+static char **g_argv;
+
+static void on_usr1(int) {
+  char c = 1;
+  if (write(g_wake[1], &c, 1) < 0) {}
+}
+
+static void present() {
+  if (g_apps_changed) {
+    g_apps_changed = false;
+    g_apps = fld::all_applications();
+    g_cats->fill();
+  }
+  load_recent();
+  order_by_recent();
+  g_search->value("");
+  g_category = "All";
+  g_cats->redraw();
+  refilter();
+  g_had_focus = false;
+  g_win->show();
+  g_search->take_focus();
+}
+
+static void wake_cb(int fd, void *) {
+  char buf[64];
+  while (read(fd, buf, sizeof buf) > 0) {}
+  if (g_win->shown()) {
+    quit_launcher();
+    return;
+  }
+  // closed a moment ago by the click (on the panel's button) that asks again
+  if (now_s() - g_hidden_at < 0.6 && just_closed()) return;
+  unlink(closed_stamp().c_str());
+  present();
+}
+
 int main(int argc, char **argv) {
-  if (toggle_existing() || just_closed()) return 0;
-  fld::write_file(pidfile(), std::to_string(getpid()));
+  g_argc = argc;
+  g_argv = argv;
+  for (int i = 1; i < argc; i++)
+    if (!strcmp(argv[i], "--daemon")) g_daemon = true;
+  if (g_daemon) {
+    if (fld::resident_launcher()) return 0; // one is enough
+  } else if (just_closed() || toggle_existing()) {
+    return 0;
+  }
+  fld::write_file(pidfile(), std::to_string(getpid()) + (g_daemon ? " daemon" : ""));
   signal(SIGTERM, on_term);
 
   fld::init_app("fldesktop.launcher", argc, argv);
@@ -479,9 +570,8 @@ int main(int argc, char **argv) {
   Fl_Box *bg = new Fl_Box(1, 1, W - 2, 52);
   bg->box(FL_FLAT_BOX);
   bg->color(fld::palette().bg);
-  g_search = new SearchInput(12, 12, W - 24, 32);
+  g_search = new SearchInput(12, 12, W - 24, 32, "Search applications");
   g_search->textsize(15);
-  g_search->box(FL_ROUNDED_BOX);
   g_search->color(fld::palette().bg2);
   g_search->when(FL_WHEN_CHANGED);
   g_search->tooltip("Type to search, Enter to start, Esc to close");
@@ -498,21 +588,49 @@ int main(int argc, char **argv) {
   g_list->sb = sb;
   make_power_bar(1, H - BAR - 1, W - 2, BAR);
   g_win->end();
-
-  // "All" starts with recently used applications first
-  std::vector<fld::DesktopEntry> ordered;
-  for (auto &id : g_recent)
-    for (auto &a : g_apps) if (a.id == id) ordered.push_back(a);
-  for (auto &a : g_apps)
-    if (std::find(g_recent.begin(), g_recent.end(), a.id) == g_recent.end()) ordered.push_back(a);
-  g_apps = ordered;
-
+  order_by_recent();
   refilter();
-  g_win->show(); // not show(argc, argv): it resets the theme colors
-  g_search->take_focus();
   Fl::add_check(focus_check);
-  int r = Fl::run();
-  fld::wait_power(); // a refused restart still shows why
-  unlink(pidfile().c_str());
-  return r;
+
+  if (!g_daemon) {
+    g_win->show(); // not show(argc, argv): it resets the theme colors
+    g_search->take_focus();
+    Fl::add_timeout(0.05, check_power);
+    int r = Fl::run();
+    fld::wait_power(); // a refused restart still shows why
+    unlink(pidfile().c_str());
+    return r;
+  }
+
+  // resident: wait for SIGUSR1 with the window hidden
+  check_power(nullptr);
+  if (pipe2(g_wake, O_CLOEXEC | O_NONBLOCK) != 0) return 1;
+  Fl::add_fd(g_wake[0], FL_READ, wake_cb);
+  signal(SIGUSR1, on_usr1);
+  // applications installed or removed: read them again before the next show
+  int apps_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+  if (apps_fd >= 0) {
+    for (const std::string &d : fld::data_dirs())
+      inotify_add_watch(apps_fd, (d + "/applications").c_str(),
+                        IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_MOVED_FROM | IN_CLOSE_WRITE);
+    Fl::add_fd(apps_fd, FL_READ, [](int fd, void *) {
+      char buf[4096];
+      while (read(fd, buf, sizeof buf) > 0) {}
+      g_apps_changed = true;
+    });
+  }
+  // colours, fonts or the icon theme changed
+  fld::ConfigWatcher appearance(fld::desktop_config_path(), [] { g_restart = true; });
+  for (;;) {
+    bool was_shown = g_win->shown();
+    Fl::wait(1e20);
+    if (was_shown && !g_win->shown()) {
+      g_hidden_at = now_s();
+      fld::wait_power();
+    }
+    if (g_restart && !g_win->shown()) {
+      unlink(pidfile().c_str());
+      fld::restart_self(g_argc, g_argv);
+    }
+  }
 }

@@ -6,6 +6,7 @@
 #include <algorithm>
 
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "settings_common.h"
 #include "settings_page.h"
 
@@ -38,7 +39,7 @@ public:
     if (freq->value() < 0) freq->value(1);
     freq->callback([](Fl_Widget *, void *d) { ((UpdatesPage *)d)->save(); }, this);
     f.row("", 26, wx, wy, ww);
-    notify = new Fl_Check_Button(wx, wy, ww, 26, "Notify when updates are available");
+    notify = new fld::CheckButton(wx, wy, ww, 26, "Notify when updates are available");
     notify->value(cfg.ini.get_bool("Updates", "Notify", true));
     notify->callback([](Fl_Widget *, void *d) { ((UpdatesPage *)d)->save(); }, this);
     f.note("Updates are never installed without asking. Security updates are marked in the notification.");

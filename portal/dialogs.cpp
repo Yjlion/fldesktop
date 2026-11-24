@@ -80,7 +80,7 @@ public:
     }
     for (auto &c : choices) {
       if (c.options.empty()) {
-        auto *cb = new Fl_Check_Button(76, y, 368, 26);
+        auto *cb = new fld::CheckButton(76, y, 368, 26);
         cb->copy_label(c.label.c_str());
         cb->value(c.selected == "true");
         widgets.push_back(cb);

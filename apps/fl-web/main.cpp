@@ -46,6 +46,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "fld/window_size.h"
 #include "glib_loop.h"
 #include "gl_readback.h"
 #include "webview.h"
@@ -389,6 +390,7 @@ public:
     win->resizable(content);
     win->end();
     win->size_range(400, 300);
+    if (!priv) fld::remember_window_size(win, "fl-web");
     fld::set_window_icon(win, "fl-web");
     g_windows.push_back(this);
     place_chrome();

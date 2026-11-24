@@ -56,7 +56,18 @@ public:
     }
     return Fl_Double_Window::handle(e);
   }
-  void popup_at(Fl_Widget *, bool) {
+  // Shows the popup for button `btn` and returns when it closes. fl-wm puts
+  // it at the button: its x range in the panel window goes in the title.
+  // One popup is open at a time: opening another closes this one.
+  void popup_at(Fl_Widget *btn, bool) {
+    if (open_popup() && open_popup() != this) open_popup()->hide();
+    if (btn) {
+      int x = btn->x();
+      for (Fl_Window *w = btn->window(); w && w->window(); w = w->window()) x += w->x();
+      copy_label(("fldesktop.panel-popup@" + std::to_string(x) + "-" + std::to_string(x + btn->w())).c_str());
+    }
+    open_popup() = this;
+    open_for() = btn;
     show();
     // FLTK ignores xdg_toplevel.close for borderless windows, so the popup
     // closes itself once the program has lost the keyboard focus (fl-wm moves
@@ -67,8 +78,35 @@ public:
       if (Fl::focus()) had_focus = true;
       else if (had_focus) hide();
     }
+    if (open_popup() == this) {
+      open_popup() = nullptr;
+      open_for() = nullptr;
+    }
+  }
+  ~PanelPopup() override {
+    if (open_popup() == this) {
+      open_popup() = nullptr;
+      open_for() = nullptr;
+    }
+  }
+  static PanelPopup *&open_popup() {
+    static PanelPopup *p = nullptr;
+    return p;
+  }
+  static Fl_Widget *&open_for() {
+    static Fl_Widget *w = nullptr;
+    return w;
   }
 };
+
+// The popup of `btn` is open: closes it (a second click on a panel button
+// closes its popup) and returns true; the button's callback then returns.
+inline bool panel_popup_toggle(Fl_Widget *btn) {
+  PanelPopup *p = PanelPopup::open_popup();
+  if (!p || PanelPopup::open_for() != btn) return false;
+  p->hide();
+  return true;
+}
 
 // Indicators in their own files. Each create function makes the (hidden)
 // button inside the panel window that is being built and starts watching its
@@ -113,6 +151,9 @@ fld::FlatButton *sysmon_create(bool on);
 // null when turned off. privacy_audio: the programs recording sound now.
 fld::FlatButton *privacy_create(bool on);
 void privacy_audio(const std::vector<std::string> &recording);
+// privacy_video: the programs capturing video through PipeWire, and whether a
+// camera source runs at all (from the volume code's PipeWire connection)
+void privacy_video(const std::vector<std::string> &users, bool running);
 // panel_notify.cpp: do not disturb for a while ("Do Not Disturb" menus)
 void dnd_menu_items(fld::Menu &m);
 // panel_network.cpp: the network button's popup and right-click menu

@@ -22,6 +22,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "fld/window_size.h"
 #include "settings_page.h"
 #include "settings_search.h"
 
@@ -63,7 +64,7 @@ static void rebuild_list() {
     e.header = true;
     e.label = t;
     g_entries.push_back(e);
-    g_list->add(("@b@C8" + fld::escape_at(t)).c_str());
+    g_list->add(("@s@b@C8" + fld::escape_at(t)).c_str());
   };
   for (const char *cat : kCategories) {
     bool any = false;
@@ -76,7 +77,7 @@ static void rebuild_list() {
       e.label = p.title;
       g_entries.push_back(e);
       g_list->add(("  " + fld::escape_at(p.title)).c_str());
-      g_list->icon(g_list->size(), fld::icon_first({p.icon, "preferences-system"}, 20));
+      g_list->icon(g_list->size(), fld::icon_first({p.icon, "preferences-system"}, 16));
     }
   }
   // single settings on all pages: "Tap to click — Mouse & Touchpad"
@@ -95,7 +96,7 @@ static void rebuild_list() {
       e.label = h.label;
       g_entries.push_back(e);
       g_list->add(("  " + fld::escape_at(h.label) + "  — " + fld::escape_at(pi->title)).c_str());
-      g_list->icon(g_list->size(), fld::icon_first({pi->icon, "preferences-system"}, 20));
+      g_list->icon(g_list->size(), fld::icon_first({pi->icon, "preferences-system"}, 16));
     }
   }
   bool any = false;
@@ -107,7 +108,7 @@ static void rebuild_list() {
     e.label = d.name;
     g_entries.push_back(e);
     g_list->add(("  " + fld::escape_at(d.name)).c_str());
-    g_list->icon(g_list->size(), fld::icon_first({d.icon, "preferences-system"}, 20));
+    g_list->icon(g_list->size(), fld::icon_first({d.icon, "preferences-system"}, 16));
   }
   for (size_t i = 0; i < g_entries.size(); i++)
     if (g_entries[i].page_id == g_current) g_list->value((int)i + 1);
@@ -366,7 +367,7 @@ int main(int argc, char **argv) {
   Fl_Group *side = new Fl_Group(0, 0, SIDE, H);
   side->box(FL_FLAT_BOX);
   side->color(p.bg);
-  g_search = new Fl_Input(10, 10, SIDE - 20, 30);
+  g_search = new fld::SearchInput(10, 10, SIDE - 20, 30, "Search settings");
   g_search->tooltip("Search settings");
   g_search->when(FL_WHEN_CHANGED);
   g_search->callback([](Fl_Widget *, void *) {
@@ -395,7 +396,8 @@ int main(int argc, char **argv) {
   g_list = new Fl_Hold_Browser(0, 50, SIDE, H - 50);
   g_list->box(FL_FLAT_BOX);
   g_list->color(p.bg);
-  g_list->textsize(14);
+  // 13 px text and 16 px icons: all the pages fit on a 768 px screen
+  g_list->textsize(13);
   g_list->selection_color(p.accent);
   g_list->callback(list_cb);
   side->resizable(g_list);
@@ -413,6 +415,7 @@ int main(int argc, char **argv) {
   if (start.empty() || [&] { for (auto &pg : fld::all_pages()) if (pg.id == start) return false; return true; }())
     start = fld::all_pages().empty() ? "" : fld::all_pages()[0].id;
   if (!start.empty()) show_page(start);
+  fld::remember_window_size(g_win, "fl-settings");
   g_win->show(); // not show(argc, argv): it resets the theme colors
   return Fl::run();
 }

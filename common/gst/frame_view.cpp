@@ -297,7 +297,7 @@ public:
 private:
   std::vector<uint8_t> scratch_;
   void draw_placeholder() {
-    Fl_Image *ic = fld::icon("audio-x-generic", 96);
+    Fl_Image *ic = fld::icon(osd_.placeholder_icon.empty() ? "audio-x-generic" : osd_.placeholder_icon, 96);
     int cy = y() + h() / 2 - 40;
     if (ic) ic->draw(x() + (w() - ic->w()) / 2, cy - ic->h() / 2);
     fl_font(FL_HELVETICA, 16);

@@ -41,7 +41,7 @@ FirewallView::FirewallView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     if (v->filling_ || i < 0 || i >= (int)v->zone_names_.size()) return;
     Client::get().set_default_zone(v->zone_names_[i], done_cb);
   }, this);
-  panic_ = new Fl_Check_Button(X + 370, Y + 34, 330, 28, "Panic mode: block all network traffic");
+  panic_ = new fld::CheckButton(X + 370, Y + 34, 330, 28, "Panic mode: block all network traffic");
   panic_->callback([](Fl_Widget *w, void *d) {
     FirewallView *v = (FirewallView *)d;
     bool on = ((Fl_Check_Button *)w)->value();
@@ -53,7 +53,7 @@ FirewallView::FirewallView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     (void)v;
     Client::get().set_panic(on, done_cb);
   }, this);
-  permanent_ = new Fl_Check_Button(X, Y + 66, 420, 26, "Save changes permanently (also after a restart)");
+  permanent_ = new fld::CheckButton(X, Y + 66, 420, 26, "Save changes permanently (also after a restart)");
   permanent_->value(1);
   zones_ = new Fl_Hold_Browser(X, Y + 100, 170, H - 100);
   zones_->textsize(14);
@@ -71,7 +71,7 @@ FirewallView::FirewallView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   zone_info_->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_WRAP);
   zone_info_->labelsize(12);
   zone_info_->labelcolor(fld::palette().fg_dim);
-  tabs_ = new Fl_Tabs(dx, Y + 158, dw, H - 158);
+  tabs_ = new fld::Tabs(dx, Y + 158, dw, H - 158);
   int ty = Y + 188, th = H - 188;
   // services
   Fl_Group *g1 = new Fl_Group(dx, ty, dw, th, "Services");
@@ -164,7 +164,7 @@ FirewallView::FirewallView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   g3->end();
   // masquerading and port forwarding
   Fl_Group *g4 = new Fl_Group(dx, ty, dw, th, "Forwarding");
-  masq_ = new Fl_Check_Button(dx + 6, ty + 6, dw - 12, 26, "Masquerading (share this computer's connection, NAT)");
+  masq_ = new fld::CheckButton(dx + 6, ty + 6, dw - 12, 26, "Masquerading (share this computer's connection, NAT)");
   masq_->callback([](Fl_Widget *w, void *d) {
     FirewallView *v = (FirewallView *)d;
     if (v->filling_ || !v->zone()) return;

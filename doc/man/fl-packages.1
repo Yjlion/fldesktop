@@ -44,7 +44,9 @@ them.
 once with \fB\-\-now\fR), and then every six hours, it refreshes the package
 lists when they are older than the configured interval and sends a
 notification when updates are available; the notification opens the
-Updates tab. The same updates are announced only once.
+Updates tab. The same updates are announced only once. Between checks it
+only sleeps: each check runs as \fBfl-packages \-\-check\-updates
+\-\-once\fR, which does one check and ends.
 .SH FILES
 .TP
 \fI~/.config/fldesktop/updates.ini\fR

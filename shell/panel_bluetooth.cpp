@@ -13,6 +13,7 @@
 #include "fld/icons.h"
 #include "fld/notify.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "panel.h"
 
 namespace {
@@ -65,6 +66,7 @@ void update() {
 }
 
 void bt_cb(Fl_Widget *w, void *) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   const bt::State &st = bt::Client::get().state();
   const bt::Adapter *a = st.adapter();
   if (!a) return;
@@ -75,7 +77,7 @@ void bt_cb(Fl_Widget *w, void *) {
   int rows = a->powered ? std::max<int>(1, paired.size()) : 0;
   int H = 44 + rows * 44 + 46;
   PanelPopup pop(W, std::min(H, 440));
-  Fl_Check_Button *power = new Fl_Check_Button(10, 8, 200, 28, "Bluetooth");
+  Fl_Check_Button *power = new fld::CheckButton(10, 8, 200, 28, "Bluetooth");
   power->labelfont(FL_HELVETICA_BOLD);
   power->value(a->powered);
   power->callback([](Fl_Widget *b, void *) {

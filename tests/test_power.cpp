@@ -34,9 +34,9 @@ int main() {
   s.display.percentage = 84.6;
   s.display.state = DISCHARGING;
   s.display.time_to_empty = 3600;
-  CHECK_EQ(summary(s), std::string("85 %, 1 h 00 min left"));
+  CHECK_EQ(summary(s), std::string("85%, 1 h 00 min left"));
   s.display.state = FULL;
-  CHECK_EQ(summary(s), std::string("85 %, fully charged"));
+  CHECK_EQ(summary(s), std::string("85%, fully charged"));
   CHECK_EQ(profile_label("power-saver"), std::string("Power Saver"));
   CHECK_EQ(profile_label("custom"), std::string("custom"));
   CHECK_EQ(battery_level(50, true), LEVEL_OK);

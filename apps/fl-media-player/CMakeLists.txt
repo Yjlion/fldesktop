@@ -15,6 +15,9 @@ if(TARGET fld-glib AND MEDIA_GIO_UNIX_FOUND)
   target_compile_definitions(fl-media-player PRIVATE FLD_HAVE_MPRIS=1)
 endif()
 install(TARGETS fl-media-player RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# builds GStreamer's plugin registry after login, before the first use
+install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-media-player-warmup.desktop
+        DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
 # the old name still works
 add_custom_command(TARGET fl-media-player POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E create_symlink fl-media-player $<TARGET_FILE_DIR:fl-media-player>/fl-video)

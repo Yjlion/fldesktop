@@ -9,6 +9,9 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <unistd.h>
+#include <signal.h>
+#include <mutex>
 #include <thread>
 
 #ifdef FLD_HAVE_GIO
@@ -85,7 +88,20 @@ bool logind_missing(const GError *e) {
 int logind_call(const char *method, GVariant *args, const GVariantType *reply_type, int timeout_ms,
                 GVariant **reply, std::string &err) {
   GError *e = nullptr;
-  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, &e);
+  // one connection for the program: each new one costs a handshake with the
+  // bus (three of them made the launcher wait before it showed)
+  static std::mutex bus_lock;
+  static GDBusConnection *cached = nullptr;
+  GDBusConnection *bus;
+  {
+    std::lock_guard<std::mutex> l(bus_lock);
+    if (cached && g_dbus_connection_is_closed(cached)) {
+      g_object_unref(cached);
+      cached = nullptr;
+    }
+    if (!cached) cached = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, &e);
+    bus = cached ? (GDBusConnection *)g_object_ref(cached) : nullptr;
+  }
   if (!bus) {
     if (args) g_variant_unref(g_variant_ref_sink(args));
     if (e) g_error_free(e);
@@ -178,6 +194,31 @@ bool can_power(PowerAction a) {
 }
 
 void suspend() { run_power("suspend"); }
+
+std::string launcher_pidfile() {
+  return getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-launcher-" + std::to_string(getuid()) + ".pid";
+}
+
+std::string launcher_closed_stamp() {
+  return getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-launcher-" + std::to_string(getuid()) + ".closed";
+}
+
+int resident_launcher() {
+  std::string s;
+  if (!read_file(launcher_pidfile(), s) || s.find("daemon") == std::string::npos) return 0;
+  int pid = atoi(s.c_str());
+  if (pid <= 1) return 0;
+  // make sure it really is a launcher (the pid may have been reused)
+  std::string comm;
+  read_file("/proc/" + std::to_string(pid) + "/comm", comm);
+  return trim(comm) == "fl-launcher" ? pid : 0;
+}
+
+void toggle_launcher() {
+  int pid = resident_launcher();
+  if (pid && kill(pid, SIGUSR1) == 0) return;
+  spawn({"fl-launcher"});
+}
 void reboot() { run_power("reboot"); }
 void power_off() { run_power("poweroff"); }
 

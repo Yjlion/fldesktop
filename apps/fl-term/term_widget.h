@@ -10,6 +10,8 @@
 
 extern "C" {
 #include <vterm.h>
+
+#include "scrollback.h"
 }
 
 class Fl_Scrollbar;
@@ -30,7 +32,7 @@ public:
   void set_font_size(int size);
   int font_size() const { return font_size_; }
   void set_colors(const TermColors &c);
-  void set_scrollback_limit(size_t n) { sb_limit_ = n; }
+  void set_scrollback_limit(size_t n) { sb_.set_limit(n); }
   // Opacity of the default background (0.2 .. 1). Below 1 the window shows
   // what is behind it; text and coloured cells stay opaque. Needs a Wayland
   // compositor (FLTK draws with cairo into ARGB buffers there).
@@ -90,8 +92,7 @@ private:
   std::string title_;
 
   // scrollback: oldest first
-  std::deque<std::vector<VTermScreenCell>> sb_;
-  size_t sb_limit_ = 10000;
+  term::Scrollback sb_;
   int scroll_ = 0; // lines scrolled back
   Fl_Scrollbar *scrollbar_ = nullptr;
 

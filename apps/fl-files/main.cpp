@@ -63,6 +63,7 @@
 #include "fld/trash.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "fld/text.h"
 
 static const char *TRASH_URI = "trash:///";
 // the network neighbourhood (GVfs): servers and shares to connect to
@@ -913,32 +914,9 @@ public:
     Fl::remove_idle(thumb_idle, d);
   }
 
+  // icon labels: broken at '-', '_', '.' and spaces first, "…" at the end
   std::vector<std::string> wrap_name(const std::string &s, int width, int max_lines) {
-    std::vector<std::string> lines;
-    std::string cur;
-    size_t i = 0;
-    while (i < s.size()) {
-      int len = std::max(1, fl_utf8len1(s[i]));
-      std::string ch = s.substr(i, len);
-      if (fl_width((cur + ch).c_str()) > width && !cur.empty()) {
-        lines.push_back(cur);
-        cur.clear();
-        if ((int)lines.size() == max_lines) break;
-      }
-      cur += ch;
-      i += len;
-    }
-    if ((int)lines.size() < max_lines) {
-      if (!cur.empty()) lines.push_back(cur);
-    } else if (i < s.size()) {
-      std::string &l = lines.back();
-      while (!l.empty() && fl_width((l + "…").c_str()) > width) {
-        l.pop_back();
-        while (!l.empty() && (l.back() & 0xC0) == 0x80) l.pop_back();
-      }
-      l += "…";
-    }
-    return lines;
+    return fld::wrap_label(s, width, max_lines);
   }
 
   // header column under x: returns the column (-1 = name) and whether x is on its right border
@@ -1061,7 +1039,8 @@ public:
         fl_color(cut || ghosted ? (s ? fl_color_average(fg, sel_bg, 0.6f) : p.fg_dim) : fg);
         int cx = ix + 8;
         int nw = name_col_w();
-        fl_draw(fld::escape_at(e.name).c_str(), cx + SM + 8, iy, nw - SM - 16, ih, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+        fl_draw(fld::escape_at(fld::ellipsize(e.name, nw - SM - 16)).c_str(), cx + SM + 8, iy, nw - SM - 16, ih,
+                FL_ALIGN_LEFT | FL_ALIGN_CLIP);
         cx += nw;
         fl_color(s ? p.accent_fg : p.fg_dim);
         for (int c : cols) {
@@ -1082,7 +1061,8 @@ public:
         if (Fl_Image *ic = open_icon ? open_icon : icon_for(e, false)) draw_icon(ic, ix + 4, iy + (ih - SM) / 2);
         fl_font(FL_HELVETICA, 13);
         fl_color(s ? (ghosted ? fl_color_average(p.accent_fg, sel_bg, 0.6f) : p.accent_fg) : cut || ghosted ? p.fg_dim : p.fg);
-        fl_draw(fld::escape_at(e.name).c_str(), ix + SM + 10, iy, iw - SM - 20, ih, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+        fl_draw(fld::escape_at(fld::ellipsize(e.name, iw - SM - 20)).c_str(), ix + SM + 10, iy, iw - SM - 20, ih,
+                FL_ALIGN_LEFT | FL_ALIGN_CLIP);
       } else {
         // icons: the cell gets a light tint and an accent border, the name
         // a solid selection pill
@@ -1396,14 +1376,14 @@ static void properties(const std::vector<std::string> &paths_in) {
       l->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
       l->labelcolor(fld::palette().fg_dim);
       for (int c = 0; c < 3; c++) {
-        perm[r * 3 + c] = new Fl_Check_Button(134 + c * 95, y, 90, 22, what[c]);
+        perm[r * 3 + c] = new fld::CheckButton(134 + c * 95, y, 90, 22, what[c]);
         perm[r * 3 + c]->value((st.st_mode >> (8 - (r * 3 + c))) & 1);
         if (!mine) perm[r * 3 + c]->deactivate();
       }
       y += 26;
     }
     if (mine && S_ISDIR(st.st_mode)) {
-      recurse = new Fl_Check_Button(134, y, 290, 22, "Apply to everything inside");
+      recurse = new fld::CheckButton(134, y, 290, 22, "Apply to everything inside");
       recurse->tooltip("Read and write go to all files and folders inside; execute to the folders only");
       y += 26;
     }
@@ -1514,8 +1494,8 @@ static void batch_rename(const std::vector<std::string> &paths) {
   Fl_Box *rl = new Fl_Box(114 + (W - 126) / 2, 44, 70, 26, "Replace:");
   rl->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
   d.repl = new Fl_Input(rl->x() + 74, 44, W - 12 - (rl->x() + 74), 26);
-  d.regex = new Fl_Check_Button(114, 74, 170, 24, "Regular expression");
-  d.icase = new Fl_Check_Button(290, 74, 120, 24, "Ignore case");
+  d.regex = new fld::CheckButton(114, 74, 170, 24, "Regular expression");
+  d.icase = new fld::CheckButton(290, 74, 120, 24, "Ignore case");
   label(104, "Case:");
   d.lcase = new Fl_Choice(114, 104, 160, 26);
   d.lcase->add("Keep|lower case|UPPER CASE|Title Case");
@@ -1607,7 +1587,7 @@ static void open_with_dialog(const std::vector<std::string> &files) {
     b->add(fld::escape_at(a.name).c_str());
     b->icon(b->size(), fld::icon_first({a.icon, "application-x-executable"}, 20));
   }
-  Fl_Check_Button *def = new Fl_Check_Button(12, 342, 356, 24, "Always use for this file type");
+  Fl_Check_Button *def = new fld::CheckButton(12, 342, 356, 24, "Always use for this file type");
   Fl_Button *cancel = new Fl_Button(160, 378, 100, 30, "Cancel");
   Fl_Return_Button *ok = new Fl_Return_Button(268, 378, 100, 30, "Open");
   static int result;
@@ -3179,7 +3159,7 @@ static void build_search_bar(int W, int Y) {
     g_s_size->add(t);
   g_s_size->value(0);
   x += 110;
-  g_s_hidden = new Fl_Check_Button(x, y, 76, 28, "Hidden");
+  g_s_hidden = new fld::CheckButton(x, y, 76, 28, "Hidden");
   g_s_hidden->tooltip("Also search hidden files and folders");
   x += 78;
   Fl_Menu_Button *opts = new Fl_Menu_Button(x, y, 34, 28, "⋯");
@@ -3281,7 +3261,7 @@ static void show_preferences() {
     y += 26;
   };
   auto check = [&](const char *t, bool v) {
-    Fl_Check_Button *c = new Fl_Check_Button(28, y, 416, 24, t);
+    Fl_Check_Button *c = new fld::CheckButton(28, y, 416, 24, t);
     c->value(v);
     y += 26;
     return c;
@@ -4117,7 +4097,7 @@ int main(int argc, char **argv) {
   });
   g_path->tooltip("Location (Ctrl+L)");
   bar->add(g_path);
-  g_filter = new Fl_Input(W - 270, 7, 112, 28);
+  g_filter = new fld::SearchInput(W - 270, 7, 112, 28, "Filter");
   g_filter->when(FL_WHEN_CHANGED);
   g_filter->callback([](Fl_Widget *, void *) { g_view->apply_filter_sort(); update_status(); });
   g_filter->tooltip("Filter by name (Ctrl+F)");

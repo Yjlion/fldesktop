@@ -130,6 +130,7 @@ public:
 };
 
 void clipboard_cb(Fl_Widget *w, void *) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   g_entries = cliphist::Store().list();
   const int W = 380;
   int list_h = 0;

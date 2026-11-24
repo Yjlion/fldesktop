@@ -71,7 +71,17 @@ std::vector<DiskDev> parse_diskstats(const std::string &text);
 class Sampler {
 public:
   explicit Sampler(const std::string &proc_root = "/proc");
-  void sample();
+  ~Sampler();
+  Sampler(const Sampler &) = delete;
+  Sampler &operator=(const Sampler &) = delete;
+  // Reads the system figures, and the processes unless `processes` is false
+  // (the list is not shown). A process's stat file stays open between
+  // samples; its command line, program and user are read once.
+  void sample(bool processes = true);
+  // whether to read each process's io file (the disk columns)
+  void set_read_io(bool on) { read_io_ = on; }
+  // files opened by the last sample (for tests)
+  int opened_last() const { return opened_; }
   const std::vector<Process> &processes() const { return procs_; }
   const System &system() const { return sys_; }
   // Rates since the previous sample (0 on the first one)
@@ -99,6 +109,22 @@ private:
   double cpu_pct_ = 0, rx_rate_ = 0, tx_rate_ = 0, rd_rate_ = 0, wr_rate_ = 0;
   std::vector<double> core_pct_;
   std::map<uid_t, std::string> users_;
+  // what stays the same for a process, and its open stat file
+  struct Known {
+    int stat_fd = -1;
+    uint64_t start_ticks = 0;
+    uid_t uid = 0;
+    std::string name, user, cmdline, exe;
+    bool kernel_thread = false;
+    bool seen = false;
+  };
+  std::map<pid_t, Known> known_;
+  bool read_io_ = true;
+  uint64_t proc_total_ = 0; // all CPUs' ticks at the last sample of the processes
+  bool have_proc_total_ = false;
+  int opened_ = 0;
+  bool fresh_ = false; // read_process read a process not known before
+  bool read_process(const std::string &dir, pid_t pid, Process &p, std::string &text);
   const std::string &user_name(uid_t uid);
 };
 
@@ -106,6 +132,10 @@ private:
 int send_signal(pid_t pid, int sig);
 int set_nice(pid_t pid, int nice);
 std::string human_bytes(double b);
+// how long the system has been up: "12 min", "1 h 22 min", "3 d 4 h"
+std::string uptime_text(double seconds);
+// a process's disk reads and writes so far (its io file); false if unreadable
+bool read_process_io(pid_t pid, uint64_t &read_bytes, uint64_t &write_bytes, const std::string &proc_root = "/proc");
 std::string state_name(char s);
 
 } // namespace procinfo

@@ -58,7 +58,7 @@ public:
 
     f.heading("Connection");
     f.row("", 26, wx, wy, ww);
-    m_inherit = new Fl_Round_Button(wx, wy, ww, 26, "Use the proxy settings the session started with");
+    m_inherit = new fld::RadioButton(wx, wy, ww, 26, "Use the proxy settings the session started with");
     m_inherit->type(FL_RADIO_BUTTON);
     std::string desc;
     for (auto &kv : inherited) desc += kv.first + "=" + kv.second + "\n";
@@ -74,10 +74,10 @@ public:
     inherited_box->labelfont(FL_COURIER);
     inherited_box->labelcolor(palette().fg_dim);
     f.row("", 26, wx, wy, ww);
-    m_none = new Fl_Round_Button(wx, wy, ww, 26, "No proxy");
+    m_none = new fld::RadioButton(wx, wy, ww, 26, "No proxy");
     m_none->type(FL_RADIO_BUTTON);
     f.row("", 26, wx, wy, ww);
-    m_manual = new Fl_Round_Button(wx, wy, ww, 26, "Manual proxy configuration");
+    m_manual = new fld::RadioButton(wx, wy, ww, 26, "Manual proxy configuration");
     m_manual->type(FL_RADIO_BUTTON);
     for (auto *b : {m_inherit, m_none, m_manual})
       b->callback([](Fl_Widget *, void *d) { ((ProxyPage *)d)->mode_changed(); }, this);
@@ -97,7 +97,7 @@ public:
     http = field("HTTP proxy:", p.http);
     http->tooltip("host:port, e.g. proxy.example.com:3128");
     f.row("", 26, wx, wy, ww);
-    all = new Fl_Check_Button(wx, wy, ww, 26, "Use this proxy for HTTPS and FTP too");
+    all = new fld::CheckButton(wx, wy, ww, 26, "Use this proxy for HTTPS and FTP too");
     all->value(p.use_http_for_all);
     all->callback([](Fl_Widget *, void *d) {
       ProxyPage *pg = (ProxyPage *)d;

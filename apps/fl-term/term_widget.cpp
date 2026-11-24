@@ -367,19 +367,11 @@ int TermWidget::bell_cb(void *user) {
 
 int TermWidget::sb_pushline_cb(int cols, const VTermScreenCell *cells, void *user) {
   TermWidget *t = static_cast<TermWidget *>(user);
-  std::vector<VTermScreenCell> line(cells, cells + cols);
-  // trim trailing blank cells to save memory
-  while (!line.empty() && line.back().chars[0] == 0 && VTERM_COLOR_IS_DEFAULT_BG(&line.back().bg))
-    line.pop_back();
-  for (auto &c : line) {
-    if (VTERM_COLOR_IS_INDEXED(&c.fg)) vterm_screen_convert_color_to_rgb(t->screen_, &c.fg);
-    if (VTERM_COLOR_IS_INDEXED(&c.bg)) vterm_screen_convert_color_to_rgb(t->screen_, &c.bg);
-  }
-  t->sb_.push_back(std::move(line));
+  bool dropped = t->sb_.push(cells, cols);
   if (t->scroll_ > 0) t->scroll_++; // keep the viewed text in place
-  if (t->sb_.size() > t->sb_limit_) {
-    t->sb_.pop_front();
-    if (t->has_sel_) { t->sel_a_line_--; t->sel_b_line_--; }
+  if (dropped && t->has_sel_) {
+    t->sel_a_line_--;
+    t->sel_b_line_--;
   }
   if (t->scroll_ > (int)t->sb_.size()) t->scroll_ = (int)t->sb_.size();
   return 1;
@@ -387,17 +379,9 @@ int TermWidget::sb_pushline_cb(int cols, const VTermScreenCell *cells, void *use
 
 int TermWidget::sb_popline_cb(int cols, VTermScreenCell *cells, void *user) {
   TermWidget *t = static_cast<TermWidget *>(user);
-  if (t->sb_.empty()) return 0;
-  auto &line = t->sb_.back();
-  for (int i = 0; i < cols; i++) {
-    if (i < (int)line.size()) cells[i] = line[i];
-    else {
-      memset(&cells[i], 0, sizeof cells[i]);
-      cells[i].width = 1;
-      vterm_state_get_default_colors(t->state_, &cells[i].fg, &cells[i].bg);
-    }
-  }
-  t->sb_.pop_back();
+  VTermColor fg, bg;
+  vterm_state_get_default_colors(t->state_, &fg, &bg);
+  if (!t->sb_.pop(cells, cols, fg, bg)) return 0;
   if (t->scroll_ > (int)t->sb_.size()) t->scroll_ = (int)t->sb_.size();
   return 1;
 }
@@ -463,11 +447,7 @@ long TermWidget::abs_line_of_row(int r) const { return (long)sb_.size() - scroll
 bool TermWidget::get_cell(long line, int col, VTermScreenCell &cell) const {
   long nsb = (long)sb_.size();
   if (line < nsb) {
-    const auto &l = sb_[line];
-    if (col < (int)l.size()) {
-      cell = l[col];
-      return true;
-    }
+    if (sb_.get((size_t)line, col, cell)) return true;
     memset(&cell, 0, sizeof cell);
     cell.width = 1;
     vterm_state_get_default_colors(state_, &cell.fg, &cell.bg);

@@ -11,5 +11,9 @@ firmware-linux-free
 network-manager
 pipewire-audio
 wireplumber
+# small machines: compressed swap in RAM (zstd, half of the memory), and
+# power modes for Settings > Power
+zram-tools
+power-profiles-daemon
 # so the live system can be installed or used for repairs
 sudo

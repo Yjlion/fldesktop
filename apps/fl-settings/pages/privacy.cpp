@@ -67,7 +67,7 @@ public:
 
     f.heading("Recent Files");
     f.row("", 26, wx, wy, ww);
-    remember = new Fl_Check_Button(wx, wy, ww, 26, "Remember the files I open");
+    remember = new fld::CheckButton(wx, wy, ww, 26, "Remember the files I open");
     remember->value(desk.ini.get_bool("Privacy", "RememberRecent", true));
     remember->callback(cb, this);
     f.row("Keep them for:", 28, wx, wy, ww);
@@ -88,7 +88,7 @@ public:
 
     f.heading("Camera and Microphone");
     f.row("", 26, wx, wy, ww);
-    indicator = new Fl_Check_Button(wx, wy, ww, 26, "Show in the panel when the camera or microphone is in use");
+    indicator = new fld::CheckButton(wx, wy, ww, 26, "Show in the panel when the camera or microphone is in use");
     indicator->value(panel.ini.get_bool("Panel", "PrivacyIndicator", true));
     indicator->callback(cb, this);
     f.row("Camera in use by:", 26, wx, wy, ww);

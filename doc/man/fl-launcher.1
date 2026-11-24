@@ -2,10 +2,19 @@
 .SH NAME
 fl-launcher \- application menu of the fldesktop desktop
 .SH SYNOPSIS
-\fBfl-launcher\fR
+\fBfl-launcher\fR [\fB\-\-daemon\fR]
 .SH DESCRIPTION
 A searchable list of the installed applications, grouped by category. Type to
 search, Enter starts the selected application (or runs the text as a command when nothing
 matches), Escape closes. Starting it while it is open closes it.
+.SH OPTIONS
+.TP
+\fB\-\-daemon\fR
+Keep the launcher ready, hidden, and show or hide it on \fBSIGUSR1\fR, so
+that it opens at once. The session starts it
+(\fI/etc/xdg/autostart/fl-launcher.desktop\fR); \fBfl-wm\fR(1)'s
+Super+Space and the panel's button then signal it, and start
+\fBfl-launcher\fR as before when it is not running. It starts again by
+itself when the appearance changes.
 .SH SEE ALSO
 \fBfl-wm\fR(1), \fBfl-session\fR(1), \fBfl-panel\fR(1)

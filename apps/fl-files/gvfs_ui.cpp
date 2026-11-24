@@ -192,7 +192,7 @@ std::string connect_dialog(std::vector<std::string> &recent, bool &bookmark) {
     b->deactivate();
   }, list);
   if (recent.empty()) clear->deactivate();
-  Fl_Check_Button *bm = new Fl_Check_Button(150, 292, W - 166, 28, "Add a bookmark");
+  Fl_Check_Button *bm = new fld::CheckButton(150, 292, W - 166, 28, "Add a bookmark");
   bm->value(bookmark);
   Fl_Button *cancel = new Fl_Button(W - 232, H - 44, 100, 30, "Cancel");
   cancel->callback([](Fl_Widget *b, void *) { result = 0; b->window()->hide(); });

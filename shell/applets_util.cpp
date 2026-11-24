@@ -183,6 +183,29 @@ std::vector<std::string> camera_users(const std::string &proc) {
   return {names.begin(), names.end()};
 }
 
+std::vector<std::string> video_devices(const std::string &dev) {
+  std::vector<std::string> r;
+  DIR *d = opendir(dev.c_str());
+  if (!d) return r;
+  while (struct dirent *e = readdir(d))
+    if (strncmp(e->d_name, "video", 5) == 0 && std::isdigit((unsigned char)e->d_name[5]))
+      r.push_back(dev + "/" + e->d_name);
+  closedir(d);
+  std::sort(r.begin(), r.end());
+  return r;
+}
+
+std::vector<std::string> merge_camera_users(const std::vector<std::string> &pipewire,
+                                            const std::vector<std::string> &proc) {
+  std::set<std::string> names(pipewire.begin(), pipewire.end());
+  for (const std::string &n : proc) {
+    // the PipeWire daemons hold the camera for the programs named above
+    if (!pipewire.empty() && (n == "pipewire" || n == "wireplumber" || n == "pipewire-media-session")) continue;
+    names.insert(n);
+  }
+  return {names.begin(), names.end()};
+}
+
 std::string name_list(const std::vector<std::string> &n, size_t max) {
   if (n.empty()) return "";
   if (n.size() == 1) return n[0];

@@ -6,6 +6,7 @@
 
 #include "fld/theme.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "settings_common.h"
 #include "settings_page.h"
 
@@ -22,7 +23,7 @@ public:
   Fl_Check_Button *check(Form &f, const char *label, bool v) {
     int wx, wy, ww;
     f.row("", 26, wx, wy, ww);
-    Fl_Check_Button *b = new Fl_Check_Button(wx, wy, ww, 26, label);
+    Fl_Check_Button *b = new fld::CheckButton(wx, wy, ww, 26, label);
     b->value(v);
     b->callback([](Fl_Widget *, void *d) { ((MousePage *)d)->save(); }, this);
     return b;

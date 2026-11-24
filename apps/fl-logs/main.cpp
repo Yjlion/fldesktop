@@ -436,7 +436,7 @@ int main(int argc, char **argv) {
   // index -> max priority: 7, 6, 5, 4, 3, 2
   g_prio->value(1);
   g_prio->callback([](Fl_Widget *, void *) { refilter(true); });
-  g_follow = new Fl_Check_Button(726, y, 90, 28, "Follow");
+  g_follow = new fld::CheckButton(726, y, 90, 28, "Follow");
   g_follow->value(1);
   g_follow->tooltip("Show new entries as they come");
   g_follow->callback([](Fl_Widget *, void *) { start_follow(); });

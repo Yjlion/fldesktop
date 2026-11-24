@@ -495,6 +495,7 @@ static void audio_changed() {
     if (!n.empty() && std::find(rec.begin(), rec.end(), n) == rec.end()) rec.push_back(n);
   }
   privacy_audio(rec);
+  privacy_video(g_audio->model().videoUsers, g_audio->model().videoRunning);
 }
 #endif
 
@@ -655,6 +656,7 @@ static void volume_menu(fld::Menu &m) {
 }
 
 static void volume_cb(Fl_Widget *w, void *) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   int media_h = 0;
 #ifdef FLD_HAVE_MPRIS
   static mpris::Player player;
@@ -710,13 +712,14 @@ static void volume_cb(Fl_Widget *w, void *) {
   s->value(std::min(100, P.volume_pct));
   s->callback([](Fl_Widget *sl, void *) { set_volume((int)((Fl_Slider *)sl)->value()); });
   s->when(FL_WHEN_CHANGED);
-  Fl_Check_Button *m = new Fl_Check_Button(200, oy + 12, 56, 26, "Mute");
+  Fl_Check_Button *m = new fld::CheckButton(200, oy + 12, 56, 26, "Mute");
   m->value(P.muted);
   m->callback([](Fl_Widget *, void *) { toggle_mute(); });
   Fl_Box *more = new Fl_Box(12, oy + 40, 236, 20);
   more->labelsize(11);
   more->labelcolor(fld::palette().fg_dim);
-  more->label("Scroll on the icon to adjust, middle-click to mute");
+  more->label("On the icon: scroll to adjust, middle-click to mute");
+  more->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
   Fl_Button *settings = new Fl_Button(12, oy + 62, 116, 26, "Sound Settings");
   settings->labelsize(12);
   settings->callback([](Fl_Widget *b, void *) {
@@ -734,13 +737,14 @@ static void volume_cb(Fl_Widget *w, void *) {
 }
 
 static void clock_cb(Fl_Widget *w, void *) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   PanelPopup pop(260, 220);
   new Calendar(1, 1, 258, 218);
   pop.end();
   pop.popup_at(w, P.top);
 }
 
-static void launcher_cb(Fl_Widget *, void *) { fld::spawn({"fl-launcher"}); }
+static void launcher_cb(Fl_Widget *, void *) { fld::toggle_launcher(); }
 
 // QuickLaunch in panel.ini; the panel restarts when it changes
 static std::vector<std::string> quick_ids() {
@@ -874,7 +878,11 @@ static void network_changed() {
   g_net_tip = st.primary_id.empty() ? (st.networking ? "Not connected" : "Networking is off")
                                     : "Connected to " + st.primary_id;
   for (auto &d : st.devices)
-    if (d.connected && !d.ip4.empty()) { g_net_tip += "\n" + d.iface + ": " + d.ip4[0]; break; }
+    // the loopback device is no network connection
+    if (d.connected && !d.ip4.empty() && d.iface != "lo" && d.ip4[0].compare(0, 4, "127.") != 0) {
+      g_net_tip += "\n" + d.iface + ": " + d.ip4[0];
+      break;
+    }
   for (auto &c : st.connections)
     if (c.active && (c.type == "vpn" || c.type == "wireguard")) g_net_tip += "\nVPN: " + c.id;
   P.network->tooltip(g_net_tip.c_str());
@@ -971,7 +979,7 @@ void panel_menu_items(fld::Menu &m) {
 static void panel_menu() {
   fld::Menu m;
   m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
-  m.item("Applications…", [] { fld::spawn({"fl-launcher"}); }).divider();
+  m.item("Applications…", [] { fld::toggle_launcher(); }).divider();
   m.item("Lock Screen", [] { fld::lock_screen(); }, fld::can_lock() ? 0 : FL_MENU_INACTIVE).divider();
   nightlight_menu_items(m);
 #ifdef FLD_HAVE_NOTIFY
@@ -1164,7 +1172,7 @@ int main(int argc, char **argv) {
     P.menu_btn->icon_name("applications-other", 20);
 
   panel_context_menu(P.menu_btn, [](fld::Menu &m) {
-    m.item("Open Applications", [] { fld::spawn({"fl-launcher"}); }).divider();
+    m.item("Open Applications", [] { fld::toggle_launcher(); }).divider();
     m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
     m.item("Settings…", [] { fld::spawn({"fl-settings"}); }).divider();
     panel_menu_items(m);

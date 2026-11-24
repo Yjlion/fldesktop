@@ -6,6 +6,8 @@
 #include <functional>
 #include <memory>
 
+#include "fld/frame_watch.h"
+
 #include "backend.h"
 
 namespace web {
@@ -47,6 +49,14 @@ private:
   bool frame_pending_ = false;
   int paste_key_ = 0; // Ctrl+V waiting for the clipboard
   static void frame_done_cb(void *);
+  // lets WebKit render the next frame: at most at 60 Hz, and slowly while
+  // the window is not on screen (minimised, another workspace)
+  void schedule_frame_done();
+  static void window_shown_cb(void *);
+  bool done_scheduled_ = false, hidden_ = false;
+  double last_done_ = 0;
+  std::unique_ptr<fld::FrameWatch> watch_;
+  Fl_Window *watched_ = nullptr;
 };
 
 } // namespace web

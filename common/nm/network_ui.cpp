@@ -111,7 +111,7 @@ public:
       fl_draw(fld::escape_at(a.ssid).c_str(), x() + 44, ry, w() - 260, ROW, FL_ALIGN_LEFT | FL_ALIGN_CLIP);
       fl_font(FL_HELVETICA, 12);
       fl_color(i == sel ? p.accent_fg : p.fg_dim);
-      std::string right = std::string(a.active ? "Connected   " : "") + (a.secure ? "🔒 " + a.security : "Open") +
+      std::string right = std::string(a.active ? "Connected   " : "") + (a.secure ? (a.security.empty() ? std::string("Secured") : a.security) : std::string("Open")) +
                           "   " + std::to_string(a.strength) + "%";
       fl_draw(right.c_str(), x(), ry, w() - 24, ROW, FL_ALIGN_RIGHT);
       fl_color(p.border);
@@ -156,7 +156,7 @@ std::string ask_wifi_password(const std::string &ssid, bool retry) {
   m->copy_label(fld::escape_at(msg).c_str());
   m->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_WRAP);
   Fl_Secret_Input *pw = new Fl_Secret_Input(68, 70, 316, 30);
-  Fl_Check_Button *show = new Fl_Check_Button(68, 102, 160, 24, "Show password");
+  Fl_Check_Button *show = new fld::CheckButton(68, 102, 160, 24, "Show password");
   show->callback([](Fl_Widget *b, void *d) {
     Fl_Secret_Input *in = (Fl_Secret_Input *)d;
     in->input_type(((Fl_Check_Button *)b)->value() ? FL_NORMAL_INPUT : FL_SECRET_INPUT);
@@ -342,7 +342,7 @@ static void build_editor(Editor *e) {
   std::string title = s.uuid.empty() ? "New Connection" : "Edit " + s.id;
   e->win = new Fl_Double_Window(W, H);
   e->win->copy_label(title.c_str());
-  Fl_Tabs *tabs = new Fl_Tabs(10, 10, W - 20, H - 70);
+  Fl_Tabs *tabs = new fld::Tabs(10, 10, W - 20, H - 70);
   const int TY = 44, LX = 160, FW = W - 190;
 
   Fl_Group *gen = new Fl_Group(10, 40, W - 20, H - 100, "General");
@@ -351,9 +351,9 @@ static void build_editor(Editor *e) {
   e->iface = new Fl_Input(LX, TY + 46, FW, 28, "Device:");
   e->iface->value(s.iface.c_str());
   e->iface->tooltip("Restrict to an interface name, e.g. eth0 (empty = any)");
-  e->autoconnect = new Fl_Check_Button(LX, TY + 84, FW, 26, "Connect automatically");
+  e->autoconnect = new fld::CheckButton(LX, TY + 84, FW, 26, "Connect automatically");
   e->autoconnect->value(s.autoconnect);
-  e->all_users = new Fl_Check_Button(LX, TY + 112, FW, 26, "Available to all users");
+  e->all_users = new fld::CheckButton(LX, TY + 112, FW, 26, "Available to all users");
   e->all_users->value(s.all_users);
   gen->end();
 
@@ -361,7 +361,7 @@ static void build_editor(Editor *e) {
     Fl_Group *wifi = new Fl_Group(10, 40, W - 20, H - 100, "Wi-Fi");
     e->ssid = new Fl_Input(LX, TY + 10, FW, 28, "Network name (SSID):");
     e->ssid->value(s.ssid.c_str());
-    e->hidden = new Fl_Check_Button(LX, TY + 44, FW, 26, "Hidden network");
+    e->hidden = new fld::CheckButton(LX, TY + 44, FW, 26, "Hidden network");
     e->hidden->value(s.hidden);
     e->security = new Fl_Choice(LX, TY + 78, FW, 28, "Security:");
     e->security->add("None");
@@ -501,7 +501,7 @@ static void build_editor(Editor *e) {
     Fl_Input *dns = new Fl_Input(LX, TY + 160, FW, 28, "DNS servers:");
     dns->tooltip("Separated by spaces or commas");
     dns->value((v6 ? s.ip6_dns : s.ip4_dns).c_str());
-    Fl_Check_Button *ign = new Fl_Check_Button(LX, TY + 194, FW, 26, "Use only these DNS servers");
+    Fl_Check_Button *ign = new fld::CheckButton(LX, TY + 194, FW, 26, "Use only these DNS servers");
     ign->value(v6 ? s.ip6_ignore_auto_dns : s.ip4_ignore_auto_dns);
     g->end();
     if (v6) { e->m6 = m; e->addr6 = addr; e->gw6 = gw; e->dns6 = dns; e->ignore6 = ign; }
@@ -561,12 +561,12 @@ NetworkView::NetworkView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   const fld::Palette &p = fld::palette();
   box(FL_FLAT_BOX);
   color(p.bg);
-  networking_ = new Fl_Check_Button(X + 10, Y + 8, 130, 26, "Networking");
+  networking_ = new fld::CheckButton(X + 10, Y + 8, 130, 26, "Networking");
   networking_->callback([](Fl_Widget *w, void *) {
     Client::get().set_networking(((Fl_Check_Button *)w)->value(),
                                  [](const std::string &e) { show_error("Could not change networking", e); });
   });
-  wireless_ = new Fl_Check_Button(X + 146, Y + 8, 90, 26, "Wi-Fi");
+  wireless_ = new fld::CheckButton(X + 146, Y + 8, 90, 26, "Wi-Fi");
   wireless_->callback([](Fl_Widget *w, void *) {
     Client::get().set_wireless(((Fl_Check_Button *)w)->value(),
                                [](const std::string &e) { show_error("Could not change Wi-Fi", e); });

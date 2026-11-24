@@ -12,7 +12,9 @@
 #include "fld/ini.h"
 #include "fld/notify.h"
 #include "fld/session.h"
+#include "fld/atspi.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "panel.h"
 #include "upclient.h"
 #ifdef FLD_HAVE_BACKLIGHT
@@ -106,6 +108,8 @@ void update() {
     g_tip = up::summary(st);
     if (st.profiles_available && !st.profile.empty()) g_tip += "\nPower mode: " + up::profile_label(st.profile);
     g_btn->tooltip(g_tip.c_str());
+    // a screen reader says what the button is, not only "100%"
+    fld::atspi_describe(g_btn, 0, "Battery: " + fld::join(fld::split(g_tip, '\n'), ", "));
 
     // warnings, once per level while discharging
     up::Level lv = up::battery_level(d.percentage, d.state == up::DISCHARGING || st.on_battery, ps.low, ps.critical,
@@ -129,6 +133,7 @@ void update() {
 }
 
 void battery_cb(Fl_Widget *, void *) {
+  if (panel_popup_toggle(g_btn)) return; // open: a second click closes it
   const up::State &st = up::Client::get().state();
   const int W = 300;
   std::vector<const up::Device *> others;
@@ -142,7 +147,7 @@ void battery_cb(Fl_Widget *, void *) {
           26 * (int)others.size() + 46;
   PanelPopup pop(W, H);
   static std::string head, sub;
-  head = "Battery " + std::to_string((int)std::lround(st.display.percentage)) + " %";
+  head = "Battery " + std::to_string((int)std::lround(st.display.percentage)) + "%";
   Fl_Box *title = new Fl_Box(48, 8, W - 58, 24, head.c_str());
   title->labelfont(FL_HELVETICA_BOLD);
   title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
@@ -184,7 +189,7 @@ void battery_cb(Fl_Widget *, void *) {
     y += 32;
     for (auto &p : st.profiles) {
       keep.push_back(p);
-      Fl_Round_Button *b = new Fl_Round_Button(16, y, W - 32, 26);
+      Fl_Round_Button *b = new fld::RadioButton(16, y, W - 32, 26);
       b->copy_label(up::profile_label(p).c_str());
       b->type(FL_RADIO_BUTTON);
       b->value(p == st.profile);
@@ -203,7 +208,7 @@ void battery_cb(Fl_Widget *, void *) {
     }
   }
   for (auto *d : others) {
-    keep.push_back(d->name() + "  " + std::to_string((int)std::lround(d->percentage)) + " %");
+    keep.push_back(d->name() + "  " + std::to_string((int)std::lround(d->percentage)) + "%");
     keep.back() = fld::escape_at(keep.back());
     Fl_Box *b = new Fl_Box(16, y, W - 32, 24, keep.back().c_str());
     b->labelsize(12);

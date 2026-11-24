@@ -128,7 +128,7 @@ struct Dialog {
   }
   void next(int h) { y += h + 8; }
   void acknowledge(const std::string &t) {
-    ack = new Fl_Check_Button(20, y, W - 40, 26);
+    ack = new fld::CheckButton(20, y, W - 40, 26);
     ack->copy_label(fld::escape_at(t).c_str());
     ack->labelfont(FL_HELVETICA_BOLD);
     ack->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->update(); }, this);
@@ -181,7 +181,7 @@ bool startup_warning() {
                         "made, and needs an administrator password.",
                         FL_ALIGN_LEFT);
   t->align(t->align() | FL_ALIGN_TOP);
-  Fl_Check_Button *hide = new Fl_Check_Button(80, 222, 440, 26, "Don't show this again");
+  Fl_Check_Button *hide = new fld::CheckButton(80, 222, 440, 26, "Don't show this again");
   int by = d.win->h() - 46;
   Fl_Button *quit = new Fl_Button(d.W - 280, by, 110, 30, "Quit");
   quit->callback([](Fl_Widget *, void *p) { ((Dialog *)p)->done = true; }, &d);

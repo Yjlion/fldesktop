@@ -27,11 +27,11 @@ public:
     auto cb = [](Fl_Widget *, void *d) { ((DrivesPage *)d)->save(); };
     f.heading("When a Drive Is Plugged In");
     f.row("", 26, wx, wy, ww);
-    automount = new Fl_Check_Button(wx, wy, ww, 26, "Mount it");
+    automount = new fld::CheckButton(wx, wy, ww, 26, "Mount it");
     automount->value(desk.ini.get_bool("Drives", "Automount", true));
     automount->callback(cb, this);
     f.row("", 26, wx, wy, ww);
-    autoopen = new Fl_Check_Button(wx, wy, ww, 26, "Open it in Files");
+    autoopen = new fld::CheckButton(wx, wy, ww, 26, "Open it in Files");
     autoopen->value(desk.ini.get_bool("Drives", "AutoOpen", false));
     autoopen->callback(cb, this);
     f.note("Otherwise a notification offers to open it. Encrypted drives ask for their passphrase in Files.", 2);

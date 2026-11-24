@@ -56,7 +56,7 @@ public:
     bat_details->labelcolor(palette().fg_dim);
     bat_details->align(FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
     f.row("", 26, wx, wy, ww);
-    percentage = new Fl_Check_Button(wx, wy, ww, 26, "Show the battery percentage in the panel");
+    percentage = new fld::CheckButton(wx, wy, ww, 26, "Show the battery percentage in the panel");
     percentage->value(desk.ini.get_bool("Power", "ShowPercentage", true));
     percentage->callback(cb, this);
 
@@ -65,7 +65,7 @@ public:
     static const char *names[] = {"power-saver", "balanced", "performance"};
     for (int i = 0; i < 3; i++) {
       f.row("", 26, wx, wy, ww);
-      profile_btn[i] = new Fl_Round_Button(wx, wy, ww, 26, labels[i]);
+      profile_btn[i] = new fld::RadioButton(wx, wy, ww, 26, labels[i]);
       profile_btn[i]->type(FL_RADIO_BUTTON);
       profile_btn[i]->callback([](Fl_Widget *, void *d) {
         up::Client::get().set_profile((const char *)d, [](const std::string &e) {

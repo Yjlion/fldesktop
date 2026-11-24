@@ -98,7 +98,7 @@ public:
       m.button(mute).button(make_default).divider();
       for (int pct : {0, 25, 50, 75, 100}) {
         char l[16];
-        snprintf(l, sizeof l, "%d %%", pct);
+        snprintf(l, sizeof l, "%d%%", pct);
         bool on = (int)lround(slider->value() * 100) == pct;
         m.radio(l, on, [this, pct] {
           slider->value(pct / 100.0);

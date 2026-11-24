@@ -37,6 +37,11 @@ Start in full screen.
 .TP
 \fB\-\-software\fR
 Use the software renderer (also \fBFLD_VIDEO_SW=1\fR).
+.TP
+\fB\-\-warm\-registry\fR
+Let GStreamer build its plugin registry and exit. The session runs this
+once after login (\fI/etc/xdg/autostart/fl-media-player-warmup.desktop\fR),
+so that the first start after an install or update is not slow.
 .SH KEYS
 .TP
 \fBSpace\fR, \fBK\fR, click

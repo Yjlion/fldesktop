@@ -7,6 +7,7 @@
 #include <cstring>
 #include <ctime>
 #include <dirent.h>
+#include <fcntl.h>
 #include <fstream>
 #include <pwd.h>
 #include <signal.h>
@@ -172,6 +173,91 @@ Sampler::Sampler(const std::string &root) : root_(root) {
   if (page_size_ <= 0) page_size_ = 4096;
 }
 
+Sampler::~Sampler() {
+  for (auto &k : known_)
+    if (k.second.stat_fd >= 0) close(k.second.stat_fd);
+}
+
+// stays well below the usual limit of 1024 open files
+static const size_t kMaxOpenStat = 600;
+
+static bool pread_text(int fd, std::string &out) {
+  char buf[1024];
+  ssize_t n = pread(fd, buf, sizeof buf, 0);
+  if (n <= 0) return false;
+  out.assign(buf, (size_t)n);
+  return true;
+}
+
+bool Sampler::read_process(const std::string &dir, pid_t pid, Process &p, std::string &text) {
+  fresh_ = false;
+  auto it = known_.find(pid);
+  if (it != known_.end()) {
+    Known &k = it->second;
+    bool ok = k.stat_fd >= 0 ? pread_text(k.stat_fd, text) : read_text(dir + "/stat", text);
+    if (ok && parse_stat_line(text, p) && p.start_ticks == k.start_ticks) {
+      p.uid = k.uid;
+      p.name = k.name;
+      p.user = k.user;
+      p.cmdline = k.cmdline;
+      p.exe = k.exe;
+      p.kernel_thread = k.kernel_thread;
+      k.seen = true;
+      return true;
+    }
+    // gone, or the pid belongs to another process now
+    if (k.stat_fd >= 0) close(k.stat_fd);
+    known_.erase(it);
+    p = Process();
+  }
+  fresh_ = true;
+  int fd = -1;
+  if (known_.size() < kMaxOpenStat) {
+    fd = open((dir + "/stat").c_str(), O_RDONLY | O_CLOEXEC);
+    opened_++;
+    if (fd < 0 || !pread_text(fd, text)) {
+      if (fd >= 0) close(fd);
+      return false;
+    }
+  } else if (!read_text(dir + "/stat", text)) {
+    return false;
+  }
+  if (!parse_stat_line(text, p)) {
+    if (fd >= 0) close(fd);
+    return false;
+  }
+  if (read_text(dir + "/status", text)) parse_status(text, p);
+  p.user = user_name(p.uid);
+  if (read_text(dir + "/cmdline", text, 64 << 10)) {
+    while (!text.empty() && text.back() == '\0') text.pop_back();
+    for (auto &c : text)
+      if (c == '\0') c = ' ';
+    p.cmdline = text;
+    // comm is cut to 15 characters: use the program name from argv[0]
+    if (p.name.size() == 15) {
+      std::string a0 = text.substr(0, text.find(' '));
+      a0 = a0.substr(a0.rfind('/') == std::string::npos ? 0 : a0.rfind('/') + 1);
+      if (a0.size() > 15 && a0.compare(0, 15, p.name) == 0) p.name = a0;
+    }
+  }
+  if (p.cmdline.empty() && (p.ppid == 2 || p.pid == 2)) p.kernel_thread = true;
+  char link[4096];
+  ssize_t n = readlink((dir + "/exe").c_str(), link, sizeof link - 1);
+  if (n > 0) p.exe.assign(link, (size_t)n);
+  opened_ += 3;
+  Known &k = known_[pid];
+  k.stat_fd = fd;
+  k.start_ticks = p.start_ticks;
+  k.uid = p.uid;
+  k.name = p.name;
+  k.user = p.user;
+  k.cmdline = p.cmdline;
+  k.exe = p.exe;
+  k.kernel_thread = p.kernel_thread;
+  k.seen = true;
+  return true;
+}
+
 const std::string &Sampler::user_name(uid_t uid) {
   auto it = users_.find(uid);
   if (it != users_.end()) return it->second;
@@ -179,7 +265,8 @@ const std::string &Sampler::user_name(uid_t uid) {
   return users_[uid] = pw ? pw->pw_name : std::to_string(uid);
 }
 
-void Sampler::sample() {
+void Sampler::sample(bool processes) {
+  opened_ = 0;
   double t = now_seconds();
   double dt = first_ ? 0 : t - prev_time_;
   // ---- system
@@ -213,49 +300,56 @@ void Sampler::sample() {
   prev_rx_ = rx; prev_tx_ = tx; prev_rd_ = rd; prev_wr_ = wr;
 
   // ---- processes
+  if (!processes) {
+    // the list is not shown: keep the last one, and the count
+    s.procs_total = (int)procs_.size();
+    prev_cpu_ = s.cpu;
+    prev_cores_ = s.cores;
+    sys_ = std::move(s);
+    prev_time_ = t;
+    first_ = false;
+    return;
+  }
   std::vector<Process> procs;
   std::map<pid_t, uint64_t> ticks;
   int ncores = std::max<int>(1, (int)s.cores.size());
   // ticks of one CPU during the interval
-  double per_cpu_ticks = dtotal ? (double)dtotal / ncores : 0;
+  // (since the last sample of the processes, which may be older than dtotal)
+  uint64_t dproc = have_proc_total_ && s.cpu.total() >= proc_total_ ? s.cpu.total() - proc_total_ : 0;
+  double per_cpu_ticks = dproc ? (double)dproc / ncores : 0;
+  proc_total_ = s.cpu.total();
+  have_proc_total_ = true;
+  for (auto &k : known_) k.second.seen = false;
   DIR *d = opendir(root_.c_str());
   if (d) {
     while (dirent *e = readdir(d)) {
       if (!isdigit((unsigned char)e->d_name[0])) continue;
       std::string dir = root_ + "/" + e->d_name;
       Process p;
-      if (!read_text(dir + "/stat", text) || !parse_stat_line(text, p)) continue;
+      if (!read_process(dir, (pid_t)atoi(e->d_name), p, text)) continue;
       p.rss *= (uint64_t)page_size_;
-      if (read_text(dir + "/status", text)) parse_status(text, p);
-      p.user = user_name(p.uid);
-      if (read_text(dir + "/cmdline", text, 64 << 10)) {
-        while (!text.empty() && text.back() == '\0') text.pop_back();
-        for (auto &c : text)
-          if (c == '\0') c = ' ';
-        p.cmdline = text;
-        // comm is cut to 15 characters: use the program name from argv[0]
-        if (p.name.size() == 15) {
-          std::string a0 = text.substr(0, text.find(' '));
-          a0 = a0.substr(a0.rfind('/') == std::string::npos ? 0 : a0.rfind('/') + 1);
-          if (a0.size() > 15 && a0.compare(0, 15, p.name) == 0) p.name = a0;
-        }
-      }
-      if (p.cmdline.empty() && (p.ppid == 2 || p.pid == 2)) p.kernel_thread = true;
-      char link[4096];
-      ssize_t n = readlink((dir + "/exe").c_str(), link, sizeof link - 1);
-      if (n > 0) p.exe.assign(link, (size_t)n);
-      if (read_text(dir + "/io", text)) {
+      if (read_io_ && read_text(dir + "/io", text)) {
         size_t a = text.find("read_bytes:"), b = text.find("\nwrite_bytes:");
         if (a != std::string::npos) p.read_bytes = strtoull(text.c_str() + a + 11, nullptr, 10);
         if (b != std::string::npos) p.write_bytes = strtoull(text.c_str() + b + 13, nullptr, 10);
       }
       auto it = prev_ticks_.find(p.pid);
+      if (fresh_) it = prev_ticks_.end(); // a new process, maybe on an old pid
       if (it != prev_ticks_.end() && per_cpu_ticks > 0 && p.cpu_ticks >= it->second)
         p.cpu = 100.0 * (double)(p.cpu_ticks - it->second) / per_cpu_ticks;
       ticks[p.pid] = p.cpu_ticks;
       procs.push_back(std::move(p));
     }
     closedir(d);
+  }
+  // processes that ended
+  for (auto it = known_.begin(); it != known_.end();) {
+    if (it->second.seen) {
+      ++it;
+      continue;
+    }
+    if (it->second.stat_fd >= 0) close(it->second.stat_fd);
+    it = known_.erase(it);
   }
   s.procs_total = (int)procs.size();
   procs_.swap(procs);
@@ -271,6 +365,25 @@ int send_signal(pid_t pid, int sig) { return kill(pid, sig) == 0 ? 0 : errno; }
 
 int set_nice(pid_t pid, int nice) {
   return setpriority(PRIO_PROCESS, (id_t)pid, nice) == 0 ? 0 : errno;
+}
+
+std::string uptime_text(double seconds) {
+  long m = (long)(seconds / 60);
+  long d = m / 1440, h = (m / 60) % 24, mm = m % 60;
+  char b[64];
+  if (d) snprintf(b, sizeof b, "%ld d %ld h", d, h);
+  else if (h) snprintf(b, sizeof b, "%ld h %ld min", h, mm);
+  else snprintf(b, sizeof b, "%ld min", mm);
+  return b;
+}
+
+bool read_process_io(pid_t pid, uint64_t &rd, uint64_t &wr, const std::string &root) {
+  std::string text;
+  if (!read_text(root + "/" + std::to_string(pid) + "/io", text)) return false;
+  size_t a = text.find("read_bytes:"), b = text.find("\nwrite_bytes:");
+  rd = a != std::string::npos ? strtoull(text.c_str() + a + 11, nullptr, 10) : 0;
+  wr = b != std::string::npos ? strtoull(text.c_str() + b + 13, nullptr, 10) : 0;
+  return true;
 }
 
 std::string human_bytes(double b) {

@@ -174,13 +174,39 @@ private:
     }
     p->owner->copy_image(image);
   }
+  // Two frames are kept and reused: the newest goes to the view, the next one
+  // is read into the other. Comparing it with the newest gives the damage
+  // (the libwpe exports have none), so the view converts and draws only what
+  // changed, and frames that change nothing cost no drawing.
+  std::shared_ptr<Frame> next_frame(int w, int h, int stride) {
+    std::shared_ptr<Frame> &f = frames_[cur_ ^ 1];
+    // the view still holds it (it keeps the newest only): a new one
+    if (!f || f.use_count() > 1) f = std::make_shared<Frame>();
+    f->width = w;
+    f->height = h;
+    f->stride = stride;
+    f->pixels.resize((size_t)stride * (size_t)h);
+    return f;
+  }
+  void deliver(const std::shared_ptr<Frame> &f) {
+    const std::shared_ptr<Frame> &prev = frames_[cur_];
+    f->damage.clear();
+    f->all = true;
+    if (prev && prev->width == f->width && prev->height == f->height && prev->stride == f->stride &&
+        prev->pixels.size() == f->pixels.size()) {
+      bool full = false;
+      f->damage = diff_damage(prev->pixels.data(), f->pixels.data(), f->width, f->height, f->stride, full);
+      f->all = full;
+    }
+    cur_ ^= 1;
+    if (on_frame) on_frame(f);
+  }
   // the image is read back at once and given back to WebKit; the next frame
   // comes after frame_shown()
   void copy_image(wpe_fdo_egl_exported_image *image) {
-    auto f = std::make_shared<Frame>();
-    bool ok = GLReadback::get().read(wpe_fdo_egl_exported_image_get_egl_image(image),
-                                     (int)wpe_fdo_egl_exported_image_get_width(image),
-                                     (int)wpe_fdo_egl_exported_image_get_height(image), *f);
+    int w = (int)wpe_fdo_egl_exported_image_get_width(image), h = (int)wpe_fdo_egl_exported_image_get_height(image);
+    auto f = next_frame(w, h, w * 4);
+    bool ok = GLReadback::get().read(wpe_fdo_egl_exported_image_get_egl_image(image), w, h, *f);
     wpe_view_backend_exportable_fdo_egl_dispatch_release_exported_image(exportable_, image);
     pending_frame_ = true;
     if (!ok) {
@@ -190,25 +216,24 @@ private:
       frame_shown(); // let WebKit go on
       return;
     }
-    if (on_frame) on_frame(f);
+    deliver(f);
   }
   void copy_shm(wpe_fdo_shm_exported_buffer *buffer) {
     wl_shm_buffer *shm = wpe_fdo_shm_exported_buffer_get_shm_buffer(buffer);
-    auto f = std::make_shared<Frame>();
+    std::shared_ptr<Frame> f;
     if (shm) {
       wl_shm_buffer_begin_access(shm);
-      f->width = wl_shm_buffer_get_width(shm);
-      f->height = wl_shm_buffer_get_height(shm);
-      f->stride = wl_shm_buffer_get_stride(shm);
-      const uint8_t *p = (const uint8_t *)wl_shm_buffer_get_data(shm);
-      f->pixels.assign(p, p + (size_t)f->stride * (size_t)f->height);
+      f = next_frame(wl_shm_buffer_get_width(shm), wl_shm_buffer_get_height(shm), wl_shm_buffer_get_stride(shm));
+      memcpy(f->pixels.data(), wl_shm_buffer_get_data(shm), f->pixels.size());
       wl_shm_buffer_end_access(shm);
     }
     release_shm(exportable_, buffer);
     pending_frame_ = true;
-    if (on_frame && shm) on_frame(f);
+    if (f) deliver(f);
   }
 
+  std::shared_ptr<Frame> frames_[2];
+  int cur_ = 0; // frames_[cur_] is the newest
   wpe_view_backend_exportable_fdo *exportable_ = nullptr;
   wpe_view_backend *backend_ = nullptr;
   int width_ = 800, height_ = 600;

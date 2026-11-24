@@ -15,6 +15,9 @@ int main() {
   CHECK_EQ(clean_label("  two\n lines  "), std::string("two lines"));
   CHECK_EQ(accessible_name("", "Zoom in (+)"), std::string("Zoom in (+)"));
   CHECK_EQ(accessible_name("Name:", ""), std::string("Name"));
+  CHECK_EQ(accessible_name("DIRECT-0c-HP M110 Las\u2026", "DIRECT-0c-HP M110 LaserJet"),
+           std::string("DIRECT-0c-HP M110 LaserJet")); // cut to fit: the whole name
+  CHECK_EQ(accessible_name("Wait\u2026", ""), std::string("Wait\u2026"));
   CHECK_EQ(accessible_name("@fileopen", "Open"), std::string("Open")); // a symbol alone: the tooltip
   CHECK_EQ(std::string(role_name(ROLE_PUSH_BUTTON)), std::string("push button"));
   CHECK_EQ(std::string(role_name(999)), std::string("unknown"));

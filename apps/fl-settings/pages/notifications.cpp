@@ -36,7 +36,7 @@ public:
     int wx, wy, ww;
     f.heading("Popups");
     f.row("", 26, wx, wy, ww);
-    dnd = new Fl_Check_Button(wx, wy, ww, 26, "Do not disturb");
+    dnd = new fld::CheckButton(wx, wy, ww, 26, "Do not disturb");
     dnd->value(cfg.ini.get_bool("Notifications", "DoNotDisturb", false));
     dnd->callback([](Fl_Widget *, void *d) { ((NotificationsPage *)d)->save(); }, this);
     f.note("Only critical notifications pop up; the others go to the history.");

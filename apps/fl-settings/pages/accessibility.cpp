@@ -33,7 +33,7 @@ public:
   Fl_Check_Button *check(Form &f, const char *label, bool v) {
     int wx, wy, ww;
     f.row("", 26, wx, wy, ww);
-    Fl_Check_Button *b = new Fl_Check_Button(wx, wy, ww, 26, label);
+    Fl_Check_Button *b = new fld::CheckButton(wx, wy, ww, 26, label);
     b->value(v);
     b->callback([](Fl_Widget *, void *d) { ((AccessibilityPage *)d)->save(); }, this);
     return b;
@@ -90,7 +90,7 @@ public:
     const char *blabel = "Bounce keys: ignore repeats within";
     fl_font(FL_HELVETICA, FL_NORMAL_SIZE);
     int bw = (int)fl_width(blabel) + 34; // the label grows with the text size
-    bounce = new Fl_Check_Button(wx, wy, bw, 28, blabel);
+    bounce = new fld::CheckButton(wx, wy, bw, 28, blabel);
     bounce->value(bms > 0);
     bounce->callback(cb, this);
     bounce_ms = new Fl_Spinner(wx + bw + 6, wy, 80, 28);

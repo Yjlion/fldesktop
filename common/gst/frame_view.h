@@ -62,6 +62,7 @@ struct Osd {
   std::string corner;        // top-left, stays (e.g. "● REC 00:12")
   bool corner_alert = false; // draw the corner text in red
   std::string placeholder;   // shown centred when there is no frame
+  std::string placeholder_icon = "audio-x-generic"; // above it
   bool mirror = false;       // mirror the picture horizontally
 };
 

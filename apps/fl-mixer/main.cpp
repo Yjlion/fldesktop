@@ -10,6 +10,7 @@
 #include "audiobackend.h"
 #include "fld/theme.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "mixer_ui.h"
 
 static fld::MixerView *g_views[5];
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
   }
   const int W = 820, H = 560, ST = 24;
   Fl_Double_Window *win = new Fl_Double_Window(W, H, "Volume Mixer");
-  Fl_Tabs *tabs = new Fl_Tabs(0, 0, W, H - ST);
+  Fl_Tabs *tabs = new fld::Tabs(0, 0, W, H - ST);
   const char *labels[] = {"Playback", "Recording", "Output Devices", "Input Devices", "Configuration"};
   fld::MixerView::Mode modes[] = {fld::MixerView::PLAYBACK, fld::MixerView::RECORDING, fld::MixerView::OUTPUTS,
                                   fld::MixerView::INPUTS, fld::MixerView::CARDS};

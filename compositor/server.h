@@ -414,6 +414,7 @@ struct flwm_view {
 	int committed_w, committed_h; /* last committed size of a shell client */
 	enum flwm_role role;
 	bool role_checked;
+	int popup_x1, popup_x2; /* a panel popup's button, in the panel window (-1: none) */
 	int x, y;          /* content (window geometry) position, layout coords */
 	struct wlr_box saved; /* geometry before maximize/fullscreen/snap */
 	struct wlr_xdg_toplevel_decoration_v1 *decoration;

@@ -46,6 +46,7 @@ jobs:
             libinput-dev libpango1.0-dev libcairo2-dev librsvg2-dev libdrm-dev libpixman-1-dev libvterm-dev \
             libglib2.0-dev libpipewire-0.3-dev libpolkit-agent-1-dev libnm-dev libssl-dev libfontconfig-dev \
             libcups2-dev libpackagekit-glib2-dev libflatpak-dev libappstream-dev libjxl-dev libarchive-dev libpoppler-cpp-dev libxml2-dev libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libegl-dev libgles-dev libgl-dev libpam0g-dev \
+            libavahi-client-dev libavahi-glib-dev libenchant-2-dev \
             libxcb1-dev libxcb-icccm4-dev xkb-data shared-mime-info lintian
       - uses: actions/checkout@v4
         with:
@@ -88,7 +89,7 @@ jobs:
             fltk wlroots0.20 libvterm pango cairo librsvg libinput libxkbcommon pixman shared-mime-info \
             glib2 libpipewire polkit libnm fontconfig xkeyboard-config ttf-dejavu \
             libcups packagekit flatpak appstream libjxl libarchive poppler libxml2 wpewebkit gstreamer gst-plugins-base gst-plugins-good \
-            libxcb xcb-util-wm
+            libxcb xcb-util-wm avahi enchant
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

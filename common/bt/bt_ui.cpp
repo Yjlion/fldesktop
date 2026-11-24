@@ -135,14 +135,14 @@ void ask_agent(const AgentRequest &r, std::function<void(bool, const std::string
 // ---- BluetoothView -------------------------------------------------------------------
 
 BluetoothView::BluetoothView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
-  power_ = new Fl_Check_Button(X, Y, 200, 30, "Bluetooth");
+  power_ = new fld::CheckButton(X, Y, 200, 30, "Bluetooth");
   power_->labelfont(FL_HELVETICA_BOLD);
   power_->labelsize(FL_NORMAL_SIZE + 2);
   power_->callback([](Fl_Widget *w, void *) {
     bool on = ((Fl_Check_Button *)w)->value();
     Client::get().set_powered(on, [](const std::string &e) { show_error("Bluetooth could not be switched.", e); });
   });
-  visible_ = new Fl_Check_Button(X + W - 260, Y, 260, 30, "Visible to other devices");
+  visible_ = new fld::CheckButton(X + W - 260, Y, 260, 30, "Visible to other devices");
   visible_->callback([](Fl_Widget *w, void *) {
     Client::get().set_discoverable(((Fl_Check_Button *)w)->value(),
                                    [](const std::string &e) { show_error("The setting could not be changed.", e); });
@@ -211,7 +211,7 @@ BluetoothView::BluetoothView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) 
       return;
     Client::get().remove(dev->path, [](const std::string &e) { show_error("The device could not be removed.", e); });
   }, this);
-  trusted_ = new Fl_Check_Button(X + 384, by, 200, 30, "Trusted");
+  trusted_ = new fld::CheckButton(X + 384, by, 200, 30, "Trusted");
   trusted_->tooltip("A trusted device may connect without asking");
   trusted_->callback([](Fl_Widget *w, void *d) {
     BluetoothView *v = (BluetoothView *)d;

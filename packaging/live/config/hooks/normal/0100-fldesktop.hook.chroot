@@ -11,3 +11,11 @@ systemctl set-default graphical.target
 # the greeter lists the live user (uid 1000) like any other
 mkdir -p /etc/fldesktop
 [ -f /etc/fldesktop/greeter.ini ] || printf '[Greeter]\nMinUid=1000\n' >/etc/fldesktop/greeter.ini
+# compressed swap in RAM: a web page or two would otherwise reach the OOM
+# killer on a 2 GB machine
+if [ -f /etc/default/zramswap ]; then
+	sed -i -e 's/^#\?ALGO=.*/ALGO=zstd/' -e 's/^#\?PERCENT=.*/PERCENT=50/' /etc/default/zramswap
+fi
+# nothing in a desktop session waits for the network to be up: booting
+# need not either (it took 3.9 s on a Celeron laptop)
+systemctl disable NetworkManager-wait-online.service 2>/dev/null || true

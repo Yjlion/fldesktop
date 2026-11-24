@@ -243,7 +243,7 @@ int main(int argc, char **argv) {
   g_search = new Fl_Input(330, y, 300, 28, "Find:");
   g_search->when(FL_WHEN_CHANGED);
   g_search->callback([](Fl_Widget *, void *) { fill(); });
-  g_running_only = new Fl_Check_Button(644, y, 160, 28, "Only running");
+  g_running_only = new fld::CheckButton(644, y, 160, 28, "Only running");
   g_running_only->callback([](Fl_Widget *, void *) { fill(); });
   Fl_Button *reload = new Fl_Button(W - 100, y, 92, 28, "Reload");
   reload->callback([](Fl_Widget *, void *) { load(); });

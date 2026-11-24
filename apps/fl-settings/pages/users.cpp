@@ -238,7 +238,7 @@ bool ask_remove(const Account &a, bool &remove_home) {
   Fl_Box *b = new Fl_Box(20, 16, 420, 70);
   b->copy_label(escape_at(text).c_str());
   b->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_WRAP);
-  Fl_Check_Button *home = new Fl_Check_Button(20, 96, 420, 26, nullptr);
+  Fl_Check_Button *home = new fld::CheckButton(20, 96, 420, 26, nullptr);
   std::string hl = "Also delete the home folder " + a.home + " and all the files in it";
   home->copy_label(escape_at(hl).c_str());
   home->value(0);
@@ -520,10 +520,23 @@ public:
     }
 #endif
     f.row("", 26, wx, wy, ww);
-    auto_b = new Fl_Check_Button(wx, wy, ww, 26, "Log in automatically when the computer starts");
+    auto_b = new fld::CheckButton(wx, wy, ww, 26, "Log in automatically when the computer starts");
     auto_b->callback(changed, this);
-    f.row("Groups:", 120, wx, wy, ww);
-    grp = new Fl_Check_Browser(wx, wy, ww, 120);
+    // the list is as tall as its groups: a list that scrolls inside the
+    // page, which scrolls itself, is hard to use with the wheel
+    int grp_h = 120;
+    {
+      std::string pw, gt;
+      read_file("/etc/passwd", pw);
+      read_file("/etc/group", gt);
+      std::vector<Group> gs = parse_group(gt);
+      std::vector<Account> as = parse_passwd(pw);
+      std::string adm = admin_group(gs);
+      attach_groups(as, gs, adm);
+      grp_h = std::max(48, std::min(480, (int)editable_groups(gs, as, adm).size() * 20 + 6));
+    }
+    f.row("Groups:", grp_h, wx, wy, ww);
+    grp = new Fl_Check_Browser(wx, wy, ww, grp_h);
     grp->when(FL_WHEN_CHANGED);
     grp->callback(changed, this);
     f.note("Groups give access to devices and services, e.g. printers (lp), serial ports (uucp, dialout) or docker.", 2);

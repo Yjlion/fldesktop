@@ -95,7 +95,7 @@ public:
 
     f.heading("Desktop");
     f.row("", 26, wx, wy, ww);
-    icons = new Fl_Check_Button(wx, wy, ww, 26, "Show icons on the desktop");
+    icons = new fld::CheckButton(wx, wy, ww, 26, "Show icons on the desktop");
     icons->value(desk.ini.get_bool("Desktop", "ShowIcons", true));
     icons->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
     f.note("The wallpaper is set on the Appearance page.");

@@ -611,7 +611,7 @@ protected:
             ic->draw(X + 6, Y + (H - ic->h()) / 2);
             tx = X + 28;
           }
-          t = fld::escape_at(n.name) + (n.encrypted ? "  🔒" : "");
+          t = fld::escape_at(n.name) + (n.encrypted ? "  (encrypted)" : "");
         } else if (C == 1) {
           t = n.dir ? (std::to_string(n.items) + (n.items == 1 ? " item" : " items")) : fld::human_size((unsigned long long)n.size);
         } else if (C == 2) {

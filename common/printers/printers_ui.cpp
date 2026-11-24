@@ -418,7 +418,7 @@ PrintersView::PrintersView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   Fl_Box *cl = new Fl_Box(dx, y + 92, 106, 22, "Connection:");
   cl->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
   y += 122;
-  enabled_ = new Fl_Check_Button(dx + 110, y, 160, 26, "Enabled");
+  enabled_ = new fld::CheckButton(dx + 110, y, 160, 26, "Enabled");
   enabled_->tooltip("A paused printer keeps jobs waiting");
   enabled_->callback([](Fl_Widget *w, void *d) {
     PrintersView *v = (PrintersView *)d;
@@ -426,14 +426,14 @@ PrintersView::PrintersView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
       show_error("The printer could not be changed.", set_enabled(p->name, ((Fl_Check_Button *)w)->value()));
     v->refresh();
   }, this);
-  accepting_ = new Fl_Check_Button(dx + 270, y, 170, 26, "Accepting jobs");
+  accepting_ = new fld::CheckButton(dx + 270, y, 170, 26, "Accepting jobs");
   accepting_->callback([](Fl_Widget *w, void *d) {
     PrintersView *v = (PrintersView *)d;
     if (const Printer *p = v->printer())
       show_error("The printer could not be changed.", set_accepting(p->name, ((Fl_Check_Button *)w)->value()));
     v->refresh();
   }, this);
-  shared_ = new Fl_Check_Button(dx + 110, y + 28, 260, 26, "Shared with other computers");
+  shared_ = new fld::CheckButton(dx + 110, y + 28, 260, 26, "Shared with other computers");
   shared_->callback([](Fl_Widget *w, void *d) {
     PrintersView *v = (PrintersView *)d;
     if (const Printer *p = v->printer())
@@ -485,7 +485,7 @@ PrintersView::PrintersView(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
   Fl_Box *jl = new Fl_Box(dx, y, 100, 22, "Jobs");
   jl->labelfont(FL_HELVETICA_BOLD);
   jl->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
-  show_done_ = new Fl_Check_Button(dx + dw - 160, y, 160, 22, "Show finished");
+  show_done_ = new fld::CheckButton(dx + dw - 160, y, 160, 22, "Show finished");
   show_done_->callback([](Fl_Widget *, void *d) { ((PrintersView *)d)->fill_jobs(); }, this);
   cancel_job_ = new Fl_Button(dx + dw - 120, Y + H - 34, 120, 30, "Cancel Job");
   cancel_job_->callback([](Fl_Widget *, void *d) {

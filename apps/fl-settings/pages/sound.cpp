@@ -7,6 +7,7 @@
 #include "audiobackend.h"
 #include "fld/theme.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "mixer_ui.h"
 #include "settings_common.h"
 #include "settings_page.h"
@@ -24,7 +25,7 @@ public:
     Fl_Group *g = page_group(X, Y, W, H, "Sound", cy);
     resizable(g);
     if (!g_backend) g_backend = AudioBackend::create();
-    Fl_Tabs *tabs = new Fl_Tabs(X + 16, cy, W - 32, H - (cy - Y) - 56);
+    Fl_Tabs *tabs = new fld::Tabs(X + 16, cy, W - 32, H - (cy - Y) - 56);
     const char *labels[] = {"Output", "Input", "Applications"};
     MixerView::Mode modes[] = {MixerView::OUTPUTS, MixerView::INPUTS, MixerView::PLAYBACK};
     for (int i = 0; i < 3; i++) {

@@ -78,7 +78,8 @@ Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-
             fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
             fldesktop-passwords, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
-            plymouth, plymouth-themes, fldesktop-plymouth-theme
+            plymouth, plymouth-themes, fldesktop-plymouth-theme, power-profiles-daemon
+Suggests: fonts-noto-color-emoji
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
  toolkit: its own wlroots compositor, a taskbar panel, an application

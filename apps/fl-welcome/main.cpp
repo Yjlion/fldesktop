@@ -262,7 +262,7 @@ void apps_page() {
   Fl_Group *g = page("More applications", "fldesktop comes with its own small applications. More come from your "
                                           "distribution's packages and from Flathub.");
   bool have_flatpak = !fld::which("flatpak").empty();
-  Fl_Check_Button *fh = new Fl_Check_Button(40, 140, W - 80, 28, "Add Flathub, the app store for Linux (flatpak)");
+  Fl_Check_Button *fh = new fld::CheckButton(40, 140, W - 80, 28, "Add Flathub, the app store for Linux (flatpak)");
   if (!have_flatpak) {
     fh->label("Flathub: install flatpak to use it");
     fh->deactivate();

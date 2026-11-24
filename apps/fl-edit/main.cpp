@@ -32,6 +32,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "fld/window_size.h"
 #include "lsp.h"
 #include "syntax.h"
 
@@ -1274,8 +1275,8 @@ static void show_find(bool replace) {
     F.win = new Fl_Double_Window(440, 160, "Find and Replace");
     F.find = new Fl_Input(90, 12, 230, 28, "Find:");
     F.repl = new Fl_Input(90, 46, 230, 28, "Replace:");
-    F.match_case = new Fl_Check_Button(90, 80, 120, 24, "Match case");
-    F.wrap = new Fl_Check_Button(210, 80, 120, 24, "Wrap around");
+    F.match_case = new fld::CheckButton(90, 80, 120, 24, "Match case");
+    F.wrap = new fld::CheckButton(210, 80, 120, 24, "Wrap around");
     F.wrap->value(1);
     Fl_Return_Button *next = new Fl_Return_Button(330, 12, 100, 28, "Next");
     next->callback([](Fl_Widget *, void *) { find_next(); });
@@ -1810,6 +1811,7 @@ int main(int argc, char **argv) {
   }
   if (g_docs.empty()) new_doc();
   sync_menus();
+  fld::remember_window_size(g_win, "fl-edit");
   g_win->show(); // not show(argc, argv): it resets the theme colors
   current()->ed->take_focus();
   update_status();

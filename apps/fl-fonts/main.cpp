@@ -224,9 +224,9 @@ int main(int argc, char **argv) {
   g_search = new Fl_Input(60, 8, LW - 68, 28, "Find:");
   g_search->when(FL_WHEN_CHANGED);
   g_search->callback([](Fl_Widget *, void *) { fill(); });
-  g_mono_only = new Fl_Check_Button(8, 40, 130, 24, "Monospace");
+  g_mono_only = new fld::CheckButton(8, 40, 130, 24, "Monospace");
   g_mono_only->callback([](Fl_Widget *, void *) { fill(); });
-  g_mine_only = new Fl_Check_Button(140, 40, 150, 24, "Installed by me");
+  g_mine_only = new fld::CheckButton(140, 40, 150, 24, "Installed by me");
   g_mine_only->callback([](Fl_Widget *, void *) { fill(); });
   g_sample = new Fl_Input(LW + 70, 8, W - LW - 300, 28, "Sample:");
   g_sample->value("The quick brown fox jumps over the lazy dog");

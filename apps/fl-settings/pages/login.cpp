@@ -131,10 +131,10 @@ public:
 
     f.heading("Users");
     f.row("", 26, wx, wy, ww);
-    remember = new Fl_Check_Button(wx, wy, ww, 26, "Preselect the user who logged in last");
+    remember = new fld::CheckButton(wx, wy, ww, 26, "Preselect the user who logged in last");
     remember->callback(changed, this);
     f.row("", 26, wx, wy, ww);
-    pictures = new Fl_Check_Button(wx, wy, ww, 26, "Show user pictures");
+    pictures = new fld::CheckButton(wx, wy, ww, 26, "Show user pictures");
     pictures->tooltip("The pictures set in Settings > Users; without them the login card is smaller");
     pictures->callback(changed, this);
     f.row("Lowest user ID:", 28, wx, wy, ww);
@@ -152,9 +152,9 @@ public:
 
     f.heading("Other");
     f.row("", 26, wx, wy, ww);
-    clock24 = new Fl_Check_Button(wx, wy, 200, 26, "24-hour clock");
+    clock24 = new fld::CheckButton(wx, wy, 200, 26, "24-hour clock");
     clock24->callback(changed, this);
-    power = new Fl_Check_Button(wx + 210, wy, 260, 26, "Restart and Shut Down buttons");
+    power = new fld::CheckButton(wx + 210, wy, 260, 26, "Restart and Shut Down buttons");
     power->callback(changed, this);
     f.row("On-screen keyboard:", 28, wx, wy, ww);
     kb_mode = new Fl_Choice(wx, wy, 180, 28);

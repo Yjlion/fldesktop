@@ -359,7 +359,7 @@ int main(int argc, char **argv) {
     g_grid->update_sb();
     g_grid->redraw();
   });
-  Fl_Check_Button *only = new Fl_Check_Button(812, 8, 180, 28, "Only in this font");
+  Fl_Check_Button *only = new fld::CheckButton(812, 8, 180, 28, "Only in this font");
   only->callback([](Fl_Widget *w, void *) {
     g_only_covered = ((Fl_Check_Button *)w)->value();
     if (*g_search->value()) do_search(); else show_selected_block();

@@ -60,6 +60,15 @@ struct HeadConfig {
   double scale;
 };
 
+// a rotation sensor (iio-sensor-proxy reads it): convertibles and tablets
+static bool has_accelerometer() {
+  for (const std::string &d : list_dir("/sys/bus/iio/devices"))
+    if (file_exists("/sys/bus/iio/devices/" + d + "/in_accel_x_raw") ||
+        file_exists("/sys/bus/iio/devices/" + d + "/in_accel_x_raw0"))
+      return true;
+  return false;
+}
+
 class DisplaysPage;
 DisplaysPage *g_page;
 
@@ -271,7 +280,7 @@ public:
     Form f(g, X + 24 + 210, cy + 180, lw - 210, 110);
     int wx, wy, ww;
     f.row("", 26, wx, wy, ww);
-    enabled = new Fl_Check_Button(wx, wy, ww, 26, "Enabled");
+    enabled = new fld::CheckButton(wx, wy, ww, 26, "Enabled");
     enabled->callback([](Fl_Widget *, void *d) { ((DisplaysPage *)d)->edit(); }, this);
     f.row("Resolution:", 28, wx, wy, ww);
     mode = new Fl_Choice(wx, wy, ww, 28);
@@ -301,9 +310,9 @@ public:
     status->labelcolor(palette().fg_dim);
 
     int ny = cy + 450;
-    {
+    if (has_accelerometer()) {
       // convertibles and tablets: fl-autorotate follows the accelerometer
-      Fl_Check_Button *rot = new Fl_Check_Button(X + 24, ny, lw, 26, "Turn the built-in screen with the device");
+      Fl_Check_Button *rot = new fld::CheckButton(X + 24, ny, lw, 26, "Rotate the built-in screen with the device");
       rot->tooltip("For convertibles and tablets with a rotation sensor (iio-sensor-proxy)");
       ConfigFile d(desktop_ini_path());
       rot->value(d.ini.get_bool("Display", "AutoRotate", true));
@@ -341,7 +350,7 @@ public:
     const std::string N = "NightLight";
     auto ncb = [](Fl_Widget *, void *d) { ((DisplaysPage *)d)->save_night(); };
     nf.row("", 26, wx, wy, ww);
-    night = new Fl_Check_Button(wx, wy, ww, 26, "Warmer colours at night");
+    night = new fld::CheckButton(wx, wy, ww, 26, "Warmer colours at night");
     night->value(desk.ini.get_bool(N, "Enabled", false));
     night->callback(ncb, this);
     nf.row("When:", 28, wx, wy, ww);
@@ -384,8 +393,35 @@ public:
     refresh();
   }
 
+  // One screen has nothing to arrange: the arrangement, the list of screens
+  // and the position go, and the rest of the page moves up and left.
+  bool single_ = false;
+  void set_single(bool single) {
+    if (single == single_) return;
+    single_ = single;
+    int dx = single ? -210 : 210, dy = single ? -180 : 180;
+    int top = arr->y(), form_x = list->x() + 210;
+    Fl_Group *g = arr->parent();
+    for (int i = 0; i < g->children(); i++) {
+      Fl_Widget *w = g->child(i);
+      if (w == arr || w == list) continue;
+      // where it is with the arrangement shown
+      int oy = single ? w->y() : w->y() + 180;
+      if (oy < top + 170) continue;
+      bool in_form = oy < top + 400 && w->x() + (single ? 0 : 210) >= form_x - 200;
+      w->position(w->x() + (in_form ? dx : 0), w->y() + dy);
+      // the position row (its label too) is for arranging
+      if (w == px || w == py || (w->label() && !strcmp(w->label(), "Position:"))) single ? w->hide() : w->show();
+    }
+    single ? arr->hide() : arr->show();
+    single ? list->hide() : list->show();
+    g->init_sizes();
+    redraw();
+  }
+
   void refresh() {
     if (dirty) return; // do not overwrite unsaved edits
+    set_single(M.heads.size() == 1);
     edited = current_config();
     list->clear();
     for (auto &h : M.heads) {

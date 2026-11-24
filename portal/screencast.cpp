@@ -257,7 +257,7 @@ public:
         p->finish(true);
     });
     if (can_persist) {
-      remember = new Fl_Check_Button(16, bottom, 468, 26, "Remember this choice for this application");
+      remember = new fld::CheckButton(16, bottom, 468, 26, "Remember this choice for this application");
       remember->value(1);
     }
     Fl_Button *c = new Fl_Button(248, 372, 112, 30, "Cancel");

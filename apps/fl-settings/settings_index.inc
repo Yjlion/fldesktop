@@ -122,7 +122,7 @@
 {"mouse", "Focus follows the mouse"},
 {"displays", "Enabled"},
 {"displays", "Apply"},
-{"displays", "Turn the built-in screen with the device"},
+{"displays", "Rotate the built-in screen with the device"},
 {"displays", "Warmer colours at night"},
 {"displays", "Revert"},
 {"displays", "Keep"},

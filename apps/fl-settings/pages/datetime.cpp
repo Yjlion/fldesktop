@@ -58,7 +58,7 @@ public:
     now->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
     now->labelfont(FL_HELVETICA_BOLD);
     f.row("", 26, wx, wy, ww);
-    ntp = new Fl_Check_Button(wx, wy, ww, 26, "Set the time automatically (network time)");
+    ntp = new fld::CheckButton(wx, wy, ww, 26, "Set the time automatically (network time)");
     ntp->callback([](Fl_Widget *, void *d) { ((DateTimePage *)d)->set_ntp(); }, this);
     f.row("Set manually:", 28, wx, wy, ww);
     manual = new Fl_Input(wx, wy, 200, 28);

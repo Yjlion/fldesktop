@@ -259,7 +259,7 @@ void permissions_dialog(const fp::App &app) {
       h->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
       y += 28;
     }
-    auto *b = new Fl_Check_Button(28, y, 480, 24);
+    auto *b = new fld::CheckButton(28, y, 480, 24);
     b->copy_label(it.label.c_str());
     rows->push_back({b, it});
     y += 26;
@@ -419,7 +419,7 @@ public:
       StoreWindow *s = (StoreWindow *)d;
       if (const fp::App *a = s->current()) permissions_dialog(*a);
     }, this);
-    tabs = new Fl_Tabs(dx, 204, dw, H - 240);
+    tabs = new fld::Tabs(dx, 204, dw, H - 240);
     {
       int ty = 204 + 26, th = H - 240 - 26;
       tab_about = new Fl_Group(dx, ty, dw, th, "About");

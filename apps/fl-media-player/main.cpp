@@ -2,6 +2,10 @@
 // (fl-video before 0.1.4)
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Return_Button.H>
+#include <functional>
+#include <memory>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_File_Chooser.H>
 #include <FL/Fl_Hold_Browser.H>
@@ -23,6 +27,7 @@
 #include "fld/widgets.h"
 #include "idle_inhibit.h"
 #include "gst_player.h"
+#include "webhelpers.h"
 #include "playlist_util.h"
 #include "video_util.h"
 #ifdef FLD_HAVE_MPRIS
@@ -602,9 +607,70 @@ static void toggle_mute() {
   update_volume();
 }
 
-enum { M_OPEN = 1, M_ADD, M_URL, M_SUBS, M_SHOT, M_FULL, M_RESUME, M_LOOP, M_ABOUT, M_QUIT, M_SUB_OFF,
+enum { M_OPEN = 1, M_ADD, M_URL, M_SUBS, M_SHOT, M_FULL, M_RESUME, M_LOOP, M_ABOUT, M_QUIT, M_SUB_OFF, M_WEB,
        M_SIDEBAR, M_SHUFFLE, M_SAVE_LIST, M_REPEAT_OFF, M_REPEAT_ALL, M_REPEAT_ONE,
        M_TRACK = 1000, M_SPEED = 2000, M_PLAYLIST = 3000 };
+
+// ---- web videos: our own yt-dlp and QuickJS-ng --------------------------------------------
+
+static void web_videos_dialog() {
+  Fl_Double_Window w(520, 250, "Web Videos");
+  w.set_modal();
+  Fl_Box *about = new Fl_Box(16, 12, 488, 70,
+                             "Videos of web sites (YouTube and many others) are played through yt-dlp. The "
+                             "versions in distributions are usually too old, so the player keeps its own yt-dlp "
+                             "and the QuickJS-ng JavaScript engine up to date, from their GitHub releases.");
+  about->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_WRAP);
+  Fl_Check_Button *manage = new fld::CheckButton(16, 90, 488, 26, "Keep yt-dlp and QuickJS-ng up to date (downloaded)");
+  webhelpers::State st = webhelpers::load_state();
+  manage->value(st.manage);
+  Fl_Box *info = new Fl_Box(16, 122, 488, 60);
+  info->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_WRAP);
+  info->labelcolor(fld::palette().fg_dim);
+  auto show_info = [info](const std::string &extra) {
+    webhelpers::State s = webhelpers::load_state();
+    std::string path = webhelpers::ytdlp_path();
+    std::string t = path.empty() ? "No yt-dlp yet." : "Using " + path;
+    if (s.manage && !s.ytdlp_version.empty())
+      t += "\nyt-dlp " + s.ytdlp_version + (s.qjs_version.empty() ? "" : ", QuickJS-ng " + s.qjs_version);
+    if (!extra.empty()) t += "\n" + extra;
+    info->copy_label(fld::escape_at(t).c_str());
+    info->redraw();
+  };
+  show_info(webhelpers::updating() ? "Checking for new versions…" : "");
+  Fl_Button *now = new Fl_Button(16, 204, 140, 30, "Update Now");
+  Fl_Return_Button *close = new Fl_Return_Button(404, 204, 100, 30, "Close");
+  w.end();
+  struct Ctx {
+    std::function<void(const std::string &)> show;
+    Fl_Button *now;
+    std::shared_ptr<bool> alive;
+  };
+  auto alive = std::make_shared<bool>(true);
+  Ctx ctx{show_info, now, alive};
+  manage->callback([](Fl_Widget *b, void *d) {
+    webhelpers::State s = webhelpers::load_state();
+    s.manage = ((Fl_Check_Button *)b)->value() != 0;
+    webhelpers::save_state(s);
+    ((Ctx *)d)->show("");
+  }, &ctx);
+  now->callback([](Fl_Widget *b, void *d) {
+    Ctx *c = (Ctx *)d;
+    b->deactivate();
+    c->show("Checking for new versions…");
+    auto a = c->alive;
+    webhelpers::update([c, a](bool ok, bool changed, const std::string &msg) {
+      if (!*a) return;
+      c->now->activate();
+      c->show(ok ? (changed ? "Updated: " : "Up to date: ") + msg : "Failed: " + msg);
+    });
+  }, &ctx);
+  if (webhelpers::updating()) now->deactivate();
+  close->callback([](Fl_Widget *w, void *) { w->window()->hide(); });
+  w.show();
+  while (w.shown()) Fl::wait();
+  *alive = false;
+}
 
 static void show_menu(int mx, int my) {
   g_labels.clear();
@@ -675,6 +741,7 @@ static void show_menu(int mx, int my) {
                FL_MENU_TOGGLE | (S.resume ? FL_MENU_VALUE : 0) | FL_MENU_DIVIDER});
   m.push_back({"Take Screenshot", 's', nullptr, (void *)M_SHOT});
   m.push_back({g_fullscreen ? "Leave Full Screen" : "Full Screen", 'f', nullptr, (void *)M_FULL, FL_MENU_DIVIDER});
+  m.push_back({"Web Videos…", 0, nullptr, (void *)M_WEB, FL_MENU_DIVIDER});
   m.push_back({"About", 0, nullptr, (void *)M_ABOUT});
   m.push_back({"Quit", FL_CTRL + 'q', nullptr, (void *)M_QUIT});
   m.push_back({nullptr});
@@ -709,6 +776,7 @@ static void show_menu(int mx, int my) {
         g_player->set_resume(S.resume);
         save_settings();
         break;
+      case M_WEB: web_videos_dialog(); break;
       case M_ABOUT:
         fld::about_dialog("Media Player", "fl-media-player",
                           ("A video and music player built with FLTK and GStreamer.\nRendering: " +
@@ -1036,6 +1104,10 @@ int main(int argc, char **argv) {
   update_title();
   update_order_buttons();
   start_mpris();
+  // our yt-dlp and QuickJS-ng: fetched once a day, quietly
+  if (webhelpers::update_due()) webhelpers::update([](bool, bool, const std::string &msg) {
+    if (!msg.empty()) fprintf(stderr, "fl-media-player: web video helpers: %s\n", msg.c_str());
+  });
   g_win->show();
   g_surface->start();
   if (start_fs) toggle_fullscreen();

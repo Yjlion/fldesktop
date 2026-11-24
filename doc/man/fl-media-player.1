@@ -8,7 +8,13 @@ Plays video and audio files, playlists and network streams with \fBGStreamer\fR:
 codecs it can play depend on the GStreamer plugins installed (the "good", "bad" and "libav"
 plugin sets cover nearly everything; a missing plugin is named in the error message). Several
 files make a playlist; files dropped on the window are added to it (with Ctrl
-held, they replace it). Web addresses that \fByt-dlp\fR understands also play when it is installed.
+held, they replace it). Web addresses that \fByt-dlp\fR understands (YouTube and many other sites) also
+play: the player keeps its own yt-dlp and the QuickJS-ng JavaScript engine in
+\fI~/.local/share/fldesktop/media-player/bin\fR, downloaded from their GitHub
+releases, checked against the published SHA-256 sums and updated once a day
+(distribution packages of yt-dlp are usually too old for the sites). This
+needs Python 3.10 or newer and curl; \fBWeb Videos\fR in the menu turns it off,
+and then an installed \fByt-dlp\fR is used.
 Subtitle files next to a video (same name) are loaded automatically.
 .PP
 The playlist sidebar (\fBL\fR, or the list button) shows the playlist: double-click or Enter

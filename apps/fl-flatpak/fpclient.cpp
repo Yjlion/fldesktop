@@ -520,6 +520,97 @@ void add_flathub(bool user, Done done) {
   });
 }
 
+// ---- sources ---------------------------------------------------------------
+
+namespace {
+// flatpak's command line: it talks to the system helper (polkit) itself
+void run_flatpak(std::vector<std::string> cmd, Done done) {
+  run_bg([cmd, done] {
+    std::string out;
+    int rc = fld::which(cmd[0]).empty() ? -1 : fld::run_capture(cmd, out);
+    std::string err = rc == 0 ? "" : rc < 0 ? "The " + cmd[0] + " command is not installed." : fld::trim(out);
+    if (rc > 0 && err.empty()) err = "flatpak failed (exit status " + std::to_string(rc) + ").";
+    fld::ui_call([done, err] { done(err); });
+  });
+}
+} // namespace
+
+void list_remotes(std::function<void(std::vector<Remote> &, const std::string &)> done) {
+  run_bg([done] {
+    std::vector<Remote> out;
+    std::string err;
+    for (const char *which : {"system", "user"}) {
+      GError *e = nullptr;
+      FlatpakInstallation *inst = open_installation(which, &e);
+      if (!inst) {
+        g_clear_error(&e);
+        continue;
+      }
+      std::map<std::string, int> counts;
+      GPtrArray *refs = flatpak_installation_list_installed_refs(inst, nullptr, &e);
+      g_clear_error(&e);
+      for (guint i = 0; refs && i < refs->len; i++)
+        counts[g2s(flatpak_installed_ref_get_origin(FLATPAK_INSTALLED_REF(g_ptr_array_index(refs, i))))]++;
+      if (refs) g_ptr_array_unref(refs);
+      GPtrArray *remotes = flatpak_installation_list_remotes(inst, nullptr, &e);
+      if (!remotes && err.empty()) err = err_text(e);
+      g_clear_error(&e);
+      for (guint i = 0; remotes && i < remotes->len; i++) {
+        FlatpakRemote *r = FLATPAK_REMOTE(g_ptr_array_index(remotes, i));
+        Remote x;
+        x.name = g2s(flatpak_remote_get_name(r));
+        gchar *t = flatpak_remote_get_title(r), *u = flatpak_remote_get_url(r);
+        x.title = g2s(t);
+        x.url = g2s(u);
+        g_free(t);
+        g_free(u);
+        x.installation = which;
+        x.prio = flatpak_remote_get_prio(r);
+        x.disabled = flatpak_remote_get_disabled(r);
+        x.gpg_verify = flatpak_remote_get_gpg_verify(r);
+        x.installed_refs = counts[x.name];
+        // the remotes of installed bundles without a URL ("<app>-origin") are not sources to manage
+        if (x.url.empty() && fld::ends_with(x.name, "-origin")) continue;
+        out.push_back(x);
+      }
+      if (remotes) g_ptr_array_unref(remotes);
+      g_object_unref(inst);
+    }
+    fld::ui_call([done, out, err]() mutable { done(out, err); });
+  });
+}
+
+void add_remote(const std::string &installation, const std::string &name, const std::string &url,
+                const std::string &title, const std::string &gpg_key, Done done) {
+  run_flatpak(remote_add_cmd(installation, name, url, title, gpg_key), done);
+}
+
+void remove_remote(const Remote &r, bool force, Done done) { run_flatpak(remote_delete_cmd(r, force), done); }
+
+void modify_remote(const Remote &r, Done done) { run_flatpak(remote_modify_cmd(r), done); }
+
+Job remove_unused(const std::string &installation, ProgressFn progress, Done done) {
+  return run_tx(installation, progress, done, [](FlatpakTransaction *t, FlatpakInstallation *inst, GError **e) {
+    GPtrArray *unused = flatpak_installation_list_unused_refs(inst, nullptr, nullptr, e);
+    if (!unused) return false;
+    bool ok = true;
+    for (guint i = 0; ok && i < unused->len; i++) {
+      gchar *ref = flatpak_ref_format_ref(FLATPAK_REF(g_ptr_array_index(unused, i)));
+      ok = flatpak_transaction_add_uninstall(t, ref, e);
+      g_free(ref);
+    }
+    g_ptr_array_unref(unused);
+    return ok;
+  });
+}
+
+void repair(const std::string &installation, Done done) {
+  std::vector<std::string> cmd = {"flatpak", "repair", installation == "user" ? "--user" : "--system"};
+  // repairing the system installation needs root
+  if (installation != "user") cmd.insert(cmd.begin(), "pkexec");
+  run_flatpak(cmd, done);
+}
+
 void launch(const App &app, Done done) {
   std::vector<std::string> cmd = {"flatpak", "run"};
   if (app.installation == "user") cmd.push_back("--user");

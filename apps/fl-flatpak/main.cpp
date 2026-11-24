@@ -41,6 +41,7 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "fpclient.h"
+#include "prefs.h"
 #include "permissions.h"
 
 namespace {
@@ -372,7 +373,12 @@ public:
     target = new Fl_Choice(W - 230, 10, 218, 30, "Install for:");
     target->add("All users");
     target->add("Only me");
-    target->value(0);
+    target->value(fp::load_settings().target == "user" ? 1 : 0);
+    target->callback([](Fl_Widget *w, void *) {
+      fp::Settings s = fp::load_settings();
+      s.target = ((Fl_Choice *)w)->value() == 1 ? "user" : "system";
+      fp::save_settings(s);
+    });
     update_all = new Fl_Button(W - 400, 10, 150, 30, "Update All");
     update_all->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->do_update_all(); }, this);
     update_all->hide();
@@ -381,7 +387,10 @@ public:
     add_flathub = new Fl_Button(W - 400, 10, 150, 30, "Add Flathub");
     add_flathub->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->do_add_flathub(); }, this);
     add_flathub->hide();
-    nav = new Fl_Hold_Browser(12, 50, 200, H - 86);
+    nav = new Fl_Hold_Browser(12, 50, 200, H - 86 - 36);
+    Fl_Button *prefs = new Fl_Button(12, H - 36 - 30, 200, 30, "Sources and Settings…");
+    prefs->tooltip("Add, remove and change the sources of apps (Flatpak remotes); maintenance");
+    prefs->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->open_prefs(); }, this);
     nav->textsize(14);
     nav->format_char(0);
     nav->callback([](Fl_Widget *, void *d) { ((StoreWindow *)d)->filter(); }, this);
@@ -505,6 +514,19 @@ public:
   void set_status(const std::string &s) {
     status->copy_label(fld::escape_at(s).c_str());
     status->redraw();
+  }
+
+  void open_prefs() {
+    preferences_dialog([this] {
+      // a moment later: several changes in a row reload once
+      Fl::remove_timeout(reload_cb, this);
+      Fl::add_timeout(0.5, reload_cb, this);
+    });
+  }
+  static void reload_cb(void *d) {
+    StoreWindow *s = (StoreWindow *)d;
+    s->target->value(fp::load_settings().target == "user" ? 1 : 0);
+    s->reload(true);
   }
 
   void reload(bool refresh) {
@@ -819,12 +841,17 @@ public:
 
 int main(int argc, char **argv) {
   std::string select, file, tab;
+  bool prefs = false;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-flatpak [APP-ID [--tab files|depends|used-by] | FILE]\nFinds, installs and updates Flatpak "
+      printf("Usage: fl-flatpak [APP-ID [--tab files|depends|used-by] | FILE | --prefs]\nFinds, installs and updates Flatpak "
              "apps; FILE is a .flatpakref,\n.flatpakrepo or .flatpak bundle.\n");
       return 0;
+    }
+    if (a == "--prefs") {
+      prefs = true;
+      continue;
     }
     if (a == "--tab" && i + 1 < argc) {
       tab = argv[++i];
@@ -850,7 +877,8 @@ int main(int argc, char **argv) {
                   [file, user](fp::ProgressFn p, fp::Done d) { return fp::install_file(file, user, p, d); },
                   [w](bool) { w->reload(true); });
   } else {
-    w->reload(false);
+    w->reload(fp::load_settings().refresh_on_start);
   }
+  if (prefs) w->open_prefs();
   return Fl::run();
 }

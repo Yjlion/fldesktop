@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "remotes.h"
+
 namespace fp {
 
 struct App {
@@ -70,6 +72,24 @@ struct RefInfo {
   std::string error;
 };
 void ref_info(const App &app, std::function<void(const RefInfo &)> done);
+
+// ---- sources (remotes) ------------------------------------------------------
+
+void list_remotes(std::function<void(std::vector<Remote> &, const std::string &error)> done);
+// url: a repository URL or a .flatpakrepo (file or https). gpg_key: a key
+// file to trust, "" for the key in a .flatpakrepo, "-" for none (unsigned)
+void add_remote(const std::string &installation, const std::string &name, const std::string &url,
+                const std::string &title, const std::string &gpg_key, Done done);
+// force: also when apps are installed from it (they stop getting updates)
+void remove_remote(const Remote &r, bool force, Done done);
+// changes title, priority and enabled state to those of r
+void modify_remote(const Remote &r, Done done);
+
+// ---- maintenance --------------------------------------------------------------
+// runtimes and extensions no installed app needs any more
+Job remove_unused(const std::string &installation, ProgressFn progress, Done done);
+// flatpak repair (the system installation asks for an administrator)
+void repair(const std::string &installation, Done done);
 
 // helpers (unit tested)
 // metadata keyfile -> "runtime/<name>/<arch>/<branch>" of an app ("" if none)

@@ -5,6 +5,8 @@ fl-flatpak \- Flatpak apps for fldesktop
 \fBfl-flatpak\fR [\fIAPP-ID\fR [\fB\-\-tab\fR \fBfiles\fR|\fBdepends\fR|\fBused-by\fR]]
 .br
 \fBfl-flatpak\fR \fIFILE\fR.flatpakref | \fIFILE\fR.flatpakrepo | \fIFILE\fR.flatpak
+.br
+\fBfl-flatpak \-\-prefs\fR
 .SH DESCRIPTION
 Shows the apps of the configured Flatpak sources (Flathub and others) with
 their icons, descriptions, licenses and versions, by category, installed or
@@ -30,3 +32,12 @@ Installing for all users asks for an administrator password through
 \fBfl-polkit-agent\fR(1).
 .SH SEE ALSO
 \fBflatpak\fR(1), \fBflatpak-override\fR(1), \fBfl-packages\fR(1)
+.SH SOURCES AND SETTINGS
+\fBSources and Settings\fR (or \fB\-\-prefs\fR) lists the sources (remotes) of
+the system and the user installation. Sources can be added by address or from
+a \fI.flatpakrepo\fR, edited (title, priority), enabled, disabled and removed;
+changes to the system installation ask for an administrator (polkit). The
+General tab sets where apps are installed by default and whether the catalogs
+are downloaded at every start, and removes unused runtimes or repairs an
+installation (\fBflatpak repair\fR). The settings are kept in
+\fI~/.config/fldesktop/flatpak.ini\fR.

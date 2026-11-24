@@ -2,12 +2,40 @@
 #include <algorithm>
 
 #include "permissions.h"
+#include "remotes.h"
 #include "test.h"
 #ifdef FLD_TEST_FPCLIENT
 #include "fpclient.h"
 #endif
 
+static void test_remotes() {
+  using V = std::vector<std::string>;
+  CHECK(fp::remote_add_cmd("user", "beta", "https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo", "Flathub Beta", "") ==
+        V({"flatpak", "remote-add", "--user", "--if-not-exists", "--title=Flathub Beta", "--from", "beta",
+           "https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo"}));
+  CHECK(fp::remote_add_cmd("system", "mine", "https://example.org/repo", "", "-") ==
+        V({"flatpak", "remote-add", "--system", "--if-not-exists", "--no-gpg-verify", "mine", "https://example.org/repo"}));
+  CHECK(fp::remote_add_cmd("system", "k", "https://example.org/repo", "", "/tmp/key.gpg") ==
+        V({"flatpak", "remote-add", "--system", "--if-not-exists", "--gpg-import=/tmp/key.gpg", "k",
+           "https://example.org/repo"}));
+  fp::Remote r;
+  r.name = "flathub";
+  r.installation = "system";
+  r.prio = 5;
+  r.disabled = true;
+  r.title = "Flathub";
+  CHECK(fp::remote_modify_cmd(r) ==
+        V({"flatpak", "remote-modify", "--system", "--disable", "--prio=5", "--title=Flathub", "flathub"}));
+  CHECK(fp::remote_delete_cmd(r, true) == V({"flatpak", "remote-delete", "--system", "--force", "flathub"}));
+  CHECK_EQ(fp::remote_name_for("Flathub Beta"), std::string("flathub-beta"));
+  CHECK_EQ(fp::remote_name_for("https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo"), std::string("flathub-beta"));
+  CHECK_EQ(fp::remote_name_for("https://dl.example.org/repo/"), std::string("example"));
+  CHECK_EQ(fp::remote_name_for("/home/me/Downloads/gnome-nightly.flatpakrepo"), std::string("gnome-nightly"));
+  CHECK_EQ(fp::remote_name_for("!!!"), std::string("source"));
+}
+
 int main() {
+  test_remotes();
   const char *meta = "[Application]\nname=org.example.App\nruntime=org.freedesktop.Platform/x86_64/24.08\n\n"
                      "[Context]\nshared=network;ipc;\nsockets=x11;wayland;pulseaudio;\ndevices=dri;\n"
                      "filesystems=xdg-download;home:ro;\n\n[Environment]\nFOO=bar\n";

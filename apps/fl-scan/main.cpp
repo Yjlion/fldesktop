@@ -5,6 +5,7 @@
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Choice.H>
+#include <algorithm>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Native_File_Chooser.H>
@@ -30,6 +31,9 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "scan_util.h"
+#ifdef FLD_HAVE_MDNS
+#include "mdns.h"
+#endif
 
 namespace {
 
@@ -173,6 +177,11 @@ void load_options() {
   g_preview->redraw();
 }
 
+#ifdef FLD_HAVE_MDNS
+void network_hint(void *);
+std::vector<std::string> g_network; // network scanners' names (mDNS)
+#endif
+
 void find_devices() {
   if (fld::which("scanimage").empty()) {
     status("scanimage is not installed: install SANE (sane / sane-utils) to scan.");
@@ -197,9 +206,54 @@ void find_devices() {
       status(g_devices.empty() ? "No scanner found. Is it switched on and connected?"
                                : std::to_string(g_devices.size()) + " scanner(s) found.");
       load_options();
+#ifdef FLD_HAVE_MDNS
+      if (!g_network.empty()) network_hint(nullptr);
+#endif
     }, o);
   }).detach();
 }
+
+// ---- scanners that announce themselves on the network (eSCL / AirScan) ----
+#ifdef FLD_HAVE_MDNS
+mdns::Browser *g_browser = nullptr;
+
+bool sane_has(const std::string &name) {
+  for (auto &d : g_devices)
+    if (d.label.find(name) != std::string::npos || d.name.find(name) != std::string::npos) return true;
+  return false;
+}
+
+bool have_airscan() {
+  return fld::file_exists("/etc/sane.d/airscan.conf") || fld::file_exists("/etc/sane.d/dll.d/airscan") ||
+         fld::file_exists("/usr/lib/sane/libsane-airscan.so.1") ||
+         fld::file_exists("/usr/lib/x86_64-linux-gnu/sane/libsane-airscan.so.1");
+}
+
+// what SANE does not list yet: look again (sane-airscan), or say what is missing
+void network_hint(void *) {
+  std::vector<std::string> missing;
+  for (auto &n : g_network)
+    if (!sane_has(n)) missing.push_back(n);
+  if (missing.empty()) return;
+  if (have_airscan()) {
+    static int tries = 0;
+    if (tries++ < 2) find_devices();
+    return;
+  }
+  status("Found on the network: " + fld::join(missing, ", ") +
+         ". Install sane-airscan to scan with it (driverless scanning).");
+}
+
+void start_discovery() {
+  g_browser = new mdns::Browser({"_uscan._tcp", "_uscans._tcp"}, [](const mdns::Service &s) {
+    if (std::find(g_network.begin(), g_network.end(), s.name) == g_network.end()) g_network.push_back(s.name);
+    Fl::remove_timeout(network_hint);
+    Fl::add_timeout(1.5, network_hint);
+  }, [](const mdns::Service &s) {
+    g_network.erase(std::remove(g_network.begin(), g_network.end(), s.name), g_network.end());
+  });
+}
+#endif
 
 // runs scanimage in a thread, reading its progress; done(ok, message) in the FLTK thread
 void run_scan(const scan::Request &req, std::function<void(bool, const std::string &)> done) {
@@ -411,6 +465,9 @@ void cleanup() {
 int main(int argc, char **argv) {
   fld::init_app("fl-scan", argc, argv);
   Fl::lock();
+#ifdef FLD_HAVE_MDNS
+  start_discovery();
+#endif
   for (int i = 1; i < argc; i++)
     if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
       printf("Usage: fl-scan\nScans with SANE (scanimage) and saves PNG pictures or a PDF.\n");

@@ -6,6 +6,7 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
+#include <algorithm>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Input.H>
@@ -33,6 +34,9 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "remote_util.h"
+#ifdef FLD_HAVE_MDNS
+#include "mdns.h"
+#endif
 #include "rfb.h"
 
 namespace {
@@ -59,15 +63,26 @@ void load() {
 
 void save() { fld::write_file(ini_path(), remote::to_ini(g_conns)); }
 
+// computers on the network that offer a remote desktop (mDNS: _rfb._tcp, _rdp._tcp)
+std::vector<remote::Connection> g_found;
+
 void fill() {
   int sel = g_list->value();
   g_list->clear();
   for (const remote::Connection &c : g_conns)
-    g_list->add((std::string("@b") + c.name + "\t" + (c.protocol == "rdp" ? "RDP" : "VNC") + "\t" + c.host +
-                 (c.port ? ":" + std::to_string(c.port) : "") + (c.user.empty() ? "" : "  (" + c.user + ")"))
+    g_list->add((std::string("@b") + fld::escape_at(c.name) + "\t" + (c.protocol == "rdp" ? "RDP" : "VNC") + "\t" +
+                 c.host + (c.port ? ":" + std::to_string(c.port) : "") + (c.user.empty() ? "" : "  (" + c.user + ")"))
                     .c_str());
   if (g_conns.empty()) g_list->add("@iNo saved connections. Use Connect to make one.");
-  if (sel && sel <= (int)g_conns.size()) g_list->select(sel);
+  if (!g_found.empty()) {
+    g_list->add("@-");
+    g_list->add("@i@.On this network");
+    for (const remote::Connection &c : g_found)
+      g_list->add((fld::escape_at(c.name) + "\t" + (c.protocol == "rdp" ? "RDP" : "VNC") + "\t" + c.host +
+                   (c.port ? ":" + std::to_string(c.port) : ""))
+                      .c_str());
+  }
+  if (sel && sel <= g_list->size()) g_list->select(sel);
 }
 
 // ---- the VNC window -----------------------------------------------------------------------
@@ -445,13 +460,52 @@ bool edit(remote::Connection &c, const char *title, bool &save_it) {
 
 remote::Connection *selected() {
   int i = g_list->value() - 1;
-  return i >= 0 && i < (int)g_conns.size() ? &g_conns[(size_t)i] : nullptr;
+  if (i >= 0 && i < (int)g_conns.size()) return &g_conns[(size_t)i];
+  // the found ones come after the saved ones (or the note), a line and a heading
+  int f = i - (int)std::max<size_t>(g_conns.size(), 1) - 2;
+  return f >= 0 && f < (int)g_found.size() ? &g_found[(size_t)f] : nullptr;
 }
+
+bool is_found(const remote::Connection *c) {
+  return c && c >= g_found.data() && c < g_found.data() + g_found.size();
+}
+
+#ifdef FLD_HAVE_MDNS
+mdns::Browser *g_browser = nullptr;
+
+void start_discovery() {
+  auto to_conn = [](const mdns::Service &s) {
+    remote::Connection c;
+    c.name = s.name;
+    c.protocol = s.type == "_rdp._tcp" ? "rdp" : "vnc";
+    c.host = mdns::url_host(s);
+    if (!c.host.empty() && c.host.front() == '[') c.host = c.host.substr(1, c.host.size() - 2);
+    c.port = s.port == (c.protocol == "rdp" ? 3389 : 5900) ? 0 : s.port;
+    return c;
+  };
+  g_browser = new mdns::Browser({"_rfb._tcp", "_rdp._tcp"}, [to_conn](const mdns::Service &s) {
+    remote::Connection c = to_conn(s);
+    for (auto &f : g_found)
+      if (f.name == c.name && f.protocol == c.protocol) return;
+    g_found.push_back(c);
+    fill();
+  }, [to_conn](const mdns::Service &s) {
+    remote::Connection c = to_conn(s);
+    for (size_t i = 0; i < g_found.size(); i++)
+      if (g_found[i].name == c.name && g_found[i].protocol == c.protocol) {
+        g_found.erase(g_found.begin() + (long)i);
+        fill();
+        return;
+      }
+  });
+}
+#endif
 
 } // namespace
 
 int main(int argc, char **argv) {
   fld::init_app("fl-remote", argc, argv);
+  Fl::lock(); // network discovery reports with Fl::awake
   load();
   std::string target;
   for (int i = 1; i < argc; i++) {
@@ -499,6 +553,20 @@ int main(int argc, char **argv) {
   btn("Edit…", 80, [](Fl_Widget *, void *) {
     remote::Connection *c = selected();
     if (!c) return;
+    if (is_found(c)) { // found on the network: becomes a saved connection
+      remote::Connection e = *c;
+      bool keep = true;
+      if (!edit(e, "Save Connection", keep)) return;
+      if (keep) {
+        remote::Connection stored = e;
+        stored.password.clear();
+        g_conns.push_back(stored);
+        save();
+        fill();
+      }
+      open_connection(e);
+      return;
+    }
     remote::Connection e = *c;
     bool keep = true;
     if (!edit(e, "Edit Connection", keep)) return;
@@ -512,7 +580,7 @@ int main(int argc, char **argv) {
   });
   btn("Delete", 80, [](Fl_Widget *, void *) {
     remote::Connection *c = selected();
-    if (!c) return;
+    if (!c || is_found(c)) return;
     if (fl_choice("Delete the connection \"%s\"?", "Cancel", "Delete", nullptr, c->name.c_str()) != 1) return;
     g_conns.erase(g_conns.begin() + (c - g_conns.data()));
     save();
@@ -527,6 +595,9 @@ int main(int argc, char **argv) {
   fld::set_window_icon(g_win, "fl-remote");
   fill();
   g_win->show();
+#ifdef FLD_HAVE_MDNS
+  start_discovery();
+#endif
   if (!target.empty()) {
     remote::Connection c;
     if (remote::parse_url(target, c)) open_connection(c);

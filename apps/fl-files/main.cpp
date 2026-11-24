@@ -1,3 +1,7 @@
+#include "fld/window_move.h"
+#ifdef FLD_HAVE_MDNS
+#include "mdns.h"
+#endif
 #include "fld/json.h" // first: X11 headers define Bool
 // fl-files: file manager for fldesktop
 #include <FL/Fl.H>
@@ -386,6 +390,20 @@ static bool in_trash() { return g_cwd == TRASH_URI && !g_searching; }
 static bool in_network() { return g_cwd == NETWORK_URI && !g_searching; }
 // the network view: what it lists, and why it may be empty
 static std::vector<Entry> g_net_entries;
+// shares that announce themselves (mDNS): also without gvfsd-dnssd
+static std::vector<Entry> g_mdns_entries;
+static std::map<std::string, std::string> g_mdns_names; // target -> the server's own name
+
+// what the Network view lists: GVfs' neighbourhood, then the mDNS shares it lacks
+static std::vector<Entry> network_entries() {
+  std::vector<Entry> v = g_net_entries;
+  for (auto &m : g_mdns_entries) {
+    bool dup = false;
+    for (auto &e : g_net_entries) dup |= e.target == m.target || e.name == m.name || e.name == g_mdns_names[m.target];
+    if (!dup) v.push_back(m);
+  }
+  return v;
+}
 static bool g_net_listing = false;
 static std::string g_net_error;
 static void mount_and_go(const std::string &uri, int where = 0); // where: 0 here, 1 window, 2 tab
@@ -801,7 +819,7 @@ public:
     loaded_mtime = stat(dir == TRASH_URI ? (fld::trash_dir() + "/files").c_str() : dir.c_str(), &dst) == 0
                        ? dst.st_mtim : timespec{};
     if (dir == NETWORK_URI) {
-      all = g_net_entries;
+      all = network_entries();
     } else if (dir == TRASH_URI) {
       for (auto &t : fld::trash_list()) {
         Entry e;
@@ -2765,8 +2783,60 @@ static void show_location() {
   } else select_place_for(g_cwd);
 }
 
+static void network_views_reload();
+
+#ifdef FLD_HAVE_MDNS
+static mdns::Browser *g_mdns;
+
+static void start_network_discovery() {
+  if (g_mdns) return;
+  static const std::vector<std::string> types = {"_smb._tcp", "_sftp-ssh._tcp", "_webdav._tcp", "_webdavs._tcp",
+                                                 "_ftp._tcp", "_nfs._tcp"};
+  auto to_entry = [](const mdns::Service &s) {
+    Entry e;
+    // "Server" for Windows shares (as GVfs shows them), "Server (SFTP)" for the rest
+    e.name = s.type == "_smb._tcp" ? s.name : s.name + " (" + mdns::type_label(s.type) + ")";
+    e.path = e.target = mdns::service_url(s);
+    e.icon_name = s.type == "_smb._tcp" ? "network-server" : "folder-remote";
+    e.is_dir = true;
+    e.mime = "inode/directory";
+    return e;
+  };
+  g_mdns = new mdns::Browser(types, [to_entry](const mdns::Service &s) {
+    Entry e = to_entry(s);
+    if (e.target.empty()) return;
+    for (auto &x : g_mdns_entries)
+      if (x.target == e.target) return;
+    g_mdns_names[e.target] = s.name; // GVfs lists the same server by this name
+    g_mdns_entries.push_back(e);
+    network_views_reload();
+  }, [to_entry](const mdns::Service &s) {
+    std::string t = mdns::service_url(s);
+    for (size_t i = 0; i < g_mdns_entries.size(); i++)
+      if (g_mdns_entries[i].target == t) {
+        g_mdns_entries.erase(g_mdns_entries.begin() + (long)i);
+        network_views_reload();
+        return;
+      }
+  });
+}
+#endif
+
+// the tabs that show the network
+static void network_views_reload() {
+  for (auto &t : g_tabs) {
+    bool cur = t.get() == cur_tab();
+    if ((cur ? g_cwd : t->cwd) != NETWORK_URI || (cur ? g_searching : t->searching)) continue;
+    t->view->load(NETWORK_URI);
+    if (cur) update_status();
+  }
+}
+
 // Lists the network neighbourhood again; the network view shows it when done
 static void network_relist() {
+#ifdef FLD_HAVE_MDNS
+  start_network_discovery();
+#endif
 #ifdef FLD_HAVE_GVFS
   if (g_net_listing) return;
   g_net_listing = true;
@@ -2784,13 +2854,7 @@ static void network_relist() {
       e.mime = "inode/directory";
       g_net_entries.push_back(e);
     }
-    // the tabs that show the network
-    for (auto &t : g_tabs) {
-      bool cur = t.get() == cur_tab();
-      if ((cur ? g_cwd : t->cwd) != NETWORK_URI || (cur ? g_searching : t->searching)) continue;
-      t->view->load(NETWORK_URI);
-      if (cur) update_status();
-    }
+    network_views_reload();
   });
   if (g_view) g_view->redraw();
 #else
@@ -3985,11 +4049,11 @@ static void build_menu(fld::Menu &m, bool for_bar) {
 }
 
 // The menu bar is built again each time it opens (selection, toggles, bookmarks)
-class FilesMenuBar : public Fl_Menu_Bar {
+class FilesMenuBar : public fld::MenuBar {
 public:
   fld::Menu menu;
   // rebuild() fills it, once the window is built
-  using Fl_Menu_Bar::Fl_Menu_Bar;
+  using fld::MenuBar::MenuBar;
   void rebuild() {
     menu = fld::Menu();
     build_menu(menu, true);
@@ -4003,7 +4067,7 @@ public:
     if (e == FL_PUSH) rebuild();
     // the shortcuts are the window's (they also work with the bar hidden)
     if (e == FL_SHORTCUT) return 0;
-    return Fl_Menu_Bar::handle(e);
+    return fld::MenuBar::handle(e);
   }
 
 private:

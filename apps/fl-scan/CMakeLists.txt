@@ -9,4 +9,8 @@ if(NOT SCAN_CAIRO_PDF_FOUND)
 endif()
 add_executable(fl-scan main.cpp)
 target_link_libraries(fl-scan PRIVATE fl-scan-util fld PkgConfig::SCAN_CAIRO_PDF)
+if(TARGET fld-mdns) # network scanners (eSCL) that SANE does not see yet
+  target_link_libraries(fl-scan PRIVATE fld-mdns)
+  target_compile_definitions(fl-scan PRIVATE FLD_HAVE_MDNS=1)
+endif()
 install(TARGETS fl-scan RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

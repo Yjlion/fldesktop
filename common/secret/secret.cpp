@@ -245,6 +245,22 @@ bool unlock(const std::string &path, std::string &err) {
   return run_prompt(pr, err);
 }
 
+bool change_password(const std::string &collection, std::string &err) {
+  // fl-secretd: Service.ChangeLock; GNOME Keyring: its own interface
+  GVariant *r = call(kPath, kService, "ChangeLock", g_variant_new("(o)", collection.c_str()), "(o)", err);
+  if (!r) {
+    err.clear();
+    r = call(kPath, "org.gnome.keyring.InternalUnsupportedGuiltRiddenInterface", "ChangeWithPrompt",
+             g_variant_new("(o)", collection.c_str()), "(o)", err);
+  }
+  if (!r) return false;
+  const char *prompt;
+  g_variant_get(r, "(&o)", &prompt);
+  std::string pr = prompt;
+  g_variant_unref(r);
+  return run_prompt(pr, err);
+}
+
 bool lock(const std::string &path, std::string &err) {
   const char *paths[] = {path.c_str(), nullptr};
   GVariant *r = call(kPath, kService, "Lock", g_variant_new("(^ao)", paths), "(aoo)", err);

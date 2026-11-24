@@ -100,7 +100,7 @@ public:
   Fl_Multiline_Output *attrs;
   Fl_Secret_Input *pass;
   Fl_Input *pass_plain;
-  Fl_Button *show_btn, *copy_btn, *save_btn, *del_btn, *add_btn, *new_btn;
+  Fl_Button *show_btn, *copy_btn, *save_btn, *del_btn, *add_btn, *new_btn, *passwd_btn;
   bool connected = false, revealed = false;
   std::string error;
 
@@ -121,6 +121,15 @@ public:
     add_btn->callback([](Fl_Widget *, void *d) { ((PasswordsPage *)d)->add(); }, this);
     new_btn = new Fl_Button(X + 144, Y + H - 40, 130, 30, "New Keyring…");
     new_btn->callback([](Fl_Widget *, void *d) { ((PasswordsPage *)d)->new_keyring(); }, this);
+    passwd_btn = new Fl_Button(X + 280, Y + H - 40, 150, 30, "Change Password…");
+    passwd_btn->tooltip("The password that unlocks this keyring");
+    passwd_btn->callback([](Fl_Widget *, void *d) {
+      PasswordsPage *p = (PasswordsPage *)d;
+      secret::Collection *c = p->current();
+      if (!c) return;
+      std::string err;
+      if (!secret::change_password(c->path, err) && !err.empty()) status(err);
+    }, this);
 
     int dx = X + lw + 110, dw = W - lw - 130;
     label = new Fl_Input(dx, Y + 46, dw, 28, "Name:");

@@ -13,7 +13,7 @@ pkg_check_modules(PORTAL_GIO_UNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
 set(INHIBIT_PROTO)
 fld_wayland_protocol(INHIBIT_PROTO ${WAYLAND_PROTOCOLS_DIR}/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml client)
 add_executable(xdg-desktop-portal-fl main.cpp filechooser.cpp appchooser.cpp settings.cpp dialogs.cpp
-               notification.cpp inhibit.cpp background.cpp shortcuts.cpp ${INHIBIT_PROTO})
+               notification.cpp inhibit.cpp background.cpp shortcuts.cpp secret.cpp ${INHIBIT_PROTO})
 target_include_directories(xdg-desktop-portal-fl PRIVATE ${FLD_PROTO_OUT})
 target_link_libraries(xdg-desktop-portal-fl PRIVATE fld-portal-util PkgConfig::PORTAL_GIO_UNIX PkgConfig::WAYLAND_CLIENT)
 # Print: through CUPS

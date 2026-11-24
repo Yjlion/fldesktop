@@ -178,6 +178,14 @@ const char *kXml = R"XML(
     <property name="AvailableDeviceTypes" type="u" access="read"/>
     <property name="version" type="u" access="read"/>
   </interface>
+  <interface name="org.freedesktop.impl.portal.Secret">
+    <method name="RetrieveSecret">
+      <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
+      <arg type="h" name="fd" direction="in"/><arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/><arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <property name="version" type="u" access="read"/>
+  </interface>
   <interface name="org.freedesktop.impl.portal.Inhibit">
     <method name="Inhibit">
       <arg type="o" name="handle" direction="in"/><arg type="s" name="app_id" direction="in"/>
@@ -309,6 +317,7 @@ void method_call(GDBusConnection *, const char *, const char *, const char *ifac
   else if (i == p + "RemoteDesktop") remotedesktop_call(m, params, inv);
 #endif
   else if (i == p + "Inhibit") inhibit_call(m, params, inv);
+  else if (i == p + "Secret") secret_call(m, params, inv);
   else if (i == p + "Background") background_call(m, params, inv);
   else if (i == p + "GlobalShortcuts") shortcuts_call(m, params, inv);
 #ifdef FLD_HAVE_PRINTERS
@@ -332,6 +341,7 @@ GVariant *get_property(GDBusConnection *, const char *, const char *, const char
   if (i == "org.freedesktop.impl.portal.RemoteDesktop") return remotedesktop_property(p);
 #endif
   if (i == "org.freedesktop.impl.portal.GlobalShortcuts" && p == "version") return g_variant_new_uint32(1);
+  if (i == "org.freedesktop.impl.portal.Secret" && p == "version") return g_variant_new_uint32(1);
   if (p == "version") return g_variant_new_uint32(i.find("Settings") != std::string::npos ? 2 : 2);
   if (p == "SupportedOptions") return g_variant_new("a{sv}", nullptr);
   return nullptr;

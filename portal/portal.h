@@ -48,6 +48,8 @@ void shortcuts_call(const std::string &method, GVariant *params, GDBusMethodInvo
 // org.fldesktop.GlobalShortcuts.Activate (from fl-wm, through --activate-shortcut)
 void shortcuts_activate(const std::string &app_id, const std::string &id);
 void print_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv, GUnixFDList *fds);
+// one secret per application, kept in the Secret Service (secret.cpp)
+void secret_call(const std::string &method, GVariant *params, GDBusMethodInvocation *inv);
 
 // display name of an application (dialogs.cpp)
 std::string app_name(const std::string &app_id);

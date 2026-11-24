@@ -1,0 +1,35 @@
+# fl-secretd: the Secret Service (org.freedesktop.secrets), in place of GNOME
+# Keyring; and pam_fldesktop_keyring.so, which unlocks it at login
+pkg_check_modules(SECRETD_DEPS IMPORTED_TARGET libcrypto gio-2.0 gio-unix-2.0)
+if(NOT SECRETD_DEPS_FOUND)
+  message(STATUS "libcrypto (OpenSSL) or GIO not found: fl-secretd is not built")
+  return()
+endif()
+# the keyring files and the cryptography (unit tested)
+add_library(fl-secretd-store STATIC crypto.cpp store.cpp)
+target_include_directories(fl-secretd-store PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-secretd-store PUBLIC fld PkgConfig::SECRETD_DEPS)
+add_executable(fl-secretd main.cpp service.cpp stash.cpp prompt.cpp)
+target_link_libraries(fl-secretd PRIVATE fl-secretd-store fld)
+install(TARGETS fl-secretd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+configure_file(${CMAKE_SOURCE_DIR}/data/dbus-1/services/org.fldesktop.Secrets.service.in
+               ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.Secrets.service @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.fldesktop.Secrets.service
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/services)
+
+find_path(SECRETD_PAM_INCLUDE security/pam_modules.h)
+find_library(SECRETD_PAM_LIB pam)
+if(SECRETD_PAM_INCLUDE AND SECRETD_PAM_LIB)
+  set(FLD_PAM_MODULE_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/security" CACHE PATH "where PAM modules go")
+  add_library(pam_fldesktop_keyring MODULE pam/pam_fldesktop_keyring.c)
+  set_target_properties(pam_fldesktop_keyring PROPERTIES PREFIX "" C_VISIBILITY_PRESET default)
+  target_include_directories(pam_fldesktop_keyring PRIVATE ${SECRETD_PAM_INCLUDE})
+  target_link_libraries(pam_fldesktop_keyring PRIVATE ${SECRETD_PAM_LIB})
+  target_compile_definitions(pam_fldesktop_keyring PRIVATE FLD_SECRETD="${CMAKE_INSTALL_FULL_BINDIR}/fl-secretd")
+  install(TARGETS pam_fldesktop_keyring LIBRARY DESTINATION ${FLD_PAM_MODULE_DIR})
+else()
+  message(STATUS "PAM headers not found: pam_fldesktop_keyring is not built")
+endif()
+# Debian's pam-auth-update profile (puts the module into common-auth,
+# common-session and common-password)
+install(FILES ${CMAKE_SOURCE_DIR}/data/pam-configs/fldesktop-keyring DESTINATION ${CMAKE_INSTALL_DATADIR}/pam-configs)

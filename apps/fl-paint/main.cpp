@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 
+#include "fld/window_move.h"
 #include "fld/icons.h"
 #include "fld/theme.h"
 #include "fld/util.h"
@@ -721,7 +722,7 @@ int main(int argc, char **argv) {
   }
   const int W = 1100, H = 740, TOOLW = 92, SIDEW = 200;
   g_win = new Fl_Double_Window(W, H, "Paint");
-  Fl_Menu_Bar *mb = new Fl_Menu_Bar(0, 0, W, 28);
+  Fl_Menu_Bar *mb = new fld::MenuBar(0, 0, W, 28);
   struct M {
     const char *path;
     int key;

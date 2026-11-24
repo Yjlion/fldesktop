@@ -608,17 +608,11 @@ int main(int argc, char **argv) {
   Fl::add_fd(g_wake[0], FL_READ, wake_cb);
   signal(SIGUSR1, on_usr1);
   // applications installed or removed: read them again before the next show
-  int apps_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
-  if (apps_fd >= 0) {
-    for (const std::string &d : fld::data_dirs())
-      inotify_add_watch(apps_fd, (d + "/applications").c_str(),
-                        IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_MOVED_FROM | IN_CLOSE_WRITE);
-    Fl::add_fd(apps_fd, FL_READ, [](int fd, void *) {
-      char buf[4096];
-      while (read(fd, buf, sizeof buf) > 0) {}
-      g_apps_changed = true;
-    });
-  }
+  // (also directories that appear later: the first Flatpak creates its
+  // exports directory)
+  std::vector<std::string> app_dirs;
+  for (const std::string &d : fld::data_dirs()) app_dirs.push_back(d + "/applications");
+  fld::DirWatcher apps_watch(app_dirs, [] { g_apps_changed = true; }, 0);
   // colours, fonts or the icon theme changed
   fld::ConfigWatcher appearance(fld::desktop_config_path(), [] { g_restart = true; });
   for (;;) {

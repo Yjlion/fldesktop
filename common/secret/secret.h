@@ -27,6 +27,8 @@ bool connect(std::string &err);
 std::vector<Collection> collections();
 bool unlock(const std::string &path, std::string &err); // a collection or an item
 bool lock(const std::string &path, std::string &err);
+// asks the service to change a collection's password (its own dialog)
+bool change_password(const std::string &collection, std::string &err);
 // The secret of an item as text (unlock it first).
 bool get_secret(const std::string &item, std::string &value, std::string &err);
 bool set_secret(const std::string &item, const std::string &value, std::string &err);

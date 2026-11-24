@@ -1,4 +1,5 @@
 #include "fld/widgets.h"
+#include "fld/window_move.h"
 #include "fld/icons.h"
 #include "fld/text.h"
 #include "fld/theme.h"
@@ -82,6 +83,18 @@ Tabs::Tabs(int x, int y, int w, int h, const char *l) : Fl_Tabs(x, y, w, h, l) {
   box(FL_FLAT_BOX);
   color(palette().bg);
   selection_color(palette().bg);
+}
+
+int Tabs::handle(int event) {
+  if (event == FL_PUSH || event == FL_DRAG || event == FL_RELEASE) {
+    int H = tab_height();
+    int ty = H >= 0 ? y() : y() + h() + H, th = H >= 0 ? H : -H;
+    bool in_strip = Fl::event_y() >= ty && Fl::event_y() < ty + th && Fl::event_x() < x() + w() - 24;
+    if (event == FL_PUSH && in_strip && !which(Fl::event_x(), Fl::event_y()))
+      return window_drag_area(this, event);
+    if (event != FL_PUSH && Fl::pushed() == this && window_drag_area(this, event)) return 1;
+  }
+  return Fl_Tabs::handle(event);
 }
 
 void Tabs::draw() {
@@ -276,6 +289,13 @@ void Toolbar::add_widget(Fl_Widget *w) {
   w->position(next_x_, y() + (h() - w->h()) / 2);
   add(w);
   next_x_ += w->w() + 4;
+}
+
+int Toolbar::handle(int event) {
+  int r = Fl_Group::handle(event);
+  if (r && event != FL_DRAG && event != FL_RELEASE) return r;
+  if (event == FL_PUSH || event == FL_DRAG || event == FL_RELEASE) return window_drag_area(this, event) || r;
+  return r;
 }
 
 void Toolbar::draw() {

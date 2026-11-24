@@ -8,14 +8,14 @@ pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
          fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring
-         fldesktop-passwords fldesktop-logs fldesktop-services fldesktop-paint fldesktop-fonts fldesktop-clock fldesktop-remote fldesktop-scan fldesktop-welcome)
+         fldesktop-passwords fldesktop-secrets fldesktop-pinentry fldesktop-logs fldesktop-services fldesktop-paint fldesktop-fonts fldesktop-clock fldesktop-remote fldesktop-scan fldesktop-welcome)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
 arch=(x86_64 aarch64)
 url="https://github.com/Yjlion/fldesktop"
 license=(GPL-2.0-or-later)
-makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit poppler libxml2)
+makedepends=(cmake ninja pkgconf wayland-protocols git gnupg librsvg libcups packagekit flatpak appstream libjxl gstreamer gst-plugins-base libarchive wpewebkit poppler libxml2 avahi enchant)
 depends=(fltk wlroots0.20 wayland libxkbcommon libinput pango cairo libdrm pixman libvterm shared-mime-info
          glib2 libpipewire polkit libnm fontconfig pam)
 checkdepends=()
@@ -218,7 +218,7 @@ package_fldesktop-web() {
   pkgdesc="fldesktop web browser (WPE WebKit)"
   depends=(fltk glib2 wpewebkit libxml2)
   optdepends=("xdg-utils: open other kinds of links" "gst-plugins-good: audio and video in pages"
-              "gnome-keyring: saved passwords (or another Secret Service, e.g. keepassxc)")
+              "fldesktop-secrets: saved passwords (or another Secret Service: gnome-keyring, keepassxc)")
   _app web
 }
 
@@ -226,17 +226,36 @@ package_fldesktop-media-player() {
   pkgdesc="fldesktop video and music player"
   depends=(fltk gstreamer gst-plugins-base-libs gst-plugins-base gst-plugins-good libglvnd wayland glib2)
   optdepends=("gst-plugins-bad: more formats" "gst-libav: more codecs (FFmpeg)"
-              "gst-plugin-pipewire: sound through PipeWire" "yt-dlp: play videos from web sites")
+              "gst-plugin-pipewire: sound through PipeWire"
+              "python: videos from web sites (its own yt-dlp is downloaded)")
   provides=(fldesktop-video)
   replaces=(fldesktop-video)
   conflicts=(fldesktop-video)
   _app media-player
   _install_files usr/bin/fl-video usr/share/man/man1/fl-video.1
 }
+package_fldesktop-secrets() {
+  pkgdesc="fldesktop password store (Secret Service), in place of GNOME Keyring"
+  depends=(glib2 openssl pam fltk)
+  optdepends=('libsecret: secret-tool')
+  install=fldesktop-secrets.install
+  _stage
+  _install_files usr/bin/fl-secretd usr/lib/security/pam_fldesktop_keyring.so \
+    usr/share/dbus-1/services/org.fldesktop.Secrets.service usr/share/man/man1/fl-secretd.1
+}
+
+package_fldesktop-pinentry() {
+  pkgdesc="fldesktop passphrase prompt for GnuPG (pinentry)"
+  depends=(fltk glib2)
+  optdepends=('gnupg: gpg-agent, which runs it' 'pinentry: pinentry-curses without a display')
+  _stage
+  _install_files usr/bin/pinentry-fldesktop usr/share/man/man1/pinentry-fldesktop.1
+}
+
 package_fldesktop-passwords() {
   pkgdesc="fldesktop passwords and keys (Secret Service, SSH, GPG)"
   depends=(fltk glib2)
-  optdepends=('gnome-keyring: a password store' 'openssh: SSH keys' 'gnupg: GPG keys')
+  optdepends=('fldesktop-secrets: the password store (or gnome-keyring)' 'openssh: SSH keys' 'gnupg: GPG keys')
   _app keyring
 }
 
@@ -275,14 +294,14 @@ package_fldesktop-clock() {
 
 package_fldesktop-remote() {
   pkgdesc="fldesktop VNC and RDP remote desktop viewer"
-  depends=(fltk)
+  depends=(fltk avahi)
   optdepends=('freerdp: RDP connections')
   _app remote
 }
 
 package_fldesktop-scan() {
   pkgdesc="fldesktop document scanner (SANE)"
-  depends=(fltk cairo sane)
+  depends=(fltk cairo sane avahi)
   optdepends=('sane-airscan: network scanners')
   _app scan
 }
@@ -298,17 +317,22 @@ package_fldesktop-calc()  { pkgdesc="fldesktop calculator"; depends=(fltk); _app
 package_fldesktop-view()  { pkgdesc="fldesktop image viewer"; depends=(fltk); _app view; }
 package_fldesktop-files() {
   pkgdesc="fldesktop file manager"
-  depends=(fltk glib2 shared-mime-info)
+  depends=(fltk glib2 shared-mime-info avahi)
   optdepends=('udisks2: list, mount and eject drives'
               'gvfs: network locations, phones and cameras (with gvfs-fuse)'
               'gvfs-smb: Windows shares' 'gvfs-mtp: phones' 'gvfs-gphoto2: cameras'
               'gvfs-nfs: NFS shares' 'gvfs-dnssd: finding servers on the network')
   _app files
 }
-package_fldesktop-edit()  { pkgdesc="fldesktop text editor"; depends=(fltk); _app edit; }
+package_fldesktop-edit()  {
+  pkgdesc="fldesktop text editor"
+  depends=(fltk enchant hunspell) # enchant only optionally pulls in its Hunspell backend
+  optdepends=('hunspell-en_us: English spell checking' 'hunspell-de: German spell checking')
+  _app edit
+}
 package_fldesktop-settings() {
   pkgdesc="fldesktop settings center"
-  depends=(fltk wayland glib2 libpipewire libnm libcups shadow)
+  depends=(fltk wayland glib2 libpipewire libnm libcups shadow avahi)
   optdepends=('xkeyboard-config: keyboard layout names'
               'fldesktop-polkit-agent: date and time, login screen and user account changes'
               'greetd: automatic login'
@@ -367,7 +391,7 @@ package_xdg-desktop-portal-fl() {
 }
 package_fldesktop-printers() {
   pkgdesc="fldesktop printer settings"
-  depends=(fltk libcups)
+  depends=(fltk libcups avahi)
   optdepends=('cups: the printing service')
   _app printers
 }

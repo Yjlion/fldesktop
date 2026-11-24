@@ -1,0 +1,12 @@
+# mDNS / DNS-SD: the plain helpers always (tested); browsing with Avahi
+add_library(fld-mdns-util STATIC mdns_util.cpp)
+target_include_directories(fld-mdns-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+pkg_check_modules(AVAHI IMPORTED_TARGET avahi-client avahi-glib)
+if(AVAHI_FOUND AND TARGET fld-glib)
+  add_library(fld-mdns STATIC mdns.cpp)
+  target_include_directories(fld-mdns PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-mdns PUBLIC fld-mdns-util fld-glib PkgConfig::AVAHI)
+  message(STATUS "Avahi found: network discovery (mDNS)")
+else()
+  message(STATUS "avahi-client / avahi-glib not found: no network discovery (mDNS)")
+endif()

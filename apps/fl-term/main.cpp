@@ -1,3 +1,4 @@
+#include "fld/window_move.h"
 #include "fld/json.h" // first: X11 headers define Bool
 // fl-term: terminal emulator for fldesktop
 #include <FL/Fl.H>
@@ -1040,9 +1041,9 @@ static Items build_menubar_items() {
 }
 
 // The menu bar rebuilds its menus when opened (SSH profiles and mounts change).
-class TermMenuBar : public Fl_Menu_Bar {
+class TermMenuBar : public fld::MenuBar {
 public:
-  using Fl_Menu_Bar::Fl_Menu_Bar;
+  using fld::MenuBar::MenuBar;
   void rebuild() {
     items_ = build_menubar_items();
     menu(items_.data());
@@ -1051,7 +1052,7 @@ public:
     if (e == FL_PUSH) rebuild();
     // shortcuts are handled by global_shortcuts()
     if (e == FL_SHORTCUT) return 0;
-    return Fl_Menu_Bar::handle(e);
+    return fld::MenuBar::handle(e);
   }
 
 private:

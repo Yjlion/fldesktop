@@ -1,3 +1,5 @@
+#include <FL/Fl_Image.H>
+#include <algorithm>
 #include <cstdlib>
 #include <memory>
 #include <vector>
@@ -12,6 +14,8 @@
 #include "fld/mime.h"
 #include "fld/styles.h"
 #include "fld/theme.h"
+#include "fld/config_watch.h"
+#include "fld/toolkit_theme.h"
 #include "fld/tab_bar.h"
 #include "fld/menus.h"
 #include "fld/session.h"
@@ -365,9 +369,122 @@ static void test_icon_lookup() {
   unsetenv("XDG_DATA_HOME");
 }
 
+// AccountsService pictures have no extension: loading one must give an
+// image the caller owns (it used to hand out FLTK's shared copy, which the
+// caller then deleted, and the next load crashed)
+static void test_load_image_no_extension() {
+  static unsigned char px[4 * 4 * 3];
+  for (size_t i = 0; i < sizeof px; i++) px[i] = (unsigned char)(i * 7);
+  Fl_RGB_Image src(px, 4, 4, 3);
+  std::string png;
+  CHECK(fld::avatar_png(&src, 8, png));
+  std::string path = g_tmp + "/picture-no-ext";
+  fld::write_file(path, png);
+  for (int i = 0; i < 3; i++) {
+    std::unique_ptr<Fl_Image> img(fld::load_image(path));
+    CHECK(img != nullptr);
+    if (!img) return;
+    CHECK_EQ(img->w(), 8);
+    CHECK(dynamic_cast<Fl_RGB_Image *>(img.get()) != nullptr);
+  }
+  std::string odd = g_tmp + "/picture.dat"; // unknown extension: sniffed
+  fld::write_file(odd, png);
+  std::unique_ptr<Fl_Image> img(fld::load_image(odd));
+  CHECK(img != nullptr);
+  fld::write_file(odd, "not an image");
+  CHECK(fld::load_image(odd) == nullptr);
+}
+
+static void test_toolkit_theme() {
+  fld::Ini d;
+  d.parse("[Appearance]\nTheme=dark\nAccent=#e01b24\nFont=Cantarell\nFontSize=16\n[General]\nIconTheme=Papirus\n");
+  fld::ToolkitTheme t = fld::toolkit_theme_from(d);
+  CHECK(t.dark);
+  CHECK_EQ(t.accent, std::string("#e01b24"));
+  CHECK_EQ(t.accent_fg, std::string("#ffffff"));
+  CHECK_EQ(t.font_pt, 12);
+  CHECK_EQ(t.icon_theme, std::string("Papirus"));
+  // the marked block is replaced; the user's own CSS stays, in place
+  std::string block = fld::gtk_accent_css(t, 3);
+  CHECK(block.find("@define-color theme_selected_bg_color #e01b24;") != std::string::npos);
+  std::string css = fld::replace_marked_block("label { color: red; }\n", block);
+  CHECK(css.find("label { color: red; }") != std::string::npos);
+  CHECK(css.find(block) == 0);
+  fld::Ini d2;
+  d2.parse("[Appearance]\nAccent=#33d17a\n");
+  std::string again = fld::replace_marked_block(css, fld::gtk_accent_css(fld::toolkit_theme_from(d2), 3));
+  CHECK(again.find("#e01b24") == std::string::npos);
+  CHECK(again.find("#33d17a") != std::string::npos);
+  CHECK(again.find("label { color: red; }") != std::string::npos);
+  CHECK_EQ(fld::replace_marked_block(again, fld::gtk_accent_css(fld::toolkit_theme_from(d2), 3)), again);
+  // qt5ct: 21 colour roles, qt6ct: 22 (Accent)
+  std::string q5 = fld::qtct_color_scheme(t, 5), q6 = fld::qtct_color_scheme(t, 6);
+  auto roles = [](const std::string &s) {
+    size_t a = s.find("active_colors="), e = s.find('\n', a);
+    std::string line = s.substr(a, e - a);
+    return (int)std::count(line.begin(), line.end(), ',') + 1;
+  };
+  CHECK_EQ(roles(q5), 21);
+  CHECK_EQ(roles(q6), 22);
+  CHECK(q5.find("#ffe01b24") != std::string::npos);
+  // writing: settings.ini keeps other keys; a user's own qt5ct setup is left alone
+  std::string cfg = g_tmp + "/tkconfig";
+  fld::mkdir_p(cfg + "/gtk-3.0");
+  fld::write_file(cfg + "/gtk-3.0/settings.ini", "[Settings]\ngtk-cursor-theme-name=Foo\n");
+  fld::mkdir_p(cfg + "/qt5ct");
+  fld::write_file(cfg + "/qt5ct/qt5ct.conf", "[Appearance]\ncolor_scheme_path=/x/mine.conf\ncustom_palette=true\n");
+  CHECK(fld::export_toolkit_theme(d, cfg));
+  fld::Ini g3;
+  g3.load(cfg + "/gtk-3.0/settings.ini");
+  CHECK_EQ(g3.get("Settings", "gtk-cursor-theme-name"), std::string("Foo"));
+  CHECK_EQ(g3.get("Settings", "gtk-application-prefer-dark-theme"), std::string("1"));
+  fld::Ini q;
+  q.load(cfg + "/qt5ct/qt5ct.conf");
+  CHECK_EQ(q.get("Appearance", "color_scheme_path"), std::string("/x/mine.conf"));
+  q.load(cfg + "/qt6ct/qt6ct.conf");
+  CHECK_EQ(q.get("Appearance", "color_scheme_path"), cfg + "/qt6ct/colors/fldesktop.conf");
+  std::string g4;
+  CHECK(fld::read_file(cfg + "/gtk-4.0/gtk.css", g4) && g4.find("--accent-bg-color: #e01b24") != std::string::npos);
+  d.set_bool("Appearance", "ToolkitColors", false);
+  CHECK(!fld::export_toolkit_theme(d, cfg));
+}
+
+// the first Flatpak creates .../flatpak/exports/share/applications: a
+// watch set up before that must still notice it, and what goes in it
+static void test_dir_watcher() {
+  std::string root = g_tmp + "/dw", target = root + "/flatpak/exports/share/applications";
+  fld::mkdir_p(root);
+  int calls = 0;
+  fld::DirWatcher w({target}, [&] { calls++; }, 0);
+  CHECK_EQ(w.watched().size(), (size_t)1);
+  fld::mkdir_p(root + "/flatpak/exports");
+  w.poll();
+  fld::mkdir_p(target);
+  w.poll(); // the parents appear one by one: follow them down
+  w.poll();
+  CHECK(calls >= 1);
+  int before = calls;
+  fld::write_file(target + "/org.example.App.desktop", "[Desktop Entry]\n");
+  w.poll();
+  CHECK(calls > before);
+  // removed and created again
+  unlink((target + "/org.example.App.desktop").c_str());
+  rmdir(target.c_str());
+  w.poll();
+  fld::mkdir_p(target);
+  w.poll();
+  before = calls;
+  fld::write_file(target + "/b.desktop", "x");
+  w.poll();
+  CHECK(calls > before);
+}
+
 int main() {
   char tmpl[] = "/tmp/fld-test-XXXXXX";
   g_tmp = mkdtemp(tmpl);
+  test_load_image_no_extension();
+  test_toolkit_theme();
+  test_dir_watcher();
   test_icon_lookup();
   test_util();
   test_ini();

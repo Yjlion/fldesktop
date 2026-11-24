@@ -24,11 +24,19 @@
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_screencopy_v1.h>
-#include <wlr/types/wlr_server_decoration.h>
 #include <wlr/types/wlr_single_pixel_buffer_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
+#include <wlr/config.h>
+#include <wlr/render/pixman.h>
+#if WLR_HAS_GLES2_RENDERER
+#include <wlr/render/gles2.h>
+#endif
+#if WLR_HAS_VULKAN_RENDERER
+/* from <wlr/render/vulkan.h>, which needs the Vulkan headers */
+bool wlr_renderer_is_vk(struct wlr_renderer *wlr_renderer);
+#endif
 #include <wlr/util/log.h>
 
 #include "server.h"
@@ -136,6 +144,64 @@ static void find_exe_dir(struct flwm_server *server) {
 	snprintf(server->exe_dir, sizeof server->exe_dir, "%s", path);
 }
 
+/* The renderer and allocator; when the GPU's can't be had (no or broken
+ * driver, a virtual machine without 3D), wlroots' software renderer: slow,
+ * but a working desktop. */
+static bool software_fallback(struct flwm_server *server, const char *what) {
+	const char *cur = getenv("WLR_RENDERER");
+	if (cur && !strcmp(cur, "pixman")) return false;
+	wlr_log(WLR_ERROR, "failed to create the %s%s%s: falling back to software rendering", what,
+		cur ? " with WLR_RENDERER=" : "", cur ? cur : "");
+	if (server->allocator) wlr_allocator_destroy(server->allocator);
+	if (server->renderer) wlr_renderer_destroy(server->renderer);
+	server->allocator = NULL;
+	server->renderer = NULL;
+	setenv("WLR_RENDERER", "pixman", 1);
+	setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
+	setenv("WLR_NO_HARDWARE_CURSORS", "1", 1);
+	server->software_fallback = true;
+	return true;
+}
+
+static bool create_renderer(struct flwm_server *server) {
+	for (;;) {
+		server->renderer = wlr_renderer_autocreate(server->backend);
+		if (!server->renderer) {
+			if (software_fallback(server, "renderer")) continue;
+			wlr_log(WLR_ERROR, "failed to create wlr_renderer");
+			return false;
+		}
+		server->allocator = wlr_allocator_autocreate(server->backend, server->renderer);
+		if (!server->allocator) {
+			if (software_fallback(server, "allocator")) continue;
+			wlr_log(WLR_ERROR, "failed to create wlr_allocator");
+			return false;
+		}
+		break;
+	}
+	const char *name = "other";
+	if (wlr_renderer_is_pixman(server->renderer)) name = "pixman";
+#if WLR_HAS_GLES2_RENDERER
+	else if (wlr_renderer_is_gles2(server->renderer)) name = "gles2";
+#endif
+#if WLR_HAS_VULKAN_RENDERER
+	else if (wlr_renderer_is_vk(server->renderer)) name = "vulkan";
+#endif
+	wlr_log(WLR_INFO, "renderer: %s", name);
+	/* for System Info and Settings > Displays */
+	setenv("FLWM_RENDERER", name, 1);
+	if (server->software_fallback || getenv("FLWM_SOFTWARE_FALLBACK")) {
+		const char *rt = getenv("XDG_RUNTIME_DIR");
+		if (rt) {
+			char path[512];
+			snprintf(path, sizeof path, "%s/fldesktop-software-rendering", rt);
+			FILE *f = fopen(path, "w");
+			if (f) fclose(f);
+		}
+	}
+	return true;
+}
+
 int main(int argc, char *argv[]) {
 	const char *config_path = NULL, *startup_cmd = NULL;
 	bool autostart = true;
@@ -165,20 +231,9 @@ int main(int argc, char *argv[]) {
 	struct flwm_server server = {0};
 	find_exe_dir(&server);
 	config_init_defaults(&server.config);
-	char *default_path = config_default_path();
-	const char *candidates[] = {config_path, default_path, "/etc/xdg/fldesktop/wm.ini",
-		FLD_DATADIR "/wm.ini"};
-	for (size_t i = 0; i < sizeof candidates / sizeof candidates[0]; i++) {
-		if (!candidates[i]) continue;
-		if (config_load(&server.config, candidates[i])) {
-			wlr_log(WLR_INFO, "loaded configuration %s", candidates[i]);
-			break;
-		}
-		if (i == 0) wlr_log(WLR_ERROR, "cannot read %s", candidates[i]);
-	}
-	if (!server.config.path) server.config.path = strdup(default_path);
+	server.config_cli_path = config_path ? strdup(config_path) : NULL;
+	config_load_first(&server.config, server.config_cli_path);
 	config_load_global_shortcuts(&server.config);
-	free(default_path);
 
 	/* children get a clean environment describing this session */
 	setenv("XDG_CURRENT_DESKTOP", "fldesktop", 0);
@@ -209,17 +264,11 @@ int main(int argc, char *argv[]) {
 		wlr_log(WLR_ERROR, "failed to create wlr_backend");
 		return 1;
 	}
-	server.renderer = wlr_renderer_autocreate(server.backend);
-	if (!server.renderer) {
-		wlr_log(WLR_ERROR, "failed to create wlr_renderer");
-		return 1;
-	}
+	/* wm.ini [behaviour] renderer=; the environment's WLR_RENDERER wins */
+	if (!getenv("WLR_RENDERER") && server.config.renderer[0] && strcmp(server.config.renderer, "auto"))
+		setenv("WLR_RENDERER", server.config.renderer, 1);
+	if (!create_renderer(&server)) return 1;
 	init_renderer_globals(server.renderer, server.wl_display);
-	server.allocator = wlr_allocator_autocreate(server.backend, server.renderer);
-	if (!server.allocator) {
-		wlr_log(WLR_ERROR, "failed to create wlr_allocator");
-		return 1;
-	}
 
 	server.compositor = wlr_compositor_create(server.wl_display, 6, server.renderer);
 	wlr_subcompositor_create(server.wl_display);
@@ -240,8 +289,6 @@ int main(int argc, char *argv[]) {
 	wlr_relative_pointer_manager_v1_create(server.wl_display);
 	wlr_pointer_constraints_v1_create(server.wl_display);
 	/* KDE's protocol, used by some toolkits to ask for server side decorations */
-	struct wlr_server_decoration_manager *sdm = wlr_server_decoration_manager_create(server.wl_display);
-	wlr_server_decoration_manager_set_default_mode(sdm, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 
 	server.output_layout = wlr_output_layout_create(server.wl_display);
 	wlr_xdg_output_manager_v1_create(server.wl_display, server.output_layout);
@@ -292,10 +339,10 @@ int main(int argc, char *argv[]) {
 	flwm_spawn(&server, xwayland_display(&server)
 		? "command -v dbus-update-activation-environment >/dev/null && "
 		  "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP "
-		  "XDG_SESSION_TYPE FLWM_PID 2>/dev/null"
+		  "XDG_SESSION_TYPE FLWM_PID FLWM_RENDERER 2>/dev/null"
 		: "command -v dbus-update-activation-environment >/dev/null && "
 		  "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP "
-		  "XDG_SESSION_TYPE FLWM_PID 2>/dev/null");
+		  "XDG_SESSION_TYPE FLWM_PID FLWM_RENDERER 2>/dev/null");
 
 	if (startup_cmd) flwm_spawn(&server, startup_cmd);
 	else if (autostart)

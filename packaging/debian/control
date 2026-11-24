@@ -38,6 +38,9 @@ Build-Depends: debhelper-compat (= 13),
                libgstreamer1.0-dev,
                libgstreamer-plugins-base1.0-dev,
                libpam0g-dev,
+               libavahi-client-dev,
+               libavahi-glib-dev,
+               libenchant-2-dev,
                libegl-dev,
                libgles-dev,
                libgl-dev,
@@ -77,8 +80,8 @@ Depends: fldesktop-wm (>= ${source:Version}),
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-media-player,
             fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
-            fldesktop-passwords, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
-            plymouth, plymouth-themes, fldesktop-plymouth-theme, power-profiles-daemon
+            fldesktop-passwords, fldesktop-secrets, fldesktop-pinentry, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
+            plymouth, plymouth-themes, fldesktop-plymouth-theme, power-profiles-daemon, avahi-daemon, libnss-mdns
 Suggests: fonts-noto-color-emoji
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
@@ -216,7 +219,7 @@ Package: fldesktop-web
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: www-browser
-Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils, gnome-keyring | keepassxc
+Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils, fldesktop-secrets | gnome-keyring | keepassxc
 Description: fldesktop web browser
  fl-web is a web browser built with FLTK and WPE WebKit: tabs, an address
  bar that searches and completes from bookmarks and history, downloads,
@@ -227,8 +230,8 @@ Description: fldesktop web browser
 Package: fldesktop-media-player
 Architecture: any
 Depends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, ${shlibs:Depends}, ${misc:Depends}
-Recommends: gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pipewire | gstreamer1.0-pulseaudio
-Suggests: yt-dlp
+Recommends: gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pipewire | gstreamer1.0-pulseaudio,
+ curl, python3
 Provides: fldesktop-video
 Replaces: fldesktop-video (<< 0.1.4~)
 Breaks: fldesktop-video (<< 0.1.4~)
@@ -239,6 +242,11 @@ Description: fldesktop video and music player
  audio and subtitle track selection, playback speed, screenshots, full screen
  and resuming where playback stopped. Other programs and the media keys
  control it through MPRIS.
+ .
+ Videos of web sites play through yt-dlp. Because distribution packages of
+ yt-dlp are usually too old for the sites, the player downloads its own
+ yt-dlp and the QuickJS-ng JavaScript engine from their GitHub releases
+ (verified by SHA-256) and keeps them up to date; this can be turned off.
 
 Package: fldesktop-docs
 Architecture: any
@@ -284,9 +292,10 @@ Description: fldesktop file manager
 Package: fldesktop-edit
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: hunspell-en-us | hunspell-dictionary
 Description: fldesktop text editor
  fl-edit is a tabbed text and code editor with syntax highlighting,
- find and replace, auto-indent and line numbers.
+ find and replace, auto-indent, line numbers and spell checking (enchant).
 
 Package: fldesktop-settings
 Architecture: any
@@ -436,10 +445,33 @@ Description: fldesktop firewall settings
 Package: fldesktop-passwords
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: gnome-keyring, openssh-client, gnupg
+Recommends: fldesktop-secrets | gnome-keyring, openssh-client, gnupg
 Description: fldesktop passwords and keys (Secret Service, SSH, GPG)
  fl-keyring shows and edits the passwords programs keep in the Secret Service
  (GNOME Keyring, KeePassXC), and makes, copies and deletes SSH and GPG keys.
+
+Package: fldesktop-secrets
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, dbus-user-session | dbus-x11 | dbus
+Recommends: libpam-runtime
+Suggests: libsecret-tools
+Description: fldesktop password store (Secret Service), in place of GNOME Keyring
+ fl-secretd keeps the passwords programs store through the Secret Service
+ (org.freedesktop.secrets: libsecret, browsers, mail programs, Flatpak apps
+ through the portal) in encrypted keyrings. The login keyring is unlocked
+ with the login password by its PAM module, pam_fldesktop_keyring.
+
+Package: fldesktop-pinentry
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: gnupg-agent | gpg-agent
+Suggests: pinentry-curses
+Provides: pinentry, pinentry-x11
+Description: fldesktop passphrase prompt for GnuPG (pinentry)
+ pinentry-fldesktop asks for the passphrases and PINs of gpg-agent in a
+ desktop dialog, shows the quality of new passphrases and can keep them in
+ the password manager (Secret Service). Without a display it hands over to
+ pinentry-curses.
 
 Package: fldesktop-logs
 Architecture: any

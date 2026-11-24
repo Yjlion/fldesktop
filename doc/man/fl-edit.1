@@ -31,7 +31,7 @@ folder up with \fB.git\fR, \fBcompile_commands.json\fR, \fBCargo.toml\fR, \fBgo.
 \fBpython=pyright-langserver --stdio\fR. \fBCode \(-> Language Servers\fR turns them off.
 .SS Multiple carets
 Ctrl+D selects the word at the cursor, then adds the next place with the same text as another
-selection. Alt+click adds a caret, Ctrl+Alt+Up and Ctrl+Alt+Down add one on the line above or
+selection. Alt+click adds a caret (Ctrl+Alt+click when Alt+drag moves windows), Ctrl+Alt+Up and Ctrl+Alt+Down add one on the line above or
 below. Typing, Backspace, Delete, Enter and the arrow keys then work at every caret; Escape (or
 a click) goes back to one.
 .SS Minimap and session
@@ -39,6 +39,12 @@ a click) goes back to one.
 click or drag in it to scroll. The open files, their cursors and scroll positions are saved at
 quit and opened again when fl-edit starts without files (\fBOptions \(-> Reopen Files at
 Start\fR).
+.PP
+\fBView > Check Spelling\fR (F7) underlines misspelt words: everything in plain
+text, the text of Markdown, and comments and strings in code. A right-click on
+one offers suggestions, adds it to the personal dictionary or ignores it. The
+languages are set in Settings > Language & Region (enchant with Hunspell
+dictionaries).
 .SH FILES
 .TP
 \fI~/.config/fldesktop/edit.ini\fR

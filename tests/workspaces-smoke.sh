@@ -4,6 +4,7 @@
 #  2. on workspace 2 the list is empty; a second fl-calc opens there
 #  3. back on workspace 1 only the first fl-calc is listed
 #  4. with wtype: Super+Shift+3 sends the window to workspace 3, Super+3 goes there
+#  5. a wm.ini written after the start (as fl-settings does) and SIGHUP: 6 workspaces
 # usage: workspaces-smoke.sh <bindir> <fl-workspaces>
 set -u
 BIN="$1"
@@ -47,6 +48,12 @@ if [ $HAVE_WTYPE = 1 ]; then
 	calcs 1
 	list six
 fi
+# no user wm.ini at the start: the reload must still read the one written now
+mkdir -p "$TMP/config/fldesktop"
+printf '[behaviour]\nworkspaces=6\n' >"$TMP/config/fldesktop/wm.ini"
+kill -HUP \$FLWM_PID
+for i in \$(seq 30); do "$WS" list 2>/dev/null | grep -q "^workspace 6" && break; sleep 0.1; done
+list seven
 echo done >"$TMP/done"
 EOS
 chmod +x "$TMP/run.sh"
@@ -86,10 +93,11 @@ if [ $HAVE_WTYPE = 1 ]; then
 else
 	echo "wtype not installed: key bindings not tested"
 fi
+check 'grep -q "^workspace 6" "$TMP/seven"' "a wm.ini written after the start was not read on SIGHUP"
 check '! grep -q "Assertion" "$LOG"' "assertion failure"
 if [ -n "$why" ]; then
 	echo "FAIL: $why"
-	for f in one two three four five six; do
+	for f in one two three four five six seven; do
 		[ -e "$TMP/$f" ] && { echo "--- $f"; cat "$TMP/$f"; }
 	done
 	echo "--- fl-wm"; grep -v "^$" "$LOG" | tail -40

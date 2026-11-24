@@ -169,6 +169,12 @@ void show_page(int i, bool keep_scroll = false) {
 // the batteries and sensors change: their page is read again while shown
 void tick(void *) {
   if (g_ids[(size_t)g_page] == "power" && g_win->shown()) show_page(g_page, true);
+  // the OpenGL and Vulkan details came in
+  static bool probed = false;
+  if (!probed && sysinfo::graphics_probe_ready()) {
+    probed = true;
+    if (g_ids[(size_t)g_page] == "graphics") show_page(g_page, true);
+  }
   Fl::repeat_timeout(2.0, tick);
 }
 
@@ -185,13 +191,13 @@ void save_report() {
   if (fc.show() != 0 || !fc.filename()) return;
   std::string path = fc.filename();
   if (fld::extension(path).empty()) path += ".txt";
-  if (!fld::write_file(path, sysinfo::report(sysinfo::all_pages())))
+  if (!fld::write_file(path, (sysinfo::wait_graphics_probe(), sysinfo::report(sysinfo::all_pages()))))
     fl_alert("Could not save %s", fld::escape_at(path).c_str());
   else g_status->copy_label(fld::escape_at("Saved " + fld::tilde(path)).c_str());
 }
 
 void copy_all() {
-  InfoView::copy_text(sysinfo::report(sysinfo::all_pages()));
+  InfoView::copy_text((sysinfo::wait_graphics_probe(), sysinfo::report(sysinfo::all_pages())));
   g_status->copy_label("Copied the whole report");
 }
 
@@ -233,10 +239,11 @@ int main(int argc, char **argv) {
     else if (a == "--report") print = true;
   }
   if (print) {
-    fputs(sysinfo::report(sysinfo::all_pages()).c_str(), stdout);
+    fputs((sysinfo::wait_graphics_probe(), sysinfo::report(sysinfo::all_pages())).c_str(), stdout);
     return 0;
   }
   fld::init_app("fl-sysinfo", argc, argv);
+  sysinfo::start_graphics_probe(); // eglinfo, vulkaninfo: a moment, in the background
 
   const fld::Palette &p = fld::palette();
   const int W = 860, H = 600, TB = 42, ST = 24, SW = 190;

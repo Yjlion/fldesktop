@@ -11,7 +11,50 @@
 #include "users_model.h"
 #include "xkb_rules.h"
 
+#include "sharing_util.h"
+#include "gnupg_conf.h"
+
+static void test_gnupg_conf() {
+  std::string c = "default-cache-ttl 600\npinentry-program /usr/bin/pinentry-gnome3\n# note\n";
+  CHECK_EQ(gnupg_conf::pinentry(c), std::string("/usr/bin/pinentry-gnome3"));
+  std::string n = gnupg_conf::with_pinentry(c, "/usr/bin/pinentry-fldesktop");
+  CHECK_EQ(n, std::string("default-cache-ttl 600\npinentry-program /usr/bin/pinentry-fldesktop\n# note\n"));
+  CHECK_EQ(gnupg_conf::with_pinentry(n, ""), std::string("default-cache-ttl 600\n# note\n"));
+  CHECK_EQ(gnupg_conf::with_pinentry("", "/x"), std::string("pinentry-program /x\n"));
+  CHECK_EQ(gnupg_conf::pinentry("pinentry-programs x\n"), std::string(""));
+}
+
+static void test_sharing() {
+  CHECK(sharing::valid_hostname("leo-laptop"));
+  CHECK(!sharing::valid_hostname("-leo"));
+  CHECK(!sharing::valid_hostname("leo_laptop"));
+  CHECK(!sharing::valid_hostname(""));
+  CHECK(!sharing::valid_hostname(std::string(64, 'a')));
+  CHECK(sharing::valid_hostname("box.example.org"));
+  CHECK(!sharing::valid_hostname("box..org"));
+  CHECK(!sharing::valid_hostname("box.-x.org"));
+  CHECK_EQ(sharing::hostname_from("Leo's Laptop!"), std::string("leos-laptop"));
+  const sharing::Published *p = sharing::find_published("sftp");
+  CHECK(p != nullptr);
+  if (p) {
+    std::string x = sharing::service_xml(*p);
+    CHECK(x.find("<type>_sftp-ssh._tcp</type>") != std::string::npos);
+    CHECK(x.find("<port>22</port>") != std::string::npos);
+    CHECK(x.find("%h") != std::string::npos);
+  }
+  CHECK(sharing::find_published("nope") == nullptr);
+  CHECK_EQ(sharing::service_path("ssh", "/x"), std::string("/x/fldesktop-ssh.service"));
+  std::string hosts = "127.0.0.1\tlocalhost\n127.0.1.1\told\n# comment old\n::1 localhost ip6-localhost\n";
+  std::string h = sharing::hosts_with_name(hosts, "old", "new");
+  CHECK(h.find("127.0.1.1\tnew\n") != std::string::npos);
+  CHECK(h.find("127.0.1.1\told") == std::string::npos);
+  CHECK(h.find("# comment old") != std::string::npos);
+  CHECK(sharing::hosts_with_name("127.0.0.1 localhost\n", "", "box").find("127.0.1.1\tbox") != std::string::npos);
+}
+
 int main() {
+  test_sharing();
+  test_gnupg_conf();
   // base.lst fixture
   xkb::Rules r;
   CHECK(r.parse("! model\n"

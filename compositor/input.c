@@ -90,13 +90,22 @@ static void finish_cycle(struct flwm_server *server) {
 	}
 }
 
+/* Super + click (with any other modifiers) or Alt alone + click grab the
+ * window, as configured; Alt+Shift+click and the like still go to the app */
+static bool drag_modifier_held(struct flwm_server *server, uint32_t mods) {
+	uint32_t m = mods & (WLR_MODIFIER_LOGO | WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT | WLR_MODIFIER_CTRL);
+	uint32_t allowed = server->config.drag_mods;
+	if ((allowed & WLR_MODIFIER_LOGO) && (m & WLR_MODIFIER_LOGO)) return true;
+	return (allowed & WLR_MODIFIER_ALT) && m == WLR_MODIFIER_ALT;
+}
+
 static void reload_config(struct flwm_server *server) {
-	char *path = server->config.path ? strdup(server->config.path) : config_default_path();
+	/* the same search as at startup: fl-settings writes the user's wm.ini,
+	 * which may not have existed when fl-wm started with the system one */
 	config_free(&server->config);
 	config_init_defaults(&server->config);
-	if (!config_load(&server->config, path)) wlr_log(WLR_INFO, "reload: no config at %s", path);
+	config_load_first(&server->config, server->config_cli_path);
 	config_load_global_shortcuts(&server->config);
-	free(path);
 	input_apply_config(server);
 	output_apply_config(server);
 	struct flwm_view *v;
@@ -1010,7 +1019,8 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	 * would leave it open, and a client in its menu loop ignores a close
 	 * request, so end the grab first: the popups get popup_done and close. */
 	struct wlr_seat_pointer_state *ps = &server->seat->pointer_state;
-	bool ours = !surface || (desc && desc->kind == FLWM_NODE_DECOR) || (mods & WLR_MODIFIER_LOGO);
+	bool drag_mods = drag_modifier_held(server, mods);
+	bool ours = !surface || (desc && desc->kind == FLWM_NODE_DECOR) || drag_mods;
 	if (ps->grab != ps->default_grab && !server->locked && ours && !server->seat->drag)
 		wlr_seat_pointer_end_grab(server->seat);
 	/* menus without a grab (FLTK's): a click elsewhere closes them too */
@@ -1044,8 +1054,8 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	if (view && view->role != FLWM_ROLE_OSK && view->role != FLWM_ROLE_NOTIFY && view->role != FLWM_ROLE_OSD)
 		view_focus(view);
 
-	/* Super + drag moves / resizes any normal window */
-	if (view && view->role == FLWM_ROLE_NORMAL && (mods & WLR_MODIFIER_LOGO)) {
+	/* Super / Alt + drag moves / resizes any normal window */
+	if (view && view->role == FLWM_ROLE_NORMAL && drag_mods) {
 		if (event->button == BTN_LEFT) {
 			view_begin_interactive(view, FLWM_CURSOR_MOVE, 0);
 			return;

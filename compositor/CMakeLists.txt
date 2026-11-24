@@ -23,6 +23,7 @@ if(EXISTS ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml)
   fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/stable/tablet/tablet-v2.xml server)
 endif()
 fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml server)
+fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/fldesktop-window-v1.xml server)
 fld_wayland_protocol(WM_PROTO_SRC ${CMAKE_SOURCE_DIR}/protocols/wlr-output-power-management-unstable-v1.xml server)
 fld_wayland_protocol(WM_PROTO_SRC ${WAYLAND_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml server)
 
@@ -34,6 +35,8 @@ foreach(p staging/tearing-control/tearing-control-v1 staging/content-type/conten
 endforeach()
 
 add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c popup_place.c zoom.c a11y.c protocols.c)
+# wlroots has the glue code of the standard protocols; our own one is here
+target_sources(fl-wm PRIVATE ${FLD_PROTO_OUT}/fldesktop-window-v1-protocol.c)
 
 # X11 programs through Xwayland, when wlroots was built with it
 option(FLD_XWAYLAND "Run X11 programs in fl-wm through Xwayland (if wlroots supports it)" ON)

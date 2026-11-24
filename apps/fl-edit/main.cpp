@@ -1,3 +1,4 @@
+#include "fld/window_move.h"
 #include "fld/json.h" // first: X11 headers define Bool
 // fl-edit: text editor for fldesktop
 #include <FL/Fl.H>
@@ -35,6 +36,9 @@
 #include "fld/window_size.h"
 #include "lsp.h"
 #include "syntax.h"
+#ifdef FLD_HAVE_SPELL
+#include "spell.h"
+#endif
 
 static Fl_Double_Window *g_win;
 static Fl_Menu_Bar *g_menu;
@@ -44,7 +48,7 @@ static Fl_Box *g_status;
 
 struct Settings {
   bool line_numbers = true, wrap = false, highlight = true, spaces = false, auto_indent = true;
-  bool brackets = true, minimap = true, lsp = true, restore_session = true;
+  bool brackets = true, minimap = true, lsp = true, restore_session = true, spell = true;
   int font_size = 14, tab_width = 4;
   std::string theme = "auto";
   std::vector<std::string> recent;
@@ -78,6 +82,22 @@ static void make_styles() {
     g_styles[i + 2 * syntax::STYLE_COUNT] = g_styles[i];
     g_styles[i + 2 * syntax::STYLE_COUNT].attr |= Fl_Text_Display::ATTR_GRAMMAR;
   }
+}
+
+// ---- spell checking ------------------------------------------------------------------
+
+#ifdef FLD_HAVE_SPELL
+static spell::Checker *checker() {
+  static spell::Checker *c = new spell::Checker();
+  return c;
+}
+#endif
+static bool spell_on() {
+#ifdef FLD_HAVE_SPELL
+  return S.spell && checker()->ok();
+#else
+  return false;
+#endif
 }
 
 // ---- documents --------------------------------------------------------------------
@@ -172,7 +192,7 @@ public:
   }
 
   // the style buffer is used for highlighting and for bracket matching
-  bool styled() const { return (S.highlight || S.brackets) && buf->length() < MAX_HIGHLIGHT; }
+  bool styled() const { return (S.highlight || S.brackets || spell_on()) && buf->length() < MAX_HIGHLIGHT; }
   syntax::Language effective_lang() const { return S.highlight ? lang : syntax::NONE; }
 
   void layout() {
@@ -219,10 +239,63 @@ public:
     syntax::highlight(effective_lang(), lexed, lexed_styles);
     dirty = false;
     shown_styles = lexed_styles;
+    overlay_spelling();
     overlay_diagnostics();
     style->text(shown_styles.c_str());
     ed->redisplay_range(0, buf->length());
     update_brackets();
+  }
+
+  // the text a language puts prose in: all of plain text, comments and strings in code
+  bool spell_style(char st) const {
+    syntax::Language l = effective_lang();
+    if (l == syntax::NONE) return true;
+    if (l == syntax::MARKDOWN) return st == syntax::PLAIN || st == syntax::HEADING;
+    return st == syntax::COMMENT || st == syntax::STRING;
+  }
+
+  // underlines misspelt words in shown_styles (the warning underline: LSP
+  // errors keep the red one)
+  void overlay_spelling() {
+#ifdef FLD_HAVE_SPELL
+    if (!spell_on() || lexed.size() > (2u << 20) || lexed.size() != shown_styles.size()) return;
+    spell::Checker *c = checker();
+    size_t i = 0, n = lexed.size();
+    while (i < n) {
+      if (!spell_style(lexed_styles[i])) {
+        i++;
+        continue;
+      }
+      size_t a = i;
+      char st = lexed_styles[i];
+      while (i < n && lexed_styles[i] == st) i++;
+      for (const spell::Word &w : spell::words(lexed, a, i)) {
+        if (c->check(lexed.substr(w.start, w.len))) continue;
+        for (size_t p = w.start; p < w.start + w.len; p++) {
+          int s0 = (shown_styles[p] - 'A') % syntax::STYLE_COUNT;
+          shown_styles[p] = (char)('A' + s0 + 2 * syntax::STYLE_COUNT);
+        }
+      }
+    }
+#endif
+  }
+
+  // the misspelt word at pos: its range, or false
+  bool misspelt_at(int pos, int &a, int &b) const {
+#ifdef FLD_HAVE_SPELL
+    if (!spell_on() || dirty || lexed.size() != (size_t)buf->length() || pos < 0 || pos > buf->length()) return false;
+    int ls = buf->line_start(pos), le = buf->line_end(pos);
+    for (const spell::Word &w : spell::words(lexed, (size_t)ls, (size_t)le)) {
+      if (pos < (int)w.start || pos > (int)(w.start + w.len)) continue;
+      if (!spell_style(lexed_styles[w.start])) return false;
+      if (checker()->check(lexed.substr(w.start, w.len))) return false;
+      a = (int)w.start;
+      b = (int)(w.start + w.len);
+      return true;
+    }
+#endif
+    (void)pos; (void)a; (void)b;
+    return false;
   }
 
   // Marks the bracket at (or just before) the cursor and its partner.
@@ -320,6 +393,7 @@ public:
     });
     if (!styled() || dirty) return; // the next rehighlight shows them
     shown_styles = lexed_styles;
+    overlay_spelling();
     overlay_diagnostics();
     style->text(shown_styles.c_str());
     marks.clear();
@@ -870,6 +944,7 @@ static void save_settings() {
   cfg.set_bool("Editor", "AutoIndent", S.auto_indent);
   cfg.set_bool("Editor", "MatchBrackets", S.brackets);
   cfg.set_bool("Editor", "Minimap", S.minimap);
+  cfg.set_bool("Editor", "CheckSpelling", S.spell);
   cfg.set_bool("Editor", "LanguageServers", S.lsp);
   cfg.set_bool("Editor", "RestoreSession", S.restore_session);
   cfg.set("Editor", "ColorTheme", S.theme);
@@ -889,6 +964,7 @@ static void load_settings() {
   S.auto_indent = cfg.get_bool("Editor", "AutoIndent", true);
   S.brackets = cfg.get_bool("Editor", "MatchBrackets", true);
   S.minimap = cfg.get_bool("Editor", "Minimap", true);
+  S.spell = cfg.get_bool("Editor", "CheckSpelling", true);
   S.lsp = cfg.get_bool("Editor", "LanguageServers", true);
   S.restore_session = cfg.get_bool("Editor", "RestoreSession", true);
   // [LanguageServers] cpp=clangd --background-index, python=pyright-langserver --stdio, ...
@@ -1375,6 +1451,7 @@ static void menu_cb(Fl_Widget *, void *v) {
     case 26: next_problem(false); break;
     case 27: next_problem(true); break;
     case 42: S.minimap = !S.minimap; apply_all(); break;
+    case 45: S.spell = !S.spell; apply_all(); break;
     case 43:
       S.lsp = !S.lsp;
       save_settings();
@@ -1636,6 +1713,30 @@ static void editor_menu(Doc *d) {
   bool sel = b->selected();
   auto run = [](long id) { return [id] { menu_cb(nullptr, (void *)id); }; };
   fld::Menu m;
+#ifdef FLD_HAVE_SPELL
+  int wa, wb;
+  if (!sel && d->misspelt_at(d->ed->insert_position(), wa, wb)) {
+    char *t = b->text_range(wa, wb);
+    std::string word = t;
+    free(t);
+    std::vector<std::string> sug = checker()->suggest(word);
+    for (auto &s : sug)
+      m.item(fld::escape_at(s).c_str(), [d, wa, wb, s] {
+        d->buf->replace(wa, wb, s.c_str());
+        d->ed->insert_position(wa + (int)s.size());
+      });
+    if (sug.empty()) m.item("(no suggestions)", [] {}, FL_MENU_INACTIVE);
+    m.divider();
+    m.item(("Add \"" + fld::escape_at(word) + "\" to the Dictionary").c_str(), [word] {
+      checker()->add_to_dictionary(word);
+      for (Doc *x : g_docs) x->rehighlight();
+    });
+    m.item("Ignore", [word] {
+      checker()->ignore(word);
+      for (Doc *x : g_docs) x->rehighlight();
+    }).divider();
+  }
+#endif
   m.item("Undo", run(10), b->can_undo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'z');
   m.item("Redo", run(11), b->can_redo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + FL_SHIFT + 'z').divider();
   m.item("Cut", run(12), sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
@@ -1677,7 +1778,7 @@ int main(int argc, char **argv) {
   make_styles();
   const int W = 900, H = 640, MH = 28, SH = 24;
   g_win = new EditorWindow(W, H, "Text Editor");
-  g_menu = new Fl_Menu_Bar(0, 0, W, MH);
+  g_menu = new fld::MenuBar(0, 0, W, MH);
   g_menu->box(FL_FLAT_BOX);
   g_menu->add("&File/&New", FL_CTRL + 'n', menu_cb, (void *)1);
   g_menu->add("&File/&Open…", FL_CTRL + 'o', menu_cb, (void *)2);
@@ -1712,6 +1813,9 @@ int main(int argc, char **argv) {
   g_menu->add("&View/&Syntax Highlighting", 0, menu_cb, (void *)32, FL_MENU_TOGGLE | (S.highlight ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Highlight Matching Brackets", 0, menu_cb, (void *)41, FL_MENU_TOGGLE | (S.brackets ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Minimap", 0, menu_cb, (void *)42, FL_MENU_TOGGLE | (S.minimap ? FL_MENU_VALUE : 0));
+#ifdef FLD_HAVE_SPELL
+  g_menu->add("&View/Check S&pelling", FL_F + 7, menu_cb, (void *)45, FL_MENU_TOGGLE | (S.spell ? FL_MENU_VALUE : 0));
+#endif
   g_menu->add("&View/&Language/&Automatic", 0, language_cb, (void *)-1L, FL_MENU_RADIO | FL_MENU_DIVIDER);
   for (auto l : syntax::all_languages()) {
     std::string label = std::string("&View/&Language/") + syntax::language_name(l);

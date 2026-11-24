@@ -172,8 +172,10 @@ struct flwm_config {
 	char *launcher_cmd;
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	bool snap_assist; /* after snapping to a side: offer the other windows */
+	uint32_t drag_mods; /* modifiers that make a click move / resize a window (WLR_MODIFIER_*) */
 	bool osk_in_tablet_mode; /* the on-screen keyboard for text fields in tablet mode */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
+	char renderer[16]; /* auto, gles2, vulkan or pixman (read at start only) */
 	int workspaces; /* number of workspaces, 1..FLWM_MAX_WORKSPACES */
 	/* touchpad gestures (gesture.c) */
 	bool gestures;         /* swipes with gesture_fingers are ours */
@@ -248,6 +250,10 @@ struct flwm_server {
 
 	struct wlr_xdg_decoration_manager_v1 *xdg_decoration_mgr;
 	struct wl_listener new_toplevel_decoration;
+	/* KDE's server-decoration protocol: what GTK 3 and 4 use */
+	struct wlr_server_decoration_manager *kde_deco_mgr;
+	struct wl_listener new_kde_decoration, kde_deco_mgr_destroy;
+	struct wl_list kde_decorations; /* flwm_kde_decoration.link */
 
 	struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_mgr;
 	struct wlr_xdg_toplevel_icon_manager_v1 *toplevel_icon_mgr; /* wlroots 0.19+ */
@@ -353,6 +359,8 @@ struct flwm_server {
 	int idle_inhibitors;
 
 	struct flwm_config config;
+	bool software_fallback; /* the GPU renderer failed: pixman */
+	char *config_cli_path; /* -c PATH, or NULL: then the first of the usual places */
 	char exe_dir[4096]; /* directory of our own executable */
 	bool desktop_shown; /* show-desktop toggled */
 };
@@ -512,6 +520,9 @@ bool config_load(struct flwm_config *c, const char *path);
 void config_load_global_shortcuts(struct flwm_config *c);
 void config_free(struct flwm_config *c);
 char *config_default_path(void);
+/* loads -c PATH, or else the user's wm.ini, the system one or the default
+ * one (the first that exists); remembers the user's path for saving */
+void config_load_first(struct flwm_config *c, const char *cli_path);
 
 /* output.c */
 void output_init(struct flwm_server *server);

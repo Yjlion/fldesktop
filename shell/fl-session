@@ -32,6 +32,18 @@ fi
 snap="${XDG_RUNTIME_DIR:-/tmp}/fldesktop-session.env"
 ( umask 077; env | grep -E '^(http|https|ftp|all|no)_proxy=|^(HTTP|HTTPS|FTP|ALL|NO)_PROXY=' > "$snap" ) 2>/dev/null || true
 
+# Flatpak's exported applications, also when the distribution's profile
+# script that adds them was not read (a session started without a login
+# shell). Added even if they don't exist yet: the first install creates them.
+data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+command -v flatpak >/dev/null 2>&1 && for d in /var/lib/flatpak/exports/share "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/exports/share"; do
+	case ":$data_dirs:" in
+	*":$d:"*|*":$d/:"*) ;;
+	*) data_dirs="$d:$data_dirs" ;;
+	esac
+done
+export XDG_DATA_DIRS="$data_dirs"
+
 # fldesktop's own cursors unless something else is configured
 if [ -z "$XCURSOR_THEME" ]; then
 	for d in "${XDG_DATA_HOME:-$HOME/.local/share}" $(echo "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" | tr ':' ' '); do
@@ -42,6 +54,16 @@ if [ -z "$XCURSOR_THEME" ]; then
 	done
 fi
 
+# Qt programs: colours, icons and the accent through qt5ct / qt6ct, whose
+# colour scheme Settings > Appearance writes (fld::export_toolkit_theme)
+if [ -z "$QT_QPA_PLATFORMTHEME" ]; then
+	if command -v qt5ct >/dev/null 2>&1; then
+		export QT_QPA_PLATFORMTHEME=qt5ct # qt6ct answers to this name too
+	elif command -v qt6ct >/dev/null 2>&1; then
+		export QT_QPA_PLATFORMTHEME=qt6ct
+	fi
+fi
+
 # Create the XDG user folders (Desktop, Documents, ...) and keep their names
 # in step with the language.
 if command -v xdg-user-dirs-update >/dev/null 2>&1; then
@@ -49,6 +71,28 @@ if command -v xdg-user-dirs-update >/dev/null 2>&1; then
 fi
 
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-run-session >/dev/null 2>&1; then
-	exec dbus-run-session -- fl-wm "$@"
+	exec dbus-run-session -- "$0" "$@"
 fi
-exec fl-wm "$@"
+
+# fldesktop's password store (the Secret Service) before any program asks
+# for it, so it gets the name before another one is started by D-Bus; it
+# leaves when GNOME Keyring or KeePassXC already has it
+if command -v fl-secretd >/dev/null 2>&1; then
+	fl-secretd >/dev/null 2>&1 &
+fi
+
+# fl-wm falls back to software rendering itself when the GPU's renderer
+# can't be created. If it still dies right away (a driver that crashes,
+# EGL that fails later), start it once more with software rendering.
+if [ -n "$WLR_RENDERER" ]; then
+	exec fl-wm "$@"
+fi
+started=$(date +%s)
+fl-wm "$@"
+rc=$?
+if [ $rc -ne 0 ] && [ $(( $(date +%s) - started )) -lt 5 ]; then
+	echo "fl-session: fl-wm exited at once ($rc): trying software rendering" >&2
+	export WLR_RENDERER=pixman WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_NO_HARDWARE_CURSORS=1 FLWM_SOFTWARE_FALLBACK=1
+	exec fl-wm "$@"
+fi
+exit $rc

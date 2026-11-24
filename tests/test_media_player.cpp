@@ -1,5 +1,6 @@
 #include <algorithm>
 #include "test.h"
+#include "webhelpers_util.h"
 #include <unistd.h>
 #include "fld/util.h"
 #include <cstdlib>
@@ -9,7 +10,46 @@
 
 using namespace video;
 
+static void test_webhelpers() {
+  using namespace webhelpers;
+  CHECK_EQ(qjs_asset("x86_64"), std::string("qjs-linux-x86_64"));
+  CHECK_EQ(qjs_asset("aarch64"), std::string("qjs-linux-aarch64"));
+  CHECK_EQ(qjs_asset("armv7l"), std::string("qjs-linux-armv7"));
+  CHECK_EQ(qjs_asset("i686"), std::string("qjs-linux-x86"));
+  CHECK_EQ(qjs_asset("ppc64le"), std::string(""));
+  std::string a(64, 'a'), b(64, 'b');
+  std::string sums = a + "  yt-dlp.exe\n" + b + "  yt-dlp\n" + a + " *yt-dlp_linux\n";
+  CHECK_EQ(sha256_in_sums(sums, "yt-dlp"), b);
+  CHECK_EQ(sha256_in_sums(sums, "yt-dlp_linux"), a);
+  CHECK_EQ(sha256_in_sums("garbage\n", "yt-dlp"), std::string(""));
+  std::string json = "{\"tag_name\":\"v0.10.1\",\"assets\":["
+                     "{\"name\":\"qjs-linux-aarch64\",\"digest\":\"sha256:" + a + "\","
+                     "\"browser_download_url\":\"https://github.com/quickjs-ng/quickjs/releases/download/v0.10.1/qjs-linux-aarch64\"},"
+                     "{\"name\":\"qjs-linux-x86_64\",\"digest\":\"sha256:" + std::string(64, 'C') + "\","
+                     "\"browser_download_url\":\"https://github.com/quickjs-ng/quickjs/releases/download/v0.10.1/qjs-linux-x86_64\"}]}";
+  std::string tag, sum, url;
+  CHECK(qjs_release_asset(json, "qjs-linux-x86_64", tag, sum, url));
+  CHECK_EQ(tag, std::string("v0.10.1"));
+  CHECK_EQ(sum, std::string(64, 'c'));
+  CHECK(!qjs_release_asset(json, "qjs-linux-riscv64", tag, sum, url));
+  // an asset from somewhere else is refused
+  std::string evil = json;
+  evil.replace(evil.rfind("https://github.com/quickjs-ng"), 29, "https://evil.example.org/x/yy");
+  CHECK(!qjs_release_asset(evil, "qjs-linux-x86_64", tag, sum, url));
+  CHECK(version_at_least("2025.11.12", "2025.11"));
+  CHECK(!version_at_least("2024.04.09", "2025.11"));
+  CHECK_EQ(js_runtime(false, "/h/qjs", false, "2025.12.08"), std::string("quickjs:/h/qjs"));
+  CHECK_EQ(js_runtime(false, "", true, "2025.12.08"), std::string("quickjs"));
+  CHECK_EQ(js_runtime(true, "/h/qjs", true, "2025.12.08"), std::string(""));
+  CHECK_EQ(js_runtime(false, "/h/qjs", false, "2024.04.09"), std::string(""));
+  auto c = resolve_cmd("/h/yt-dlp", "quickjs:/h/qjs", "https://youtu.be/x");
+  CHECK_EQ(c.front(), std::string("/h/yt-dlp"));
+  CHECK_EQ(c.back(), std::string("https://youtu.be/x"));
+  CHECK(std::find(c.begin(), c.end(), std::string("--js-runtimes")) != c.end());
+}
+
 int main() {
+  test_webhelpers();
   CHECK_EQ(format_time(0), std::string("0:00"));
   CHECK_EQ(format_time(75.9), std::string("1:15"));
   CHECK_EQ(format_time(3725), std::string("1:02:05"));

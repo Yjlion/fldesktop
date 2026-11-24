@@ -20,7 +20,9 @@
 #include <cctype>
 #include <climits>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <map>
 #include <unordered_map>
 #include <dirent.h>
@@ -345,10 +347,36 @@ static Fl_Image *normalize_depth(Fl_Image *img) {
   return n;
 }
 
+// The format from the first bytes, for files without a (known) extension,
+// such as AccountsService's pictures ("" if unknown).
+static std::string sniff_format(const std::string &path) {
+  unsigned char b[16] = {0};
+  FILE *f = fopen(path.c_str(), "rb");
+  if (!f) return "";
+  size_t n = fread(b, 1, sizeof b, f);
+  fclose(f);
+  if (n >= 8 && !memcmp(b, "\x89PNG\r\n\x1a\n", 8)) return "png";
+  if (n >= 3 && b[0] == 0xff && b[1] == 0xd8 && b[2] == 0xff) return "jpg";
+  if (n >= 6 && (!memcmp(b, "GIF87a", 6) || !memcmp(b, "GIF89a", 6))) return "gif";
+  if (n >= 2 && b[0] == 'B' && b[1] == 'M') return "bmp";
+  if (n >= 4 && !memcmp(b, "\0\0\1\0", 4)) return "ico";
+  if (n >= 2 && b[0] == 0x1f && b[1] == 0x8b) return "svgz";
+  if (n >= 9 && !memcmp(b, "/* XPM */", 9)) return "xpm";
+  if (n >= 2 && b[0] == 'P' && b[1] >= '1' && b[1] <= '6') return "pnm";
+  if (n >= 1 && (b[0] == '<' || (n >= 3 && b[0] == 0xef && b[1] == 0xbb && b[2] == 0xbf))) return "svg";
+  return "";
+}
+
 Fl_Image *load_image(const std::string &path) {
   static bool registered = false;
   if (!registered) { fl_register_images(); registered = true; }
   std::string ext = extension(path);
+  static const char *known[] = {"svg", "svgz", "xpm", "png", "jpg", "jpeg", "jpe", "gif", "bmp", "ico",
+                                "pnm", "pbm", "pgm", "ppm"};
+  if (std::find(std::begin(known), std::end(known), ext) == std::end(known)) {
+    std::string sniffed = sniff_format(path);
+    if (!sniffed.empty()) ext = sniffed;
+  }
   Fl_Image *img = nullptr;
   if (ext == "svg" || ext == "svgz") img = new Fl_SVG_Image(path.c_str());
   else if (ext == "xpm") img = new Fl_XPM_Image(path.c_str());
@@ -363,9 +391,13 @@ Fl_Image *load_image(const std::string &path) {
   else {
     Fl_Shared_Image *s = Fl_Shared_Image::get(path.c_str());
     if (!s) return nullptr;
-    if (s->fail() || s->w() <= 0) { s->release(); return nullptr; }
-    img = s->copy();
+    // s->copy() only adds a reference to the shared image itself, which the
+    // caller would then delete while FLTK's list still points at it: copy
+    // the image it holds instead
+    const Fl_Image *held = (s->fail() || s->w() <= 0) ? nullptr : s->image();
+    img = held ? held->copy(held->data_w(), held->data_h()) : nullptr;
     s->release();
+    if (!img) return nullptr;
   }
   if (img && (img->fail() || img->w() <= 0 || img->h() <= 0)) {
     delete img;

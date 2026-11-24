@@ -17,4 +17,8 @@ if(TARGET fld-gvfs)
   target_sources(fl-files PRIVATE gvfs_ui.cpp)
   target_link_libraries(fl-files PRIVATE fld-gvfs)
   target_compile_definitions(fl-files PRIVATE FLD_HAVE_GVFS=1)
+  if(TARGET fld-mdns) # shares that announce themselves on the network
+    target_link_libraries(fl-files PRIVATE fld-mdns)
+    target_compile_definitions(fl-files PRIVATE FLD_HAVE_MDNS=1)
+  endif()
 endif()

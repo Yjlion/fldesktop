@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <future>
+#include <mutex>
 #include <set>
 #include <sstream>
 
@@ -602,6 +604,174 @@ Page memory(const std::string &root) {
   return p;
 }
 
+
+// ---- OpenGL and Vulkan --------------------------------------------------------
+
+namespace {
+// "key: value" lines (leading spaces allowed)
+std::map<std::string, std::string> colon_values(const std::string &text, size_t from = 0, size_t to = std::string::npos) {
+  std::map<std::string, std::string> m;
+  std::istringstream in(text.substr(from, to == std::string::npos ? std::string::npos : to - from));
+  std::string line;
+  while (std::getline(in, line)) {
+    size_t c = line.find(':');
+    if (c == std::string::npos) continue;
+    std::string k = trim(line.substr(0, c)), v = trim(line.substr(c + 1));
+    if (!k.empty() && !v.empty() && !m.count(k)) m[k] = v;
+  }
+  return m;
+}
+
+std::string run_tool(const std::string &cmd) {
+  std::string out;
+  FILE *f = popen(("timeout 3 " + cmd + " 2>/dev/null").c_str(), "r");
+  if (!f) return out;
+  char buf[4096];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof buf, f)) > 0 && out.size() < (1u << 20)) out.append(buf, n);
+  pclose(f);
+  return out;
+}
+
+bool on_path(const std::string &prog) {
+  std::string path = getenv("PATH") ? getenv("PATH") : "/usr/bin:/bin";
+  std::istringstream in(path);
+  std::string d;
+  while (std::getline(in, d, ':'))
+    if (!d.empty() && access((d + "/" + prog).c_str(), X_OK) == 0) return true;
+  return false;
+}
+} // namespace
+
+Group parse_eglinfo(const std::string &text) {
+  Group g{"OpenGL", {}};
+  // several platforms (Wayland, GBM, device, ...): the first one with a renderer
+  size_t start = 0, end = std::string::npos;
+  for (;;) {
+    size_t r = text.find("renderer:", start);
+    if (r == std::string::npos) return g;
+    size_t sec = text.rfind(" platform:", r);
+    size_t sec_start = sec == std::string::npos ? 0 : text.rfind('\n', sec);
+    start = sec_start == std::string::npos ? 0 : sec_start;
+    size_t next = text.find(" platform:", r);
+    end = next == std::string::npos ? std::string::npos : text.rfind('\n', next);
+    break;
+  }
+  auto m = colon_values(text, start, end);
+  auto pick = [&](std::initializer_list<const char *> keys) {
+    for (const char *k : keys)
+      if (m.count(k)) return m[k];
+    return std::string();
+  };
+  add(g, "Renderer", pick({"OpenGL core profile renderer", "OpenGL compatibility profile renderer", "OpenGL ES profile renderer"}));
+  add(g, "Vendor", pick({"OpenGL core profile vendor", "OpenGL compatibility profile vendor", "OpenGL ES profile vendor"}));
+  add(g, "OpenGL", pick({"OpenGL core profile version", "OpenGL compatibility profile version"}));
+  add(g, "OpenGL ES", pick({"OpenGL ES profile version"}));
+  add(g, "Shading language", pick({"OpenGL core profile shading language version"}));
+  add(g, "EGL", pick({"EGL version string"}) + (m.count("EGL vendor string") ? " (" + m["EGL vendor string"] + ")" : ""));
+  return g;
+}
+
+Group parse_glxinfo(const std::string &text) {
+  Group g{"OpenGL", {}};
+  auto m = colon_values(text);
+  add(g, "Renderer", m["OpenGL renderer string"]);
+  add(g, "Vendor", m["OpenGL vendor string"]);
+  add(g, "OpenGL", m.count("OpenGL core profile version string") ? m["OpenGL core profile version string"]
+                                                                  : m["OpenGL version string"]);
+  add(g, "OpenGL ES", m["OpenGL ES profile version string"]);
+  add(g, "Shading language", m["OpenGL core profile shading language version string"]);
+  add(g, "Direct rendering", m["direct rendering"]);
+  if (m.count("Accelerated")) add(g, "Hardware accelerated", m["Accelerated"]);
+  add(g, "Video memory", m["Video memory"]);
+  return g;
+}
+
+std::vector<Group> parse_vulkaninfo(const std::string &text) {
+  std::vector<Group> v;
+  std::istringstream in(text);
+  std::string line, instance;
+  Group *cur = nullptr;
+  std::map<std::string, std::string> dev;
+  auto flush = [&]() {
+    if (!cur) return;
+    static const std::map<std::string, std::string> types = {
+        {"PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU", "Integrated GPU"},
+        {"PHYSICAL_DEVICE_TYPE_DISCRETE_GPU", "Discrete GPU"},
+        {"PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU", "Virtual GPU"},
+        {"PHYSICAL_DEVICE_TYPE_CPU", "Software (processor)"},
+        {"PHYSICAL_DEVICE_TYPE_OTHER", "Other"}};
+    cur->title = "Vulkan: " + (dev.count("deviceName") ? dev["deviceName"] : std::string("device"));
+    auto t = types.find(dev["deviceType"]);
+    add(*cur, "Type", t != types.end() ? t->second : dev["deviceType"]);
+    add(*cur, "Vulkan", dev["apiVersion"]);
+    add(*cur, "Driver", dev["driverName"]);
+    add(*cur, "Driver version", dev.count("driverInfo") ? dev["driverInfo"] : dev["driverVersion"]);
+    add(*cur, "Conformance", dev["conformanceVersion"]);
+    if (!instance.empty()) add(*cur, "Loader (instance)", instance);
+    dev.clear();
+  };
+  while (std::getline(in, line)) {
+    std::string t = trim(line);
+    if (starts_with(t, "Vulkan Instance Version:")) instance = trim(t.substr(24));
+    else if (t.size() > 3 && starts_with(t, "GPU") && t.back() == ':' && isdigit((unsigned char)t[3])) {
+      flush();
+      v.push_back({"Vulkan", {}});
+      cur = &v.back();
+    } else if (cur) {
+      size_t eq = t.find('=');
+      if (eq != std::string::npos) dev[trim(t.substr(0, eq))] = trim(t.substr(eq + 1));
+    }
+  }
+  flush();
+  return v;
+}
+
+std::string describe_renderer(const std::string &name) {
+  if (name == "gles2") return "Graphics card (OpenGL ES)";
+  if (name == "vulkan") return "Graphics card (Vulkan)";
+  if (name == "pixman") return "Software (processor)";
+  return name;
+}
+
+namespace {
+std::once_flag g_probe_once;
+std::shared_future<std::vector<Group>> g_probe;
+
+std::vector<Group> probe_graphics() {
+  std::vector<Group> out;
+  bool egl = on_path("eglinfo"), glx = on_path("glxinfo");
+  Group gl{"OpenGL", {}};
+  if (egl && getenv("WAYLAND_DISPLAY")) gl = parse_eglinfo(run_tool("eglinfo -B"));
+  if (gl.rows.empty() && glx) gl = parse_glxinfo(run_tool("glxinfo -B"));
+  if (gl.rows.empty() && egl) gl = parse_eglinfo(run_tool("eglinfo -B"));
+  if (gl.rows.empty() && !egl && !glx) add(gl, "Details", "Install mesa-utils to see the OpenGL renderer");
+  if (!gl.rows.empty()) out.push_back(gl);
+  if (on_path("vulkaninfo")) {
+    auto vk = parse_vulkaninfo(run_tool("vulkaninfo --summary"));
+    if (vk.empty()) vk.push_back({"Vulkan", {{"Devices", "none (no Vulkan driver)"}}});
+    for (auto &g : vk) out.push_back(g);
+  } else {
+    out.push_back({"Vulkan", {{"Details", "Install vulkan-tools to see the Vulkan devices"}}});
+  }
+  return out;
+}
+} // namespace
+
+void start_graphics_probe() {
+  std::call_once(g_probe_once, [] { g_probe = std::async(std::launch::async, probe_graphics).share(); });
+}
+
+void wait_graphics_probe() {
+  start_graphics_probe();
+  g_probe.wait();
+}
+
+bool graphics_probe_ready() {
+  start_graphics_probe();
+  return g_probe.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+}
+
 Page graphics(const std::string &root) {
   Page p{"graphics", "Graphics", "video-display", {}};
   std::string base = root + "/sys/class/drm";
@@ -624,6 +794,13 @@ Page graphics(const std::string &root) {
     add_group(p, g);
   }
   if (p.groups.empty()) p.groups.push_back({"Graphics", {{"Devices", "none found"}}});
+  if (root.empty()) { // the running system: the desktop's renderer, OpenGL, Vulkan
+    if (const char *r = getenv("FLWM_RENDERER")) p.groups.push_back({"Desktop", {{"Drawn by", describe_renderer(r)}}});
+    if (graphics_probe_ready())
+      for (auto &g : g_probe.get()) p.groups.push_back(g);
+    else
+      p.groups.push_back({"OpenGL and Vulkan", {{"Details", "Reading…"}}});
+  }
   return p;
 }
 

@@ -1,4 +1,7 @@
 #include "printers_ui.h"
+#ifdef FLD_HAVE_MDNS
+#include "mdns.h"
+#endif
 
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
@@ -123,7 +126,11 @@ struct AddDialog : std::enable_shared_from_this<AddDialog> {
   Fl_Choice *driver;
   Fl_Button *rescan;
   Fl_Return_Button *add;
-  std::vector<Device> found;
+  std::vector<Device> found;     // what the list shows: CUPS' devices, then the ones mDNS found
+  std::vector<Device> cups_found, mdns_found;
+#ifdef FLD_HAVE_MDNS
+  std::unique_ptr<mdns::Browser> browser;
+#endif
   std::vector<Driver> drivers;
   std::string device_id;
   bool driverless = false;
@@ -136,7 +143,62 @@ struct AddDialog : std::enable_shared_from_this<AddDialog> {
     status->redraw();
   }
 
+  // printers on the network announce themselves (mDNS): listed as they answer,
+  // before CUPS' slower search is done
+  void start_mdns() {
+#ifdef FLD_HAVE_MDNS
+    if (browser) return;
+    std::weak_ptr<AddDialog> weak = shared_from_this();
+    browser.reset(new mdns::Browser({"_ipp._tcp", "_ipps._tcp"}, [weak](const mdns::Service &s) {
+      auto self = weak.lock();
+      if (!self) return;
+      Device d;
+      d.uri = mdns::service_url(s);
+      d.info = s.name;
+      d.make_model = mdns::printer_model(s);
+      d.device_class = "network";
+      auto it = s.txt.find("note");
+      if (it != s.txt.end()) d.location = it->second;
+      for (auto &x : self->mdns_found)
+        if (x.info == d.info) return; // _ipp and _ipps of the same printer
+      self->mdns_found.push_back(d);
+      self->show_list();
+    }, [weak](const mdns::Service &s) {
+      auto self = weak.lock();
+      if (!self) return;
+      auto &v = self->mdns_found;
+      for (size_t i = 0; i < v.size(); i++)
+        if (v[i].uri == mdns::service_url(s)) {
+          v.erase(v.begin() + (long)i);
+          self->show_list();
+          return;
+        }
+    }));
+#endif
+  }
+
+  void show_list() {
+    int sel = devices->value();
+    std::string keep = sel > 0 && sel <= (int)found.size() ? found[(size_t)sel - 1].uri : "";
+    found = cups_found;
+    for (auto &d : mdns_found) {
+      bool dup = false; // CUPS' dnssd backend reports the same printers by name
+      for (auto &c : cups_found) dup |= c.info == d.info || c.uri == d.uri;
+      if (!dup) found.push_back(d);
+    }
+    devices->clear();
+    for (auto &d : found) {
+      std::string label = d.info.empty() ? d.uri : d.info;
+      if (!d.make_model.empty() && d.make_model != "Unknown" && d.make_model != label) label += " — " + d.make_model;
+      devices->add(label.c_str());
+      bool net = d.device_class == "network";
+      devices->icon(devices->size(), fld::icon_first({net ? "printer-network" : "printer"}, 20));
+      if (!keep.empty() && d.uri == keep) devices->value(devices->size());
+    }
+  }
+
   void scan() {
+    start_mdns();
     set_status("Searching for printers…");
     rescan->deactivate();
     int gen = ++generation;
@@ -162,15 +224,8 @@ struct AddDialog : std::enable_shared_from_this<AddDialog> {
   }
 
   void scan_done(const std::vector<Device> &list, const Error &err) {
-    found = list;
-    devices->clear();
-    for (auto &d : found) {
-      std::string label = d.info.empty() ? d.uri : d.info;
-      if (!d.make_model.empty() && d.make_model != "Unknown" && d.make_model != label) label += " — " + d.make_model;
-      devices->add(label.c_str());
-      bool net = d.device_class == "network";
-      devices->icon(devices->size(), fld::icon_first({net ? "printer-network" : "printer"}, 20));
-    }
+    cups_found = list;
+    show_list();
     rescan->activate();
     if (!err.empty()) set_status("Search failed: " + err);
     else if (found.empty()) set_status("No printers found. Enter the printer's address below.");

@@ -1,4 +1,5 @@
 #include "gst_player.h"
+#include "webhelpers.h"
 
 #include <FL/Fl.H>
 #include <FL/Fl_JPEG_Image.H>
@@ -276,7 +277,8 @@ void Player::find_folder_cover() {
 
 void Player::start_item(int i, bool play) {
   const Item &item = list_[(size_t)i];
-  if (item.resolved.empty() && video::needs_resolver(item.location) && !fld::which("yt-dlp").empty()) {
+  if (item.resolved.empty() && video::needs_resolver(item.location) &&
+      (!webhelpers::ytdlp_path().empty() || webhelpers::updating())) {
     resolve_and_start(i, play);
     return;
   }
@@ -327,15 +329,34 @@ void Player::resolve_and_start(int i, bool play) {
   slot_.clear();
   cur_ = i;
   if (on_media) on_media();
-  std::thread([job] {
+  std::vector<std::string> cmd = webhelpers::resolve_command(loc);
+  bool downloading = webhelpers::updating() && webhelpers::ytdlp_path().empty();
+  std::thread([job, cmd, downloading] {
+    if (downloading) { // the first start: our yt-dlp is still on its way
+      for (int i = 0; i < 600 && webhelpers::updating(); i++) usleep(100000);
+    }
+    std::vector<std::string> c = cmd;
+    if (downloading) c = webhelpers::resolve_command(job->loc);
     std::string out;
-    int rc = fld::run_capture({"yt-dlp", "--no-playlist", "-f", "b", "--get-url", "--get-title", job->loc}, out);
-    std::vector<std::string> lines = fld::split(fld::trim(out), '\n');
+    // stderr too: yt-dlp says there what went wrong
+    int rc = fld::run_capture_input(c, "", out, true);
+    std::vector<std::string> lines, errors;
+    for (auto &l : fld::split(fld::trim(out), '\n')) {
+      std::string t = fld::trim(l);
+      if (t.empty() || fld::starts_with(t, "WARNING:") || fld::starts_with(t, "[")) continue;
+      if (fld::starts_with(t, "ERROR:")) errors.push_back(fld::trim(t.substr(6)));
+      else lines.push_back(t);
+    }
     if (rc == 0 && lines.size() >= 2) {
       job->title = lines[0];
       job->url = lines.back();
+    } else if (rc == 127 || rc < 0) {
+      job->err = "yt-dlp is not available. It is downloaded when the player starts (Python 3 is needed), "
+                 "or install it yourself.";
     } else {
-      job->err = lines.empty() ? "yt-dlp could not find a stream" : lines.back();
+      job->err = !errors.empty() ? errors.back() : !lines.empty() ? lines.back() : "yt-dlp could not find a stream";
+      // usually: the site changed and yt-dlp did not keep up
+      if (webhelpers::load_state().manage) job->err += " (yt-dlp may be out of date: checking for a new one)";
     }
     Fl::awake([](void *d) {
       Job *j = static_cast<Job *>(d);
@@ -345,8 +366,10 @@ void Player::resolve_and_start(int i, bool play) {
           p->list_[(size_t)j->index].resolved = j->url;
           if (!j->title.empty()) p->list_[(size_t)j->index].title = j->title;
           p->start_item(j->index, j->play);
-        } else if (p->on_error) {
-          p->on_error(j->err);
+        } else {
+          if (p->on_error) p->on_error(j->err);
+          if (webhelpers::load_state().manage && !webhelpers::updating())
+            webhelpers::update([](bool, bool, const std::string &) {});
         }
       }
       delete j;

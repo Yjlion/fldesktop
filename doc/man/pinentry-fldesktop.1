@@ -1,0 +1,32 @@
+.TH PINENTRY-FLDESKTOP 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+pinentry-fldesktop \- GnuPG passphrase prompt for fldesktop
+.SH SYNOPSIS
+\fBpinentry-fldesktop\fR [\fB\-\-display\fR \fIDISPLAY\fR] [\fIpinentry options\fR]
+.SH DESCRIPTION
+\fBpinentry-fldesktop\fR asks for passphrases and PINs for \fBgpg-agent\fR(1)
+and confirms its questions, in an FLTK dialog in the desktop's colors. It
+speaks the Assuan protocol on standard input and output, as every pinentry
+does, and shows the quality of a new passphrase, asks for it twice when
+gpg-agent wants that, and closes after the agent's timeout.
+.PP
+When gpg-agent allows it (\fBallow-external-password-cache\fR, the default)
+the dialog offers to save the passphrase in the password manager (the Secret
+Service: \fBfl-secretd\fR, GNOME Keyring or KeePassXC, in the same format as
+pinentry-gnome3); the next time it is taken from there without asking. A
+passphrase that turned out wrong is forgotten.
+.PP
+Without a graphical session (a text console, SSH) it runs
+\fBpinentry-curses\fR or \fBpinentry-tty\fR instead.
+.SH SETUP
+Settings > Default Applications chooses it for GnuPG, or in
+\fI~/.gnupg/gpg-agent.conf\fR:
+.PP
+.nf
+pinentry-program /usr/bin/pinentry-fldesktop
+.fi
+.PP
+then \fBgpgconf \-\-reload gpg-agent\fR. On Debian the package also offers it as
+the \fBpinentry\fR and \fBpinentry-x11\fR alternative.
+.SH SEE ALSO
+\fBgpg-agent\fR(1), \fBfl-keyring\fR(1)

@@ -185,8 +185,61 @@ static void test_pages() {
   if (system(cmd.c_str()) != 0) fprintf(stderr, "could not remove %s\n", g_root.c_str());
 }
 
+static std::string row(const sysinfo::Group &g, const std::string &k) {
+  for (auto &r : g.rows)
+    if (r.key == k) return r.value;
+  return "";
+}
+
+static void test_graphics_tools() {
+  const char *egl =
+      "GBM platform:\nEGL API version: 1.5\n"
+      "Wayland platform:\nEGL API version: 1.5\nEGL vendor string: Mesa Project\nEGL version string: 1.5\n"
+      "OpenGL core profile vendor: Intel\nOpenGL core profile renderer: Mesa Intel(R) UHD Graphics 620 (KBL GT2)\n"
+      "OpenGL core profile version: 4.6 (Core Profile) Mesa 24.2.8\n"
+      "OpenGL core profile shading language version: 4.60\n"
+      "OpenGL ES profile version: OpenGL ES 3.2 Mesa 24.2.8\n"
+      "Device platform:\nOpenGL core profile renderer: llvmpipe (LLVM 19.1.4, 256 bits)\n";
+  sysinfo::Group g = sysinfo::parse_eglinfo(egl);
+  CHECK_EQ(row(g, "Renderer"), std::string("Mesa Intel(R) UHD Graphics 620 (KBL GT2)"));
+  CHECK_EQ(row(g, "OpenGL"), std::string("4.6 (Core Profile) Mesa 24.2.8"));
+  CHECK_EQ(row(g, "OpenGL ES"), std::string("OpenGL ES 3.2 Mesa 24.2.8"));
+  CHECK_EQ(row(g, "EGL"), std::string("1.5 (Mesa Project)"));
+  const char *glx =
+      "name of display: :0\ndirect rendering: Yes\nExtended renderer info (GLX_MESA_query_renderer):\n"
+      "    Vendor: AMD (0x1002)\n    Accelerated: yes\n    Video memory: 8192MB\n"
+      "OpenGL vendor string: AMD\nOpenGL renderer string: AMD Radeon RX 6600 (radeonsi, navi23, LLVM 19.1.4)\n"
+      "OpenGL core profile version string: 4.6 (Core Profile) Mesa 24.2.8\n"
+      "OpenGL version string: 4.6 (Compatibility Profile) Mesa 24.2.8\n";
+  g = sysinfo::parse_glxinfo(glx);
+  CHECK_EQ(row(g, "Renderer"), std::string("AMD Radeon RX 6600 (radeonsi, navi23, LLVM 19.1.4)"));
+  CHECK_EQ(row(g, "Direct rendering"), std::string("Yes"));
+  CHECK_EQ(row(g, "Video memory"), std::string("8192MB"));
+  CHECK_EQ(row(g, "OpenGL"), std::string("4.6 (Core Profile) Mesa 24.2.8"));
+  const char *vk =
+      "==========\nVULKANINFO\n==========\n\nVulkan Instance Version: 1.3.290\n\n"
+      "Devices:\n========\nGPU0:\n\tapiVersion         = 1.3.289\n\tdriverVersion      = 24.2.8\n"
+      "\tdeviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU\n"
+      "\tdeviceName         = Intel(R) UHD Graphics 620 (KBL GT2)\n"
+      "\tdriverName         = Intel open-source Mesa driver\n\tdriverInfo         = Mesa 24.2.8\n"
+      "\tconformanceVersion = 1.3.6.0\n"
+      "GPU1:\n\tapiVersion         = 1.3.289\n\tdeviceType         = PHYSICAL_DEVICE_TYPE_CPU\n"
+      "\tdeviceName         = llvmpipe (LLVM 19.1.4, 256 bits)\n\tdriverName         = llvmpipe\n";
+  auto v = sysinfo::parse_vulkaninfo(vk);
+  CHECK_EQ(v.size(), (size_t)2);
+  if (v.size() == 2) {
+    CHECK_EQ(v[0].title, std::string("Vulkan: Intel(R) UHD Graphics 620 (KBL GT2)"));
+    CHECK_EQ(row(v[0], "Type"), std::string("Integrated GPU"));
+    CHECK_EQ(row(v[0], "Driver version"), std::string("Mesa 24.2.8"));
+    CHECK_EQ(row(v[0], "Loader (instance)"), std::string("1.3.290"));
+    CHECK_EQ(row(v[1], "Type"), std::string("Software (processor)"));
+  }
+  CHECK_EQ(sysinfo::describe_renderer("pixman"), std::string("Software (processor)"));
+}
+
 int main() {
   test_parsers();
   test_pages();
+  test_graphics_tools();
   return test_result("sysinfo");
 }

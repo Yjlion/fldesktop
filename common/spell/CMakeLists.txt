@@ -1,0 +1,12 @@
+# spell checking: finding words (tested) and checking them with enchant-2
+add_library(fld-spell-util STATIC spell_util.cpp)
+target_include_directories(fld-spell-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+pkg_check_modules(ENCHANT IMPORTED_TARGET enchant-2)
+if(ENCHANT_FOUND)
+  add_library(fld-spell STATIC spell.cpp)
+  target_include_directories(fld-spell PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(fld-spell PUBLIC fld-spell-util fld PkgConfig::ENCHANT)
+  message(STATUS "enchant ${ENCHANT_VERSION}: spell checking")
+else()
+  message(STATUS "enchant-2 not found: no spell checking")
+endif()

@@ -8,8 +8,10 @@
 #include <unistd.h>
 #include <linux/input-event-codes.h>
 #include <time.h>
+#include <wlr/types/wlr_server_decoration.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include "xdg-shell-protocol.h"
+#include "fldesktop-window-v1-server-protocol.h"
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 
@@ -804,6 +806,82 @@ void view_reposition_shell(struct flwm_view *view) {
 	}
 }
 
+/* ---- KDE server-decoration ---------------------------------------------- *
+ * GTK 3 and 4 don't speak xdg-decoration but this one: told that the server
+ * decorates by default, a window without its own header bar asks for SERVER
+ * mode and draws no title bar itself, so we must draw one. */
+
+struct flwm_kde_decoration {
+	struct wlr_server_decoration *deco;
+	struct flwm_server *server;
+	struct wl_listener mode, destroy;
+	struct wl_list link;
+};
+
+static struct flwm_kde_decoration *kde_decoration_for(struct flwm_server *server,
+		struct wlr_surface *surface) {
+	struct flwm_kde_decoration *k;
+	wl_list_for_each(k, &server->kde_decorations, link)
+		if (k->deco->surface == surface) return k;
+	return NULL;
+}
+
+static struct flwm_view *view_from_surface(struct flwm_server *server, struct wlr_surface *surface) {
+	struct flwm_view *v;
+	wl_list_for_each(v, &server->views, link)
+		if (v->xdg_toplevel && v->xdg_toplevel->base->surface == surface) return v;
+	return NULL;
+}
+
+/* ssd from the KDE protocol, unless xdg-decoration already decided */
+static void kde_decoration_apply(struct flwm_server *server, struct wlr_surface *surface) {
+	struct flwm_view *view = view_from_surface(server, surface);
+	if (!view || view->decoration) return;
+	struct flwm_kde_decoration *k = kde_decoration_for(server, surface);
+	bool ssd = k && k->deco->mode == WLR_SERVER_DECORATION_MANAGER_MODE_SERVER;
+	if (ssd == view->ssd) return;
+	view->ssd = ssd;
+	wlr_log(WLR_DEBUG, "%s: %s decorations (server-decoration)", title_or(view, "?"),
+		ssd ? "server" : "client");
+	if (view->mapped) decor_update(view);
+}
+
+static void kde_decoration_mode(struct wl_listener *listener, void *data) {
+	struct flwm_kde_decoration *k = wl_container_of(listener, k, mode);
+	kde_decoration_apply(k->server, k->deco->surface);
+}
+
+static void kde_decoration_destroy(struct wl_listener *listener, void *data) {
+	struct flwm_kde_decoration *k = wl_container_of(listener, k, destroy);
+	struct flwm_server *server = k->server;
+	struct wlr_surface *surface = k->deco->surface;
+	wl_list_remove(&k->mode.link);
+	wl_list_remove(&k->destroy.link);
+	wl_list_remove(&k->link);
+	free(k);
+	kde_decoration_apply(server, surface);
+}
+
+static void server_new_kde_decoration(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, new_kde_decoration);
+	struct flwm_kde_decoration *k = calloc(1, sizeof *k);
+	if (!k) return;
+	k->deco = data;
+	k->server = server;
+	k->mode.notify = kde_decoration_mode;
+	wl_signal_add(&k->deco->events.mode, &k->mode);
+	k->destroy.notify = kde_decoration_destroy;
+	wl_signal_add(&k->deco->events.destroy, &k->destroy);
+	wl_list_insert(&server->kde_decorations, &k->link);
+	kde_decoration_apply(server, k->deco->surface);
+}
+
+static void kde_deco_mgr_destroyed(struct wl_listener *listener, void *data) {
+	struct flwm_server *server = wl_container_of(listener, server, kde_deco_mgr_destroy);
+	wl_list_remove(&server->new_kde_decoration.link);
+	wl_list_remove(&server->kde_deco_mgr_destroy.link);
+}
+
 /* ---- initial placement of normal windows --------------------------------- */
 
 static struct flwm_view *view_from_toplevel(struct flwm_server *server, struct wlr_xdg_toplevel *t) {
@@ -979,6 +1057,8 @@ static void view_commit(struct wl_listener *listener, void *data) {
 			wlr_xdg_toplevel_decoration_v1_set_mode(view->decoration,
 				WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
 			view->ssd = true;
+		} else {
+			kde_decoration_apply(view->server, base->surface);
 		}
 		switch (view->role) {
 		case FLWM_ROLE_PANEL:
@@ -1310,6 +1390,39 @@ static void set_toplevel_icon(struct wl_listener *listener, void *data) {
 }
 #endif
 
+
+/* ---- fld_window_manager_v1: moves started from a client's own widgets --- */
+
+static void fldwin_destroy(struct wl_client *client, struct wl_resource *resource) {
+	wl_resource_destroy(resource);
+}
+
+static void fldwin_move(struct wl_client *client, struct wl_resource *resource,
+		struct wl_resource *surface_resource) {
+	struct flwm_server *server = wl_resource_get_user_data(resource);
+	struct wlr_surface *surface = wlr_surface_from_resource(surface_resource);
+	struct flwm_view *view = view_from_surface(server, surface);
+	if (!view || !view->mapped || view->role != FLWM_ROLE_NORMAL) return;
+	/* only while the button that started it is held, as with xdg_toplevel.move */
+	if (server->seat->pointer_state.button_count == 0 || server->cursor_mode != FLWM_CURSOR_PASSTHROUGH)
+		return;
+	view_begin_interactive(view, FLWM_CURSOR_MOVE, 0);
+}
+
+static const struct fld_window_manager_v1_interface fldwin_impl = {
+	.destroy = fldwin_destroy,
+	.move = fldwin_move,
+};
+
+static void fldwin_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id) {
+	struct wl_resource *r = wl_resource_create(client, &fld_window_manager_v1_interface, version, id);
+	if (!r) {
+		wl_client_post_no_memory(client);
+		return;
+	}
+	wl_resource_set_implementation(r, &fldwin_impl, data, NULL);
+}
+
 void view_init(struct flwm_server *server) {
 	wl_list_init(&server->views);
 	server->xdg_shell = wlr_xdg_shell_create(server->wl_display, 6);
@@ -1322,6 +1435,18 @@ void view_init(struct flwm_server *server) {
 	server->new_toplevel_decoration.notify = server_new_toplevel_decoration;
 	wl_signal_add(&server->xdg_decoration_mgr->events.new_toplevel_decoration,
 		&server->new_toplevel_decoration);
+
+	wl_global_create(server->wl_display, &fld_window_manager_v1_interface, 1, server, fldwin_bind);
+
+	wl_list_init(&server->kde_decorations);
+	server->kde_deco_mgr = wlr_server_decoration_manager_create(server->wl_display);
+	wlr_server_decoration_manager_set_default_mode(server->kde_deco_mgr,
+		WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+	server->new_kde_decoration.notify = server_new_kde_decoration;
+	wl_signal_add(&server->kde_deco_mgr->events.new_decoration, &server->new_kde_decoration);
+	/* wlroots checks that nobody listens any more when the display goes */
+	server->kde_deco_mgr_destroy.notify = kde_deco_mgr_destroyed;
+	wl_signal_add(&server->kde_deco_mgr->events.destroy, &server->kde_deco_mgr_destroy);
 
 	server->foreign_toplevel_mgr = wlr_foreign_toplevel_manager_v1_create(server->wl_display);
 

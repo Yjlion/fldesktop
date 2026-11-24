@@ -1,10 +1,10 @@
 # fl-media-player (fl-video before 0.1.4): video and music on GStreamer
 set(MEDIA_PROTO)
 fld_wayland_protocol(MEDIA_PROTO ${WAYLAND_PROTOCOLS_DIR}/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml client)
-add_library(fl-media-player-util STATIC video_util.cpp playlist_util.cpp)
+add_library(fl-media-player-util STATIC video_util.cpp playlist_util.cpp webhelpers_util.cpp)
 target_include_directories(fl-media-player-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-media-player-util PUBLIC fld)
-add_executable(fl-media-player main.cpp gst_player.cpp idle_inhibit.cpp ${MEDIA_PROTO})
+add_executable(fl-media-player main.cpp gst_player.cpp idle_inhibit.cpp webhelpers.cpp ${MEDIA_PROTO})
 target_include_directories(fl-media-player PRIVATE ${FLD_PROTO_OUT})
 target_link_libraries(fl-media-player PRIVATE fl-media-player-util fld-gst fld PkgConfig::WAYLAND_CLIENT)
 # MPRIS: the panel and the media keys control it

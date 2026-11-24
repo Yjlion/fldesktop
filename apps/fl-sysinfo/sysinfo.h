@@ -83,6 +83,20 @@ const IdDatabase &usb_ids();
 // the name of a PCI class (0x0300xx -> "VGA compatible controller")
 std::string pci_class_name(unsigned cls);
 
+// ---- the graphics APIs, from mesa-utils and vulkan-tools ----
+// eglinfo -B (the first platform's section) or glxinfo -B: an "OpenGL" group
+Group parse_eglinfo(const std::string &text);
+Group parse_glxinfo(const std::string &text);
+// vulkaninfo --summary: one group per device ("Vulkan: <name>")
+std::vector<Group> parse_vulkaninfo(const std::string &text);
+// "gles2" / "vulkan" / "pixman" (fl-wm's FLWM_RENDERER) -> what the user reads
+std::string describe_renderer(const std::string &name);
+// Runs the tools (3 s at most each) in the background; graphics() waits for
+// them. Call early to have them ready when the page is shown.
+void start_graphics_probe();
+bool graphics_probe_ready();
+void wait_graphics_probe(); // before a report
+
 // battery health in percent: full / design (0 when unknown)
 int battery_health(uint64_t full, uint64_t design);
 

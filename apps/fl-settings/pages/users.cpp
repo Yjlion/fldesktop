@@ -751,8 +751,11 @@ public:
   }
 
   void choose_picture() {
-    const Account *a = current();
-    if (!a) return;
+    const Account *cur = current();
+    if (!cur) return;
+    // a copy: the account list may be read again while the dialogs are open
+    const Account acc = *cur;
+    const Account *a = &acc;
     std::string path = pick_picture();
     if (path.empty()) return;
     // the helper gets a 256 px square PNG: small, and the same in every place

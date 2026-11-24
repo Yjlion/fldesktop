@@ -45,7 +45,7 @@ public:
     f.note("Updates are never installed without asking. Security updates are marked in the notification.");
     f.heading("Software");
     f.row("", 30, wx, wy, ww);
-    Fl_Button *open = new Fl_Button(wx, wy, 200, 30, "Open Software Updates");
+    Fl_Button *open = new Fl_Button(wx, wy, 200, 30, "Open Software Packages");
     open->callback([](Fl_Widget *, void *) { spawn({"fl-packages", "--updates"}); });
     if (which("fl-packages").empty()) {
       open->deactivate();

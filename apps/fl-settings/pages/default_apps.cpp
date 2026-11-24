@@ -11,6 +11,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "gnupg_conf.h"
 #include "settings_common.h"
 #include "settings_page.h"
 
@@ -42,8 +43,8 @@ class DefaultAppsPage : public Fl_Group {
 public:
   std::vector<Fl_Choice *> choices;
   std::vector<std::vector<DesktopEntry>> candidates;
-  Fl_Choice *terminal;
-  std::vector<std::string> terminals;
+  Fl_Choice *terminal, *pinentry = nullptr;
+  std::vector<std::string> terminals, pinentries; // "" = GnuPG's own choice
 
   DefaultAppsPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
@@ -98,8 +99,48 @@ public:
       if (i >= 0 && i < (int)p->terminals.size()) c.ini.set("General", "Terminal", p->terminals[i]);
       c.save();
     }, this);
+    // GnuPG: who asks for passphrases (gpg-agent.conf pinentry-program)
+    if (!which("gpg-agent").empty() || !which("gpgconf").empty()) {
+      f.row("GnuPG passphrases:", 28, wx, wy, ww);
+      pinentry = new Fl_Choice(wx, wy, ww, 28);
+      std::string conf, cur_p;
+      read_file(gnupg_conf::conf_path(), conf);
+      cur_p = gnupg_conf::pinentry(conf);
+      pinentries.push_back("");
+      pinentry->add("GnuPG's default");
+      for (const char *p : {"pinentry-fldesktop", "pinentry-gnome3", "pinentry-qt", "pinentry-gtk", "pinentry-gtk-2",
+                            "pinentry-curses"}) {
+        std::string path = which(p);
+        if (path.empty()) continue;
+        pinentries.push_back(path);
+        pinentry->add(p);
+        if (cur_p == path || basename(cur_p) == p) pinentry->value((int)pinentries.size() - 1);
+      }
+      if (pinentry->value() < 0) {
+        if (!cur_p.empty()) { // something else, set by hand: keep showing it
+          pinentries.push_back(cur_p);
+          pinentry->add(escape_at(basename(cur_p)).c_str());
+          pinentry->value((int)pinentries.size() - 1);
+        } else {
+          pinentry->value(0);
+        }
+      }
+      pinentry->tooltip("The window gpg-agent opens to ask for a passphrase (gpg-agent.conf: pinentry-program)");
+      pinentry->callback([](Fl_Widget *, void *d) { ((DefaultAppsPage *)d)->set_pinentry(); }, this);
+    }
     g->end();
     end();
+  }
+
+  void set_pinentry() {
+    int i = pinentry->value();
+    if (i < 0 || i >= (int)pinentries.size()) return;
+    std::string path = gnupg_conf::conf_path(), conf;
+    read_file(path, conf);
+    mkdir_p(dirname(path), 0700);
+    if (!write_file(path, gnupg_conf::with_pinentry(conf, pinentries[(size_t)i]))) return;
+    // the running agent picks it up for the next prompt
+    if (!which("gpgconf").empty()) spawn({"gpgconf", "--reload", "gpg-agent"});
   }
 
   void changed(Fl_Choice *c) {

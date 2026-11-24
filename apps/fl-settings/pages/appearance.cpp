@@ -16,6 +16,7 @@
 #include <memory>
 #include <set>
 
+#include "fld/toolkit_theme.h"
 #include "fld/accents.h"
 #include "fld/icons.h"
 #include "fld/pickers.h"
@@ -82,6 +83,7 @@ public:
   Fl_Spinner *radius, *ui_size, *mono_size, *cursor_size;
   AccentSwatches *accent;
   Fl_Check_Button *icons_follow;
+  Fl_Check_Button *toolkit_colors;
   WallpaperGallery *gallery;
   std::string wallpaper;
   std::vector<std::string> fonts, icon_themes, cursor_themes;
@@ -108,6 +110,12 @@ public:
     f.row("", 24, wx, wy, ww);
     icons_follow = new fld::CheckButton(wx, wy, ww, 24, "Folder icons follow the accent color");
     icons_follow->tooltip("Switches to the fldesktop icon theme in the accent color");
+    f.row("", 24, wx, wy, ww);
+    toolkit_colors = new fld::CheckButton(wx, wy, ww, 24, "GTK and Qt programs use these colors too");
+    toolkit_colors->tooltip("Writes the light or dark theme, the accent color, icons and font for GTK\n"
+                            "(gtk-3.0, gtk-4.0) and Qt (qt5ct, qt6ct) programs; they apply it when they start");
+    toolkit_colors->value(desk.ini.get_bool("Appearance", "ToolkitColors", true));
+    toolkit_colors->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
     f.row("Widget style:", 28, wx, wy, ww);
     style = new Fl_Choice(wx, wy, 200, 28);
     std::string cur_style = normalize_style(desk.ini.get("Appearance", "Scheme", "gtk+"));
@@ -327,10 +335,12 @@ public:
       if (icon_themes[i] == it) icons->value((int)i);
     desk.ini.set("General", "IconTheme", it);
     desk.ini.set_bool("Appearance", "IconsFollowAccent", icons_follow->value() != 0);
+    desk.ini.set_bool("Appearance", "ToolkitColors", toolkit_colors->value() != 0);
     desk.ini.set("Desktop", "Wallpaper", wallpaper);
     const char *modes[] = {"fill", "fit", "stretch", "center", "tile"};
     desk.ini.set("Desktop", "WallpaperMode", modes[std::max(0, wp_mode->value())]);
     desk.save();
+    export_toolkit_theme(desk.ini); // GTK and Qt programs follow
     wm.ini.set("cursor", "theme", choice_text(cursors, cursor_themes));
     wm.ini.set_int("cursor", "size", (int)cursor_size->value());
     switch (titlebar->value()) {

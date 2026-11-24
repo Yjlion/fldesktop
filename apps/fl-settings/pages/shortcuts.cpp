@@ -286,10 +286,29 @@ public:
     ws->step(1);
     ws->value(std::clamp(wm.ini.get_int("behaviour", "workspaces", 4), 1, 9));
     ws->tooltip("How many workspaces there are (all screens switch together)");
+    ws->when(FL_WHEN_CHANGED); // a typed number applies without Enter
     ws->callback([](Fl_Widget *w, void *d) {
       ShortcutsPage *p = (ShortcutsPage *)d;
       p->wm.ini.load(p->wm.path);
-      p->wm.ini.set_int("behaviour", "workspaces", (int)((Fl_Spinner *)w)->value());
+      int n = (int)((Fl_Spinner *)w)->value();
+      if (n < 1 || n > 9 || n == p->wm.ini.get_int("behaviour", "workspaces", 4)) return;
+      p->wm.ini.set_int("behaviour", "workspaces", n);
+      save_wm(p->wm);
+    }, this);
+    Fl_Choice *dm = new Fl_Choice(X + 24 + 420, cy, 160, 28, "Move windows with:");
+    dm->align(FL_ALIGN_LEFT);
+    dm->add("Super+drag|Alt+drag|Super or Alt+drag|Only the title bar");
+    {
+      std::string v = wm.ini.get("behaviour", "drag_modifier", "super+alt");
+      bool su = v.find("super") != std::string::npos, al = v.find("alt") != std::string::npos;
+      dm->value(su && al ? 2 : su ? 0 : al ? 1 : 3);
+    }
+    dm->tooltip("Hold this key and drag with the left button to move a window, with the right button to resize it");
+    dm->callback([](Fl_Widget *w, void *d) {
+      static const char *vals[] = {"super", "alt", "super+alt", "none"};
+      ShortcutsPage *p = (ShortcutsPage *)d;
+      p->wm.ini.load(p->wm.path);
+      p->wm.ini.set("behaviour", "drag_modifier", vals[((Fl_Choice *)w)->value()]);
       save_wm(p->wm);
     }, this);
     cy += 36;

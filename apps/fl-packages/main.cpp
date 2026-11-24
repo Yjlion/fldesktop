@@ -340,7 +340,7 @@ public:
   Fl_Box *status;
   pk::Job busy;
 
-  MainWindow() : Fl_Double_Window(980, 620, "Software Updates") {
+  MainWindow() : Fl_Double_Window(980, 620, "Software Packages") {
     const int W = w(), H = h();
     tabs = new fld::Tabs(8, 8, W - 16, H - 40);
     // --- updates
@@ -1037,13 +1037,13 @@ int check_updates_once() {
     fld::mkdir_p(fld::cache_home() + "/fldesktop");
     fld::write_file(fld::cache_home() + "/fldesktop/updates-notified", h + "\n");
     fld::Notification n;
-    n.app_name = "Software Updates";
+    n.app_name = "Software Packages";
     n.desktop_entry = "fl-packages";
     n.icon = "fl-packages";
     n.summary = std::to_string(ups.size()) + (ups.size() == 1 ? " update is available" : " updates are available");
     n.body = security ? std::to_string(security) + (security == 1 ? " of them fixes" : " of them fix") +
                             " security problems."
-                      : "Install them with Software Updates.";
+                      : "Install them with Software Packages.";
     n.urgency = security ? 2 : 1;
     n.actions = {{"default", "Show Updates"}};
     // the notification's button works only while this runs: wait a while

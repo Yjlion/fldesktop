@@ -7,6 +7,11 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "locale_env.h"
+#ifdef FLD_HAVE_SPELL
+#include <FL/Fl_Check_Browser.H>
+#include <algorithm>
+#include "spell.h"
+#endif
 #include "settings_common.h"
 #include "settings_page.h"
 
@@ -21,6 +26,17 @@ public:
   Fl_Choice *lang, *formats;
   Fl_Box *preview;
   std::string preview_text;
+#ifdef FLD_HAVE_SPELL
+  Fl_Check_Browser *spelling = nullptr;
+  void save_spelling() {
+    std::vector<std::string> on;
+    for (int i = 1; i <= spelling->nitems(); i++)
+      if (spelling->checked(i)) on.push_back(spelling->text(i));
+    ConfigFile desk{desktop_config_path()};
+    desk.ini.set("Spelling", "Languages", join(on, ","));
+    desk.save();
+  }
+#endif
 
   LanguagePage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
@@ -61,6 +77,24 @@ public:
     preview->labelfont(FL_COURIER);
     f.note("Changes take effect the next time you log in.", 1);
     if (locales.empty()) f.note("No UTF-8 locales are installed (see locale-gen or the locales package).", 2);
+#ifdef FLD_HAVE_SPELL
+    // the dictionaries the spell checkers use (fl-edit, ...)
+    f.heading("Spell checking");
+    std::vector<std::string> dicts = spell::installed_languages();
+    if (dicts.empty()) {
+      f.note("No dictionaries are installed (hunspell-en-us, hunspell-de-de, ...).", 1);
+    } else {
+      int lh = std::min(150, 24 * (int)dicts.size() + 4);
+      f.row("Check in:", lh, wx, wy, ww);
+      spelling = new Fl_Check_Browser(wx, wy, ww, lh);
+      std::vector<std::string> on = spell::configured_languages();
+      for (auto &d : dicts)
+        spelling->add(d.c_str(), std::find(on.begin(), on.end(), d) != on.end() ? 1 : 0);
+      spelling->callback([](Fl_Widget *, void *d) { ((LanguagePage *)d)->save_spelling(); }, this);
+      spelling->when(FL_WHEN_CHANGED);
+      f.note("Words are checked in all the languages chosen.", 1);
+    }
+#endif
     g->end();
     end();
     update_preview();

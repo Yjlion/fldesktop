@@ -33,6 +33,7 @@ fld_settings_page(network    pages/network.cpp REQUIRES fld-nm-ui)
 fld_settings_page(proxy      pages/proxy.cpp)
 fld_settings_page(printers   pages/printers.cpp REQUIRES fld-printers-ui)
 fld_settings_page(firewall   pages/firewall.cpp REQUIRES fld-fw-ui)
+fld_settings_page(sharing    pages/sharing.cpp)
 fld_settings_page(bluetooth  pages/bluetooth.cpp REQUIRES fld-bt-ui)
 fld_settings_page(power      pages/power.cpp REQUIRES fld-power)
 fld_settings_page(drives     pages/drives.cpp)
@@ -67,7 +68,7 @@ set(DISPLAYS_PROTO)
 fld_wayland_protocol(DISPLAYS_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-management-unstable-v1.xml client)
 
 add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp users_model.cpp datetime_sys.cpp
-            settings_search.cpp)
+            settings_search.cpp sharing_util.cpp gnupg_conf.cpp)
 target_include_directories(fl-settings-xkb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-settings-xkb PUBLIC fld)
 
@@ -79,6 +80,10 @@ target_compile_definitions(fl-settings PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_F
 if(TARGET fld-fprint)
   target_link_libraries(fl-settings PRIVATE fld-fprint)
   target_compile_definitions(fl-settings PRIVATE FLD_HAVE_FPRINT=1)
+endif()
+if(TARGET fld-spell) # Language & Region: the spell checking languages
+  target_link_libraries(fl-settings PRIVATE fld-spell)
+  target_compile_definitions(fl-settings PRIVATE FLD_HAVE_SPELL=1)
 endif()
 if(TARGET fld-backlight)
   target_link_libraries(fl-settings PRIVATE fld-backlight)

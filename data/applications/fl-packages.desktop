@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Software Updates
+Name=Software Packages
 GenericName=Package Manager
 Comment=Install, remove and update the software of the system
 Exec=fl-packages

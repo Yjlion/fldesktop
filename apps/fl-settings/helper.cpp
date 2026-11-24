@@ -12,6 +12,12 @@
 //   fl-settings-helper set-time "YYYY-MM-DD HH:MM:SS"   date -s, hwclock -w
 //   fl-settings-helper ntp on|off   starts and enables (stops and disables)
 //                                   chronyd, ntpd or openntpd
+//
+// Sharing:
+//   fl-settings-helper hostname <name>      the computer's name (hostnamectl,
+//                                           else /etc/hostname and /etc/hosts)
+//   fl-settings-helper avahi on|off         starts and enables avahi-daemon
+//   fl-settings-helper publish <id> on|off  /etc/avahi/services/fldesktop-<id>.service
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -26,6 +32,7 @@
 #include "datetime_sys.h"
 #include "greeter_config.h"
 #include "helper_util.h"
+#include "sharing_util.h"
 
 using fld::helper_fail;
 static int fail(const std::string &m) { return helper_fail(m); }
@@ -60,6 +67,54 @@ static int set_ntp(bool on) {
   return 0;
 }
 
+static int set_hostname(const std::string &name) {
+  if (!sharing::valid_hostname(name)) return fail("not a valid computer name: " + name);
+  std::string out;
+  if (!fld::which("hostnamectl").empty() && fld::run_capture({"hostnamectl", "hostname", name}, out) == 0) return 0;
+  std::string old;
+  fld::read_file("/etc/hostname", old);
+  old = fld::trim(old);
+  if (!fld::write_atomic("/etc/hostname", name + "\n")) return fail("cannot write /etc/hostname");
+  std::string hosts;
+  if (fld::read_file("/etc/hosts", hosts) && !fld::write_atomic("/etc/hosts", sharing::hosts_with_name(hosts, old, name)))
+    return fail("cannot write /etc/hosts");
+  if (!fld::which("hostname").empty()) fld::run_capture({"hostname", name}, out);
+  else if (!fld::write_atomic("/proc/sys/kernel/hostname", name)) return fail("cannot set the host name");
+  return 0;
+}
+
+static bool systemd() { return fld::is_dir("/run/systemd/system"); }
+
+static int set_avahi(bool on) {
+  std::vector<std::vector<std::string>> cmds;
+  if (systemd()) {
+    // the socket starts the daemon again when asked: both go
+    if (on) cmds = {{"systemctl", "enable", "--now", "avahi-daemon.socket", "avahi-daemon.service"}};
+    else cmds = {{"systemctl", "disable", "--now", "avahi-daemon.socket", "avahi-daemon.service"}};
+  } else {
+    cmds = dtsys::service_commands(dtsys::detect_init(), "avahi-daemon", on);
+  }
+  for (auto &cmd : cmds) {
+    std::string out;
+    if (fld::run_capture(cmd, out) != 0 && cmd[0] != "update-rc.d") return fail(cmd[0] + " failed: " + out);
+  }
+  return 0;
+}
+
+static int set_published(const std::string &id, bool on) {
+  const sharing::Published *p = sharing::find_published(id);
+  if (!p) return fail("unknown service: " + id);
+  std::string path = sharing::service_path(id);
+  if (!on) {
+    if (unlink(path.c_str()) != 0 && errno != ENOENT) return fail("cannot remove " + path + ": " + strerror(errno));
+    return 0;
+  }
+  if (!fld::is_dir("/etc/avahi/services")) return fail("Avahi is not installed (no /etc/avahi/services)");
+  if (!fld::write_atomic(path, sharing::service_xml(*p))) return fail("cannot write " + path);
+  chmod(path.c_str(), 0644);
+  return 0; // avahi-daemon notices new service files itself
+}
+
 int main(int argc, char **argv) {
   if (argc >= 3 && geteuid() != 0) return fail("must run as root (through pkexec)");
   if (argc == 3) {
@@ -67,10 +122,15 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "set-time")) return set_time(argv[2]);
     if (!strcmp(argv[1], "ntp") && (!strcmp(argv[2], "on") || !strcmp(argv[2], "off")))
       return set_ntp(!strcmp(argv[2], "on"));
+    if (!strcmp(argv[1], "hostname")) return set_hostname(argv[2]);
+    if (!strcmp(argv[1], "avahi") && (!strcmp(argv[2], "on") || !strcmp(argv[2], "off")))
+      return set_avahi(!strcmp(argv[2], "on"));
   }
+  if (argc == 4 && !strcmp(argv[1], "publish") && (!strcmp(argv[3], "on") || !strcmp(argv[3], "off")))
+    return set_published(argv[2], !strcmp(argv[3], "on"));
   if (argc < 3 || strcmp(argv[1], "greeter-ini") != 0)
     return fail("usage: fl-settings-helper greeter-ini <new.ini> [<background image>] | timezone <zone> | "
-                "set-time <time> | ntp on|off");
+                "set-time <time> | ntp on|off | hostname <name> | avahi on|off | publish <id> on|off");
   uid_t uid = fld::helper_caller_uid();
 
   std::string text, err;

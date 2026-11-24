@@ -29,6 +29,8 @@ void Audio::Model::clear()
 	defaultSink.clear();
 	defaultSource.clear();
 	serverName.clear();
+	videoUsers.clear();
+	videoRunning = false;
 	connected = false;
 }
 

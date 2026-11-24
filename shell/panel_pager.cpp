@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <wayland-client.h>
+#include "fld/atspi.h"
 #include "ext-workspace-v1-client-protocol.h"
 
 #include "fld/util.h"
@@ -47,7 +48,10 @@ std::vector<Workspace *> sorted() {
 class Pager : public Fl_Widget {
 public:
   int hover = -1;
-  Pager() : Fl_Widget(0, 0, kCell, PANEL_H - 4) { tooltip("Workspaces"); }
+  Pager() : Fl_Widget(0, 0, kCell, PANEL_H - 4) {
+    tooltip("Workspaces");
+    fld::atspi_describe(this, 0, "Workspaces");
+  }
   int index_at(int ex) const {
     int i = (ex - x() - 2) / kCell;
     return i >= 0 && i < (int)g_ws.size() ? i : -1;

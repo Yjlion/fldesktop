@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Application Launcher
+Comment=Keeps the application launcher ready, so that it opens at once
+Exec=fl-launcher --daemon
+OnlyShowIn=fldesktop;
+NoDisplay=true
+X-GNOME-AutoRestart=true

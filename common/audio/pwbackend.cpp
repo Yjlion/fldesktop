@@ -248,6 +248,22 @@ static void rebuild(PipeWireBackend *b)
 			continue;
 
 		std::string mc = o->get(PW_KEY_MEDIA_CLASS);
+		if (mc == "Video/Source" || mc == "Stream/Input/Video") {
+			/* cameras, for the privacy indicator */
+			if (!o->running)
+				continue;
+			m.videoRunning = true;
+			if (mc == "Stream/Input/Video") {
+				std::string n = o->get(PW_KEY_APP_NAME);
+				if (n.empty())
+					n = o->get(PW_KEY_APP_PROCESS_BINARY);
+				if (n.empty())
+					n = o->get(PW_KEY_NODE_DESCRIPTION);
+				if (!n.empty() && std::find(m.videoUsers.begin(), m.videoUsers.end(), n) == m.videoUsers.end())
+					m.videoUsers.push_back(n);
+			}
+			continue;
+		}
 		if (mc == "Audio/Sink" || mc == "Audio/Source" || mc == "Audio/Source/Virtual") {
 			Audio::Device dev;
 			dev.id = o->id;
@@ -502,7 +518,8 @@ static void registryGlobal(void *data, uint32_t id, uint32_t, const char *type, 
 	PwObject *o = 0;
 	if (!strcmp(type, PW_TYPE_INTERFACE_Node)) {
 		if (!mc || (strcmp(mc, "Audio/Sink") && strcmp(mc, "Audio/Source") && strcmp(mc, "Audio/Source/Virtual") &&
-		            strcmp(mc, "Stream/Output/Audio") && strcmp(mc, "Stream/Input/Audio")))
+		            strcmp(mc, "Stream/Output/Audio") && strcmp(mc, "Stream/Input/Audio") &&
+		            strcmp(mc, "Video/Source") && strcmp(mc, "Stream/Input/Video")))
 			return;
 		o = new PwObject;
 		o->kind = NodeObj;

@@ -14,6 +14,7 @@
 #include <wlr/util/log.h>
 
 #include "server.h"
+#include "popup_place.h"
 #if FLWM_WLR_AT_LEAST(0, 19)
 #include <wlr/types/wlr_xdg_dialog_v1.h>
 #include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
@@ -189,7 +190,16 @@ static void detect_role(struct flwm_view *view) {
 	view->role_checked = true;
 	for (size_t i = 0; i < sizeof shell_roles / sizeof shell_roles[0]; i++) {
 		const char *want = shell_roles[i].app_id;
-		if (!(app_id && !strcmp(app_id, want)) && !(title && !strcmp(title, want))) continue;
+		if (shell_roles[i].role == FLWM_ROLE_POPUP) {
+			/* "fldesktop.panel-popup@x1-x2": the button it belongs to */
+			int a1, a2, b1, b2;
+			bool by_id = flwm_popup_title(app_id, &a1, &a2), by_title = flwm_popup_title(title, &b1, &b2);
+			if (!by_id && !by_title) continue;
+			view->popup_x1 = by_title ? b1 : a1;
+			view->popup_x2 = by_title ? b2 : a2;
+		} else if (!(app_id && !strcmp(app_id, want)) && !(title && !strcmp(title, want))) {
+			continue;
+		}
 		struct wl_client *client = wl_resource_get_client(view->xdg_toplevel->resource);
 		if (!client_exe_is(view->server, client, shell_roles[i].exe)) {
 			wlr_log(WLR_INFO, "%s claimed by a foreign program; treating as normal", want);
@@ -719,13 +729,29 @@ void view_reposition_shell(struct flwm_view *view) {
 			o->usable_area.y + o->usable_area.height - geo.height - 48);
 		break;
 	case FLWM_ROLE_POPUP: {
-		/* next to the panel, horizontally centred on the pointer */
-		o = output_at(server, server->cursor->x, server->cursor->y);
+		/* next to the panel, centred on the button that opened it (its x
+		 * range comes in the title), else on the pointer: a popup opened
+		 * from the keyboard or a screen reader goes to its button too */
+		int center = (int)server->cursor->x;
+		o = NULL;
+		if (view->popup_x1 >= 0) {
+			struct flwm_view *panel = NULL, *v;
+			wl_list_for_each(v, &server->views, link) {
+				if (v->role != FLWM_ROLE_PANEL || !v->mapped || !same_client(v, view)) continue;
+				if (!panel) panel = v;
+				struct wlr_box pg;
+				view_get_geometry(v, &pg);
+				if (server->cursor->x >= pg.x && server->cursor->x < pg.x + pg.width) panel = v;
+			}
+			if (panel) {
+				center = panel->x + (view->popup_x1 + view->popup_x2) / 2;
+				o = output_at(server, center, panel->y);
+			}
+		}
+		if (!o) o = output_at(server, server->cursor->x, server->cursor->y);
 		if (!o) return;
 		struct wlr_box ua = o->usable_area;
-		int x = (int)server->cursor->x - geo.width / 2;
-		if (x + geo.width > ua.x + ua.width - 4) x = ua.x + ua.width - 4 - geo.width;
-		if (x < ua.x + 4) x = ua.x + 4;
+		int x = flwm_popup_x(center, geo.width, ua.x, ua.width);
 		int y = server->config.panel_top ? ua.y + 4 : ua.y + ua.height - geo.height - 4;
 		if (!view->placed) {
 			view_set_position(view, x, y);

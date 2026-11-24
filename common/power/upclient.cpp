@@ -308,7 +308,7 @@ std::string format_time(long long seconds) {
 std::string summary(const State &s) {
   if (!s.has_battery) return s.on_battery ? "On battery" : "On AC power";
   const Device &d = s.display;
-  std::string pct = std::to_string((int)std::lround(d.percentage)) + " %";
+  std::string pct = std::to_string((int)std::lround(d.percentage)) + "%";
   switch (d.state) {
     case FULL: return pct + ", fully charged";
     case CHARGING: {

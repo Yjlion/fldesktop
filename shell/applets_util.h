@@ -51,6 +51,12 @@ double memory_usage(const std::string &meminfo, unsigned long long *total_kb = n
 // the names of the programs that have a camera (/dev/video*) open, found in
 // /proc (only one's own processes can be seen); sorted, each once
 std::vector<std::string> camera_users(const std::string &proc = "/proc");
+// the camera device nodes: /dev/video0 ... (sorted)
+std::vector<std::string> video_devices(const std::string &dev = "/dev");
+// the camera users to show: those PipeWire knows, and those found in /proc,
+// without PipeWire's own processes when it names its clients
+std::vector<std::string> merge_camera_users(const std::vector<std::string> &pipewire,
+                                            const std::vector<std::string> &proc);
 // "Firefox and fl-webcam", "a, b and 2 more"
 std::string name_list(const std::vector<std::string> &names, size_t max = 3);
 

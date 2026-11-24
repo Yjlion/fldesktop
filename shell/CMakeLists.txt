@@ -62,6 +62,9 @@ endif()
 
 add_executable(fl-launcher launcher.cpp)
 target_link_libraries(fl-launcher PRIVATE fld)
+# kept ready from the start of the session (fl-launcher --daemon)
+install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-launcher.desktop
+        DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)
 
 add_executable(fl-desktop desktop.cpp desktop_layout.cpp)
 target_link_libraries(fl-desktop PRIVATE fld)

@@ -33,7 +33,7 @@ foreach(p staging/tearing-control/tearing-control-v1 staging/content-type/conten
   endif()
 endforeach()
 
-add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c zoom.c a11y.c protocols.c)
+add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c popup_place.c zoom.c a11y.c protocols.c)
 
 # X11 programs through Xwayland, when wlroots was built with it
 option(FLD_XWAYLAND "Run X11 programs in fl-wm through Xwayland (if wlroots supports it)" ON)

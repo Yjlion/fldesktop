@@ -10,9 +10,11 @@
 #include <vector>
 
 #include "fld/icons.h"
+#include "fld/text.h"
 #include "fld/menus.h"
 #include "fld/notify.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "network_ui.h"
 #include "nmclient.h"
 #include "panel.h"
@@ -97,6 +99,7 @@ std::string wired_status(const nm::Device &d) {
 } // namespace
 
 void network_popup(Fl_Widget *w) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   nm::Client &c = nm::Client::get();
   const nm::State &st = c.state();
   if (!st.running) {
@@ -152,7 +155,7 @@ void network_popup(Fl_Widget *w) {
   H = std::min(H, 560);
   PanelPopup pop(W, H);
   const fld::Palette &p = fld::palette();
-  Fl_Check_Button *net = new Fl_Check_Button(10, 8, 150, 28, "Networking");
+  Fl_Check_Button *net = new fld::CheckButton(10, 8, 150, 28, "Networking");
   net->labelfont(FL_HELVETICA_BOLD);
   net->value(st.networking);
   net->callback([](Fl_Widget *b, void *) {
@@ -160,7 +163,7 @@ void network_popup(Fl_Widget *w) {
     b->window()->hide();
   });
   if (have_wifi) {
-    Fl_Check_Button *wifi = new Fl_Check_Button(W - 100, 8, 90, 28, "Wi-Fi");
+    Fl_Check_Button *wifi = new fld::CheckButton(W - 100, 8, 90, 28, "Wi-Fi");
     wifi->value(st.wireless);
     if (!st.wireless_hw || !st.networking) wifi->deactivate();
     wifi->callback([](Fl_Widget *b, void *) {
@@ -191,16 +194,25 @@ void network_popup(Fl_Widget *w) {
     Fl_Box *ic = new Fl_Box(10, y + 8, 28, 28);
     ic->image(fld::icon_first({icon, "network-wireless", "fl-network"}, 22));
     Fl_Box *n = new Fl_Box(44, y + 2, W - 160, 22);
-    n->copy_label(fld::escape_at(r.name).c_str());
     n->labelfont(r.active ? FL_HELVETICA_BOLD : FL_HELVETICA);
+    // a long name ends with "…"; the whole of it in the tooltip
+    fl_font(n->labelfont(), n->labelsize());
+    std::string shown = fld::ellipsize(r.name, n->w() - 4);
+    n->copy_label(fld::escape_at(shown).c_str());
+    if (shown != r.name) n->copy_tooltip(r.name.c_str());
     n->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
     std::string sub = r.sub;
-    if (r.kind == Row::WIFI && r.ap.secure) sub = "🔒 " + sub;
     Fl_Box *s = new Fl_Box(44, y + 22, W - 160, 18);
     s->copy_label(fld::escape_at(sub).c_str());
     s->labelsize(12);
     s->labelcolor(p.fg_dim);
     s->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
+    // a lock before the security of a protected network
+    if (r.kind == Row::WIFI && r.ap.secure)
+      if (Fl_Image *lock = fld::symbolic_icon("network-wireless-encrypted", 12, p.fg_dim)) {
+        s->image(lock);
+        s->align(s->align() | FL_ALIGN_IMAGE_NEXT_TO_TEXT);
+      }
     Fl_Button *b = new Fl_Button(W - 108, y + 8, 98, 28, r.active ? "Disconnect" : "Connect");
     b->labelsize(12);
     b->callback(row_cb, &r);

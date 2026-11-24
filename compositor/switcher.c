@@ -38,6 +38,17 @@ struct sw_buffer {
 	cairo_surface_t *surface;
 };
 
+
+/* whether text on this colour (0xRRGGBB) reads better dark than white: WCAG
+ * contrast against near-black and white, as fld::text_on does */
+static bool accent_wants_dark_text(uint32_t c) {
+	double ch[3] = {((c >> 16) & 0xff) / 255.0, ((c >> 8) & 0xff) / 255.0, (c & 0xff) / 255.0};
+	for (int k = 0; k < 3; k++) ch[k] = ch[k] <= 0.04045 ? ch[k] / 12.92 : pow((ch[k] + 0.055) / 1.055, 2.4);
+	double l = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+	double dark = 0.007; /* #141416 */
+	return (l + 0.05) / (dark + 0.05) >= 1.05 / (l + 0.05);
+}
+
 static void sw_buffer_destroy(struct wlr_buffer *b) {
 	struct sw_buffer *buf = wl_container_of(b, buf, base);
 	flwm_buffer_finish(b);
@@ -459,6 +470,9 @@ static void sw_render(struct flwm_server *server) {
 	char *big_font = pango_font_description_to_string(fd);
 	pango_font_description_free(fd);
 
+	/* text on the accent: near-black or white, whichever reads better (white
+	 * on a light accent such as amber is about 3:1) */
+	double on_accent = accent_wants_dark_text(accent) ? 0.08 : 1.0;
 	for (int i = 0; i < s->n; i++) {
 		struct flwm_view *v = s->views[i];
 		int cx = PAD + (i % cols) * CELL_W, cy = top + PAD + (i / cols) * CELL_H;
@@ -481,7 +495,7 @@ static void sw_render(struct flwm_server *server) {
 			int len = 1;
 			while (t[len] && ((unsigned char)t[len] & 0xc0) == 0x80 && len < 4) len++;
 			memcpy(letter, t, len);
-			cairo_set_source_rgb(cr, 1, 1, 1);
+			cairo_set_source_rgb(cr, on_accent, on_accent, on_accent);
 			draw_text(cr, "Sans Bold 26", letter, ix, iy + 12, ICON, 1, true);
 		}
 		if (v->minimized) {
@@ -490,7 +504,10 @@ static void sw_render(struct flwm_server *server) {
 		}
 		const char *title = view_title(v) ? view_title(v) : "";
 		if (!*title && view_app_id(v)) title = view_app_id(v);
-		cairo_set_source_rgba(cr, 1, 1, 1, v->minimized && i != s->sel ? 0.55 : 0.95);
+		if (i == s->sel)
+			cairo_set_source_rgba(cr, on_accent, on_accent, on_accent, 0.95);
+		else
+			cairo_set_source_rgba(cr, 1, 1, 1, v->minimized ? 0.55 : 0.95);
 		draw_text(cr, small_font, title, cx + 8, iy + ICON + 8, CELL_W - 16, 2, true);
 	}
 	/* the selected window's whole title */

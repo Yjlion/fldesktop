@@ -108,6 +108,10 @@ struct Model {
 	std::string defaultSink;    // Device::name of the default output
 	std::string defaultSource;  // Device::name of the default input
 	std::string serverName;     // e.g. "PulseAudio (on PipeWire 1.4.2)"
+	// the programs capturing video through the server (a camera), and whether
+	// any video source runs; PipeWire only
+	std::vector<std::string> videoUsers;
+	bool videoRunning = false;
 	bool connected;
 	Model() : connected(false) {}
 	void clear();

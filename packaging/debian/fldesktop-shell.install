@@ -11,6 +11,7 @@ usr/share/man/man1/fl-autorotate.1
 usr/libexec/fldesktop/fl-backlight-helper
 usr/share/polkit-1/actions/org.fldesktop.backlight.policy
 etc/xdg/autostart/fl-cliphist.desktop
+etc/xdg/autostart/fl-launcher.desktop
 usr/bin/fl-session
 usr/bin/fl-screenshot
 usr/bin/fl-snip

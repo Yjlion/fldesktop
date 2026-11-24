@@ -16,6 +16,7 @@
 #include "fld/icons.h"
 #include "fld/notify.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 #include "panel.h"
 
 namespace {
@@ -54,7 +55,7 @@ void update_button() {
   Fl_Image *img = g_dnd ? fld::symbolic_icon("notifications-disabled", 18, fg)
                         : fld::symbolic_icon("preferences-system-notifications", 18, fg);
   g_bell->icon_image(img);
-  if (!img) g_bell->copy_label(g_dnd ? "🔕" : "🔔");
+  if (!img) g_bell->copy_label(g_dnd ? "Off" : "!");
   std::string tip = g_dnd ? "Do not disturb" : unseen ? std::to_string(unseen) + " new notifications" : "Notifications";
   g_bell->copy_tooltip(tip.c_str());
   bool vis = g_available;
@@ -220,6 +221,7 @@ time_t tomorrow_morning() {
 }
 
 void bell_cb(Fl_Widget *w, void *) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   const int W = 360;
   int list_h = 0;
   for (auto &e : g_list) list_h += EntryBox::height_for(e, W - 18);
@@ -230,7 +232,7 @@ void bell_cb(Fl_Widget *w, void *) {
   title->labelfont(FL_HELVETICA_BOLD);
   title->labelsize(14);
   title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-  Fl_Check_Button *dnd = new Fl_Check_Button(140, 8, 130, 28, "Do not disturb");
+  Fl_Check_Button *dnd = new fld::CheckButton(140, 8, 130, 28, "Do not disturb");
   dnd->labelsize(12);
   dnd->value(g_dnd);
   dnd->callback([](Fl_Widget *b, void *) { set_dnd(((Fl_Check_Button *)b)->value(), 0); });

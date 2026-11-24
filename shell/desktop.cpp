@@ -35,6 +35,7 @@
 #include "fld/theme.h"
 #include "fld/trash.h"
 #include "fld/util.h"
+#include "fld/text.h"
 #include "desktop_layout.h"
 #include "panel.h" // PANEL_H
 
@@ -338,34 +339,6 @@ public:
     }
   }
 
-  static std::vector<std::string> wrap_label(const std::string &s, int width, int max_lines) {
-    std::vector<std::string> lines;
-    std::string cur;
-    size_t i = 0;
-    while (i < s.size()) {
-      int len = fl_utf8len1(s[i]);
-      std::string ch = s.substr(i, len);
-      if (fl_width((cur + ch).c_str()) > width && !cur.empty()) {
-        // try to break at the last space
-        size_t sp = cur.rfind(' ');
-        std::string rest;
-        if (sp != std::string::npos && sp > 0) { rest = cur.substr(sp + 1); cur = cur.substr(0, sp); }
-        lines.push_back(cur);
-        cur = rest;
-        if ((int)lines.size() == max_lines) break;
-      }
-      cur += ch;
-      i += len;
-    }
-    if ((int)lines.size() < max_lines && !cur.empty()) lines.push_back(cur);
-    else if (i < s.size() && !lines.empty()) {
-      std::string &l = lines.back();
-      while (!l.empty() && fl_width((l + "…").c_str()) > width) l.pop_back();
-      l += "…";
-    }
-    return lines;
-  }
-
   void draw() override {
     draw_wallpaper();
     fl_font(FL_HELVETICA, 12);
@@ -379,7 +352,7 @@ public:
         if (Fl_RGB_Image *img = selection_image(focused)) img->draw(it.x + 2, it.y);
       }
       if (it.icon) it.icon->draw(it.x + (CELL_W - ICON) / 2, it.y + 4);
-      auto lines = wrap_label(it.name, CELL_W - 8, sel ? 4 : 2);
+      auto lines = fld::wrap_label(it.name, CELL_W - 8, sel ? 4 : 2);
       int ly = it.y + ICON + 8;
       for (auto &l : lines) {
         int lw = (int)fl_width(l.c_str());

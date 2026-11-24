@@ -140,6 +140,7 @@ void kick() {
 }
 
 void printers_cb(Fl_Widget *w, void *) {
+  if (panel_popup_toggle(w)) return; // open: a second click closes it
   const int W = 380;
   int n = std::max<int>(1, g_jobs.size());
   int H = 44 + n * 50 + 46;

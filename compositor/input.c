@@ -2,6 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include <linux/input-event-codes.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <signal.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <string.h>
@@ -110,6 +112,31 @@ static void reload_config(struct flwm_server *server) {
 	wlr_log(WLR_INFO, "configuration reloaded");
 }
 
+/* The resident launcher's pid, from the pid file fl-launcher --daemon writes
+ * ("<pid> daemon"), when that process is fl-launcher; it gets SIGUSR1. */
+static bool signal_resident_launcher(void) {
+	const char *rt = getenv("XDG_RUNTIME_DIR");
+	char path[512], buf[64] = "";
+	snprintf(path, sizeof path, "%s/fl-launcher-%u.pid", rt ? rt : "/tmp", (unsigned)getuid());
+	FILE *f = fopen(path, "r");
+	if (!f) return false;
+	size_t n = fread(buf, 1, sizeof buf - 1, f);
+	fclose(f);
+	buf[n] = 0;
+	if (!strstr(buf, "daemon")) return false;
+	int pid = atoi(buf);
+	if (pid <= 1) return false;
+	char comm_path[64], comm[32] = "";
+	snprintf(comm_path, sizeof comm_path, "/proc/%d/comm", pid);
+	f = fopen(comm_path, "r");
+	if (!f) return false;
+	if (!fgets(comm, sizeof comm, f)) comm[0] = 0;
+	fclose(f);
+	comm[strcspn(comm, "\n")] = 0;
+	if (strcmp(comm, "fl-launcher")) return false;
+	return kill(pid, SIGUSR1) == 0;
+}
+
 bool input_run_action(struct flwm_server *server, enum flwm_action_type action, const char *arg) {
 	struct flwm_view *v = focused_normal(server);
 	switch (action) {
@@ -167,8 +194,12 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 		cycle(server, true);
 		return true;
 	case FLWM_ACTION_LAUNCHER:
-		/* fl-launcher toggles: a second instance closes the running one (FLTK
-		 * ignores xdg_toplevel.close for borderless windows) */
+		/* the resident fl-launcher (--daemon) shows or hides on SIGUSR1, at
+		 * once; otherwise fl-launcher toggles: a second instance closes the
+		 * running one (FLTK ignores xdg_toplevel.close for borderless windows) */
+		if ((!server->config.launcher_cmd || !strcmp(server->config.launcher_cmd, "fl-launcher")) &&
+		    signal_resident_launcher())
+			return true;
 		flwm_spawn(server, server->config.launcher_cmd ? server->config.launcher_cmd : "fl-launcher");
 		return true;
 	case FLWM_ACTION_QUIT:

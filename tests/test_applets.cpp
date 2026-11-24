@@ -83,7 +83,26 @@ int main() {
     CHECK_EQ(u[0], std::string("fl-webcam"));
     CHECK_EQ(u[1], std::string("zoom"));
     CHECK(camera_users(root + "/none").empty());
+    // the device nodes to watch
+    mkdir((root + "/dev").c_str(), 0755);
+    for (const char *n : {"video1", "video0", "vhci", "videofoo", "null"}) {
+      FILE *f = fopen((root + "/dev/" + n).c_str(), "w");
+      if (f) fclose(f);
+    }
+    auto v = video_devices(root + "/dev");
+    CHECK_EQ(v.size(), (size_t)2);
+    if (v.size() == 2) CHECK_EQ(v[0], root + "/dev/video0");
+    CHECK(video_devices(root + "/nodev").empty());
     if (system(("rm -rf " + root).c_str()) != 0) {}
+  }
+  // PipeWire's clients replace PipeWire itself
+  {
+    auto m = merge_camera_users({"Firefox"}, {"pipewire", "fl-webcam"});
+    CHECK_EQ(m.size(), (size_t)2);
+    CHECK(m.size() == 2 && m[0] == "Firefox" && m[1] == "fl-webcam");
+    m = merge_camera_users({}, {"pipewire"});
+    CHECK(m.size() == 1 && m[0] == "pipewire");
+    CHECK(merge_camera_users({}, {}).empty());
   }
   CHECK_EQ(name_list({}), std::string(""));
   CHECK_EQ(name_list({"a"}), std::string("a"));

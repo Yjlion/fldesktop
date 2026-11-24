@@ -32,6 +32,7 @@
 
 #include "fprint.h"
 #endif
+#include "fld/avatar.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/osk.h"
@@ -81,11 +82,8 @@ public:
   Screen(int x, int y, int w, int h) : Fl_Group(x, y, w, h) {
     src.reset(fld::load_image(g_cfg.background));
     if (!g_avatar.empty()) {
-      Fl_Image *a = fld::load_image(g_avatar);
-      if (a) {
-        avatar.reset(a->copy(96, 96));
-        delete a;
-      }
+      std::unique_ptr<Fl_Image> a(fld::load_image(g_avatar));
+      if (a) avatar.reset(fld::avatar_image(a.get(), 96));
     }
   }
   int card_y() const { return y() + h() / 2 - 40; }
@@ -124,12 +122,7 @@ public:
     if (avatar) {
       avatar->draw(ax, ay);
     } else {
-      fl_color(fld::palette().accent);
-      fl_pie(ax, ay, 96, 96, 0, 360);
-      std::string init(1, (char)toupper((unsigned char)(g_user.empty() ? '?' : g_user[0])));
-      fl_color(FL_WHITE);
-      fl_font(FL_HELVETICA_BOLD, 44);
-      fl_draw(init.c_str(), ax, ay, 96, 96, FL_ALIGN_CENTER);
+      fld::draw_initial_avatar(ax, ay, 96, g_user, g_real_name);
     }
     fl_color(FL_WHITE);
     fl_font(FL_HELVETICA_BOLD, 20);

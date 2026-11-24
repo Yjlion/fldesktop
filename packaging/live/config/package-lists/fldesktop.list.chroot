@@ -1,0 +1,15 @@
+# the desktop (its Recommends come along: greeter, apps, Plymouth theme)
+fldesktop
+fldesktop-greeter
+fldesktop-archive-keyring
+# boot splash
+plymouth
+plymouth-themes
+fldesktop-plymouth-theme
+# hardware, network, sound
+firmware-linux-free
+network-manager
+pipewire-audio
+wireplumber
+# so the live system can be installed or used for repairs
+sudo

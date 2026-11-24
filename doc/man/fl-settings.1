@@ -54,7 +54,10 @@ and automatic login with greetd (the \fB[initial_session]\fR of
 its standard input. It refuses to remove your own account, a user who is
 logged in, or the last administrator. Pictures are kept in
 \fI/var/lib/AccountsService/icons\fR, where \fBfl-lock\fR(1) and
-\fBfl-greet\fR(1) find them.
+\fBfl-greet\fR(1) find them, as 256 pixel square PNG images: one of the
+stock pictures in \fI/usr/share/pixmaps/faces\fR or a photo of your own,
+cropped to a square. A new account starts with the first letter of its name
+on a color of its own.
 .SH OPTIONS
 .TP
 \fIPAGE\fR

@@ -72,7 +72,7 @@ public:
   AccentSwatches *accent;
   WallpaperGallery *gallery;
   Fl_Check_Browser *users;
-  Fl_Check_Button *remember, *clock24, *power;
+  Fl_Check_Button *remember, *pictures, *clock24, *power;
   Fl_Button *apply, *revert;
   std::vector<std::string> icon_themes, cursor_themes, user_names, layouts;
   std::string background, custom_background;  // custom = a file to copy
@@ -133,6 +133,10 @@ public:
     f.row("", 26, wx, wy, ww);
     remember = new Fl_Check_Button(wx, wy, ww, 26, "Preselect the user who logged in last");
     remember->callback(changed, this);
+    f.row("", 26, wx, wy, ww);
+    pictures = new Fl_Check_Button(wx, wy, ww, 26, "Show user pictures");
+    pictures->tooltip("The pictures set in Settings > Users; without them the login card is smaller");
+    pictures->callback(changed, this);
     f.row("Lowest user ID:", 28, wx, wy, ww);
     min_uid = new Fl_Spinner(wx, wy, 90, 28);
     min_uid->range(0, 65535);
@@ -234,6 +238,7 @@ public:
     if (file_exists(background)) gallery->add_file(background);
     gallery->value(background);
     remember->value(cfg.get_bool("Greeter", "RememberUser", true));
+    pictures->value(cfg.get_bool("Greeter", "ShowUserPictures", true));
     min_uid->value(cfg.get_int("Greeter", "MinUid", 1000));
     users->clear();
     load_users();
@@ -279,6 +284,7 @@ public:
     n.set_int("Cursor", "Size", (int)cursor_size->value());
     if (custom_background.empty()) n.set("Greeter", "Background", background);
     n.set_bool("Greeter", "RememberUser", remember->value() != 0);
+    n.set_bool("Greeter", "ShowUserPictures", pictures->value() != 0);
     n.set_int("Greeter", "MinUid", (int)min_uid->value());
     std::string hide;
     for (int i = 1; i <= users->nitems(); i++)

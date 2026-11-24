@@ -892,7 +892,8 @@ static void process_cursor_motion(struct flwm_server *server, uint32_t time) {
 		}
 		return;
 	default:
-		hot_corners(server);
+		/* a hot corner (the switcher) would take the release that ends a drag */
+		if (!server->seat->drag) hot_corners(server);
 		input_update_pointer_focus(server, time);
 	}
 }
@@ -979,7 +980,7 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	 * request, so end the grab first: the popups get popup_done and close. */
 	struct wlr_seat_pointer_state *ps = &server->seat->pointer_state;
 	bool ours = !surface || (desc && desc->kind == FLWM_NODE_DECOR) || (mods & WLR_MODIFIER_LOGO);
-	if (ps->grab != ps->default_grab && !server->locked && ours)
+	if (ps->grab != ps->default_grab && !server->locked && ours && !server->seat->drag)
 		wlr_seat_pointer_end_grab(server->seat);
 	/* menus without a grab (FLTK's): a click elsewhere closes them too */
 	struct flwm_view *menu_owner = view_focused(server);

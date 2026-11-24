@@ -543,3 +543,14 @@ if(TARGET fl-snip-util)
   target_link_libraries(test_snip PRIVATE fl-snip-util)
   add_test(NAME snip COMMAND test_snip)
 endif()
+
+# fl-desktop's icon grid
+add_executable(test_desktop_layout test_desktop_layout.cpp ${CMAKE_SOURCE_DIR}/shell/desktop_layout.cpp)
+add_test(NAME desktop_layout COMMAND test_desktop_layout)
+
+# desktop icons: drag onto a folder, move on the desktop (headless fl-wm)
+if(TARGET fl-vptr AND FLD_BUILD_WM)
+  add_test(NAME dnd-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/dnd-smoke.sh
+           ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-vptr>)
+  set_tests_properties(dnd-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+endif()

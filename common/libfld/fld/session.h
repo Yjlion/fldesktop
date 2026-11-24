@@ -16,10 +16,20 @@ void suspend();
 void reboot();
 void power_off();
 
-// "suspend", "hibernate", "reboot" or "poweroff" through loginctl (systemd-logind
-// or elogind), else systemctl; shows an error and returns false without either
+// "suspend", "hibernate", "reboot" or "poweroff": asks logind over D-Bus
+// (systemd-logind or elogind; polkit may ask for a password), else runs
+// systemctl or elogind's loginctl. Works in a thread: returns at once, and
+// shows a dialog if the action is refused or fails.
 bool run_power(const std::string &action);
-// the command run_power() runs (empty: none available)
+// true while a run_power() request has not finished
+bool power_pending();
+// runs the event loop until requests have finished (a program that is about
+// to exit calls this so their error dialogs are still shown)
+void wait_power();
+// false when logind says the action is not possible here ("no", "na")
+bool can_power(PowerAction a);
+// the command run_power() falls back to without logind on the system bus:
+// systemctl, else loginctl (elogind; systemd's loginctl has no power verbs)
 std::vector<std::string> power_command(const std::string &action, bool have_loginctl, bool have_systemctl);
 
 // Asks first for log out, restart and shut down (Lock and Suspend just run);

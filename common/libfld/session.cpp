@@ -1,10 +1,19 @@
 #include "fld/session.h"
 #include "fld/util.h"
 
+#include <FL/Fl.H>
 #include <FL/fl_ask.H>
+#include <atomic>
 #include <csignal>
+#include <cstring>
 #include <cstdlib>
+#include <memory>
 #include <string>
+#include <thread>
+
+#ifdef FLD_HAVE_GIO
+#include <gio/gio.h>
+#endif
 
 namespace fld {
 
@@ -29,21 +38,142 @@ void log_out() {
 }
 
 std::vector<std::string> power_command(const std::string &action, bool have_loginctl, bool have_systemctl) {
-  // loginctl talks to systemd-logind and elogind alike (Devuan, Alpine);
-  // systemctl is the fallback on systemd systems without loginctl in PATH
-  if (have_loginctl) return {"loginctl", action};
+  // systemctl on systemd systems: systemd's loginctl has no power verbs (only
+  // elogind's has), so loginctl is only the fallback for elogind (Devuan, Alpine)
   if (have_systemctl) return {"systemctl", action};
+  if (have_loginctl) return {"loginctl", action};
   return {};
 }
 
-bool run_power(const std::string &action) {
-  auto argv = power_command(action, !which("loginctl").empty(), !which("systemctl").empty());
-  if (argv.empty()) {
-    fl_alert("Cannot %s: neither loginctl (elogind or systemd-logind) nor systemctl is installed.",
-             action == "poweroff" ? "shut down" : action.c_str());
-    return false;
+namespace {
+
+std::atomic<int> g_power_pending{0};
+
+const char *power_verb(const std::string &action) {
+  if (action == "poweroff") return "shut down";
+  if (action == "reboot") return "restart";
+  return action == "hibernate" ? "hibernate" : "suspend";
+}
+
+struct PowerFailure {
+  std::string action, message;
+};
+
+void show_power_failure(void *d) {
+  std::unique_ptr<PowerFailure> f(static_cast<PowerFailure *>(d));
+  fl_alert("Could not %s the computer.\n\n%s", power_verb(f->action), f->message.c_str());
+}
+
+#ifdef FLD_HAVE_GIO
+const char *logind_method(const std::string &action) {
+  if (action == "reboot") return "Reboot";
+  if (action == "poweroff") return "PowerOff";
+  if (action == "suspend") return "Suspend";
+  if (action == "hibernate") return "Hibernate";
+  return nullptr;
+}
+
+bool logind_missing(const GError *e) {
+  return g_error_matches(e, G_DBUS_ERROR, G_DBUS_ERROR_SERVICE_UNKNOWN) ||
+         g_error_matches(e, G_DBUS_ERROR, G_DBUS_ERROR_NAME_HAS_NO_OWNER) ||
+         g_error_matches(e, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD) ||
+         g_error_matches(e, G_IO_ERROR, G_IO_ERROR_NOT_FOUND);
+}
+
+// A call to logind's Manager on the system bus. 0: done, 1: logind is not
+// there (no system bus, no logind), 2: refused or failed (message in err).
+int logind_call(const char *method, GVariant *args, const GVariantType *reply_type, int timeout_ms,
+                GVariant **reply, std::string &err) {
+  GError *e = nullptr;
+  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, &e);
+  if (!bus) {
+    if (args) g_variant_unref(g_variant_ref_sink(args));
+    if (e) g_error_free(e);
+    return 1;
   }
-  spawn(argv);
+  GVariant *r = g_dbus_connection_call_sync(bus, "org.freedesktop.login1", "/org/freedesktop/login1",
+                                            "org.freedesktop.login1.Manager", method, args, reply_type,
+                                            G_DBUS_CALL_FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION, timeout_ms,
+                                            nullptr, &e);
+  g_object_unref(bus);
+  if (r) {
+    if (reply) *reply = r;
+    else g_variant_unref(r);
+    return 0;
+  }
+  int rc = logind_missing(e) ? 1 : 2;
+  if (rc == 2) {
+    g_dbus_error_strip_remote_error(e);
+    err = e->message;
+  }
+  g_error_free(e);
+  return rc;
+}
+#endif
+
+// Runs the action: logind over D-Bus (systemd-logind and elogind both have it;
+// polkit asks through fl-polkit-agent when needed), else systemctl / loginctl.
+// Returns the reason it failed, or "" when it was started.
+std::string do_power(const std::string &action) {
+  std::string err;
+#ifdef FLD_HAVE_GIO
+  if (const char *m = logind_method(action)) {
+    // interactive: polkit may ask for a password, which can take a while
+    int rc = logind_call(m, g_variant_new("(b)", TRUE), nullptr, G_MAXINT, nullptr, err);
+    if (rc != 1) return err;
+  }
+#endif
+  auto argv = power_command(action, !which("loginctl").empty(), !which("systemctl").empty());
+  if (argv.empty()) return "Neither logind (systemd-logind or elogind) nor systemctl is available.";
+  std::string out;
+  int st = run_capture_input(argv, "", out, true);
+  if (st == 0) return "";
+  err = trim(out);
+  if (err.empty()) err = join(argv, " ") + " failed (exit status " + std::to_string(st) + ").";
+  return err;
+}
+
+} // namespace
+
+bool run_power(const std::string &action) {
+  // Fl::awake() from the worker needs FLTK's thread support switched on
+  Fl::lock();
+  Fl::unlock();
+  g_power_pending++;
+  std::thread([action] {
+    std::string err = do_power(action);
+    if (!err.empty()) Fl::awake(show_power_failure, new PowerFailure{action, err});
+    g_power_pending--;
+    Fl::awake();
+  }).detach();
+  return true;
+}
+
+bool power_pending() { return g_power_pending > 0; }
+
+void wait_power() {
+  while (power_pending()) Fl::wait(0.2);
+  Fl::flush();
+  // a failure dialog queued just before the counter dropped
+  Fl::wait(0);
+}
+
+bool can_power(PowerAction a) {
+  if (a == PowerAction::Lock) return can_lock();
+  if (a == PowerAction::LogOut) return true;
+#ifdef FLD_HAVE_GIO
+  const char *m = a == PowerAction::Suspend ? "CanSuspend" : a == PowerAction::Reboot ? "CanReboot" : "CanPowerOff";
+  GVariant *r = nullptr;
+  std::string err;
+  if (logind_call(m, nullptr, G_VARIANT_TYPE("(s)"), 2000, &r, err) == 0) {
+    const char *v = nullptr;
+    g_variant_get(r, "(&s)", &v);
+    // "yes", "challenge" (polkit asks) or "no", "na" (not possible here)
+    bool ok = v && strcmp(v, "no") != 0 && strcmp(v, "na") != 0;
+    g_variant_unref(r);
+    return ok;
+  }
+#endif
   return true;
 }
 

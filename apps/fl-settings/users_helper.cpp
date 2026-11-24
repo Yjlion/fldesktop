@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <vector>
 
+#include "fld/avatar.h"
 #include "fld/ini.h"
 #include "fld/util.h"
 #include "greeter_config.h"
@@ -98,6 +99,8 @@ std::string login_shell() {
   return "/bin/sh";
 }
 
+bool store_picture(const std::string &user, const std::string &img);
+
 int cmd_add(int argc, char **argv) {
   if (argc != 5) return helper_fail("usage: add <name> <full name> <admin 0|1>");
   std::string name = argv[2], full = argv[3], err;
@@ -122,6 +125,9 @@ int cmd_add(int argc, char **argv) {
     tool({find_tool("userdel"), "-r", "--", name}, e2);  // do not leave an account without a password
     return helper_fail("Cannot set the password: " + err);
   }
+  // new accounts start with a picture: their initial on a color of their own
+  std::string png;
+  if (initial_avatar_png(name, full, 256, png)) store_picture(name, png);
   return 0;
 }
 
@@ -199,35 +205,42 @@ int cmd_password(int argc, char **argv) {
   return 0;
 }
 
+// AccountsService (when installed) keeps its own record of the picture
+void set_accounts_icon(const std::string &user, const std::string &icon) {
+  std::string users_dir = "/var/lib/AccountsService/users";
+  if (!is_dir(users_dir)) return;
+  Ini rec;
+  std::string p = users_dir + "/" + user;
+  rec.load(p);
+  rec.set("User", "Icon", icon);
+  write_atomic(p, rec.to_string(), 0600);
+}
+
+// the picture the greeter, the lock screen and Settings show
+bool store_picture(const std::string &user, const std::string &img) {
+  std::string dest = picture_path(user);
+  mkdir_p("/var/lib/AccountsService/icons", 0755);
+  if (!write_atomic(dest, img)) return false;
+  set_accounts_icon(user, dest);
+  return true;
+}
+
 int cmd_picture(int argc, char **argv) {
   if (argc != 4) return helper_fail("usage: picture <name> <image file|->");
   std::string err;
   Db d = load_db();
   const Account *a = target(d, argv[2], err);
   if (!a) return helper_fail(err);
-  std::string dest = picture_path(a->name);
-  std::string users_dir = "/var/lib/AccountsService/users";
-  auto set_accounts_icon = [&](const std::string &icon) {
-    // AccountsService (when installed) keeps its own record of the picture
-    if (!is_dir(users_dir)) return;
-    Ini rec;
-    std::string p = users_dir + "/" + a->name;
-    rec.load(p);
-    rec.set("User", "Icon", icon);
-    write_atomic(p, rec.to_string(), 0600);
-  };
   if (std::string(argv[3]) == "-") {
-    unlink(dest.c_str());
-    set_accounts_icon("");
+    unlink(picture_path(a->name).c_str());
+    set_accounts_icon(a->name, "");
     return 0;
   }
   std::string img;
   if (!read_user_file(argv[3], helper_caller_uid(), 8u << 20, img, err)) return helper_fail(err);
   std::string ext = image_type(img);
   if (ext != "png" && ext != "jpg") return helper_fail("The picture has to be a PNG or JPEG image.");
-  mkdir_p("/var/lib/AccountsService/icons", 0755);
-  if (!write_atomic(dest, img)) return helper_fail("Cannot write " + dest);
-  set_accounts_icon(dest);
+  if (!store_picture(a->name, img)) return helper_fail("Cannot write " + picture_path(a->name));
   return 0;
 }
 

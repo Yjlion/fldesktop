@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <map>
 #include <set>
 #include <string>
 #include <sys/inotify.h>
@@ -34,6 +35,7 @@
 #include "fld/theme.h"
 #include "fld/trash.h"
 #include "fld/util.h"
+#include "desktop_layout.h"
 #include "panel.h" // PANEL_H
 
 struct Item {
@@ -66,7 +68,11 @@ public:
   Fl_Color bg_color = fl_rgb_color(0x2d, 0x3a, 0x4f);
   bool show_icons = true;
   bool panel_top = false; // fl-panel is at the top edge (wm.ini behaviour/panel_position)
-  std::unique_ptr<Fl_Image> wp_src, wp_scaled;
+  // only the wallpaper scaled to the screen is kept: the file is decoded
+  // again when the screen size or the wallpaper changes (a 4K photo is
+  // about 33 MB decoded)
+  std::unique_ptr<Fl_Image> wp_scaled;
+  bool wp_missing = false;
   int wp_w = 0, wp_h = 0;
   // rubber band
   bool banding = false;
@@ -74,7 +80,19 @@ public:
   // drag and drop
   int press_item = -1, press_x = 0, press_y = 0, pending_toggle = -1;
   bool dragging = false, dropping = false;
-  int drop_item = -1; // folder, Home or Trash under a drag
+  int drop_item = -1; // folder, Home, Trash or launcher under a drag
+  int drop_x = 0, drop_y = 0;
+  // our own drag: the icons it moves (Home and Trash too) and the one under
+  // the pointer, to move them on the desktop when they are dropped on it
+  std::vector<std::string> drag_keys;
+  std::set<std::string> drag_paths;
+  std::string drag_anchor;
+  // Home and Trash alone (no files to hand to other programs), or no
+  // Wayland drag: the icons are moved within the desktop on release
+  bool moving_here = false;
+  // icon cells: the ones the user moved (desktop-icons.ini) and the grid
+  std::map<std::string, desk::Cell> saved;
+  int grid_cols = 1, grid_rows = 1;
 
 
   DesktopView(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {}
@@ -95,10 +113,99 @@ public:
     reload();
   }
 
+  static bool is_launcher(const Item &it) { return !it.is_dir && fld::ends_with(it.path, ".desktop"); }
+
+  // folders, Home and Trash take files; launchers open them
   bool drop_target(int i) const {
-    if (i < 0) return false;
+    if (i < 0 || i >= (int)items.size()) return false;
     const Item &it = items[i];
-    return it.path == "trash:///" || it.is_dir;
+    if (it.path == "trash:///" || it.is_dir) return true;
+    if (!is_launcher(it)) return false;
+    fld::DesktopEntry e;
+    return e.load(it.path) && !e.exec.empty();
+  }
+
+  // the name an icon's cell is saved under
+  std::string key_of(const Item &it) const {
+    if (it.path == "trash:///") return ":trash";
+    if (it.path == fld::home_dir()) return ":home";
+    return fld::basename(it.path);
+  }
+
+  static std::string positions_path() { return fld::path_join(fld::fld_config_dir(), "desktop-icons.ini"); }
+
+  void load_positions() {
+    saved.clear();
+    fld::Ini ini;
+    if (!ini.load(positions_path())) return;
+    for (auto &k : ini.keys("Positions")) {
+      desk::Cell c;
+      if (desk::parse_cell(ini.get("Positions", k), c)) saved[fld::uri_decode(k)] = c;
+    }
+  }
+
+  void save_positions() {
+    fld::Ini ini;
+    for (auto &kv : saved) ini.set("Positions", fld::uri_encode_path(kv.first), desk::format_cell(kv.second));
+    ini.save(positions_path());
+  }
+
+  // the grid cell under a point (on the grid)
+  desk::Cell cell_at(int ex, int ey) const {
+    int top = panel_top ? PANEL_H : 0;
+    int col = (ex - x() - 8) / CELL_W, row = (ey - y() - top - 8) / CELL_H;
+    return {std::min(std::max(col, 0), grid_cols - 1), std::min(std::max(row, 0), grid_rows - 1)};
+  }
+
+  desk::Cell cell_of(const Item &it) const { return cell_at(it.x + CELL_W / 2, it.y + CELL_H / 2); }
+
+  // Moves the icons `moving` so that `anchor` is in the cell under (ex, ey);
+  // icons not on the desktop yet (files being dropped) go below it. Every
+  // icon keeps the cell it has now, so the others do not shuffle.
+  void move_icons(const std::vector<std::string> &moving, const std::string &anchor, int ex, int ey) {
+    std::vector<std::string> keys;
+    std::vector<desk::Cell> cells;
+    for (auto &it : items) {
+      keys.push_back(key_of(it));
+      cells.push_back(cell_of(it));
+    }
+    int below = 0;
+    desk::Cell at = cell_at(ex, ey);
+    for (auto &k : moving)
+      if (std::find(keys.begin(), keys.end(), k) == keys.end()) {
+        keys.push_back(k);
+        // offsets from the anchor, which is the first of them if not here
+        cells.push_back({at.first, at.second + below++});
+      }
+    std::string a = anchor;
+    if (std::find(moving.begin(), moving.end(), a) == moving.end() && !moving.empty()) a = moving[0];
+    desk::Cell target = at;
+    for (size_t i = 0; i < keys.size(); i++)
+      if (keys[i] == a && i >= items.size()) target = cells[i];
+    for (auto &kv : desk::move(keys, cells, moving, a, target, grid_cols, grid_rows)) saved[kv.first] = kv.second;
+    save_positions();
+    layout_items();
+    redraw();
+  }
+
+  // files dropped on icon i: into a folder (Home, Trash), or opened with a launcher
+  void drop_on(int i, const std::vector<std::string> &paths, int state) {
+    if (i < 0 || i >= (int)items.size()) return;
+    const Item &it = items[i];
+    if (is_launcher(it)) {
+      fld::DesktopEntry e;
+      if (e.load(it.path)) e.launch(paths);
+      return;
+    }
+    std::string dest = it.path;
+    fld::run_drop(fld::drop_action(paths, dest, state), paths, dest, [](FileOp *) {});
+  }
+
+  void arrange_icons() {
+    saved.clear();
+    unlink(positions_path().c_str());
+    layout_items();
+    redraw();
   }
 
   void load_config() {
@@ -123,16 +230,18 @@ public:
     int best = kDefaultIcon;
     for (int s : kIconSizes) if (std::abs(s - size) < std::abs(best - size)) best = s;
     set_icon_size(best);
-    wp_src.reset(fld::load_image(wallpaper));
     wp_scaled.reset();
+    wp_missing = false;
     wp_w = wp_h = 0;
     redraw();
   }
 
   void reload() {
-    std::string prev_sel;
     items.clear();
     selected.clear();
+    drop_item = -1; // an index into the old list
+    press_item = -1;
+    load_positions();
     if (!show_icons) { redraw(); return; }
     fld::mkdir_p(dir);
     std::vector<Item> dirs, files;
@@ -180,12 +289,14 @@ public:
   void layout_items() {
     // fl-desktop covers the whole output; keep the icons off the panel's edge
     int top = panel_top ? PANEL_H : 0, bottom = panel_top ? 0 : PANEL_H;
-    int col = 0, row = 0;
-    int rows = std::max(1, (h() - top - bottom - 16) / CELL_H);
-    for (auto &it : items) {
-      it.x = x() + 8 + col * CELL_W;
-      it.y = y() + top + 8 + row * CELL_H;
-      if (++row >= rows) { row = 0; col++; }
+    grid_rows = std::max(1, (h() - top - bottom - 16) / CELL_H);
+    grid_cols = std::max(1, (w() - 16) / CELL_W);
+    std::vector<std::string> keys;
+    for (auto &it : items) keys.push_back(key_of(it));
+    auto cells = desk::place(keys, saved, grid_cols, grid_rows);
+    for (size_t i = 0; i < items.size(); i++) {
+      items[i].x = x() + 8 + cells[i].first * CELL_W;
+      items[i].y = y() + top + 8 + cells[i].second * CELL_H;
     }
   }
 
@@ -197,8 +308,13 @@ public:
   void draw_wallpaper() {
     fl_color(bg_color);
     fl_rectf(x(), y(), w(), h());
-    if (!wp_src) return;
-    if (!wp_scaled || wp_w != w() || wp_h != h()) {
+    if ((!wp_scaled || wp_w != w() || wp_h != h()) && !(wp_missing && wp_w == w() && wp_h == h())) {
+      wp_scaled.reset();
+      wp_w = w();
+      wp_h = h();
+      std::unique_ptr<Fl_Image> wp_src(fld::load_image(wallpaper));
+      wp_missing = !wp_src;
+      if (!wp_src) return;
       int iw = wp_src->w(), ih = wp_src->h();
       double sx = (double)w() / iw, sy = (double)h() / ih;
       double s = mode == "fit" ? std::min(sx, sy) : mode == "center" || mode == "tile" ? 1.0 : std::max(sx, sy);
@@ -208,9 +324,11 @@ public:
         int nw = std::max(1, (int)std::lround(iw * s)), nh = std::max(1, (int)std::lround(ih * s));
         wp_scaled.reset(wp_src->copy(nw, nh));
       }
-      wp_w = w();
-      wp_h = h();
+      // the copy of an SVG draws it at the new size: make that now, while
+      // the source is still here
+      if (auto *rgb = dynamic_cast<Fl_RGB_Image *>(wp_scaled.get())) rgb->normalize();
     }
+    if (!wp_scaled) return;
     Fl_Image *img = wp_scaled.get();
     if (mode == "tile") {
       for (int ty = 0; ty < h(); ty += img->h())
@@ -440,6 +558,7 @@ public:
           {nullptr},
         {"Show Desktop Icons", 0, nullptr, (void *)6, FL_MENU_TOGGLE | (show_icons ? FL_MENU_VALUE : 0),
          0, 0, 0, 0},
+        {"Arrange Icons", 0, nullptr, (void *)8, saved.empty() ? FL_MENU_INACTIVE : 0},
         {"Refresh", 0, nullptr, (void *)7},
         {nullptr}};
     const Fl_Menu_Item *r = m->popup(Fl::event_x(), Fl::event_y());
@@ -460,6 +579,7 @@ public:
         break;
       }
       case 7: load_config(); reload(); break;
+      case 8: arrange_icons(); break;
       case 10: set_mode("fill"); break;
       case 11: set_mode("fit"); break;
       case 12: set_mode("stretch"); break;
@@ -491,6 +611,7 @@ public:
         press_x = Fl::event_x();
         press_y = Fl::event_y();
         dragging = false;
+        moving_here = false;
         pending_toggle = -1;
         if (i >= 0) {
           // Ctrl on a selected icon deselects it on release, unless it is dragged
@@ -507,30 +628,41 @@ public:
         return 1;
       }
       case FL_DRAG:
-        if (!banding && press_item >= 0 && !dragging && (Fl::event_state() & FL_BUTTON1) &&
+        if (moving_here) return 1;
+        if (!banding && press_item >= 0 && press_item < (int)items.size() && !dragging &&
+            (Fl::event_state() & FL_BUTTON1) &&
             (std::abs(Fl::event_x() - press_x) > 6 || std::abs(Fl::event_y() - press_y) > 6)) {
           pending_toggle = -1;
+          drag_keys.clear();
+          for (int k : selected) drag_keys.push_back(key_of(items[k]));
+          drag_anchor = key_of(items[press_item]);
           auto paths = selected_paths();
-          if (!paths.empty()) {
-            dragging = true;
-            std::string text = fld::make_uri_list(paths);
-            // the icons under the pointer while dragging, with their number
-            fld::DragImage img;
-            img.size = ICON;
-            if (press_item < (int)items.size() && items[press_item].icon) img.icons.push_back(items[press_item].icon);
-            for (int k : selected)
-              if (k != press_item && k < (int)items.size() && items[k].icon && img.icons.size() < 3)
-                img.icons.push_back(items[k].icon);
-            img.count = (int)paths.size();
-            auto *self = this;
-            if (!fld::start_drag(window(), text, true, img, [self](fld::DragEnd) {
-                  self->dragging = false;
-                  self->press_item = -1;
-                  self->redraw();
-                })) {
-              Fl::copy(text.c_str(), (int)text.size(), 0);
-              Fl::dnd();
-            }
+          drag_paths = std::set<std::string>(paths.begin(), paths.end());
+          if (paths.empty()) {
+            // Home and Trash alone: only moved on the desktop
+            moving_here = true;
+            return 1;
+          }
+          dragging = true;
+          std::string text = fld::make_uri_list(paths);
+          // the icons under the pointer while dragging, with their number
+          fld::DragImage img;
+          img.size = ICON;
+          if (items[press_item].icon) img.icons.push_back(items[press_item].icon);
+          for (int k : selected)
+            if (k != press_item && k < (int)items.size() && items[k].icon && img.icons.size() < 3)
+              img.icons.push_back(items[k].icon);
+          img.count = (int)paths.size();
+          auto *self = this;
+          if (!fld::start_drag(window(), text, true, img, [self](fld::DragEnd) {
+                self->dragging = false;
+                self->press_item = -1;
+                self->redraw();
+              })) {
+            // no Wayland drag (FLTK's own would never tell us it ended):
+            // the icons can still be moved, or dropped on a folder here
+            dragging = false;
+            moving_here = true;
           }
           return 1;
         }
@@ -547,6 +679,13 @@ public:
         }
         return 1;
       case FL_RELEASE:
+        if (moving_here) {
+          moving_here = false;
+          int t = item_at(Fl::event_x(), Fl::event_y());
+          std::vector<std::string> paths(drag_paths.begin(), drag_paths.end());
+          if (drop_target(t) && !selected.count(t) && !paths.empty()) drop_on(t, paths, Fl::event_state());
+          else if (t < 0 || selected.count(t)) move_icons(drag_keys, drag_anchor, Fl::event_x(), Fl::event_y());
+        }
         banding = false;
         if (!dragging && pending_toggle >= 0 && pending_toggle == press_item) selected.erase(pending_toggle);
         pending_toggle = -1;
@@ -567,20 +706,37 @@ public:
         return 1;
       case FL_DND_RELEASE:
         dropping = true;
+        drop_x = Fl::event_x();
+        drop_y = Fl::event_y();
         return 1;
       case FL_PASTE: {
-        // files dropped on the desktop go into the desktop folder, or into the
-        // folder (Home, Trash) they were dropped on
+        // files dropped on a folder (Home, Trash) go into it, on a launcher
+        // open with it; on the desktop they go into the desktop folder where
+        // they were dropped, and the desktop's own icons move there
         if (!dropping) return 1;
         dropping = false;
         int i = drop_item;
         drop_item = -1;
+        bool ours = dragging;
         dragging = false;
         redraw();
         auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
-        std::string dest = i >= 0 ? items[i].path : dir;
-        fld::run_drop(fld::drop_action(paths, dest, Fl::event_state()), paths, dest,
-                      [](FileOp *) {});
+        if (paths.empty()) return 1;
+        if (!ours && std::set<std::string>(paths.begin(), paths.end()) == drag_paths) ours = true;
+        if (i >= 0 && i < (int)items.size()) {
+          drop_on(i, paths, Fl::event_state());
+          return 1;
+        }
+        std::vector<std::string> here, elsewhere;
+        for (auto &p : paths) (fld::dirname(p) == dir ? here : elsewhere).push_back(p);
+        std::vector<std::string> moving;
+        if (ours) moving = drag_keys; // with Home and Trash
+        else
+          for (auto &p : here) moving.push_back(fld::basename(p));
+        for (auto &p : elsewhere) moving.push_back(fld::basename(p));
+        if (!moving.empty()) move_icons(moving, ours ? drag_anchor : moving[0], drop_x, drop_y);
+        if (!elsewhere.empty())
+          fld::run_drop(fld::drop_action(elsewhere, dir, Fl::event_state()), elsewhere, dir, [](FileOp *) {});
         return 1;
       }
       case FL_KEYBOARD: {

@@ -14,17 +14,24 @@ bool on_grid(Cell c, int cols, int rows) {
 
 // the first free cell at or after `from`, column by column, going round to
 // the first column; past the last column when the grid is full
+// noipa: GCC 16.2 with -O2 -flto (makepkg's default) lets IPA-CP use a copy
+// specialized for cols == 1 (from a place() call) for every caller
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((noipa))
+#endif
 Cell next_free(const std::set<Cell> &taken, Cell from, int cols, int rows) {
-  int start = std::max(0, from.first) * rows + std::max(0, from.second), n = cols * rows;
-  if (start < n)
+  const int n = cols * rows;
+  const int start = (from.first < 0 ? 0 : from.first) * rows + (from.second < 0 ? 0 : from.second);
+  if (start < n) {
     for (int k = 0; k < n; k++) {
-      int i = (start + k) % n;
-      Cell c{i / rows, i % rows};
-      if (!taken.count(c)) return c;
+      const int i = (start + k) % n;
+      const Cell c(i / rows, i % rows);
+      if (taken.find(c) == taken.end()) return c;
     }
-  for (int i = std::max(start, n);; i++) {
-    Cell c{i / rows, i % rows};
-    if (!taken.count(c)) return c;
+  }
+  for (int i = start > n ? start : n;; i++) {
+    const Cell c(i / rows, i % rows);
+    if (taken.find(c) == taken.end()) return c;
   }
 }
 

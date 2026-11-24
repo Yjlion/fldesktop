@@ -24,7 +24,7 @@ std::vector<OskKey> osk_parse_row(const std::string &row) {
       {"up", OSK_UP, "↑"}, {"down", OSK_DOWN, "↓"}, {"del", OSK_DELETE, "Del"},
       {"home", OSK_HOME, "Home"}, {"end", OSK_END, "End"}, {"shift", OSK_SHIFT, "⇧"},
       {"caps", OSK_CAPS, "Caps"}, {"ctrl", OSK_CTRL, "Ctrl"}, {"alt", OSK_ALT, "Alt"},
-      {"sym", OSK_SYMBOLS, "?123"}, {"abc", OSK_LETTERS, "ABC"}, {"lang", OSK_LAYOUT, "🌐"},
+      {"sym", OSK_SYMBOLS, "?123"}, {"abc", OSK_LETTERS, "ABC"}, {"lang", OSK_LAYOUT, "Lang"},
       {"hide", OSK_HIDE, "⌨"}, {"space", OSK_SPACE, ""},
   };
   std::vector<OskKey> keys;

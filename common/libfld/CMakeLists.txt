@@ -1,5 +1,8 @@
 add_library(fld STATIC
   util.cpp
+  text.cpp
+  frame_watch.cpp
+  window_size.cpp
   accents.cpp
   ini.cpp
   desktop_entry.cpp

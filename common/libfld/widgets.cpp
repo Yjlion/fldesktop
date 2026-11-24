@@ -1,5 +1,6 @@
 #include "fld/widgets.h"
 #include "fld/icons.h"
+#include "fld/text.h"
 #include "fld/theme.h"
 
 #include <FL/Fl.H>
@@ -7,6 +8,8 @@
 #include <FL/Fl_Image.H>
 #include <FL/Fl_Window.H>
 #include <FL/fl_draw.H>
+
+#include <algorithm>
 
 namespace fld {
 
@@ -64,6 +67,177 @@ void FlatButton::draw() {
     fl_draw(escape_at(l).c_str(), ix, y(), w() - (ix - x()), h(), FL_ALIGN_LEFT | FL_ALIGN_CLIP);
   }
   if (Fl::focus() == this && visible_focus()) draw_focus();
+}
+
+void draw_focus_ring(int x, int y, int w, int h, int radius) {
+  fl_color(palette().accent);
+  fl_line_style(FL_SOLID, 2);
+  fl_rounded_rect(x + 1, y + 1, w - 2, h - 2, radius);
+  fl_line_style(0);
+}
+
+// ---- tabs ----
+
+Tabs::Tabs(int x, int y, int w, int h, const char *l) : Fl_Tabs(x, y, w, h, l) {
+  box(FL_FLAT_BOX);
+  color(palette().bg);
+  selection_color(palette().bg);
+}
+
+void Tabs::draw() {
+  // the strip behind the tabs, and a line under them
+  if (damage() & FL_DAMAGE_ALL) {
+    int H = tab_height();
+    int ty = H >= 0 ? y() : y() + h() + H, th = H >= 0 ? H : -H;
+    fl_color(palette().bg);
+    fl_rectf(x(), ty, w(), th);
+  }
+  Fl_Tabs::draw();
+  int H = tab_height();
+  if (H > 0) {
+    fl_color(palette().border);
+    fl_xyline(x(), y() + H - 1, x() + w() - 1);
+  }
+}
+
+void Tabs::draw_tab(int x1, int x2, int W, int H, Fl_Widget *o, int flags, int what) {
+  const Palette &p = palette();
+  // Fl_Tabs.cxx's own (file-local) enum { LEFT, RIGHT, SELECTED }
+  const int kRight = 1, kSelected = 2;
+  bool sel = what == kSelected;
+  if (x2 < x1 + W && what == kRight) x1 = x2 - W;
+  bool top = H >= 0;
+  if (!top) H = -H;
+  int ty = top ? y() : y() + h() - H;
+  fl_push_clip(x1, ty, W, H);
+  fl_color(p.bg);
+  fl_rectf(x1, ty, W, H);
+  Fl_Color lc = o->labelcolor();
+  Fl_Font lf = o->labelfont();
+  o->labelcolor(sel ? p.fg : p.fg_dim);
+  o->labelfont(sel ? (lf | FL_BOLD) : lf);
+  o->draw_label(x1, ty, W, H - (sel ? 3 : 0), FL_ALIGN_CENTER);
+  o->labelcolor(lc);
+  o->labelfont(lf);
+  if (sel) {
+    // the accent under the shown tab (over it when the tabs are at the bottom)
+    fl_color(o->active_r() ? p.accent : p.fg_dim);
+    fl_rectf(x1 + 6, top ? ty + H - 3 : ty, W - 12, 3);
+  }
+  if (Fl::focus() == this && visible_focus() && sel) draw_focus_ring(x1 + 1, ty + 1, W - 2, H - 4);
+  fl_pop_clip();
+}
+
+// ---- check boxes and radio buttons ----
+
+namespace {
+
+// the box or circle at the left of the button, and where its label goes
+void indicator_geometry(Fl_Widget *b, int &bx, int &by, int &s) {
+  s = std::min(16, b->h() - 4);
+  bx = b->x() + Fl::box_dx(b->box()) + 3;
+  by = b->y() + (b->h() - s) / 2;
+}
+
+} // namespace
+
+void CheckButton::draw() {
+  const Palette &p = palette();
+  if (box()) draw_box(box(), color());
+  int bx, by, s;
+  indicator_geometry(this, bx, by, s);
+  bool on = value() != 0;
+  Fl_Color fill = on ? (active_r() ? p.accent : p.fg_dim) : p.bg2;
+  fl_color(fill);
+  fl_rounded_rectf(bx, by, s, s, 3);
+  if (!on) {
+    fl_color(active_r() ? fl_color_average(p.fg, p.bg2, 0.45f) : p.border);
+    fl_rounded_rect(bx, by, s, s, 3);
+  } else {
+    fl_color(text_on(fill));
+    fl_line_style(FL_SOLID | FL_CAP_ROUND | FL_JOIN_ROUND, 2);
+    fl_begin_line();
+    fl_vertex(bx + s * 0.24, by + s * 0.52);
+    fl_vertex(bx + s * 0.42, by + s * 0.70);
+    fl_vertex(bx + s * 0.76, by + s * 0.32);
+    fl_end_line();
+    fl_line_style(0);
+  }
+  // 6 px between the box and its label
+  int lx = bx + s + 6;
+  draw_label(lx, y(), x() + w() - lx, h(), (align() & ~(FL_ALIGN_RIGHT | FL_ALIGN_CENTER)) | FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+  if (Fl::focus() == this && visible_focus()) draw_focus_ring(bx - 3, by - 3, s + 6, s + 6, 5);
+}
+
+void RadioButton::draw() {
+  const Palette &p = palette();
+  if (box()) draw_box(box(), color());
+  int bx, by, s;
+  indicator_geometry(this, bx, by, s);
+  bool on = value() != 0;
+  fl_color(on ? (active_r() ? p.accent : p.fg_dim) : p.bg2);
+  fl_pie(bx, by, s, s, 0, 360);
+  if (!on) {
+    fl_color(active_r() ? fl_color_average(p.fg, p.bg2, 0.45f) : p.border);
+    fl_arc(bx, by, s, s, 0, 360);
+  } else {
+    int d = s * 2 / 5;
+    fl_color(text_on(active_r() ? p.accent : p.fg_dim));
+    fl_pie(bx + (s - d) / 2, by + (s - d) / 2, d, d, 0, 360);
+  }
+  int lx = bx + s + 6;
+  draw_label(lx, y(), x() + w() - lx, h(), (align() & ~(FL_ALIGN_RIGHT | FL_ALIGN_CENTER)) | FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+  if (Fl::focus() == this && visible_focus()) draw_focus_ring(bx - 3, by - 3, s + 6, s + 6, s);
+}
+
+// ---- search fields ----
+
+namespace {
+
+// the box of a search field: a thin frame with room for the magnifier on the
+// left (as a box type, so Fl_Input puts the text and the clicks inside it)
+void search_box(int x, int y, int w, int h, Fl_Color c) {
+  const Palette &p = palette();
+  fl_color(c);
+  fl_rectf(x, y, w, h);
+  fl_color(p.border);
+  fl_rect(x, y, w, h);
+  if (Fl_Image *im = symbolic_icon("system-search", 16, p.fg_dim)) im->draw(x + 6, y + (h - 16) / 2);
+}
+
+Fl_Boxtype search_boxtype() {
+  static Fl_Boxtype t = FL_NO_BOX;
+  if (t == FL_NO_BOX) {
+    t = (Fl_Boxtype)(FL_FREE_BOXTYPE + 7);
+    Fl::set_boxtype(t, search_box, 27, 2, 30, 4);
+  }
+  return t;
+}
+
+} // namespace
+
+SearchInput::SearchInput(int x, int y, int w, int h, const char *ph) : Fl_Input(x, y, w, h) {
+  box(search_boxtype());
+  color(palette().bg2);
+  if (ph) placeholder_ = ph;
+}
+
+void SearchInput::draw() {
+  const Palette &p = palette();
+  Fl_Input::draw();
+  if (!(damage() & FL_DAMAGE_ALL) && !(damage() & FL_DAMAGE_EXPOSE)) return;
+  // the accent around the field while typing in it
+  if (Fl::focus() == this) {
+    fl_color(p.accent);
+    fl_rect(x(), y(), w(), h());
+    fl_rect(x() + 1, y() + 1, w() - 2, h() - 2);
+  }
+  if (!size() && !placeholder_.empty() && Fl::focus() != this) {
+    fl_font(textfont(), textsize());
+    fl_color(p.fg_dim);
+    fl_draw(placeholder_.c_str(), x() + Fl::box_dx(box()) + 2, y(), w() - Fl::box_dw(box()) - 4, h(),
+            FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+  }
 }
 
 Toolbar::Toolbar(int x, int y, int w, int h) : Fl_Group(x, y, w, h), next_x_(x + 4) {

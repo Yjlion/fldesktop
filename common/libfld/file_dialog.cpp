@@ -29,6 +29,7 @@
 #include "fld/mime.h"
 #include "fld/theme.h"
 #include "fld/util.h"
+#include "fld/widgets.h"
 
 namespace fld {
 
@@ -125,7 +126,7 @@ public:
     path->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->path_entered(); }, this);
     newdir = new Fl_Button(W - 224, 8, 104, 28, "New Folder");
     newdir->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->new_folder(); }, this);
-    hidden = new Fl_Check_Button(W - 112, 8, 104, 28, "Hidden");
+    hidden = new fld::CheckButton(W - 112, 8, 104, 28, "Hidden");
     hidden->tooltip("Show hidden files (Ctrl+H)");
     hidden->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->refresh(); }, this);
     // places
@@ -175,7 +176,7 @@ public:
       }
       for (auto &c : opt.choices) {
         if (c.options.empty()) {
-          auto *cb = new Fl_Check_Button(x, y, 170, 28);
+          auto *cb = new fld::CheckButton(x, y, 170, 28);
           cb->copy_label(c.label.c_str());
           cb->value(c.selected == "true");
           choice_widgets.push_back(cb);

@@ -22,6 +22,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <unordered_map>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <time.h>
 #include <memory>
 
 namespace fld {
@@ -34,11 +38,23 @@ struct ThemeDir {
   enum { Fixed, Scalable, Threshold } type = Threshold;
 };
 
+// Where each icon name is in a theme, from listing its directories once
+// (instead of trying every directory x extension for every name: a missing
+// icon cost ~700 stat() calls in hicolor alone).
+struct IconFile {
+  unsigned short dir; // ThemeDir index
+  unsigned char base, ext;
+};
+
 struct Theme {
   std::string name;
   std::vector<std::string> bases;   // existing <base>/<name> directories
   std::vector<ThemeDir> dirs;
   std::vector<std::string> parents;
+  bool indexed = false;
+  double indexed_at = 0;
+  std::unordered_map<std::string, std::vector<IconFile>> files;
+  std::vector<std::pair<std::string, time_t>> listed; // directory, mtime
 };
 
 std::vector<std::string> icon_bases() {
@@ -127,23 +143,87 @@ bool usable_file(const std::string &p) {
   return !ends_with(p, ".svg") || svg_usable(p);
 }
 
+double mono_seconds() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+time_t dir_mtime(const std::string &d) {
+  struct stat st;
+  return stat(d.c_str(), &st) == 0 ? st.st_mtime : 0;
+}
+
+int ext_index(const char *name, size_t len) {
+  for (int e = 0; e < 3; e++) {
+    size_t el = strlen(kExts[e]);
+    if (len > el && strcmp(name + len - el, kExts[e]) == 0) return e;
+  }
+  return -1;
+}
+
+void index_theme(Theme *t) {
+  t->files.clear();
+  t->listed.clear();
+  for (size_t di = 0; di < t->dirs.size() && di < 65535; di++)
+    for (size_t bi = 0; bi < t->bases.size() && bi < 255; bi++) {
+      std::string d = t->bases[bi] + "/" + t->dirs[di].subdir;
+      DIR *dir = opendir(d.c_str());
+      if (!dir) continue;
+      t->listed.push_back({d, dir_mtime(d)});
+      while (struct dirent *e = readdir(dir)) {
+        size_t len = strlen(e->d_name);
+        int ext = ext_index(e->d_name, len);
+        if (ext < 0) continue;
+        t->files[std::string(e->d_name, len - strlen(kExts[ext]))].push_back(
+            {(unsigned short)di, (unsigned char)bi, (unsigned char)ext});
+      }
+      closedir(dir);
+    }
+  // in the order the lookup prefers: directory, base, extension
+  for (auto &f : t->files)
+    std::sort(f.second.begin(), f.second.end(), [](const IconFile &a, const IconFile &b) {
+      if (a.dir != b.dir) return a.dir < b.dir;
+      if (a.base != b.base) return a.base < b.base;
+      return a.ext < b.ext;
+    });
+  t->indexed = true;
+  t->indexed_at = mono_seconds();
+}
+
+// icons installed while the program runs (a new application): a name not
+// found looks again, at most every 10 s, whether a directory changed
+bool reindex_if_changed(Theme *t) {
+  double now = mono_seconds();
+  if (now - t->indexed_at < 10) return false;
+  t->indexed_at = now;
+  for (auto &l : t->listed)
+    if (dir_mtime(l.first) != l.second) {
+      index_theme(t);
+      return true;
+    }
+  return false;
+}
+
+// fldesktop's own themes are checked when they are built (tests/artwork-check.py)
+bool trusted_svg(const std::string &path) {
+  return path.find("/icons/fldesktop") != std::string::npos;
+}
+
 std::string lookup_in_theme(Theme *t, const std::string &name, int size) {
+  if (!t->indexed) index_theme(t);
+  auto it = t->files.find(name);
+  if (it == t->files.end() && reindex_if_changed(t)) it = t->files.find(name);
+  if (it == t->files.end()) return "";
   std::string best;
   int best_dist = INT_MAX;
-  for (auto &d : t->dirs) {
-    int dist = dir_distance(d, size);
+  for (const IconFile &f : it->second) {
+    int dist = dir_distance(t->dirs[f.dir], size);
     if (dist >= best_dist) continue;
-    for (auto &b : t->bases) {
-      for (auto ext : kExts) {
-        std::string p = b + "/" + d.subdir + "/" + name + ext;
-        if (usable_file(p)) {
-          best = p;
-          best_dist = dist;
-          goto next_dir;
-        }
-      }
-    }
-  next_dir:
+    std::string p = t->bases[f.base] + "/" + t->dirs[f.dir].subdir + "/" + name + kExts[f.ext];
+    if (f.ext == 1 && !trusted_svg(p) && !svg_usable(p)) continue;
+    best = p;
+    best_dist = dist;
     if (best_dist == 0) break;
   }
   return best;
@@ -218,11 +298,24 @@ std::string icon_path(const std::string &name, int size) {
   std::string r = lookup_recursive(icon_theme_name(), n, size, 0, visited);
   if (r.empty()) r = lookup_recursive("hicolor", n, size, 0, visited);
   if (r.empty()) {
-    for (auto &d : data_dirs()) {
-      for (auto ext : kExts) {
-        std::string p = path_join(d, "pixmaps/" + n + ext);
-        if (usable_file(p)) { r = p; break; }
+    // the pixmaps directories, listed once
+    static std::vector<std::pair<std::string, std::vector<std::string>>> pixmaps;
+    static bool listed = false;
+    if (!listed) {
+      listed = true;
+      for (auto &d : data_dirs()) {
+        std::string pd = path_join(d, "pixmaps");
+        std::vector<std::string> names = list_dir(pd);
+        if (!names.empty()) pixmaps.push_back({pd, names});
       }
+    }
+    for (auto &pd : pixmaps) {
+      for (auto ext : kExts)
+        if (std::binary_search(pd.second.begin(), pd.second.end(), n + ext) &&
+            usable_file(pd.first + "/" + n + ext)) {
+          r = pd.first + "/" + n + ext;
+          break;
+        }
       if (!r.empty()) break;
     }
   }

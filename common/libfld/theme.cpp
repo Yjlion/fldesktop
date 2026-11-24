@@ -4,9 +4,14 @@
 #include "fld/ini.h"
 #include "fld/menus.h"
 #include "fld/styles.h"
+#include "fld/text.h"
 #include "fld/util.h"
-#ifdef FLD_HAVE_ATSPI
 #include "fld/atspi.h"
+#ifndef FLD_HAVE_ATSPI
+namespace fld {
+// without the bridge there is nobody to tell
+void atspi_describe(Fl_Widget *, unsigned, const std::string &) {}
+} // namespace fld
 #endif
 
 #include <FL/Fl.H>
@@ -98,7 +103,7 @@ void init_app(const char *app_id, int argc, char **argv) {
   p.accent = parse_color(cfg.get(A, "Accent", "#3584e4"), fl_rgb_color(0x35, 0x84, 0xe4));
   // a dark accent on white, a light one on black, so text on it stays readable
   if (high) p.accent = dark ? fl_rgb_color(0xff, 0xd7, 0x00) : fl_rgb_color(0x00, 0x3d, 0xa5);
-  p.accent_fg = high && dark ? FL_BLACK : FL_WHITE;
+  p.accent_fg = text_on(p.accent);
   p.selection = p.accent;
   p.danger = fl_rgb_color(0xe0, 0x1b, 0x24);
 

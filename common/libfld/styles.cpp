@@ -198,6 +198,8 @@ void apply_style(const std::string &id_in, int radius) {
     Fl::set_boxtype(FL_THIN_UP_FRAME, classic_thin_up_frame, 1, 1, 2, 2);
     Fl::set_boxtype(FL_THIN_DOWN_FRAME, classic_thin_down_frame, 1, 1, 2, 2);
   }
+  // flat styles: slimmer scrollbars (their arrows take less from every list)
+  Fl::scrollbar_size(id == "fld-flat" || id == "fld-rounded" ? 12 : 16);
   // redraw everything that is already on screen
   for (Fl_Window *w = Fl::first_window(); w; w = Fl::next_window(w)) w->redraw();
 }

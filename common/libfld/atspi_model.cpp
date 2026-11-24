@@ -100,6 +100,11 @@ std::string clean_label(const std::string &l, bool symbols) {
 
 std::string accessible_name(const std::string &label, const std::string &tooltip) {
   std::string n = clean_label(label);
+  // a label cut to fit ("DIRECT-0c-HP M110 Las…"): the tooltip has all of it
+  static const std::string ellipsis = "\u2026";
+  if (n.size() >= ellipsis.size() && n.compare(n.size() - ellipsis.size(), ellipsis.size(), ellipsis) == 0 &&
+      !clean_label(tooltip).empty())
+    n = clean_label(tooltip);
   if (n.empty()) n = clean_label(tooltip);
   // "Name:" before a field is read as "Name"
   while (!n.empty() && (n.back() == ':' || n.back() == ' ')) n.pop_back();

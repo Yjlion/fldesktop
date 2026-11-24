@@ -1,0 +1,10 @@
+# pinentry-fldesktop: GnuPG's passphrase prompt (its own Assuan, no libassuan)
+add_library(fl-pinentry-util STATIC assuan.cpp)
+target_include_directories(fl-pinentry-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(pinentry-fldesktop main.cpp)
+target_link_libraries(pinentry-fldesktop PRIVATE fl-pinentry-util fld)
+if(TARGET fld-secret) # passphrases kept in the password manager, when gpg-agent allows it
+  target_link_libraries(pinentry-fldesktop PRIVATE fld-secret)
+  target_compile_definitions(pinentry-fldesktop PRIVATE FLD_HAVE_SECRET=1)
+endif()
+install(TARGETS pinentry-fldesktop RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

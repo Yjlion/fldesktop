@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <algorithm>
@@ -207,6 +208,18 @@ static std::vector<std::string> channelNames(const std::vector<uint32_t> &positi
 /* ------------------------------------------------------------------ */
 /* the model, rebuilt from the objects after every change             */
 
+/* FLD_AUDIO_DEBUG=1: where each device's volume and mute come from, and
+ * where they are written to (to check a card's routes on real hardware) */
+static bool audioDebug()
+{
+	static int on = -1;
+	if (on < 0) {
+		const char *e = getenv("FLD_AUDIO_DEBUG");
+		on = e && *e && strcmp(e, "0") != 0;
+	}
+	return on != 0;
+}
+
 static void rebuild(PipeWireBackend *b)
 {
 	PipeWireBackend::Private *d = b->d;
@@ -328,6 +341,11 @@ static void rebuild(PipeWireBackend *b)
 				dev.muted = o->mute;
 				dev.hasVolume = true;
 			}
+			if (audioDebug())
+				fprintf(stderr, "fld-audio: node %u %s: route %s (vol %d mute %d=%d) node (vol %d mute %d) -> muted %d level %.2f\n",
+				        dev.id, dev.name.c_str(), route ? route->name.c_str() : "-", route ? route->hasVolume : 0,
+				        route ? route->hasMute : 0, route ? route->mute : 0, o->haveVolume, o->mute, dev.muted,
+				        dev.volumes.empty() ? -1.0 : dev.volumes[0]);
 			m.devices[dev.id] = dev;
 		} else if (mc == "Stream/Output/Audio" || mc == "Stream/Input/Audio") {
 			if (o->props.count(PEAK_PROPERTY) ||
@@ -945,11 +963,16 @@ void PipeWireBackend::setNodeVolume(uint32_t id, const std::vector<float> *volum
 				                                           mute, 1);
 				if (pod)
 					pw_device_set_param((pw_device *)c->second->proxy, tm_param_route(), 0, pod);
+				if (audioDebug())
+					fprintf(stderr, "fld-audio: set node %u via route %d of device %u: %zu volumes, mute %d%s\n", id,
+					        routes[i].index, c->second->id, linear.size(), mute, pod ? "" : " (too big)");
 				return;
 			}
 		}
 	}
 
+	if (audioDebug())
+		fprintf(stderr, "fld-audio: set node %u via its Props: %zu volumes, mute %d\n", id, linear.size(), mute);
 	uint8_t buf[2048];
 	const struct spa_pod *pod = tm_build_props(buf, sizeof(buf), linear.empty() ? 0 : &linear[0],
 	                                           linear.size(), mute);

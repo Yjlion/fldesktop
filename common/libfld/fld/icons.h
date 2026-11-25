@@ -24,6 +24,13 @@ Fl_Image *symbolic_icon(const std::string &name, int size, Fl_Color color);
 std::string recolor_symbolic_svg(const std::string &svg, const std::string &hex);
 // Tries several names in order.
 Fl_Image *icon_first(const std::vector<std::string> &names, int size);
+// Like icon(), but under a dark palette a single-colour (black or dark grey)
+// SVG icon is drawn in the text colour, so it stays visible. Cached; never delete.
+Fl_Image *ui_icon(const std::string &name, int size);
+Fl_Image *ui_icon_first(const std::vector<std::string> &names, int size);
+// An SVG drawn in one dark neutral ink (with optional white highlights),
+// without gradients or images: the kind ui_icon() recolours.
+bool svg_is_monochrome(const std::string &svg);
 
 // Loads any supported image file (png, jpg, gif, bmp, svg, xpm, ...).
 // The caller owns the returned image. Returns nullptr on failure.

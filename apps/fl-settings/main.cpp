@@ -64,7 +64,8 @@ static void rebuild_list() {
     e.header = true;
     e.label = t;
     g_entries.push_back(e);
-    g_list->add(("@s@b@C8" + fld::escape_at(t)).c_str());
+    // 13 px bold in the dimmed text colour: readable, still set apart from the pages
+    g_list->add(("@b@C" + std::to_string((unsigned)fld::palette().fg_dim) + fld::escape_at(t)).c_str());
   };
   for (const char *cat : kCategories) {
     bool any = false;
@@ -77,7 +78,7 @@ static void rebuild_list() {
       e.label = p.title;
       g_entries.push_back(e);
       g_list->add(("  " + fld::escape_at(p.title)).c_str());
-      g_list->icon(g_list->size(), fld::icon_first({p.icon, "preferences-system"}, 16));
+      g_list->icon(g_list->size(), fld::ui_icon_first({p.icon, "preferences-system"}, 16));
     }
   }
   // single settings on all pages: "Tap to click — Mouse & Touchpad"
@@ -96,7 +97,7 @@ static void rebuild_list() {
       e.label = h.label;
       g_entries.push_back(e);
       g_list->add(("  " + fld::escape_at(h.label) + "  — " + fld::escape_at(pi->title)).c_str());
-      g_list->icon(g_list->size(), fld::icon_first({pi->icon, "preferences-system"}, 16));
+      g_list->icon(g_list->size(), fld::ui_icon_first({pi->icon, "preferences-system"}, 16));
     }
   }
   bool any = false;
@@ -108,7 +109,7 @@ static void rebuild_list() {
     e.label = d.name;
     g_entries.push_back(e);
     g_list->add(("  " + fld::escape_at(d.name)).c_str());
-    g_list->icon(g_list->size(), fld::icon_first({d.icon, "preferences-system"}, 16));
+    g_list->icon(g_list->size(), fld::ui_icon_first({d.icon, "preferences-system"}, 16));
   }
   for (size_t i = 0; i < g_entries.size(); i++)
     if (g_entries[i].page_id == g_current) g_list->value((int)i + 1);
@@ -361,7 +362,8 @@ int main(int argc, char **argv) {
   Fl::screen_work_area(sx, sy, sw, sh);
   const int SIDE = sw > 0 && sw < 960 ? 190 : 230;
   const int W = sw > 0 ? std::max(600, std::min(1020, sw - 40)) : 1020;
-  const int H = sh > 0 ? std::max(320, std::min(680, sh - 60)) : 680;
+  // at most 85% of the screen height: room above and below on 768 px screens
+  const int H = sh > 0 ? std::max(320, std::min(680, sh * 85 / 100)) : 680;
   const fld::Palette &p = fld::palette();
   g_win = new Fl_Double_Window(W, H, "Settings");
   Fl_Group *side = new Fl_Group(0, 0, SIDE, H);

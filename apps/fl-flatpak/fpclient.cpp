@@ -1,6 +1,6 @@
 #include "fpclient.h"
 
-#include <appstream.h>
+#include <gio/gio.h>
 #ifdef __GLIBC__
 #include <malloc.h>
 #endif
@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <set>
 #include <sys/stat.h>
 #include <thread>
 
@@ -44,87 +45,349 @@ FlatpakInstallation *open_installation(const std::string &which, GError **e) {
 
 std::string g2s(const char *s) { return s ? s : ""; }
 
-// --- AppStream ---------------------------------------------------------------------
+} // namespace
 
-void parse_appstream(const std::string &remote, GFile *dir, std::map<std::string, App> &out) {
-  GFile *f = g_file_get_child(dir, "appstream.xml.gz");
-  if (!g_file_query_exists(f, nullptr)) {
-    g_object_unref(f);
-    f = g_file_get_child(dir, "appstream.xml");
+// --- AppStream ---------------------------------------------------------------------
+//
+// Flathub's catalog has thousands of components. libappstream builds an
+// object tree of all of it (a few hundred MB at peak) before anything can be
+// copied out; this reads the XML as a stream and keeps only what App holds.
+
+namespace {
+
+struct IconCand {
+  std::string kind, name, url, file;
+  int width = 0, scale = 1;
+};
+
+struct Comp {
+  bool app = false;
+  std::string ref;
+  std::map<std::string, std::string> name, summary, dev_name, desc; // by xml:lang
+  std::string license, homepage, version;
+  bool have_version = false;
+  std::vector<std::string> categories;
+  std::vector<IconCand> icons;
+};
+
+std::string markup_escape(const std::string &s) {
+  std::string o;
+  for (char c : s) {
+    if (c == '&') o += "&amp;";
+    else if (c == '<') o += "&lt;";
+    else if (c == '>') o += "&gt;";
+    else o += c;
   }
-  AsMetadata *md = as_metadata_new();
-  as_metadata_set_format_style(md, AS_FORMAT_STYLE_CATALOG);
-  GError *e = nullptr;
-  if (!as_metadata_parse_file(md, f, AS_FORMAT_KIND_XML, &e)) {
-    g_clear_error(&e);
-    g_object_unref(md);
-    g_object_unref(f);
-    return;
+  return o;
+}
+
+const char *attr(const char **names, const char **values, const char *key) {
+  for (int i = 0; names[i]; i++)
+    if (!strcmp(names[i], key)) return values[i];
+  return nullptr;
+}
+
+struct AsParser {
+  std::string remote, base;
+  std::vector<std::string> langs; // preferred first; "" is untranslated
+  std::map<std::string, App> *out;
+
+  std::vector<std::string> stack;
+  bool in_comp = false;
+  size_t comp_depth = 0; // the component's children are at stack[comp_depth]
+  Comp c;
+  std::string text;        // text of the element being read
+  std::string text_lang;   // its xml:lang
+  std::string desc_lang;   // xml:lang of <description>
+  std::set<std::string> list_open; // langs whose description has an open <ul>/<ol>
+  std::string list_tag;
+  IconCand icon;
+
+  // how well an xml:lang fits (lower is better, -1: not at all): one the
+  // locale names, else the same language for another country (de_CH for de)
+  int rank(const std::string &tag) const {
+    std::string lang = tag;
+    std::replace(lang.begin(), lang.end(), '-', '_'); // "de-DE" is written too
+    auto base = [](const std::string &l) { return l.substr(0, l.find_first_of("_@")); };
+    int near = -1;
+    for (size_t i = 0; i < langs.size(); i++) {
+      if (langs[i] == lang) return (int)i * 2;
+      if (near < 0 && !lang.empty() && !langs[i].empty() && base(langs[i]) == base(lang)) near = (int)i * 2 + 1;
+    }
+    return near;
   }
-  gchar *dpath = g_file_get_path(dir);
-  std::string base = dpath ? dpath : "";
-  g_free(dpath);
-  AsComponentBox *box = as_metadata_get_components(md);
-  for (guint i = 0; i < as_component_box_len(box); i++) {
-    AsComponent *c = as_component_box_index(box, i);
-    AsComponentKind k = as_component_get_kind(c);
-    if (k != AS_COMPONENT_KIND_DESKTOP_APP && k != AS_COMPONENT_KIND_CONSOLE_APP) continue;
-    AsBundle *b = as_component_get_bundle(c, AS_BUNDLE_KIND_FLATPAK);
-    if (!b) continue;
+  bool wanted(const std::string &lang) const { return rank(lang) >= 0; }
+  std::string best(const std::map<std::string, std::string> &m) const {
+    int r = -1;
+    std::string out;
+    for (auto &kv : m) {
+      int k = rank(kv.first);
+      if (k >= 0 && !kv.second.empty() && (r < 0 || k < r)) {
+        r = k;
+        out = kv.second;
+      }
+    }
+    return out;
+  }
+  const std::string &parent() const {
+    static const std::string none;
+    return stack.size() >= 2 ? stack[stack.size() - 2] : none;
+  }
+  // inside the component's own <description> (not a release's)
+  bool in_desc() const { return in_comp && stack.size() > comp_depth && stack[comp_depth] == "description"; }
+
+  void start(const char *el, const char **an, const char **av) {
+    std::string e = el;
+    stack.push_back(e);
+    if (e == "component" && stack.size() <= 2) {
+      in_comp = true;
+      comp_depth = stack.size();
+      c = Comp();
+      const char *t = attr(an, av, "type");
+      std::string type = t ? t : "";
+      c.app = type == "desktop-application" || type == "desktop" || type == "console-application";
+      return;
+    }
+    if (!in_comp) return;
+    // inline markup in a paragraph: its text is part of the paragraph's
+    if (in_desc() && (e == "em" || e == "code")) return;
+    const char *l = attr(an, av, "xml:lang");
+    text.clear();
+    text_lang = l ? l : "";
+    if (e == "description" && parent() == "component") {
+      desc_lang = text_lang;
+      list_open.clear();
+    } else if (in_desc()) {
+      std::string lang = l ? text_lang : desc_lang;
+      text_lang = lang;
+      if (e == "ul" || e == "ol") list_tag = e;
+      else if (e == "li" && wanted(lang) && !list_open.count(lang)) {
+        c.desc[lang] += "<" + (list_tag.empty() ? std::string("ul") : list_tag) + ">";
+        list_open.insert(lang);
+      } else if (e == "p" || e == "heading") {
+        // a paragraph (or heading) ends the lists before it
+        if (list_open.count(lang)) {
+          c.desc[lang] += "</ul>";
+          list_open.erase(lang);
+        }
+      }
+    } else if (e == "bundle" && parent() == "component") {
+      const char *t = attr(an, av, "type");
+      text_lang = t && !strcmp(t, "flatpak") ? "flatpak" : "";
+    } else if (e == "url" && parent() == "component") {
+      const char *t = attr(an, av, "type");
+      text_lang = t ? t : "";
+    } else if (e == "release" && parent() == "releases") {
+      // the newest comes first (catalogs are sorted; timestamps are not always right)
+      const char *v = attr(an, av, "version");
+      if (v && !c.have_version) {
+        c.version = v;
+        c.have_version = true;
+      }
+    } else if (e == "icon" && parent() == "component") {
+      icon = IconCand();
+      const char *t = attr(an, av, "type");
+      icon.kind = t ? t : "";
+      if (const char *w = attr(an, av, "width")) icon.width = atoi(w);
+      if (const char *s = attr(an, av, "scale")) icon.scale = std::max(1, atoi(s));
+    }
+  }
+
+  void chars(const char *t, gsize n) {
+    if (in_comp) text.append(t, n);
+  }
+
+  void end(const char *el) {
+    std::string e = el;
+    if (in_desc() && (e == "em" || e == "code")) {
+      stack.pop_back();
+      return;
+    }
+    if (in_comp) {
+      const std::string &p = parent();
+      std::string v = fld::trim(text);
+      if (e == "component" && stack.size() <= 2) {
+        finish();
+        in_comp = false;
+      } else if (in_desc() && e != "description") {
+        if ((e == "p" || e == "li") && wanted(text_lang))
+          c.desc[text_lang] += "<" + e + ">" + markup_escape(v) + "</" + e + ">";
+        else if (e == "heading" && wanted(text_lang))
+          c.desc[text_lang] += "<p>" + markup_escape(v) + "</p>"; // a paragraph of its own
+        else if (e == "ul" || e == "ol") {
+          for (auto &l : list_open) c.desc[l] += "</ul>";
+          list_open.clear();
+          list_tag.clear();
+        }
+      } else if (p == "component") {
+        if (e == "name" && wanted(text_lang)) c.name[text_lang] = v;
+        else if (e == "summary" && wanted(text_lang)) c.summary[text_lang] = v;
+        else if (e == "developer_name" && wanted(text_lang)) c.dev_name[text_lang] = v;
+        else if (e == "project_license") c.license = v;
+        else if (e == "url" && text_lang == "homepage") c.homepage = v;
+        else if (e == "bundle" && text_lang == "flatpak" && c.ref.empty()) c.ref = v;
+        else if (e == "icon") {
+          if (icon.kind == "remote") icon.url = v;
+          else if (icon.kind == "local") icon.file = v;
+          else icon.name = v;
+          c.icons.push_back(icon);
+        }
+      } else if (p == "developer" && e == "name" && wanted(text_lang)) {
+        c.dev_name[text_lang] = v;
+      } else if (p == "categories" && e == "category" && !v.empty()) {
+        c.categories.push_back(v);
+      }
+      text.clear();
+    }
+    if (!stack.empty()) stack.pop_back();
+  }
+
+  void finish() {
+    if (!c.app || c.ref.empty()) return;
     App a;
-    a.ref = g2s(as_bundle_get_id(b));
+    a.ref = c.ref;
     a.id = ref_id(a.ref);
-    if (a.id.empty() || out.count(a.id)) continue;
+    if (a.id.empty() || out->count(a.id)) return;
     a.remote = remote;
     a.in_catalog = true;
-    a.name = g2s(as_component_get_name(c));
-    a.summary = g2s(as_component_get_summary(c));
-    a.description = strip_markup(g2s(as_component_get_description(c)));
-    if (AsDeveloper *dev = as_component_get_developer(c)) a.developer = g2s(as_developer_get_name(dev));
-    a.license = g2s(as_component_get_project_license(c));
-    a.homepage = g2s(as_component_get_url(c, AS_URL_KIND_HOMEPAGE));
-    if (GPtrArray *cats = as_component_get_categories(c))
-      for (guint j = 0; j < cats->len; j++) a.categories.push_back((const char *)g_ptr_array_index(cats, j));
-    if (AsReleaseList *rl = as_component_get_releases_plain(c))
-      if (as_release_list_len(rl) > 0) a.version = g2s(as_release_get_version(as_release_list_index(rl, 0)));
+    a.name = best(c.name);
+    a.summary = best(c.summary);
+    a.description = strip_markup(best(c.desc));
+    a.developer = best(c.dev_name);
+    a.license = c.license;
+    a.homepage = c.homepage;
+    a.categories = c.categories;
+    a.version = c.version;
     // cached icons: icons/<size>x<size>[@<scale>]/<name> (or icons/flatpak/...);
     // the one closest to 128 px (sharp at 64 and on HiDPI), remote icons
     // and theme names as fallbacks
-    GPtrArray *icons = as_component_get_icons(c);
-    int best = -1, best_remote = -1;
-    for (guint j = 0; icons && j < icons->len; j++) {
-      AsIcon *ic = AS_ICON(g_ptr_array_index(icons, j));
-      AsIconKind kind = as_icon_get_kind(ic);
-      int w = (int)as_icon_get_width(ic), scale = (int)std::max(1u, as_icon_get_scale(ic));
-      int px = w * scale;
+    int best_score = -1, best_remote = -1;
+    for (auto &ic : c.icons) {
+      int px = ic.width * ic.scale;
       int score = px >= 128 ? px - 128 : (128 - px) * 2;
-      if (kind == AS_ICON_KIND_STOCK) {
-        if (a.icon_stock.empty()) a.icon_stock = g2s(as_icon_get_name(ic));
-      } else if (kind == AS_ICON_KIND_REMOTE) {
+      if (ic.kind == "stock") {
+        if (a.icon_stock.empty()) a.icon_stock = ic.name;
+      } else if (ic.kind == "remote") {
         if (best_remote < 0 || score < best_remote) {
           best_remote = score;
-          a.icon_url = g2s(as_icon_get_url(ic));
+          a.icon_url = ic.url;
         }
-      } else if (kind == AS_ICON_KIND_CACHED || kind == AS_ICON_KIND_LOCAL) {
-        if (best >= 0 && score >= best) continue;
-        std::string name = g2s(as_icon_get_name(ic));
-        std::string file = g2s(as_icon_get_filename(ic));
-        std::string dir = std::to_string(w) + "x" + std::to_string(w) + (scale > 1 ? "@" + std::to_string(scale) : "");
-        for (const std::string &p : {file, base + "/icons/" + dir + "/" + name, base + "/icons/flatpak/" + dir + "/" + name}) {
+      } else if (ic.kind == "cached" || ic.kind == "local") {
+        if (best_score >= 0 && score >= best_score) continue;
+        std::string dir = std::to_string(ic.width) + "x" + std::to_string(ic.width) +
+                          (ic.scale > 1 ? "@" + std::to_string(ic.scale) : "");
+        std::vector<std::string> paths = {ic.file};
+        if (!ic.name.empty())
+          for (const std::string &p : {base + "/icons/" + dir + "/" + ic.name, base + "/icons/flatpak/" + dir + "/" + ic.name})
+            paths.push_back(p);
+        for (const std::string &p : paths) {
           if (!p.empty() && p[0] == '/' && fld::file_exists(p)) {
             a.icon = p;
-            best = score;
+            best_score = score;
             break;
           }
         }
       }
     }
     if (a.name.empty()) a.name = a.id;
-    out[a.id] = a;
+    (*out)[a.id] = a;
   }
-  g_object_unref(md);
-  g_object_unref(f);
+};
+
+void as_start(GMarkupParseContext *, const char *el, const char **an, const char **av, gpointer d, GError **) {
+  static_cast<AsParser *>(d)->start(el, an, av);
 }
+void as_end(GMarkupParseContext *, const char *el, gpointer d, GError **) { static_cast<AsParser *>(d)->end(el); }
+void as_text(GMarkupParseContext *, const char *t, gsize n, gpointer d, GError **) {
+  static_cast<AsParser *>(d)->chars(t, n);
+}
+const GMarkupParser kAsParser = {as_start, as_end, as_text, nullptr, nullptr};
+
+std::vector<std::string> locale_langs() {
+  std::vector<std::string> out;
+  for (const gchar *const *n = g_get_language_names(); n && *n; n++) {
+    std::string l = *n;
+    if (l == "C" || l == "POSIX") l = "";
+    if (l.find('.') != std::string::npos) continue; // de_DE.UTF-8: de_DE comes too
+    if (std::find(out.begin(), out.end(), l) == out.end()) out.push_back(l);
+  }
+  if (std::find(out.begin(), out.end(), "") == out.end()) out.push_back("");
+  return out;
+}
+
+} // namespace
+
+static bool parse_appstream_stream(const std::string &remote, const std::string &base, GInputStream *in,
+                            const std::vector<std::string> &langs, std::map<std::string, App> &out) {
+  AsParser p;
+  p.remote = remote;
+  p.base = base;
+  p.langs = langs;
+  p.out = &out;
+  GMarkupParseContext *ctx = g_markup_parse_context_new(&kAsParser, (GMarkupParseFlags)0, &p, nullptr);
+  std::vector<char> buf(64 * 1024);
+  bool ok = true;
+  for (;;) {
+    GError *e = nullptr;
+    gssize n = g_input_stream_read(in, buf.data(), buf.size(), nullptr, &e);
+    if (n < 0) {
+      g_clear_error(&e);
+      ok = false;
+      break;
+    }
+    if (n == 0) break;
+    if (!g_markup_parse_context_parse(ctx, buf.data(), n, &e)) {
+      g_clear_error(&e);
+      ok = false; // what was read until here is kept
+      break;
+    }
+  }
+  if (ok) {
+    GError *e = nullptr;
+    if (!g_markup_parse_context_end_parse(ctx, &e)) ok = false;
+    g_clear_error(&e);
+  }
+  g_markup_parse_context_free(ctx);
+  return ok;
+}
+
+bool parse_appstream_text(const std::string &remote, const std::string &base, const std::string &xml,
+                          const std::vector<std::string> &langs, std::map<std::string, App> &out) {
+  GInputStream *in = g_memory_input_stream_new_from_data(xml.data(), (gssize)xml.size(), nullptr);
+  bool ok = parse_appstream_stream(remote, base, in, langs, out);
+  g_object_unref(in);
+  return ok;
+}
+
+static void parse_appstream(const std::string &remote, GFile *dir, std::map<std::string, App> &out) {
+  bool gz = true;
+  GFile *f = g_file_get_child(dir, "appstream.xml.gz");
+  if (!g_file_query_exists(f, nullptr)) {
+    g_object_unref(f);
+    f = g_file_get_child(dir, "appstream.xml");
+    gz = false;
+  }
+  GFileInputStream *fin = g_file_read(f, nullptr, nullptr);
+  g_object_unref(f);
+  if (!fin) return;
+  GInputStream *in = G_INPUT_STREAM(fin);
+  GZlibDecompressor *z = nullptr;
+  if (gz) {
+    z = g_zlib_decompressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP);
+    in = g_converter_input_stream_new(G_INPUT_STREAM(fin), G_CONVERTER(z));
+  }
+  gchar *dpath = g_file_get_path(dir);
+  std::string base = dpath ? dpath : "";
+  g_free(dpath);
+  parse_appstream_stream(remote, base, in, locale_langs(), out);
+  if (z) {
+    g_object_unref(in);
+    g_object_unref(z);
+  }
+  g_object_unref(fin);
+}
+
+namespace {
 
 void run_bg(std::function<void()> fn) { std::thread(std::move(fn)).detach(); }
 

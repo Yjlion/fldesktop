@@ -1,14 +1,16 @@
 // Backend for WPE WebKit built with the WPE Platform API: a WPEDisplay and
-// WPEView of our own whose buffers are copied into memory for FLTK to draw.
-// With a GPU the display offers its EGL display and DRM device, WebKit
-// renders into DMA-BUF buffers and they are read back with GL; otherwise
-// WebKit renders with the CPU into shared memory.
+// WPEView of our own. With a GPU the display offers its EGL display and DRM
+// device and WebKit renders into DMA-BUF buffers, which go to the compositor
+// as they are (wl_present.h), or are read back with GL when it cannot take
+// them; without a GPU WebKit renders with the CPU into shared memory.
 #include "backend.h"
 #include "gl_readback.h"
 
 #include <wpe/wpe-platform.h>
 
+#include <algorithm>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 namespace web {
@@ -154,6 +156,7 @@ public:
       for (guint i = 0; i < n; i++) in.push_back({rects[i].x, rects[i].y, rects[i].width, rects[i].height});
       dmg = clip_damage(in.data(), n, w, h, all);
     }
+    if (direct && on_dmabuf && WPE_IS_BUFFER_DMA_BUF(buffer) && present(buffer, w, h, rects, n)) return TRUE;
     if (!frame_) frame_ = std::make_shared<Frame>();
     Frame *f = frame_.get();
     if (WPE_IS_BUFFER_DMA_BUF(buffer) && gpu_display() != EGL_NO_DISPLAY) {
@@ -208,6 +211,48 @@ public:
     if (on_frame) on_frame(frame_);
     return TRUE;
   }
+  // the buffer to the compositor as it is; false: read it back instead
+  bool present(WPEBuffer *buffer, int w, int h, const WPERectangle *rects, guint n) {
+    WPEBufferDMABuf *d = WPE_BUFFER_DMA_BUF(buffer);
+    Dmabuf b;
+    b.width = w;
+    b.height = h;
+    b.fourcc = wpe_buffer_dma_buf_get_format(d);
+    b.modifier = wpe_buffer_dma_buf_get_modifier(d);
+    b.planes = (int)std::min(4u, wpe_buffer_dma_buf_get_n_planes(d));
+    for (int i = 0; i < b.planes; i++) {
+      b.fd[i] = wpe_buffer_dma_buf_get_fd(d, (guint)i); // the buffer's own
+      b.stride[i] = wpe_buffer_dma_buf_get_stride(d, (guint)i);
+      b.offset[i] = wpe_buffer_dma_buf_get_offset(d, (guint)i);
+    }
+    std::vector<Rect> dmg;
+    for (guint i = 0; i < n; i++) dmg.push_back({rects[i].x, rects[i].y, rects[i].width, rects[i].height});
+    // its wl_buffer goes with it
+    if (!g_object_get_data(G_OBJECT(buffer), "fl-web-presented")) {
+      g_object_set_data(G_OBJECT(buffer), "fl-web-presented", GINT_TO_POINTER(1));
+      g_object_weak_ref(G_OBJECT(buffer), [](gpointer key, GObject *) { wl_present::forget(key); }, buffer);
+    }
+    // the view and the buffer stay alive until the compositor is done
+    struct Hold {
+      WPEView *view;
+      WPEBuffer *buffer;
+      ~Hold() {
+        g_object_unref(buffer);
+        g_object_unref(view);
+      }
+    };
+    auto hold = std::make_shared<Hold>(Hold{WPE_VIEW(g_object_ref(view_)), WPE_BUFFER(g_object_ref(buffer))});
+    bool ok = on_dmabuf(
+        buffer, b, dmg, n == 0, [hold] { wpe_view_buffer_rendered(hold->view, hold->buffer); },
+        [hold] { wpe_view_buffer_released(hold->view, hold->buffer); });
+    if (!ok) {
+      static bool said = false;
+      if (!said) g_message("fl-web: the compositor does not take WebKit's buffers, reading them back");
+      said = true;
+      direct = false;
+    }
+    return ok;
+  }
   void cursor(const char *name) {
     if (on_cursor) on_cursor(name ? name : "default");
   }
@@ -242,7 +287,8 @@ WebKitWebView *PlatformBackend::create_view(WebKitWebView *related, WebKitSettin
     wv = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "display", display(), "related-view", related, nullptr));
   else
     wv = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "display", display(), "settings", settings,
-                                      "network-session", session, "user-content-manager", ucm, nullptr));
+                                      "network-session", session, "user-content-manager", ucm, "web-context",
+                                      g_web_context ? g_web_context : webkit_web_context_get_default(), nullptr));
   WPEView *v = webkit_web_view_get_wpe_view(wv);
   if (v && FLD_IS_WPE_VIEW(v)) {
     view_ = FLD_WPE_VIEW(v);
@@ -308,8 +354,9 @@ static WPEBufferFormats *display_get_preferred_buffer_formats(WPEDisplay *d) {
     if (dpy == EGL_NO_DISPLAY || !drm) return nullptr;
     auto query_modifiers = (PFNEGLQUERYDMABUFMODIFIERSEXTPROC)eglGetProcAddress("eglQueryDmaBufModifiersEXT");
     const guint64 kInvalid = 0x00ffffffffffffffULL; // DRM_FORMAT_MOD_INVALID: the driver's choice
-    WPEBufferFormatsBuilder *b = wpe_buffer_formats_builder_new(drm);
-    wpe_buffer_formats_builder_append_group(b, drm, WPE_BUFFER_FORMAT_USAGE_RENDERING);
+    // what EGL can render into, and, when the buffers go to the compositor as
+    // they are, what the compositor takes as well
+    std::vector<std::pair<guint32, guint64>> all, shared;
     for (guint32 fourcc : {0x34325241u /* AR24 */, 0x34325258u /* XR24 */}) {
       std::vector<EGLuint64KHR> mods;
       std::vector<EGLBoolean> external;
@@ -322,11 +369,17 @@ static WPEBufferFormats *display_get_preferred_buffer_formats(WPEDisplay *d) {
       bool any = false;
       for (EGLint i = 0; i < n; i++)
         if (!external[i]) {
-          wpe_buffer_formats_builder_append_format(b, fourcc, mods[i]);
+          all.push_back({fourcc, mods[i]});
           any = true;
         }
-      if (!any) wpe_buffer_formats_builder_append_format(b, fourcc, kInvalid);
+      if (!any) all.push_back({fourcc, kInvalid});
     }
+    if (web::wl_present::available())
+      for (auto &f : all)
+        if (web::wl_present::supports(f.first, f.second)) shared.push_back(f);
+    WPEBufferFormatsBuilder *b = wpe_buffer_formats_builder_new(drm);
+    wpe_buffer_formats_builder_append_group(b, drm, WPE_BUFFER_FORMAT_USAGE_RENDERING);
+    for (auto &f : shared.empty() ? all : shared) wpe_buffer_formats_builder_append_format(b, f.first, f.second);
     self->formats = wpe_buffer_formats_builder_end(b);
   }
   return self->formats; // transfer none

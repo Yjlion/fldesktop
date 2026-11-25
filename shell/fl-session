@@ -74,13 +74,6 @@ if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-run-session >/dev/null 
 	exec dbus-run-session -- "$0" "$@"
 fi
 
-# fldesktop's password store (the Secret Service) before any program asks
-# for it, so it gets the name before another one is started by D-Bus; it
-# leaves when GNOME Keyring or KeePassXC already has it
-if command -v fl-secretd >/dev/null 2>&1; then
-	fl-secretd >/dev/null 2>&1 &
-fi
-
 # fl-wm falls back to software rendering itself when the GPU's renderer
 # can't be created. If it still dies right away (a driver that crashes,
 # EGL that fails later), start it once more with software rendering.

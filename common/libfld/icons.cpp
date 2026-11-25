@@ -12,6 +12,7 @@
 #include <FL/Fl_JPEG_Image.H>
 #include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_PNM_Image.H>
+#include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_SVG_Image.H>
 #include <FL/Fl_Shared_Image.H>
 #include <FL/Fl_XPM_Image.H>
@@ -500,6 +501,105 @@ Fl_Image *symbolic_icon(const std::string &name, int size, Fl_Color color) {
   if (!img) img = icon(name, size); // a full color icon of that name
   cache[key] = img;
   return img;
+}
+
+bool svg_is_monochrome(const std::string &svg) {
+  for (const char *t : {"Gradient", "<image", "<pattern"})
+    if (svg.find(t) != std::string::npos) return false;
+  bool dark_seen = false, any = false;
+  for (size_t i = 0; i < svg.size(); i++) {
+    if (svg[i] != '#') continue;
+    char prev = i ? svg[i - 1] : ' ';
+    if (!(prev == '"' || prev == '\'' || prev == ':' || prev == ' ' || prev == '=' || prev == ',')) continue;
+    size_t n = 0;
+    while (i + 1 + n < svg.size() && hexval(svg[i + 1 + n]) >= 0 && n < 7) n++;
+    bool term = i + 1 + n >= svg.size() || !isalnum((unsigned char)svg[i + 1 + n]);
+    if (!(n == 3 || n == 6) || !term) continue;
+    int c[3];
+    for (int k = 0; k < 3; k++)
+      c[k] = n == 3 ? hexval(svg[i + 1 + k]) * 17 : hexval(svg[i + 1 + 2 * k]) * 16 + hexval(svg[i + 2 + 2 * k]);
+    int lo = std::min(c[0], std::min(c[1], c[2])), hi = std::max(c[0], std::max(c[1], c[2]));
+    any = true;
+    if (hi - lo > 16) return false;          // a real colour
+    if (hi < 0x80) dark_seen = true;         // the dark ink
+    else if (hi < 0xf0) return false;        // light grey shading: a drawn icon
+  }
+  // no colour at all: SVG's default black fill
+  return dark_seen || !any;
+}
+
+Fl_Image *ui_icon(const std::string &name, int size) {
+  const Palette &pal = palette();
+  if (!pal.dark) return icon(name, size);
+  std::string p = icon_path(name, size);
+  if (p.empty()) return icon(name, size);
+  uchar r, g, b;
+  Fl::get_color(pal.fg, r, g, b);
+  char hex[8];
+  snprintf(hex, sizeof hex, "#%02x%02x%02x", r, g, b);
+  static std::map<std::string, Fl_Image *> cache;
+  std::string key = name + "@" + std::to_string(size) + hex;
+  auto it = cache.find(key);
+  if (it != cache.end()) return it->second;
+  Fl_Image *img = nullptr;
+  std::string svg;
+  if (extension(p) != "svg") {
+    // a raster icon (a theme's 16x16 PNG): one dark ink is redrawn in the text
+    // colour, keeping its alpha
+    if (Fl_Image *src = load_image(p)) {
+      Fl_Image *sized = src;
+      if (src->w() != size || src->h() != size) sized = src->copy(size, size);
+      if (sized->d() == 4 && sized->count() == 1 && sized->data() && sized->data()[0]) {
+        const uchar *d = (const uchar *)sized->data()[0];
+        int ld = sized->ld() ? sized->ld() : sized->w() * 4;
+        bool mono = true, any = false;
+        for (int y = 0; y < sized->h() && mono; y++)
+          for (int x = 0; x < sized->w(); x++) {
+            const uchar *q = d + y * ld + x * 4;
+            if (q[3] < 24) continue;
+            int lo = std::min(q[0], std::min(q[1], q[2])), hi = std::max(q[0], std::max(q[1], q[2]));
+            if (hi - lo > 24 || hi >= 0x90) { mono = false; break; }
+            any = true;
+          }
+        if (mono && any) {
+          int w = sized->w(), h = sized->h();
+          uchar *out = new uchar[(size_t)w * h * 4];
+          for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+              uchar *o = out + ((size_t)y * w + x) * 4;
+              o[0] = r, o[1] = g, o[2] = b, o[3] = d[y * ld + x * 4 + 3];
+            }
+          auto *rgb = new Fl_RGB_Image(out, w, h, 4);
+          rgb->alloc_array = 1;
+          img = rgb;
+        }
+      }
+      if (sized != src) delete sized;
+      delete src;
+    }
+  } else if (read_file(p, svg, 1 << 20) && (ends_with(fld::basename(p), "-symbolic.svg") || svg_is_monochrome(svg))) {
+    svg = recolor_symbolic_svg(svg, hex);
+    // nothing to replace: the default (black) fill becomes the text colour
+    size_t root = svg.find("<svg");
+    if (root != std::string::npos && svg.find(hex) == std::string::npos)
+      svg.insert(root + 4, std::string(" fill=\"") + hex + "\"");
+    auto *s = new Fl_SVG_Image(nullptr, svg.c_str());
+    if (s->fail()) delete s;
+    else {
+      s->scale(size, size, 1, 1);
+      img = s;
+    }
+  }
+  if (!img) img = icon(name, size);
+  cache[key] = img;
+  return img;
+}
+
+Fl_Image *ui_icon_first(const std::vector<std::string> &names, int size) {
+  for (auto &n : names)
+    if (!icon_path(n, size).empty())
+      if (Fl_Image *i = ui_icon(n, size)) return i;
+  return nullptr;
 }
 
 Fl_Image *icon_first(const std::vector<std::string> &names, int size) {

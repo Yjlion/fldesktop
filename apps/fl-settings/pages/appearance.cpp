@@ -24,6 +24,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "fld/text.h"
 #include "settings_common.h"
 #include "settings_page.h"
 
@@ -133,7 +134,7 @@ public:
     style->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->style_changed(); }, this);
     radius = new Fl_Spinner(wx + 290, wy, 60, 28, "Corners:");
     radius->range(0, 12);
-    radius->value(desk.ini.get_int("Appearance", "Radius", 4));
+    radius->value(desk.ini.get_int("Appearance", "Radius", 6));
     radius->tooltip("Corner radius of the Rounded style");
     radius->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->style_changed(); }, this);
     f.row("Preview:", 64, wx, wy, ww);
@@ -357,7 +358,8 @@ public:
         break;
       case 3:
         wm.ini.set("appearance", "active_title", hex);
-        wm.ini.set("appearance", "active_text", "#ffffff");
+        // dark text on light accents (amber, yellow), white on the others
+        wm.ini.set("appearance", "active_text", fld::text_on(accent_color) == FL_WHITE ? "#ffffff" : "#141416");
         wm.ini.set("appearance", "inactive_title", "#e8e9eb");
         wm.ini.set("appearance", "inactive_text", "#6b6f76");
         break;

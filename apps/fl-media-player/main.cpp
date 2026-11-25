@@ -80,6 +80,9 @@ static Fl_Slider *g_seek, *g_vol;
 static Fl_Box *g_time;
 static fld::FlatButton *g_play, *g_prev, *g_next, *g_mute, *g_full;
 static bool g_fullscreen = false, g_bar_visible = true, g_force_sw = false;
+// OpenGL (Mesa: tens of MB) waits for the first video; music and an empty
+// window need only the software surface
+static bool g_gl_deferred = false;
 static bool g_seeking = false;
 // the playlist sidebar
 static Fl_Group *g_side;
@@ -867,37 +870,54 @@ static int surface_event(int e) {
 
 // ---- main ---------------------------------------------------------------------------------
 
+static void replace_surface();
+
 static void make_surface(int W, int H) {
   g_win->begin();
-  g_surface = fgst::FrameView::create(0, 0, W, H - BAR, g_force_sw);
+  g_surface = fgst::FrameView::create(0, 0, W, H - BAR, g_force_sw || g_gl_deferred);
   g_win->end();
   g_surface->set_slot(&g_player->frames());
   g_surface->on_event = surface_event;
   // software rendering: let the pipeline scale to the widget size
   g_surface->on_resize = [](int w, int h) {
-    if (g_surface && g_surface->software()) fgst::set_scale_to(g_player->video_sink(), w, h);
+    if (g_surface && g_surface->software()) g_player->set_scale_to(w, h);
   };
-  if (g_surface->software()) fgst::set_scale_to(g_player->video_sink(), W, H - BAR);
-  else fgst::set_scale_to(g_player->video_sink(), 0, 0);
+  if (g_surface->software()) g_player->set_scale_to(W, H - BAR);
+  else g_player->set_scale_to(0, 0);
   g_surface->on_failed = [] {
     // no usable OpenGL: switch to the software renderer
-    fgst::FrameView *old = g_surface;
-    g_win->remove(old->widget());
-    Fl::delete_widget(old->widget());
     g_force_sw = true;
-    make_surface(g_win->w(), g_win->h());
-    g_win->insert(*g_surface->widget(), 0);
-    g_surface->widget()->show();
-    g_surface->start();
-    layout();
-    update_play_button();
+    replace_surface();
   };
+}
+
+static void replace_surface() {
+  fgst::FrameView *old = g_surface;
+  g_win->remove(old->widget());
+  Fl::delete_widget(old->widget());
+  make_surface(g_win->w(), g_win->h());
+  g_win->insert(*g_surface->widget(), 0);
+  g_surface->widget()->show();
+  g_surface->start();
+  layout();
+  update_play_button();
+}
+
+// the first video: now the OpenGL surface
+static void video_needs_gl() {
+  if (!g_gl_deferred || !g_player->has_video()) return;
+  g_gl_deferred = false;
+  if (!g_force_sw) replace_surface();
 }
 
 int main(int argc, char **argv) {
   // run once after an install or update (the autostart entry): GStreamer
   // builds its plugin registry, which made the first start take 5 s
   if (argc == 2 && !strcmp(argv[1], "--warm-registry")) {
+    // the login warm-up: skipped on small machines, where it would compete
+    // with whatever is opened first
+    unsigned long long ram = fld::total_ram_bytes();
+    if (ram && ram < (2ull << 30)) return 0;
     fgst::init();
     return 0;
   }
@@ -926,16 +946,14 @@ int main(int argc, char **argv) {
   const char *sw = getenv("FLD_VIDEO_SW");
   if (sw && *sw && strcmp(sw, "0")) g_force_sw = true;
 
+  // GStreamer starts with the first file played (see Player::ensure_engine)
   g_player = new Player();
-  if (!g_player->ok()) {
-    fl_alert("Could not start the GStreamer playback engine:\n%s", g_player->init_error().c_str());
-    return 1;
-  }
   g_player->set_resume(S.resume);
   g_player->set_volume(S.volume);
   g_player->set_shuffle(S.shuffle);
   g_player->set_repeat((media::Repeat)S.repeat);
 
+  g_gl_deferred = !g_force_sw && files.empty();
   const fld::Palette &pal = fld::palette();
   const int W = 960, H = 600;
   g_win = new VideoWindow(W, H, "Media Player");
@@ -1083,11 +1101,15 @@ int main(int argc, char **argv) {
     update_mpris();
   };
   g_player->on_media = [] {
+    video_needs_gl();
     update_title();
     update_time();
     update_play_button();
   };
-  g_player->on_tracks = [] { update_play_button(); };
+  g_player->on_tracks = [] {
+    video_needs_gl();
+    update_play_button();
+  };
   g_player->on_buffering = [](int pct) {
     if (pct < 100) g_surface->show_message("Buffering " + std::to_string(pct) + "%", 1);
   };

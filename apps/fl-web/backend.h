@@ -13,6 +13,7 @@
 #include <wpe/webkit.h>
 
 #include "damage.h"
+#include "wl_present.h"
 
 namespace web {
 
@@ -28,6 +29,10 @@ struct Frame {
 
 
 enum Mods { MOD_CTRL = 1, MOD_SHIFT = 2, MOD_ALT = 4, MOD_META = 8, MOD_BUTTON1 = 16, MOD_BUTTON2 = 32, MOD_BUTTON3 = 64 };
+
+// The web context the views are created in (memory limits on small
+// machines; main.cpp), or nullptr for WebKit's default one
+extern WebKitWebContext *g_web_context;
 
 class Backend {
 public:
@@ -59,6 +64,17 @@ public:
 
   // newest frame (called in the main thread)
   std::function<void(std::shared_ptr<const Frame>)> on_frame;
+
+  // Direct presentation (wl_present.h): set by the view when the compositor
+  // takes DMA-BUFs. A GPU frame then goes to on_dmabuf instead of being read
+  // back; `key` stays the same while WebKit reuses a buffer. on_dmabuf calls
+  // `shown` once the frame is on screen and `release` once the compositor no
+  // longer reads the buffer; it returns false when the buffer cannot be shown
+  // (neither is called then: the backend reads the frame back instead).
+  bool direct = false;
+  std::function<bool(const void *key, const Dmabuf &buf, const std::vector<Rect> &damage, bool all,
+                     std::function<void()> shown, std::function<void()> release)>
+      on_dmabuf;
   std::function<void(const std::string &cursor)> on_cursor; // CSS cursor names
   static std::function<void(const std::string &text)> on_copy; // the page copied text
 };

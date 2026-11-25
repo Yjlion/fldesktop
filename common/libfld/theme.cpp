@@ -27,6 +27,19 @@ static Palette g_pal;
 static Fl_Font g_mono = FL_COURIER;
 static int g_mono_size = 14, g_ui_size = 14;
 
+// Text on a coloured surface (a selected row, a highlighted menu item): the
+// colour asked for while it is readable (WCAG AA: 4.5:1, 3:1 for large
+// text), else dark or white, whichever reads better. FLTK's own rule keeps
+// white on amber or yellow accents at about 3:1.
+#if FL_API_VERSION >= 10400
+static Fl_Color readable_contrast(Fl_Color fg, Fl_Color bg, int, int size) {
+  double need = size >= 18 ? 3.0 : 4.5;
+  if (contrast_ratio(fg, bg) >= need) return fg;
+  Fl_Color alt = text_on(bg);
+  return contrast_ratio(alt, bg) > contrast_ratio(fg, bg) ? alt : fg;
+}
+#endif
+
 static Fl_Color parse_color(const std::string &s, Fl_Color def) {
   if (s.size() == 7 && s[0] == '#') {
     unsigned v = (unsigned)strtoul(s.c_str() + 1, nullptr, 16);
@@ -115,9 +128,13 @@ void init_app(const char *app_id, int argc, char **argv) {
   Fl::get_color(p.fg, r, g, b);
   Fl::foreground(r, g, b);
   Fl::set_color(FL_SELECTION_COLOR, p.selection);
+#if FL_API_VERSION >= 10400
+  fl_contrast_function(readable_contrast);
+  fl_contrast_mode(FL_CONTRAST_CUSTOM);
+#endif
   // high contrast: flat boxes framed in the border colour (styles.cpp)
   if (high) apply_style("fld-flat", 0);
-  else apply_style(cfg.get(A, "Scheme", "gtk+"), cfg.get_int(A, "Radius", 4));
+  else apply_style(cfg.get(A, "Scheme", "gtk+"), cfg.get_int(A, "Radius", 6));
   Fl::set_color(FL_INACTIVE_COLOR, p.fg_dim);
   Fl_Tooltip::color(dark ? fl_rgb_color(0x10, 0x10, 0x12) : fl_rgb_color(0x30, 0x32, 0x36));
   Fl_Tooltip::textcolor(FL_WHITE);

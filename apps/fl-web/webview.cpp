@@ -17,6 +17,8 @@
 
 namespace web {
 
+WebKitWebContext *g_web_context = nullptr;
+
 namespace {
 
 uint32_t now_ms() { return (uint32_t)(g_get_monotonic_time() / 1000); }
@@ -58,7 +60,31 @@ WebView::WebView(int x, int y, int w, int h, WebKitWebView *related, WebKitSetti
                  WebKitNetworkSession *session, WebKitUserContentManager *ucm)
     : Fl_Widget(x, y, w, h) {
   backend_ = Backend::create();
+  if (wl_present::available()) {
+    presenter_ = std::make_unique<wl_present::Presenter>();
+    backend_->direct = true;
+    backend_->on_dmabuf = [this](const void *key, const Dmabuf &buf, const std::vector<Rect> &damage, bool all,
+                                 std::function<void()> shown, std::function<void()> release) {
+      Fl_Window *win = window();
+      if (!win || !win->shown()) return false;
+      presenter_->place(win, this->x(), this->y(), this->w(), this->h());
+      presenter_->set_mapped(visible_r());
+      if (!presenter_->show(key, buf, damage, all, std::move(shown), std::move(release))) return false;
+      if (!direct_shown_) {
+        direct_shown_ = true;
+        frame_.reset(); // nothing to draw here any more
+        redraw();
+      }
+      return true;
+    };
+  }
   backend_->on_frame = [this](std::shared_ptr<const Frame> f) {
+    if (direct_shown_) {
+      // back to frames read into memory (WebKit rendered with the CPU)
+      direct_shown_ = false;
+      if (presenter_) presenter_->set_mapped(false);
+      convert_all_ = true;
+    }
     frame_ = f;
     if (f->all) {
       convert_all_ = true;
@@ -94,8 +120,27 @@ WebView::WebView(int x, int y, int w, int h, WebKitWebView *related, WebKitSetti
 
 WebView::~WebView() {
   Fl::remove_timeout(frame_done_cb, this);
+  // first: it gives WebKit its buffers back while the view still exists
+  presenter_.reset();
   if (view_) g_object_unref(view_);
   backend_.reset();
+}
+
+void WebView::update_presenter() {
+  if (!presenter_) return;
+  bool on = visible_r() && direct_shown_;
+  presenter_->set_mapped(on);
+  if (on && window() && window()->shown()) presenter_->place(window(), x(), y(), w(), h());
+}
+
+void WebView::show() {
+  Fl_Widget::show();
+  update_presenter();
+}
+
+void WebView::hide() {
+  Fl_Widget::hide();
+  update_presenter();
 }
 
 void WebView::activate_view(bool on) {
@@ -108,6 +153,8 @@ void WebView::resize(int X, int Y, int W, int H) {
   bool sized = W != w() || H != h();
   Fl_Widget::resize(X, Y, W, H);
   if (sized) backend_->resize(W, H);
+  if (presenter_ && direct_shown_ && visible_r() && window() && window()->shown())
+    presenter_->place(window(), X, Y, W, H);
 }
 
 static double mono_now() {
@@ -167,6 +214,11 @@ void WebView::convert(const Rect &r) {
 }
 
 void WebView::draw() {
+  if (direct_shown_ && presenter_) {
+    // the page is a subsurface over this: only its place may have changed
+    update_presenter();
+    return;
+  }
   fl_push_clip(x(), y(), w(), h());
   const Frame *f = frame_.get();
   if (!f || f->pixels.empty()) {

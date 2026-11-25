@@ -80,8 +80,9 @@ Depends: fldesktop-wm (>= ${source:Version}),
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-media-player,
             fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
-            fldesktop-passwords, fldesktop-secrets, fldesktop-pinentry, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
-            plymouth, plymouth-themes, fldesktop-plymouth-theme, power-profiles-daemon, avahi-daemon, libnss-mdns
+            fldesktop-passwords, fldesktop-pinentry, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
+            plymouth, plymouth-themes, fldesktop-plymouth-theme, power-profiles-daemon, avahi-daemon, libnss-mdns,
+            gnome-keyring, libpam-gnome-keyring, orca
 Suggests: fonts-noto-color-emoji
 Description: lightweight Wayland desktop built with FLTK (metapackage)
  fldesktop is a small desktop environment for Wayland made with the FLTK
@@ -219,7 +220,7 @@ Package: fldesktop-web
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: www-browser
-Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils, fldesktop-secrets | gnome-keyring | keepassxc
+Recommends: gstreamer1.0-plugins-good, xdg-user-dirs, xdg-utils, gnome-keyring | keepassxc
 Description: fldesktop web browser
  fl-web is a web browser built with FLTK and WPE WebKit: tabs, an address
  bar that searches and completes from bookmarks and history, downloads,
@@ -379,7 +380,8 @@ Description: fldesktop notification server
 Package: xdg-desktop-portal-fl
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, xdg-desktop-portal
-Recommends: grim, slurp, pipewire, xdg-desktop-portal-gtk
+Recommends: grim, slurp, pipewire
+Suggests: xdg-desktop-portal-gtk
 Description: xdg-desktop-portal backend for fldesktop
  Implements the file chooser, "open with" dialog, settings (color scheme,
  accent color, fonts), screenshot and color picker, access and account
@@ -445,21 +447,10 @@ Description: fldesktop firewall settings
 Package: fldesktop-passwords
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: fldesktop-secrets | gnome-keyring, openssh-client, gnupg
+Recommends: gnome-keyring, openssh-client, gnupg
 Description: fldesktop passwords and keys (Secret Service, SSH, GPG)
  fl-keyring shows and edits the passwords programs keep in the Secret Service
  (GNOME Keyring, KeePassXC), and makes, copies and deletes SSH and GPG keys.
-
-Package: fldesktop-secrets
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, dbus-user-session | dbus-x11 | dbus
-Recommends: libpam-runtime
-Suggests: libsecret-tools
-Description: fldesktop password store (Secret Service), in place of GNOME Keyring
- fl-secretd keeps the passwords programs store through the Secret Service
- (org.freedesktop.secrets: libsecret, browsers, mail programs, Flatpak apps
- through the portal) in encrypted keyrings. The login keyring is unlocked
- with the login password by its PAM module, pam_fldesktop_keyring.
 
 Package: fldesktop-pinentry
 Architecture: any

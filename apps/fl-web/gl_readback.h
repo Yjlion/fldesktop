@@ -1,6 +1,7 @@
 // GPU rendering for fl-web: WebKit renders with the GPU into buffers that
-// are handed over as EGL images; they are copied back into memory here for
-// FLTK to draw. Without a GPU (or with FL_WEB_SOFTWARE=1 in the environment)
+// are handed over as EGL images or DMA-BUFs. They go to the compositor as
+// they are (wl_present.h); when it cannot take them they are copied back
+// into memory here for FLTK to draw. Without a GPU (or with FL_WEB_SOFTWARE=1 in the environment)
 // WebKit renders with the CPU into shared memory instead, which on a slow
 // machine costs most of a core (Mesa's llvmpipe).
 #pragma once

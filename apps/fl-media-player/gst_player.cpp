@@ -28,20 +28,39 @@ enum { PLAY_FLAG_VIDEO = 1 << 0, PLAY_FLAG_AUDIO = 1 << 1, PLAY_FLAG_TEXT = 1 <<
 
 static std::string positions_path() { return fld::cache_home() + "/fldesktop/video-positions.ini"; }
 
-Player::Player() {
-  if (!fgst::init(&init_error_)) return;
+// GStreamer (its plugin registry, playbin and the sinks: tens of MB) starts
+// with the first item played, not with the window
+Player::Player() {}
+
+bool Player::ensure_engine() {
+  if (playbin_) return true;
+  if (!init_error_.empty()) return false;
+  if (!fgst::init(&init_error_)) {
+    if (init_error_.empty()) init_error_ = "GStreamer could not be initialized";
+    return false;
+  }
   playbin_ = gst_element_factory_make("playbin", "player");
   if (!playbin_) {
     init_error_ = "The GStreamer \"playbin\" element is missing (install the GStreamer base plugins).";
-    return;
+    return false;
   }
   gst_object_ref_sink(playbin_);
   vsink_ = fgst::make_sink(&slot_);
   if (vsink_) g_object_set(playbin_, "video-sink", vsink_, NULL);
+  fgst::set_scale_to(vsink_, scale_w_, scale_h_);
   // keep the pitch when playing faster or slower
   if (GstElement *st = gst_element_factory_make("scaletempo", nullptr)) g_object_set(playbin_, "audio-filter", st, NULL);
   if (getenv("FLD_VIDEO_DEBUG")) gst_debug_set_threshold_from_string("*:2", TRUE);
+  set_volume(volume_);
+  set_mute(muted_);
   Fl::add_timeout(0.05, poll_cb, this);
+  return true;
+}
+
+void Player::set_scale_to(int w, int h) {
+  scale_w_ = w;
+  scale_h_ = h;
+  if (vsink_) fgst::set_scale_to(vsink_, w, h);
 }
 
 Player::~Player() {
@@ -189,7 +208,7 @@ void Player::move(int from, int to) {
 
 void Player::clear() {
   save_position();
-  gst_element_set_state(playbin_, GST_STATE_READY);
+  if (playbin_) gst_element_set_state(playbin_, GST_STATE_READY);
   list_.clear();
   order_.clear();
   cur_ = -1;
@@ -276,6 +295,10 @@ void Player::find_folder_cover() {
 }
 
 void Player::start_item(int i, bool play) {
+  if (!ensure_engine()) {
+    if (on_error) on_error("Could not start the GStreamer playback engine: " + init_error_);
+    return;
+  }
   const Item &item = list_[(size_t)i];
   if (item.resolved.empty() && video::needs_resolver(item.location) &&
       (!webhelpers::ytdlp_path().empty() || webhelpers::updating())) {
@@ -382,6 +405,7 @@ void Player::resolve_and_start(int i, bool play) {
 void Player::set_state_playing(bool playing) {
   want_playing_ = playing;
   paused_ = !playing;
+  if (!playbin_) return;
   if (buffering_ && playing) {
     gst_element_set_state(playbin_, GST_STATE_PAUSED);
   } else {
@@ -409,7 +433,7 @@ void Player::toggle_pause() {
 
 void Player::stop() {
   save_position();
-  gst_element_set_state(playbin_, GST_STATE_NULL);
+  if (playbin_) gst_element_set_state(playbin_, GST_STATE_NULL);
   cur_ = -1;
   paused_ = true;
   slot_.clear();
@@ -448,6 +472,7 @@ void Player::seek_relative(double d) {
 }
 
 void Player::apply_rate(double pos) {
+  if (!playbin_) return;
   gst_element_seek(playbin_, rate_, GST_FORMAT_TIME, (GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE),
                    GST_SEEK_TYPE_SET, (gint64)(pos * GST_SECOND), GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
 }
@@ -543,6 +568,7 @@ std::vector<Player::Track> Player::tracks() const {
 
 void Player::select_track(const std::string &type, int index) {
   const char *prop = type == "video" ? "current-video" : type == "audio" ? "current-audio" : "current-text";
+  if (!playbin_) return;
   if (type == "sub") set_subtitles_visible(true);
   g_object_set(playbin_, prop, index, NULL);
   if (on_tracks) on_tracks();
@@ -551,6 +577,7 @@ void Player::select_track(const std::string &type, int index) {
 void Player::cycle_track(const std::string &type) {
   const char *n_prop = type == "video" ? "n-video" : type == "audio" ? "n-audio" : "n-text";
   const char *cur_prop = type == "video" ? "current-video" : type == "audio" ? "current-audio" : "current-text";
+  if (!playbin_) return;
   int n = 0, cur = 0;
   g_object_get(playbin_, n_prop, &n, cur_prop, &cur, NULL);
   if (n <= 0) return;
@@ -571,6 +598,7 @@ void Player::cycle_track(const std::string &type) {
 void Player::subtitles_off() { set_subtitles_visible(false); }
 
 void Player::set_subtitles_visible(bool v) {
+  if (!playbin_) return;
   int flags = 0;
   g_object_get(playbin_, "flags", &flags, NULL);
   flags = v ? (flags | PLAY_FLAG_TEXT) : (flags & ~PLAY_FLAG_TEXT);
@@ -579,6 +607,7 @@ void Player::set_subtitles_visible(bool v) {
 }
 
 bool Player::subtitles_visible() const {
+  if (!playbin_) return false;
   int flags = 0;
   g_object_get(playbin_, "flags", &flags, NULL);
   return flags & PLAY_FLAG_TEXT;

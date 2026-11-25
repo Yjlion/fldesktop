@@ -29,7 +29,6 @@ A lightweight Wayland desktop built with the [FLTK](https://www.fltk.org) 1.4 to
 | **fl-scan** | Scanning with SANE (scanimage): preview, an area to scan, the glass or the document feeder, pages reordered and saved as one PDF or as PNG pictures |
 | **fl-remote** | Remote desktop: saved VNC and RDP connections; VNC in a window of its own (its own RFB client, VNC passwords, scaling, clipboard text, Ctrl+Alt+Delete), RDP through FreeRDP; computers on the network that offer VNC or RDP (mDNS) |
 | **fl-keyring** | Passwords and keys: the passwords in the Secret Service (GNOME Keyring, KeePassXC) shown, copied, changed, added and deleted, keyrings locked and unlocked; SSH keys (generate, copy, passphrase, delete) and GPG keys (generate, import, copy, delete) |
-| **fl-secretd** | The password store, in place of GNOME Keyring: the Secret Service (org.freedesktop.secrets) with encrypted keyrings, the login keyring unlocked at login by its PAM module, and the Secret portal for Flatpak apps |
 | **pinentry-fldesktop** | GnuPG's passphrase prompt: quality of new passphrases, repeat, and passphrases kept in the password manager when gpg-agent allows it |
 | **fl-logs** | Log viewer: the systemd journal (system or user, by boot or time) or the syslog and OpenRC files in /var/log; priority colours, filters by priority, program and text, following new entries, all fields of an entry, saving as text |
 | **fl-services** | Services of systemd or OpenRC: start, stop, restart, enable, disable (through polkit), state and status; systemd user services |
@@ -232,6 +231,12 @@ adds packages to it (needs the `FLD_REPO_GPG_KEY` secret in CI).
   Screen** sets its background, style, accent color, icons, cursor, the users
   it lists and its on-screen keyboard (`Keyboard=button|always|never`) in
   `/etc/fldesktop/greeter.ini`, asking for an administrator password.
+
+  Saved passwords live in GNOME Keyring. Debian's greetd unlocks it with the
+  login password once `libpam-gnome-keyring` is installed (the metapackage
+  recommends it). On Arch, add to `/etc/pam.d/greetd`:
+  `auth optional pam_gnome_keyring.so` after the auth lines and
+  `session optional pam_gnome_keyring.so auto_start` after the session lines.
 
 Running uninstalled from the build tree (nested in your current session):
 

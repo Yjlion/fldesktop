@@ -46,7 +46,8 @@ lists when they are older than the configured interval and sends a
 notification when updates are available; the notification opens the
 Updates tab. The same updates are announced only once. Between checks it
 only sleeps: each check runs as \fBfl-packages \-\-check\-updates
-\-\-once\fR, which does one check and ends.
+\-\-once\fR, which does one check and ends. It ends with the session: once
+a minute it checks that the compositor (\fBWAYLAND_DISPLAY\fR) still answers.
 .SH FILES
 .TP
 \fI~/.config/fldesktop/updates.ini\fR

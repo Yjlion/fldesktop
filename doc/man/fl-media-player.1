@@ -47,7 +47,9 @@ Use the software renderer (also \fBFLD_VIDEO_SW=1\fR).
 \fB\-\-warm\-registry\fR
 Let GStreamer build its plugin registry and exit. The session runs this
 once after login (\fI/etc/xdg/autostart/fl-media-player-warmup.desktop\fR),
-so that the first start after an install or update is not slow.
+so that the first start after an install or update is not slow. On machines
+with less than 2 GB of memory it does nothing. The player itself starts
+GStreamer only when the first file is played.
 .SH KEYS
 .TP
 \fBSpace\fR, \fBK\fR, click

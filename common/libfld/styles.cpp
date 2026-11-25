@@ -106,8 +106,10 @@ void round_down(int x, int y, int w, int h, Fl_Color c) {
 // ---- classic bevel (two-pixel 3D edges) -------------------------------------------------
 
 void bevel(int x, int y, int w, int h, Fl_Color c, bool up, bool thin) {
-  Fl_Color hi = fl_color_average(c, FL_WHITE, 0.25f), lo = fl_color_average(c, FL_BLACK, 0.55f);
-  Fl_Color hi2 = fl_color_average(c, FL_WHITE, 0.7f), lo2 = fl_color_average(c, FL_BLACK, 0.8f);
+  // a deep two-tone bevel: near-white light edges, dark shadows (set apart
+  // from FLTK classic's softer one)
+  Fl_Color hi = fl_color_average(c, FL_WHITE, 0.25f), lo = fl_color_average(c, FL_BLACK, 0.45f);
+  Fl_Color hi2 = fl_color_average(c, FL_WHITE, 0.15f), lo2 = fl_color_average(c, FL_BLACK, 0.65f);
   if (!up) {
     std::swap(hi, lo);
     std::swap(hi2, lo2);
@@ -153,6 +155,35 @@ void classic_thin_down_box(int x, int y, int w, int h, Fl_Color c) {
   bevel(x, y, w, h, c, false, true);
 }
 
+// ---- plastic: corrections to FLTK's scheme ----------------------------------------------
+
+// The scheme shades sunken boxes towards white whatever their colour: on a
+// light theme its troughs (scrollbars, progress bars) come out very pale,
+// so they are drawn from a darker base
+// (its shading mixes in only part of the colour, hence the strong step).
+// Text fields (the bg2 colour) stay as they are.
+Fl_Box_Draw_F *g_plastic_down = nullptr, *g_plastic_thin_down = nullptr;
+Fl_Color plastic_trough(Fl_Color c) {
+  uchar r1, g1, b1, r2, g2, b2;
+  Fl::get_color(c, r1, g1, b1);
+  Fl::get_color(FL_BACKGROUND2_COLOR, r2, g2, b2);
+  if (r1 == r2 && g1 == g2 && b1 == b2) return c;
+  return fl_color_average(c, FL_BLACK, 0.6f);
+}
+// a coloured fill (a progress bar) in its own colour: the shading washes it out
+bool saturated(Fl_Color c) {
+  uchar r, g, b;
+  Fl::get_color(c, r, g, b);
+  return std::max(r, std::max(g, b)) - std::min(r, std::min(g, b)) > 40;
+}
+void plastic_light_down_box(int x, int y, int w, int h, Fl_Color c) {
+  if (saturated(c)) flat_down_box(x, y, w, h, c);
+  else g_plastic_down(x, y, w, h, plastic_trough(c));
+}
+void plastic_light_thin_down_box(int x, int y, int w, int h, Fl_Color c) {
+  g_plastic_thin_down(x, y, w, h, plastic_trough(c));
+}
+
 } // namespace
 
 const std::string &current_style() { return g_style; }
@@ -188,6 +219,25 @@ void apply_style(const std::string &id_in, int radius) {
     Fl::set_boxtype(FL_THIN_DOWN_FRAME, rounded_down_frame, 1, 1, 2, 2);
     Fl::set_boxtype(FL_ROUND_UP_BOX, round_up, 1, 1, 2, 2);
     Fl::set_boxtype(FL_ROUND_DOWN_BOX, round_down, 1, 1, 2, 2);
+  } else if (id == "plastic" && palette().dark && !palette().high_contrast) {
+    // the scheme's sunken boxes turn light grey under the dark theme's light
+    // text (inputs, spin boxes, pressed buttons): flat ones instead
+    Fl::set_boxtype(FL_DOWN_BOX, flat_down_box, 1, 1, 2, 2);
+    Fl::set_boxtype(FL_THIN_DOWN_BOX, flat_down_box, 1, 1, 2, 2);
+    Fl::set_boxtype(FL_DOWN_FRAME, flat_down_frame, 1, 1, 2, 2);
+    Fl::set_boxtype(FL_THIN_DOWN_FRAME, flat_down_frame, 1, 1, 2, 2);
+  } else if (id == "plastic") {
+    // the scheme has just set these, so they are its own functions
+    // (unless they are still ours from an earlier call)
+    Fl_Box_Draw_F *down = Fl::get_boxtype(FL_DOWN_BOX), *thin = Fl::get_boxtype(FL_THIN_DOWN_BOX);
+    if (down != plastic_light_down_box) g_plastic_down = down;
+    if (thin != plastic_light_thin_down_box) g_plastic_thin_down = thin;
+    if (g_plastic_down)
+      Fl::set_boxtype(FL_DOWN_BOX, plastic_light_down_box, Fl::box_dx(FL_DOWN_BOX), Fl::box_dy(FL_DOWN_BOX),
+                      Fl::box_dw(FL_DOWN_BOX), Fl::box_dh(FL_DOWN_BOX));
+    if (g_plastic_thin_down)
+      Fl::set_boxtype(FL_THIN_DOWN_BOX, plastic_light_thin_down_box, Fl::box_dx(FL_THIN_DOWN_BOX),
+                      Fl::box_dy(FL_THIN_DOWN_BOX), Fl::box_dw(FL_THIN_DOWN_BOX), Fl::box_dh(FL_THIN_DOWN_BOX));
   } else if (id == "fld-classic") {
     Fl::set_boxtype(FL_UP_BOX, classic_up_box, 2, 2, 4, 4);
     Fl::set_boxtype(FL_DOWN_BOX, classic_down_box, 2, 2, 4, 4);

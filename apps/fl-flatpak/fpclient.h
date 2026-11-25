@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -98,6 +99,12 @@ std::string metadata_runtime(const std::string &keyfile);
 std::string metadata_extension_of(const std::string &keyfile);
 std::string ref_id(const std::string &ref); // app/org.foo/x86_64/stable -> org.foo
 std::string strip_markup(const std::string &appstream_description);
+// Reads an AppStream catalog (XML) as a stream into apps by id: desktop and
+// console apps with a Flatpak bundle, texts in the first of `langs` that has
+// them ("" = untranslated). `base` is the catalog's directory (cached icons).
+// False when the XML was cut short or malformed (what came before is kept).
+bool parse_appstream_text(const std::string &remote, const std::string &base, const std::string &xml,
+                          const std::vector<std::string> &langs, std::map<std::string, App> &out);
 std::string category_label(const std::string &category);
 const std::vector<std::string> &browse_categories();
 

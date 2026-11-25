@@ -410,7 +410,7 @@ package_fldesktop-packages() {
 }
 package_fldesktop-flatpak() {
   pkgdesc="fldesktop Flatpak app store"
-  depends=(fltk glib2 flatpak appstream)
+  depends=(fltk glib2 flatpak)
   optdepends=('curl: icons of apps whose catalog has only a web address for them')
   _app flatpak
 }

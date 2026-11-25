@@ -21,6 +21,10 @@ struct FileOp {
   std::mutex mtx;
   std::string current;            // file being processed
   std::vector<std::string> errors;
+  // what was done, for Undo: each source and where it is now (COPY: the copy,
+  // MOVE: the new place, TRASH: ""); items that replaced a file are left out
+  // (the old file is gone). Read it once `finished` is set.
+  std::vector<std::pair<std::string, std::string>> done;
 
   // Runs the operation in a thread; `on_done` is called in the FLTK thread.
   void start(std::function<void(FileOp *)> on_done);
@@ -32,6 +36,7 @@ private:
   void run();
   void set_current(const std::string &s);
   void error(const std::string &e);
+  void record(const std::string &src, const std::string &dst);
   static void awake_done(void *data);
 };
 

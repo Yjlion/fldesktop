@@ -95,4 +95,11 @@ std::string escape_at(const std::string &s);
 
 void about_dialog(const char *app_name, const char *icon, const char *description);
 
+// Asks for one line of text in a small dialog titled `title`: `prompt` above
+// the field, `text` in it, the first `select` bytes selected (-1: all) so that
+// typing replaces them. `ok_label` names the button ("Create", "Rename").
+// Returns false when cancelled; `text` then keeps its value.
+bool ask_text(const char *title, const char *prompt, std::string &text, int select = -1,
+              const char *ok_label = "OK");
+
 } // namespace fld

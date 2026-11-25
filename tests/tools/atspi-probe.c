@@ -218,6 +218,18 @@ int main(int argc, char **argv) {
     wait(800);
     if (!(states(banana) & (1ull << 23))) FAIL("Banana is not selected");
   }
+  /* menus: File › Save, reached and chosen like from the keyboard */
+  find("File", 33);
+  find("History", 8);
+  Obj *save = find("Save", 35);
+  if (save && result) {
+    GVariant *r = call(save->bus, save->path, "org.a11y.atspi.Action", "DoAction", g_variant_new("(i)", 0), "(b)");
+    if (r) g_variant_unref(r);
+    wait(800);
+    char *t = text(result);
+    if (strcmp(t, "saved")) FAIL("Result says '%s' after File > Save", t);
+    g_free(t);
+  }
   printf("atspi-probe: %d objects, %d failures\n", nobjs, failures);
   return failures ? 1 : 0;
 }

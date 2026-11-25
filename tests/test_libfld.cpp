@@ -49,6 +49,18 @@ static void test_util() {
   CHECK_EQ(fld::uri_decode(fld::uri_encode_path("/a b/ü%")), std::string("/a b/ü%"));
   CHECK_EQ(fld::uri_encode_path("/a b"), std::string("/a%20b"));
   CHECK_EQ(fld::shell_quote("it's"), std::string("'it'\\''s'"));
+  // natural order for file names
+  CHECK(fld::natural_compare("file2", "file10") < 0);
+  CHECK(fld::natural_compare("file10", "file100") < 0);
+  CHECK(fld::natural_compare("file101", "file1000") < 0);
+  CHECK(fld::natural_compare("File2", "file10") < 0);
+  CHECK(fld::natural_compare("a1", "a01") < 0);
+  CHECK(fld::natural_compare("a01", "a2") < 0);
+  CHECK(fld::natural_compare("img", "img1") < 0);
+  CHECK(fld::natural_compare("x9.png", "x9.jpg") > 0);
+  CHECK(fld::natural_compare("99999999999999999999b", "100000000000000000000a") < 0);
+  CHECK_EQ(fld::natural_compare("same", "same"), 0);
+  CHECK(fld::natural_compare("Abc", "abc") != 0);
 }
 
 static void test_ini() {

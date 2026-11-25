@@ -1,4 +1,6 @@
 #include "fld/widgets.h"
+#include <FL/Fl_Input.H>
+#include <FL/Fl_Return_Button.H>
 #include "fld/window_move.h"
 #include "fld/icons.h"
 #include "fld/text.h"
@@ -333,6 +335,37 @@ void about_dialog(const char *app_name, const char *icon_n, const char *descript
   w->show();
   while (w->shown()) Fl::wait();
   Fl::delete_widget(w);
+}
+
+bool ask_text(const char *title, const char *prompt, std::string &text, int select, const char *ok_label) {
+  const int W = 380, H = 128;
+  Fl_Window *w = new Fl_Window(W, H, title);
+  w->set_modal();
+  Fl_Box *l = new Fl_Box(16, 12, W - 32, 22, prompt);
+  l->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+  Fl_Input *in = new Fl_Input(16, 38, W - 32, 30);
+  in->value(text.c_str());
+  in->tooltip(prompt);
+  int n = (int)text.size();
+  int sel = select < 0 || select > n ? n : select;
+  in->insert_position(sel, 0); // selected: typing replaces it
+  static int result;
+  result = 0;
+  Fl_Button *cancel = new Fl_Button(W - 196, H - 44, 86, 30, "Cancel");
+  cancel->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
+  Fl_Return_Button *ok = new Fl_Return_Button(W - 102, H - 44, 86, 30, ok_label);
+  ok->callback([](Fl_Widget *b, void *) {
+    result = 1;
+    b->window()->hide();
+  });
+  w->end();
+  w->size_range(W, H, W, H); // not resizable: no maximize button
+  in->take_focus();
+  w->show();
+  while (w->shown()) Fl::wait();
+  if (result) text = in->value();
+  Fl::delete_widget(w);
+  return result != 0;
 }
 
 } // namespace fld

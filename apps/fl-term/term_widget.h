@@ -60,6 +60,8 @@ public:
   // search: every line (scrollback, oldest first, then the screen), one
   // char32 per column; the selection shows a match and scrolls it into view
   std::vector<std::u32string> all_lines() const;
+  // the lines shown now (UTF-8, trailing spaces trimmed), for screen readers
+  std::string screen_text() const;
   void show_match(long line, int col, int len);
   bool selection_start(long &line, int &col) const; // false without a selection
   void clear_selection();

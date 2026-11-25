@@ -10,6 +10,7 @@
 // snapshot; a worker thread answers D-Bus calls from it. Actions (a click,
 // new text, a value) are carried out on the FLTK thread.
 #pragma once
+#include <functional>
 #include <string>
 
 class Fl_Widget;
@@ -21,5 +22,10 @@ bool atspi_running();
 // Programs with their own widgets can name them: an AT-SPI role number
 // (atspi_model.h) and a name; role 0 keeps the guessed role.
 void atspi_describe(Fl_Widget *w, unsigned role, const std::string &name);
+// The text a program's own widget shows (a terminal's screen, a display),
+// read only; `text` runs on the FLTK thread a few times a second while an
+// assistive technology is listening. Call atspi_forget() before deleting w.
+void atspi_describe_text(Fl_Widget *w, std::function<std::string()> text);
+void atspi_forget(Fl_Widget *w);
 
 } // namespace fld

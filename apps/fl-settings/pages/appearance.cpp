@@ -147,6 +147,7 @@ public:
       def->selection_color(fl_darker(palette().bg));
       Fl_Input *in = new Fl_Input(wx + 196, wy, std::max(80, ww - 196), 28);
       in->value("Text field");
+      in->tooltip("Sample text field");
       Fl_Check_Button *cb = new fld::CheckButton(wx, wy + 34, 90, 26, "Check");
       cb->value(1);
       Fl_Round_Button *rb = new fld::RadioButton(wx + 92, wy + 34, 80, 26, "Radio");

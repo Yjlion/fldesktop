@@ -13,6 +13,18 @@ static double ev(const char *s, bool deg = false) {
 static bool fails(const char *s) { return !calc::evaluate(s).ok; }
 
 int main() {
+  // √ and ∛ keys apply to what is already there
+  CHECK_EQ(calc::apply_function("9", "√"), std::string("√(9)"));
+  CHECK_EQ(calc::apply_function("12×3+9", "√"), std::string("12×3+√(9)"));
+  CHECK_EQ(calc::apply_function("(2+7)", "√"), std::string("√((2+7))"));
+  CHECK_EQ(calc::apply_function("1+sin(30)", "√"), std::string("1+√(sin(30))"));
+  CHECK_EQ(calc::apply_function("", "√"), std::string("√("));
+  CHECK_EQ(calc::apply_function("2+", "√"), std::string("2+√("));
+  CHECK_EQ(calc::apply_function("ans", "∛"), std::string("∛(ans)"));
+  CHECK_NEAR(ev("√(9)"), 3);
+  CHECK_NEAR(ev("12×3+√(16)"), 40);
+  CHECK_NEAR(ev("∛(27)"), 3);
+  CHECK_NEAR(ev("2√(9)"), 6);
   CHECK_NEAR(ev("1+2*3"), 7);
   CHECK_NEAR(ev("(1+2)*3"), 9);
   CHECK_NEAR(ev("2^3^2"), 512);

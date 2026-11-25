@@ -11,6 +11,8 @@
 namespace fld {
 // without the bridge there is nobody to tell
 void atspi_describe(Fl_Widget *, unsigned, const std::string &) {}
+void atspi_describe_text(Fl_Widget *, std::function<std::string()>) {}
+void atspi_forget(Fl_Widget *) {}
 } // namespace fld
 #endif
 

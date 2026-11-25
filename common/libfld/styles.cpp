@@ -197,6 +197,12 @@ void apply_style(const std::string &id_in, int radius) {
     if (id == s.id) builtin = s.builtin;
   // the built-in scheme resets all boxtypes; ours are drawn on top of "base"
   Fl::scheme(builtin ? (id == "none" ? "base" : id.c_str()) : "base");
+  // the grey ramp back to the one of the background (plastic changes it)
+  {
+    uchar r, g, b;
+    Fl::get_color(FL_BACKGROUND_COLOR, r, g, b);
+    Fl::background(r, g, b);
+  }
   if (id == "fld-flat") {
     Fl::set_boxtype(FL_UP_BOX, flat_box, 1, 1, 2, 2);
     Fl::set_boxtype(FL_DOWN_BOX, flat_down_box, 1, 1, 2, 2);
@@ -227,6 +233,10 @@ void apply_style(const std::string &id_in, int radius) {
     Fl::set_boxtype(FL_DOWN_FRAME, flat_down_frame, 1, 1, 2, 2);
     Fl::set_boxtype(FL_THIN_DOWN_FRAME, flat_down_frame, 1, 1, 2, 2);
   } else if (id == "plastic") {
+    // Scroll bars: FLTK draws the trough flat in FL_DARK2 and the thumb in
+    // the scheme's raised box, both almost white here: a darker trough lets
+    // the thumb show (QA: "pale grey on pale grey")
+    Fl::set_color(FL_DARK2, fl_color_average(FL_BACKGROUND_COLOR, FL_BLACK, 0.72f));
     // the scheme has just set these, so they are its own functions
     // (unless they are still ours from an earlier call)
     Fl_Box_Draw_F *down = Fl::get_boxtype(FL_DOWN_BOX), *thin = Fl::get_boxtype(FL_THIN_DOWN_BOX);

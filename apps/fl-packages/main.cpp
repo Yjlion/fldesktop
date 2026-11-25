@@ -1059,14 +1059,22 @@ int check_updates_once() {
 }
 
 // The background checker sleeps between checks without any of the libraries
-// set up (a few hundred KB instead of a resident GUI program) and runs each
+// set up (still a few MB: the binary maps FLTK and the rest) and runs each
 // check as `fl-packages --check-updates --once`: first a minute after login
-// (at once with --now), then every few hours.
+// (at once with --now), then every few hours. It ends with the session: once
+// a minute it checks that the compositor still answers.
 int check_updates_scheduler(bool now) {
-  double wait = now ? 0 : 60;
+  const int slice = 60;
+  int wait = now ? 0 : 60;
   for (;;) {
-    struct timespec ts = {(time_t)wait, 0};
-    while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
+    while (wait > 0) {
+      int step = std::min(wait, slice);
+      struct timespec ts = {(time_t)step, 0};
+      while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
+      wait -= step;
+      if (!fld::wayland_display_alive()) return 0;
+    }
+    if (!fld::wayland_display_alive()) return 0;
     pid_t pid = fork();
     if (pid == 0) {
       execl("/proc/self/exe", "fl-packages", "--check-updates", "--once", (char *)nullptr);

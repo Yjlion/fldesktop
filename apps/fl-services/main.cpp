@@ -151,25 +151,55 @@ void fill() {
   show_status();
 }
 
-void load() {
-  std::string out, files;
-  if (g_init == svc::Init::Systemd) {
-    std::vector<std::string> base = {"systemctl"};
-    if (user_scope()) base.push_back("--user");
-    std::vector<std::string> a = base, b = base;
-    for (const char *x : {"list-units", "--type=service", "--all", "--plain", "--no-legend", "--no-pager"}) a.push_back(x);
-    for (const char *x : {"list-unit-files", "--type=service", "--plain", "--no-legend", "--no-pager"}) b.push_back(x);
-    fld::run_capture(a, out);
-    fld::run_capture(b, files);
-    g_all = svc::parse_systemctl_units(out);
-    svc::merge_unit_files(g_all, files);
-  } else if (g_init == svc::Init::OpenRC) {
-    fld::run_capture({"rc-status", "--all", "--nocolor"}, out);
-    fld::run_capture({"rc-update", "show", "-v"}, files);
-    g_all = svc::parse_rc_status(out);
-    svc::merge_rc_update(g_all, files);
-  }
-  fill();
+// systemctl takes a second or two: the lists are read in a thread, so the
+// window shows at once. `then` is a status message shown once they are in.
+// A newer load wins over one that is still running.
+static unsigned g_load_gen = 0;
+
+void load(const std::string &then = "") {
+  if (g_init == svc::Init::Unknown) return;
+  unsigned gen = ++g_load_gen;
+  bool user = user_scope();
+  svc::Init init = g_init;
+  if (g_all.empty()) status("Loading services…");
+  std::thread([gen, user, init, then] {
+    std::string out, files;
+    std::vector<svc::Service> all;
+    if (init == svc::Init::Systemd) {
+      std::vector<std::string> base = {"systemctl"};
+      if (user) base.push_back("--user");
+      std::vector<std::string> a = base, b = base;
+      for (const char *x : {"list-units", "--type=service", "--all", "--plain", "--no-legend", "--no-pager"}) a.push_back(x);
+      for (const char *x : {"list-unit-files", "--type=service", "--plain", "--no-legend", "--no-pager"}) b.push_back(x);
+      fld::run_capture(a, out);
+      fld::run_capture(b, files);
+      all = svc::parse_systemctl_units(out);
+      svc::merge_unit_files(all, files);
+    } else if (init == svc::Init::OpenRC) {
+      fld::run_capture({"rc-status", "--all", "--nocolor"}, out);
+      fld::run_capture({"rc-update", "show", "-v"}, files);
+      all = svc::parse_rc_status(out);
+      svc::merge_rc_update(all, files);
+    }
+    struct Loaded {
+      unsigned gen;
+      std::vector<svc::Service> all;
+      std::string then;
+    };
+    Fl::lock();
+    Fl::awake(
+        [](void *d) {
+          Loaded *r = (Loaded *)d;
+          if (r->gen == g_load_gen) {
+            g_all = std::move(r->all);
+            fill();
+            if (!r->then.empty()) status(r->then);
+          }
+          delete r;
+        },
+        new Loaded{gen, std::move(all), then});
+    Fl::unlock();
+  }).detach();
 }
 
 // runs an action in a thread (polkit may ask for a password meanwhile)
@@ -210,14 +240,13 @@ void act(const std::string &action) {
           Done *r = (Done *)d;
           g_busy = false;
           fl_cursor(FL_CURSOR_DEFAULT);
-          load();
           if (r->rc != 0) {
             std::string m = fld::trim(r->out);
             if (m.empty()) m = "it did not work";
-            status(r->action + " " + r->name + " failed: " + m);
             // the reason often is in the status
+            load(r->action + " " + r->name + " failed: " + m);
           } else {
-            status(r->action + " " + r->name + ": done");
+            load(r->action + " " + r->name + ": done");
           }
           delete r;
         },

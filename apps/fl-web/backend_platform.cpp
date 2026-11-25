@@ -242,7 +242,8 @@ WebKitWebView *PlatformBackend::create_view(WebKitWebView *related, WebKitSettin
     wv = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "display", display(), "related-view", related, nullptr));
   else
     wv = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "display", display(), "settings", settings,
-                                      "network-session", session, "user-content-manager", ucm, nullptr));
+                                      "network-session", session, "user-content-manager", ucm, "web-context",
+                                      g_web_context ? g_web_context : webkit_web_context_get_default(), nullptr));
   WPEView *v = webkit_web_view_get_wpe_view(wv);
   if (v && FLD_IS_WPE_VIEW(v)) {
     view_ = FLD_WPE_VIEW(v);

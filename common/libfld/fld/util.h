@@ -21,6 +21,13 @@ std::string fld_config_dir();              // ~/.config/fldesktop (created)
 std::string user_dir(const char *key);     // XDG user dir, e.g. "DESKTOP"
 std::string fld_data_dir();                // $FLD_DATADIR or the installed share/fldesktop
 
+// Physical memory in bytes (0 if unknown)
+unsigned long long total_ram_bytes();
+// The Wayland compositor of this session still accepts connections (true
+// when WAYLAND_DISPLAY is not set: nothing to check). Lets background
+// helpers end with the session.
+bool wayland_display_alive();
+
 // Filesystem helpers
 bool file_exists(const std::string &path);
 bool is_dir(const std::string &path);

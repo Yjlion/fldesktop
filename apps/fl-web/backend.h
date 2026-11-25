@@ -29,6 +29,10 @@ struct Frame {
 
 enum Mods { MOD_CTRL = 1, MOD_SHIFT = 2, MOD_ALT = 4, MOD_META = 8, MOD_BUTTON1 = 16, MOD_BUTTON2 = 32, MOD_BUTTON3 = 64 };
 
+// The web context the views are created in (memory limits on small
+// machines; main.cpp), or nullptr for WebKit's default one
+extern WebKitWebContext *g_web_context;
+
 class Backend {
 public:
   virtual ~Backend() = default;

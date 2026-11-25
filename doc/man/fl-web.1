@@ -34,8 +34,12 @@ left out. "Block Ads on This Site" in the menu turns blocking off for the site o
 page, and Settings turns it off everywhere. Private windows block too.
 .PP
 The developer tools (F12) are WebKit's Web Inspector: fl-web serves it on a loopback port
-chosen at start, and F12 opens it in a window that lists the pages to inspect. They can be
-turned off in Settings.
+chosen at start, and F12 opens it in a window that lists the pages to inspect. They are off
+by default (the inspector server costs memory in every session); the first F12 offers to
+turn them on and restarts fl-web with the same tabs. Settings turns them on or off.
+.PP
+On machines with less than 4 GB of memory fl-web asks WebKit to free memory early (its
+processes aim to stay within a quarter of the RAM) and to keep no cache of visited pages.
 .SS Reader mode
 F9 (or Reader Mode in the menu) shows the article of the current page alone: its title, the
 site and author, and the text, headings, lists, quotes, code and pictures, without menus,

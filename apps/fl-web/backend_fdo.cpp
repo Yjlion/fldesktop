@@ -80,7 +80,8 @@ public:
       wv = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "backend", wb, "related-view", related, nullptr));
     else
       wv = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "backend", wb, "settings", settings,
-                                        "network-session", session, "user-content-manager", ucm, nullptr));
+                                        "network-session", session, "user-content-manager", ucm, "web-context",
+                                        g_web_context ? g_web_context : webkit_web_context_get_default(), nullptr));
     backend_ = vb;
     wpe_view_backend_add_activity_state(backend_, wpe_view_activity_state_in_window);
     return wv;

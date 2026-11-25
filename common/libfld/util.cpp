@@ -17,6 +17,8 @@
 #include <signal.h>
 #include <sstream>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -652,6 +654,33 @@ void restart_self(int argc, char **argv) {
   if (n <= 0) return;
   exe[n] = 0;
   execv(exe, argv);
+}
+
+unsigned long long total_ram_bytes() {
+  long pages = sysconf(_SC_PHYS_PAGES), page = sysconf(_SC_PAGESIZE);
+  return pages > 0 && page > 0 ? (unsigned long long)pages * (unsigned long long)page : 0;
+}
+
+bool wayland_display_alive() {
+  const char *d = getenv("WAYLAND_DISPLAY");
+  if (!d || !*d) return true;
+  std::string path = d;
+  if (path[0] != '/') {
+    const char *rt = getenv("XDG_RUNTIME_DIR");
+    if (!rt || !*rt) return true;
+    path = std::string(rt) + "/" + path;
+  }
+  struct sockaddr_un a = {};
+  a.sun_family = AF_UNIX;
+  if (path.size() >= sizeof a.sun_path) return true;
+  memcpy(a.sun_path, path.c_str(), path.size() + 1);
+  int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  if (fd < 0) return true;
+  bool ok = connect(fd, (struct sockaddr *)&a, sizeof a) == 0;
+  int err = errno;
+  close(fd);
+  // only a missing socket or one nobody listens on means the session ended
+  return ok || (err != ENOENT && err != ECONNREFUSED);
 }
 
 } // namespace fld

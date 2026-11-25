@@ -69,7 +69,7 @@ struct Config {
   bool javascript = true;
   bool restore = false; // reopen the last session's tabs
   bool natural_scroll = false; // the page follows the fingers (wheel down scrolls up)
-  bool devtools = true;        // developer tools (F12) through WebKit's inspector server
+  bool devtools = false;       // developer tools (F12) through WebKit's inspector server (a restart to change)
   bool menubar = false;        // a menu bar above the tabs
   bool block_ads = true;       // content blocking with EasyList / EasyPrivacy
   bool easylist = true, easyprivacy = true;
@@ -873,6 +873,7 @@ int BrowserWindow::handle(int e) {
 }
 
 static void save_session();
+static std::vector<std::string> session_uris();
 
 void BrowserWindow::hide() {
   if (std::count_if(g_windows.begin(), g_windows.end(), [](Browser *w) { return !w->priv; }) == 1 && !b->priv)
@@ -1529,7 +1530,7 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
     m.item("Downloads…", cmd(C_DOWNLOADS), 0, FL_CTRL + 'j');
     password_items(m);
     m.divider();
-    m.item("Developer Tools", cmd(C_DEVTOOLS), g_inspector_port ? 0 : FL_MENU_INACTIVE, FL_F + 12);
+    m.item("Developer Tools", cmd(C_DEVTOOLS), 0, FL_F + 12);
     m.item("View Page Source", cmd(C_SOURCE), tab() && !tab()->uri.empty() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'u');
     m.item("Settings…", cmd(C_SETTINGS));
     m.item("About Web", cmd(C_ABOUT)).divider();
@@ -1571,7 +1572,7 @@ void Browser::build_menu(fld::Menu &m, bool for_bar) {
   adblock_item(m);
   m.divider();
   m.item("View Page Source", cmd(C_SOURCE), 0, FL_CTRL + 'u');
-  m.item("Developer Tools", cmd(C_DEVTOOLS), g_inspector_port ? 0 : FL_MENU_INACTIVE, FL_F + 12);
+  m.item("Developer Tools", cmd(C_DEVTOOLS), 0, FL_F + 12);
   m.end_submenu();
   m.submenu("&History");
   m.item("Back", cmd(C_BACK), 0, FL_ALT + FL_Left);
@@ -1981,7 +1982,20 @@ static void show_passwords() {
 // F12: WebKit's inspector frontend, served on loopback, in a window of its own
 void Browser::open_devtools() {
   if (!g_inspector_port) {
-    fl_message("The developer tools are turned off in Settings.");
+    // WebKit starts its inspector server only at startup
+    if (fl_choice("The developer tools are off. Turn them on and restart Web?", "Cancel", "Restart", nullptr) != 1)
+      return;
+    g_cfg.devtools = true;
+    g_cfg.save();
+    save_session();
+    // the same tabs again, in a new process with the inspector server
+    std::vector<std::string> args = {"fl-web"};
+    for (auto &u : session_uris()) args.push_back(u);
+    std::vector<char *> argv;
+    for (auto &a : args) argv.push_back((char *)a.c_str());
+    argv.push_back(nullptr);
+    fld::restart_self((int)args.size(), argv.data());
+    fl_alert("Web could not restart itself. Close it and open it again.");
     return;
   }
   Browser *b = new_window({"http://127.0.0.1:" + std::to_string(g_inspector_port) + "/"}, false);
@@ -2360,14 +2374,22 @@ static Browser *new_window(const std::vector<std::string> &urls, bool priv) {
   return b;
 }
 
-static void save_session() {
-  std::string data;
+// the open tabs, but not those of private windows (they leave no trace)
+// nor the developer tools
+static std::vector<std::string> session_uris() {
+  std::vector<std::string> out;
   for (auto *w : g_windows) {
-    if (w->priv) continue; // private windows leave no trace
+    if (w->priv) continue;
     for (auto *t : w->tabs)
       if (!t->uri.empty() && !fld::starts_with(t->uri, "http://127.0.0.1:" + std::to_string(g_inspector_port) + "/"))
-        data += one_line(t->uri) + "\n";
+        out.push_back(one_line(t->uri));
   }
+  return out;
+}
+
+static void save_session() {
+  std::string data;
+  for (auto &u : session_uris()) data += u + "\n";
   fld::mkdir_p(data_dir());
   fld::write_file(session_path(), data);
 }
@@ -2448,6 +2470,25 @@ int main(int argc, char **argv) {
   if (GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr)) g_object_unref(bus);
   g_network_monitor_get_default();
   g_proxy_resolver_get_default();
+
+  // Under 4 GB of RAM: WebKit frees memory early (its processes are asked to
+  // stay within a quarter of the RAM) and keeps no page cache, before any
+  // WebKit object exists
+  unsigned long long ram = fld::total_ram_bytes();
+  if (ram && ram < (4ull << 30)) {
+    guint limit_mb = (guint)std::max(256ull, ram / 4 / (1024 * 1024));
+    WebKitMemoryPressureSettings *mp = webkit_memory_pressure_settings_new();
+    webkit_memory_pressure_settings_set_memory_limit(mp, limit_mb);
+    webkit_memory_pressure_settings_set_conservative_threshold(mp, 0.33);
+    webkit_network_session_set_memory_pressure_settings(mp);
+    GObjectClass *cls = G_OBJECT_CLASS(g_type_class_ref(WEBKIT_TYPE_WEB_CONTEXT));
+    if (g_object_class_find_property(cls, "memory-pressure-settings"))
+      web::g_web_context = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT, "memory-pressure-settings", mp, nullptr));
+    g_type_class_unref(cls);
+    webkit_memory_pressure_settings_free(mp);
+    webkit_web_context_set_cache_model(web::g_web_context ? web::g_web_context : webkit_web_context_get_default(),
+                                       WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
+  }
 
   std::string cache = fld::cache_home() + "/fl-web";
   g_session =webkit_network_session_new(data_dir().c_str(), cache.c_str());

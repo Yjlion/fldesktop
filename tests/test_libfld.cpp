@@ -298,6 +298,13 @@ static void test_symbolic_recolor() {
   CHECK_EQ(fld::recolor_symbolic_svg("<path fill=\"#e01b24\"/>", W), "<path fill=\"#e01b24\"/>");
   CHECK_EQ(fld::recolor_symbolic_svg("<path fill=\"#ffffff\"/>", W), "<path fill=\"#ffffff\"/>");
   CHECK_EQ(fld::recolor_symbolic_svg("<use href=\"#abc\" fill=\"url(#aaa)\"/>", W).find("url(#aaa)") != std::string::npos, true);
+  // single-colour icons that ui_icon() draws in the text colour on dark themes
+  CHECK(fld::svg_is_monochrome("<svg><rect fill=\"#3d4046\"/><path stroke=\"#3d4046\"/></svg>"));
+  CHECK(fld::svg_is_monochrome("<svg><path d=\"M0 0h4v4z\"/></svg>")); // the default black
+  CHECK(fld::svg_is_monochrome("<svg><path fill=\"#222\"/><path fill=\"#fff\"/></svg>"));
+  CHECK(!fld::svg_is_monochrome("<svg><path fill=\"#3584e4\"/></svg>"));
+  CHECK(!fld::svg_is_monochrome("<svg><path fill=\"#222\"/><path fill=\"#c0c0c0\"/></svg>"));
+  CHECK(!fld::svg_is_monochrome("<svg><linearGradient id=\"g\"/><path fill=\"url(#g)\"/></svg>"));
 }
 
 // 10 px per character (not byte), so the tests need no fonts
@@ -605,6 +612,18 @@ int main() {
     CHECK(png.size() > 24 && (uchar)png[19] == 32 && (uchar)png[23] == 32); // IHDR 32x32
     CHECK(fld::initial_avatar_png("alice", "Alice", 64, png));
     CHECK(png.size() > 24 && png.compare(1, 3, "PNG") == 0 && (uchar)png[19] == 64);
+  }
+  {
+    // background helpers end with the session
+    std::string saved = getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY") : "";
+    bool had = getenv("WAYLAND_DISPLAY") != nullptr;
+    unsetenv("WAYLAND_DISPLAY");
+    CHECK(fld::wayland_display_alive()); // nothing to check
+    setenv("WAYLAND_DISPLAY", "/nonexistent/fld-test-wayland-0", 1);
+    CHECK(!fld::wayland_display_alive());
+    if (had) setenv("WAYLAND_DISPLAY", saved.c_str(), 1);
+    else unsetenv("WAYLAND_DISPLAY");
+    CHECK(fld::total_ram_bytes() > (64ull << 20));
   }
   return test_result("libfld");
 }

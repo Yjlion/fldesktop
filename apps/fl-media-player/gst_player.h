@@ -16,10 +16,15 @@ class Player {
 public:
   Player();
   ~Player();
+  // starts GStreamer (done by the first item played); false with init_error()
+  bool ensure_engine();
   bool ok() const { return playbin_ != nullptr; }
   const std::string &init_error() const { return init_error_; }
   fgst::FrameSlot &frames() { return slot_; }
   GstElement *video_sink() const { return vsink_; }
+  // software rendering: frames scaled to fit w x h (0, 0: as they are);
+  // kept for an engine started later
+  void set_scale_to(int w, int h);
 
   // playlist
   // a media file, a URL, or a playlist file (.m3u, .pls: its entries)
@@ -128,6 +133,7 @@ private:
   double pending_seek_ = -1; // resume position once the media is ready
   std::string tag_title_;
   double last_pos_ = -1, last_dur_ = -1;
+  int scale_w_ = 0, scale_h_ = 0;
 
   void start_item(int i, bool play);
   void set_state_playing(bool playing);

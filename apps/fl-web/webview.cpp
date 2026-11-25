@@ -17,6 +17,8 @@
 
 namespace web {
 
+WebKitWebContext *g_web_context = nullptr;
+
 namespace {
 
 uint32_t now_ms() { return (uint32_t)(g_get_monotonic_time() / 1000); }

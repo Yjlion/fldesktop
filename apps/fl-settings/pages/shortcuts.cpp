@@ -1,4 +1,5 @@
 // Shortcuts: the key bindings of fl-wm ([keys] in wm.ini)
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -33,36 +34,36 @@ struct Action {
 };
 // kActions[0] is the default for a new shortcut
 const Action kActions[] = {
-    {"exec", "Run a command", kCommand},
-    {"launcher", "Open the application menu", kNoArg},
-    {"close", "Close window", kNoArg},
-    {"maximize", "Maximize / restore", kNoArg},
-    {"minimize", "Minimize", kNoArg},
-    {"fullscreen", "Fullscreen", kNoArg},
-    {"snap-left", "Snap to the left", kNoArg},
-    {"snap-right", "Snap to the right", kNoArg},
-    {"snap-up", "Snap up (quarter, maximize)", kNoArg},
-    {"snap-down", "Snap down (quarter, restore, minimize)", kNoArg},
-    {"snap-third-left", "Snap to the left third", kNoArg},
-    {"snap-third-right", "Snap to the right third", kNoArg},
-    {"overview", "Overview of the windows", kNoArg},
-    {"resize-mode", "Resize with the keyboard", kNoArg},
-    {"cycle", "Next window", kNoArg},
-    {"cycle-back", "Previous window", kNoArg},
-    {"show-desktop", "Show desktop", kNoArg},
-    {"workspace", "Go to workspace", kWorkspace},
-    {"workspace-next", "Next workspace", kNoArg},
-    {"workspace-prev", "Previous workspace", kNoArg},
-    {"move-to-workspace", "Move window to workspace", kWorkspace},
-    {"move-to-workspace-next", "Move window to the next workspace", kNoArg},
-    {"move-to-workspace-prev", "Move window to the previous workspace", kNoArg},
-    {"sticky", "Show window on all workspaces", kNoArg},
-    {"zoom-in", "Zoom in (magnifier)", kNoArg},
-    {"zoom-out", "Zoom out", kNoArg},
-    {"zoom-reset", "End the zoom", kNoArg},
-    {"lock", "Lock the screen", kNoArg},
-    {"reload", "Reload configuration", kNoArg},
-    {"quit", "Log out (quit fl-wm)", kNoArg},
+    {"exec", N_("Run a command"), kCommand},
+    {"launcher", N_("Open the application menu"), kNoArg},
+    {"close", N_("Close window"), kNoArg},
+    {"maximize", N_("Maximize / restore"), kNoArg},
+    {"minimize", N_("Minimize"), kNoArg},
+    {"fullscreen", N_("Fullscreen"), kNoArg},
+    {"snap-left", N_("Snap to the left"), kNoArg},
+    {"snap-right", N_("Snap to the right"), kNoArg},
+    {"snap-up", N_("Snap up (quarter, maximize)"), kNoArg},
+    {"snap-down", N_("Snap down (quarter, restore, minimize)"), kNoArg},
+    {"snap-third-left", N_("Snap to the left third"), kNoArg},
+    {"snap-third-right", N_("Snap to the right third"), kNoArg},
+    {"overview", N_("Overview of the windows"), kNoArg},
+    {"resize-mode", N_("Resize with the keyboard"), kNoArg},
+    {"cycle", N_("Next window"), kNoArg},
+    {"cycle-back", N_("Previous window"), kNoArg},
+    {"show-desktop", N_("Show desktop"), kNoArg},
+    {"workspace", N_("Go to workspace"), kWorkspace},
+    {"workspace-next", N_("Next workspace"), kNoArg},
+    {"workspace-prev", N_("Previous workspace"), kNoArg},
+    {"move-to-workspace", N_("Move window to workspace"), kWorkspace},
+    {"move-to-workspace-next", N_("Move window to the next workspace"), kNoArg},
+    {"move-to-workspace-prev", N_("Move window to the previous workspace"), kNoArg},
+    {"sticky", N_("Show window on all workspaces"), kNoArg},
+    {"zoom-in", N_("Zoom in (magnifier)"), kNoArg},
+    {"zoom-out", N_("Zoom out"), kNoArg},
+    {"zoom-reset", N_("End the zoom"), kNoArg},
+    {"lock", N_("Lock the screen"), kNoArg},
+    {"reload", N_("Reload configuration"), kNoArg},
+    {"quit", N_("Log out (quit fl-wm)"), kNoArg},
 };
 
 // "workspace 3" -> {"workspace", "3"}
@@ -78,7 +79,7 @@ std::string describe(const std::string &action) {
   if (id == "exec") return "Run: " + arg;
   if (id == "portal-shortcut") return "Application shortcut (portal)";
   for (auto &x : kActions)
-    if (id == x.id) return x.arg == kWorkspace ? std::string(x.label) + " " + arg : x.label;
+    if (id == x.id) return x.arg == kWorkspace ? std::string(_(x.label)) + " " + arg : _(x.label);
   return trim(action);
 }
 
@@ -186,7 +187,7 @@ void app_shortcuts_dialog() {
         list.add((name + "\t" + (combo.empty() ? "(none)" : combo) + "\t" + desc).c_str());
         rows.push_back({app, id});
       }
-    if (rows.empty()) list.add("No application has asked for shortcuts.");
+    if (rows.empty()) list.add(_("No application has asked for shortcuts."));
   };
   fill();
   Fl_Button rm(16, 314, 110, 30, "Remove");
@@ -227,7 +228,7 @@ void hot_corners_dialog() {
   Fl_Choice *ch[4];
   for (int i = 0; i < 4; i++) {
     ch[i] = new Fl_Choice(130, 16 + i * 38, 250, 28, labels[i]);
-    ch[i]->add("Nothing|Overview of the windows|Applications|Show the desktop|Lock the screen|Next workspace");
+    ch[i]->add(_("Nothing|Overview of the windows|Applications|Show the desktop|Lock the screen|Next workspace"));
     std::string cur = wm.ini.get("behaviour", keys[i], "");
     ch[i]->value(0);
     for (int k = 1; k < 6; k++)
@@ -259,8 +260,8 @@ public:
     resizable(g);
     int lw = std::min(W - 48, 700);
     Fl_Check_Button *sw = new fld::CheckButton(X + 24, cy, lw, 28,
-                                              "Window switching (Alt+Tab) shows a list of the windows");
-    sw->tooltip("Off: each Alt+Tab raises the next window directly");
+                                              _("Window switching (Alt+Tab) shows a list of the windows"));
+    sw->tooltip(_("Off: each Alt+Tab raises the next window directly"));
     sw->value(wm.ini.get_bool("behaviour", "switcher", true));
     sw->callback([](Fl_Widget *w, void *d) {
       ShortcutsPage *p = (ShortcutsPage *)d;
@@ -270,7 +271,7 @@ public:
     }, this);
     cy += 30;
     Fl_Check_Button *assist = new fld::CheckButton(X + 24, cy, lw, 28,
-                                                  "Snap assist: after snapping a window to a side, offer the others for the rest");
+                                                  _("Snap assist: after snapping a window to a side, offer the others for the rest"));
     assist->value(wm.ini.get_bool("behaviour", "snap_assist", true));
     assist->callback([](Fl_Widget *w, void *d) {
       ShortcutsPage *p = (ShortcutsPage *)d;
@@ -279,13 +280,13 @@ public:
       save_wm(p->wm);
     }, this);
     cy += 36;
-    Fl_Spinner *ws = new Fl_Spinner(X + 24 + 160, cy, 70, 28, "Workspaces:");
+    Fl_Spinner *ws = new Fl_Spinner(X + 24 + 160, cy, 70, 28, _("Workspaces:"));
     ws->align(FL_ALIGN_LEFT);
     ws->type(FL_INT_INPUT);
     ws->range(1, 9);
     ws->step(1);
     ws->value(std::clamp(wm.ini.get_int("behaviour", "workspaces", 4), 1, 9));
-    ws->tooltip("How many workspaces there are (all screens switch together)");
+    ws->tooltip(_("How many workspaces there are (all screens switch together)"));
     ws->when(FL_WHEN_CHANGED); // a typed number applies without Enter
     ws->callback([](Fl_Widget *w, void *d) {
       ShortcutsPage *p = (ShortcutsPage *)d;
@@ -295,15 +296,15 @@ public:
       p->wm.ini.set_int("behaviour", "workspaces", n);
       save_wm(p->wm);
     }, this);
-    Fl_Choice *dm = new Fl_Choice(X + 24 + 420, cy, 160, 28, "Move windows with:");
+    Fl_Choice *dm = new Fl_Choice(X + 24 + 420, cy, 160, 28, _("Move windows with:"));
     dm->align(FL_ALIGN_LEFT);
-    dm->add("Super+drag|Alt+drag|Super or Alt+drag|Only the title bar");
+    dm->add(_("Super+drag|Alt+drag|Super or Alt+drag|Only the title bar"));
     {
       std::string v = wm.ini.get("behaviour", "drag_modifier", "super+alt");
       bool su = v.find("super") != std::string::npos, al = v.find("alt") != std::string::npos;
       dm->value(su && al ? 2 : su ? 0 : al ? 1 : 3);
     }
-    dm->tooltip("Hold this key and drag with the left button to move a window, with the right button to resize it");
+    dm->tooltip(_("Hold this key and drag with the left button to move a window, with the right button to resize it"));
     dm->callback([](Fl_Widget *w, void *d) {
       static const char *vals[] = {"super", "alt", "super+alt", "none"};
       ShortcutsPage *p = (ShortcutsPage *)d;
@@ -353,17 +354,17 @@ public:
     int ry = two_rows ? by + 36 : by;
     int rx = two_rows ? X + 24 : X + 24 + lw - right_w;
     Fl_Button *apps = place(right_l[0], rx, ry);
-    apps->tooltip("Global shortcuts that applications asked for (through the desktop portal)");
+    apps->tooltip(_("Global shortcuts that applications asked for (through the desktop portal)"));
     apps->callback([](Fl_Widget *, void *) { app_shortcuts_dialog(); });
     Fl_Button *corners = place(right_l[1], rx, ry);
-    corners->tooltip("What pushing the pointer into a corner of the screen does");
+    corners->tooltip(_("What pushing the pointer into a corner of the screen does"));
     corners->callback([](Fl_Widget *, void *) { hot_corners_dialog(); });
     Fl_Button *reset = place(right_l[2], rx, ry);
     fld::set_context_menu(list, [add, ed, rm, reset](fld::Menu &m) {
       m.button(add).button(ed).button(rm).divider().button(reset);
     });
     reset->callback([](Fl_Widget *, void *d) {
-      if (fl_choice("Replace all shortcuts with the defaults?", "Cancel", "Reset", nullptr) != 1) return;
+      if (fl_choice(_("Replace all shortcuts with the defaults?"), _("Cancel"), _("Reset"), nullptr) != 1) return;
       ShortcutsPage *p = (ShortcutsPage *)d;
       p->load_defaults();
       p->fill();
@@ -408,11 +409,11 @@ public:
     int idx = list->value() - 1;
     if (!add && idx < 0) return;
     Fl_Double_Window w(460, 220, add ? "Add Shortcut" : "Edit Shortcut");
-    new Fl_Box(10, 16, 110, 30, "Keys:");
+    new Fl_Box(10, 16, 110, 30, _("Keys:"));
     KeyCapture *keys = new KeyCapture(120, 16, 330, 30);
-    Fl_Choice *action = new Fl_Choice(120, 56, 330, 30, "Action:");
-    for (auto &a : kActions) action->add(a.label);
-    Fl_Input *cmd = new Fl_Input(120, 96, 330, 30, "Command:");
+    Fl_Choice *action = new Fl_Choice(120, 56, 330, 30, _("Action:"));
+    for (auto &a : kActions) action->add(_(a.label));
+    Fl_Input *cmd = new Fl_Input(120, 96, 330, 30, _("Command:"));
     std::string cur = add ? "exec " : bindings[idx].second;
     if (!add) {
       keys->combo = bindings[idx].first;
@@ -435,8 +436,8 @@ public:
     };
     action->callback(sync, cmd);
     sync(nullptr, cmd);
-    Fl_Button *cancel = new Fl_Button(240, 176, 100, 30, "Cancel");
-    Fl_Return_Button *ok = new Fl_Return_Button(350, 176, 100, 30, "OK");
+    Fl_Button *cancel = new Fl_Button(240, 176, 100, 30, _("Cancel"));
+    Fl_Return_Button *ok = new Fl_Return_Button(350, 176, 100, 30, _("OK"));
     static int result;
     result = 0;
     cancel->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
@@ -454,7 +455,7 @@ public:
     } else if (chosen.arg == kWorkspace) {
       int n = atoi(cmd->value());
       if (n < 1 || n > 9) {
-        fl_alert("The workspace is a number from 1 to 9.");
+        fl_alert(_("The workspace is a number from 1 to 9."));
         return;
       }
       act += " " + std::to_string(n);
@@ -462,7 +463,7 @@ public:
     // one action per key combination
     for (size_t i = 0; i < bindings.size(); i++)
       if ((add || (int)i != idx) && lower(bindings[i].first) == lower(keys->combo)) {
-        if (fl_choice("%s is already used for \"%s\". Replace it?", "Cancel", "Replace", nullptr,
+        if (fl_choice(_("%s is already used for \"%s\". Replace it?"), _("Cancel"), _("Replace"), nullptr,
                       keys->combo.c_str(), describe(bindings[i].second).c_str()) != 1)
           return;
         bindings.erase(bindings.begin() + i);
@@ -489,8 +490,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new ShortcutsPage(x, y, w,
 } // namespace
 
 PageInfo page_shortcuts() {
-  return {"shortcuts", "Shortcuts", "preferences-desktop-keyboard-shortcuts", "Hardware",
-          "keyboard shortcuts hotkeys bindings keys super launcher", create};
+  return {"shortcuts", _("Shortcuts"), "preferences-desktop-keyboard-shortcuts", "Hardware",
+          _("keyboard shortcuts hotkeys bindings keys super launcher"), create};
 }
 
 } // namespace fld

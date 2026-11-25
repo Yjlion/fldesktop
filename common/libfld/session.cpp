@@ -1,3 +1,4 @@
+#include "fld/i18n.h"
 #include "fld/session.h"
 #include "fld/util.h"
 
@@ -64,7 +65,7 @@ struct PowerFailure {
 
 void show_power_failure(void *d) {
   std::unique_ptr<PowerFailure> f(static_cast<PowerFailure *>(d));
-  fl_alert("Could not %s the computer.\n\n%s", power_verb(f->action), f->message.c_str());
+  fl_alert(_("Could not %s the computer.\n\n%s"), power_verb(f->action), f->message.c_str());
 }
 
 #ifdef FLD_HAVE_GIO
@@ -254,15 +255,15 @@ bool confirm_power(PowerAction a) {
       suspend();
       return true;
     case PowerAction::LogOut:
-      if (fl_choice("Log out of this session?", "Cancel", "Log Out", nullptr) != 1) return false;
+      if (fl_choice(_("Log out of this session?"), _("Cancel"), _("Log Out"), nullptr) != 1) return false;
       log_out();
       return true;
     case PowerAction::Reboot:
-      if (fl_choice("Restart the computer?", "Cancel", "Restart", nullptr) != 1) return false;
+      if (fl_choice(_("Restart the computer?"), _("Cancel"), _("Restart"), nullptr) != 1) return false;
       reboot();
       return true;
     case PowerAction::PowerOff:
-      if (fl_choice("Shut down the computer?", "Cancel", "Shut Down", nullptr) != 1) return false;
+      if (fl_choice(_("Shut down the computer?"), _("Cancel"), _("Shut Down"), nullptr) != 1) return false;
       power_off();
       return true;
   }

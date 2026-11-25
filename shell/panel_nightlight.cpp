@@ -1,6 +1,7 @@
 // fl-panel: night light ([NightLight] in desktop.ini, applied by
 // fl-nightlight). A moon button shows while night light is on; a click or the
 // panel's menu turns it on and off.
+#include "fld/i18n.h"
 #include "fld/config_watch.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
@@ -54,7 +55,7 @@ fld::FlatButton *nightlight_indicator_create() {
   g_btn->hover_color(panel_hover());
   if (Fl_Image *i = fld::symbolic_icon("weather-clear-night", 18, panel_fg())) g_btn->icon_image(i);
   else g_btn->icon_name("weather-clear-night", 20);
-  g_btn->tooltip("Night light is on. Click to turn it off.");
+  g_btn->tooltip(_("Night light is on. Click to turn it off."));
   g_btn->callback([](Fl_Widget *, void *) { set_enabled(false); });
   panel_context_menu(g_btn, [](fld::Menu &m) {
     nightlight_menu_items(m);

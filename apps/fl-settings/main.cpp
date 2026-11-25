@@ -1,4 +1,5 @@
 // fl-settings: the fldesktop settings center
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Browser_.H>
 #include <FL/Fl_Double_Window.H>
@@ -49,7 +50,21 @@ struct Entry {
 static std::vector<Entry> g_entries;
 static std::vector<fld::DesktopEntry> g_external;
 
-static const char *kCategories[] = {"Personal", "Hardware", "Network", "System"};
+static const char *kCategories[] = {N_("Personal"), N_("Hardware"), N_("Network"), N_("System")};
+
+// the search index in the user's language: the generated table holds the
+// labels as they are in the source (the msgids)
+static const std::vector<settings_search::Item> &translated_index() {
+  static std::vector<settings_search::Item> items;
+  static std::vector<std::string> texts;
+  if (items.empty()) {
+    auto &src = settings_search::index();
+    texts.reserve(src.size());
+    for (auto &it : src) texts.push_back(settings_search::clean_label(_(it.label)));
+    for (size_t i = 0; i < src.size(); i++) items.push_back({src[i].page, texts[i].c_str()});
+  }
+  return items;
+}
 
 static bool matches(const std::string &text, const std::string &q) {
   return fld::lower(text).find(q) != std::string::npos;
@@ -72,7 +87,7 @@ static void rebuild_list() {
     for (auto &p : fld::all_pages()) {
       if (p.category != cat) continue;
       if (!q.empty() && !matches(p.title, q) && !matches(p.keywords, q) && !matches(p.id, q)) continue;
-      if (!any) { add_header(cat); any = true; }
+      if (!any) { add_header(_(cat)); any = true; }
       Entry e;
       e.page_id = p.id;
       e.label = p.title;
@@ -84,12 +99,12 @@ static void rebuild_list() {
   // single settings on all pages: "Tap to click — Mouse & Touchpad"
   if (!q.empty()) {
     bool first = true;
-    for (auto &h : settings_search::search(q, settings_search::index(), 12)) {
+    for (auto &h : settings_search::search(q, translated_index(), 12)) {
       const fld::PageInfo *pi = nullptr;
       for (auto &p : fld::all_pages())
         if (p.id == h.page) pi = &p;
       if (!pi) continue; // a page this build does not have
-      if (first) add_header("Settings");
+      if (first) add_header(_("Settings"));
       first = false;
       Entry e;
       e.page_id = h.page;
@@ -103,7 +118,7 @@ static void rebuild_list() {
   bool any = false;
   for (auto &d : g_external) {
     if (!q.empty() && !matches(d.name, q) && !matches(d.comment, q)) continue;
-    if (!any) { add_header("More"); any = true; }
+    if (!any) { add_header(_("More")); any = true; }
     Entry e;
     e.desktop_id = d.id;
     e.label = d.name;
@@ -247,7 +262,7 @@ static void show_page(const std::string &id) {
   g->show();
   g_content->place(g);
   g_current = id;
-  std::string title = info->title + " – Settings";
+  std::string title = fld::format(_("%s – Settings"), {info->title});
   g_win->copy_label(title.c_str());
   int line = g_list->value();
   bool on_result = line >= 1 && line <= (int)g_entries.size() && g_entries[(size_t)line - 1].page_id == id;
@@ -333,6 +348,7 @@ static void list_cb(Fl_Widget *, void *) {
 }
 
 int main(int argc, char **argv) {
+  fld::i18n_init(); // the page titles are read before init_app()
   std::string start;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
@@ -376,8 +392,8 @@ int main(int argc, char **argv) {
   Fl_Group *side = new Fl_Group(0, 0, SIDE, H);
   side->box(FL_FLAT_BOX);
   side->color(p.bg);
-  g_search = new fld::SearchInput(10, 10, SIDE - 20, 30, "Search settings");
-  g_search->tooltip("Search settings");
+  g_search = new fld::SearchInput(10, 10, SIDE - 20, 30, _("Search settings"));
+  g_search->tooltip(_("Search settings"));
   g_search->when(FL_WHEN_CHANGED);
   g_search->callback([](Fl_Widget *, void *) {
     rebuild_list();

@@ -1,4 +1,5 @@
 // Network: the NetworkManager view of fl-network
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 
 #include "fld/theme.h"
@@ -30,8 +31,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new NetworkPage(x, y, w, h
 } // namespace
 
 PageInfo page_network() {
-  return {"network", "Network", "network-workgroup", "Network",
-          "network wifi wi-fi wireless ethernet wired ip address dns gateway vpn networkmanager", create};
+  return {"network", _("Network"), "network-workgroup", "Network",
+          _("network wifi wi-fi wireless ethernet wired ip address dns gateway vpn networkmanager"), create};
 }
 
 } // namespace fld

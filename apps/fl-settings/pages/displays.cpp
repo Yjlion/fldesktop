@@ -1,4 +1,5 @@
 // Displays: resolution, scale, rotation and position through wlr-output-management
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -281,20 +282,20 @@ public:
     Form f(g, X + 24 + 210, cy + 180, lw - 210, 110);
     int wx, wy, ww;
     f.row("", 26, wx, wy, ww);
-    enabled = new fld::CheckButton(wx, wy, ww, 26, "Enabled");
+    enabled = new fld::CheckButton(wx, wy, ww, 26, _("Enabled"));
     enabled->callback([](Fl_Widget *, void *d) { ((DisplaysPage *)d)->edit(); }, this);
-    f.row("Resolution:", 28, wx, wy, ww);
+    f.row(_("Resolution:"), 28, wx, wy, ww);
     mode = new Fl_Choice(wx, wy, ww, 28);
     mode->callback([](Fl_Widget *, void *d) { ((DisplaysPage *)d)->edit(); }, this);
-    f.row("Scale:", 28, wx, wy, ww);
+    f.row(_("Scale:"), 28, wx, wy, ww);
     scale = new Fl_Choice(wx, wy, 140, 28);
     for (double s : kScales) scale->add((std::to_string((int)lround(s * 100)) + "\\%").c_str());
     scale->callback([](Fl_Widget *, void *d) { ((DisplaysPage *)d)->edit(); }, this);
-    f.row("Rotation:", 28, wx, wy, ww);
+    f.row(_("Rotation:"), 28, wx, wy, ww);
     rotation = new Fl_Choice(wx, wy, 140, 28);
     for (auto r : kRotations) rotation->add(r);
     rotation->callback([](Fl_Widget *, void *d) { ((DisplaysPage *)d)->edit(); }, this);
-    f.row("Position:", 28, wx, wy, ww);
+    f.row(_("Position:"), 28, wx, wy, ww);
     px = new Fl_Spinner(wx, wy, 100, 28);
     py = new Fl_Spinner(wx + 110, wy, 100, 28);
     for (Fl_Spinner *s : {px, py}) {
@@ -302,7 +303,7 @@ public:
       s->step(10);
       s->callback([](Fl_Widget *, void *d) { ((DisplaysPage *)d)->edit(); }, this);
     }
-    apply_btn = new Fl_Button(X + 24 + lw - 120, cy + 400, 120, 32, "Apply");
+    apply_btn = new Fl_Button(X + 24 + lw - 120, cy + 400, 120, 32, _("Apply"));
     apply_btn->callback([](Fl_Widget *, void *d) { ((DisplaysPage *)d)->do_apply(); }, this);
     apply_btn->deactivate();
     status = new Fl_Box(X + 24, cy + 400, lw - 130, 32);
@@ -313,8 +314,8 @@ public:
     int ny = cy + 450;
     if (has_accelerometer()) {
       // convertibles and tablets: fl-autorotate follows the accelerometer
-      Fl_Check_Button *rot = new fld::CheckButton(X + 24, ny, lw, 26, "Rotate the built-in screen with the device");
-      rot->tooltip("For convertibles and tablets with a rotation sensor (iio-sensor-proxy)");
+      Fl_Check_Button *rot = new fld::CheckButton(X + 24, ny, lw, 26, _("Rotate the built-in screen with the device"));
+      rot->tooltip(_("For convertibles and tablets with a rotation sensor (iio-sensor-proxy)"));
       ConfigFile d(desktop_ini_path());
       rot->value(d.ini.get_bool("Display", "AutoRotate", true));
       rot->callback([](Fl_Widget *w, void *) {
@@ -329,8 +330,8 @@ public:
     int pct;
     if (bl::screen_get(pct)) {
       Form bf(g, X + 24, ny, lw);
-      bf.heading("Brightness");
-      bf.row("Built-in screen:", 26, wx, wy, ww);
+      bf.heading(_("Brightness"));
+      bf.row(_("Built-in screen:"), 26, wx, wy, ww);
       Fl_Slider *b = new Fl_Slider(wx, wy, std::min(ww, 320), 26);
       b->type(FL_HOR_NICE_SLIDER);
       b->bounds(1, 100);
@@ -341,26 +342,26 @@ public:
         std::string err;
         if (!bl::screen_set((int)((Fl_Slider *)w)->value(), err)) fprintf(stderr, "fl-settings: %s\n", err.c_str());
       });
-      bf.note("The brightness keys change it too.");
+      bf.note(_("The brightness keys change it too."));
       ny = bf.y() + 16;
     }
 #endif
     Form nf(g, X + 24, ny, lw);
-    nf.heading("Night Light");
+    nf.heading(_("Night Light"));
     ConfigFile desk(desktop_ini_path());
     const std::string N = "NightLight";
     auto ncb = [](Fl_Widget *, void *d) { ((DisplaysPage *)d)->save_night(); };
     nf.row("", 26, wx, wy, ww);
-    night = new fld::CheckButton(wx, wy, ww, 26, "Warmer colours at night");
+    night = new fld::CheckButton(wx, wy, ww, 26, _("Warmer colours at night"));
     night->value(desk.ini.get_bool(N, "Enabled", false));
     night->callback(ncb, this);
-    nf.row("When:", 28, wx, wy, ww);
+    nf.row(_("When:"), 28, wx, wy, ww);
     night_schedule = new Fl_Choice(wx, wy, 220, 28);
-    night_schedule->add("Sunset to sunrise|Custom hours|All the time");
+    night_schedule->add(_("Sunset to sunrise|Custom hours|All the time"));
     std::string sch = desk.ini.get(N, "Schedule", "sunset");
     night_schedule->value(sch == "custom" ? 1 : sch == "always" ? 2 : 0);
     night_schedule->callback(ncb, this);
-    nf.row("From:", 28, wx, wy, ww);
+    nf.row(_("From:"), 28, wx, wy, ww);
     night_from = new Fl_Input(wx, wy, 70, 28);
     night_from->value(desk.ini.get(N, "From", "20:00").c_str());
     Fl_Box *to_label = new Fl_Box(wx + 76, wy, 30, 28, "to");
@@ -371,7 +372,7 @@ public:
       in->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
       in->callback(ncb, this);
     }
-    nf.row("Warmth:", 26, wx, wy, ww);
+    nf.row(_("Warmth:"), 26, wx, wy, ww);
     night_temp = new Fl_Value_Slider(wx, wy, std::min(ww, 320), 26);
     night_temp->type(FL_HOR_NICE_SLIDER);
     // left: barely warmer, right: very warm; the value shown is in kelvin
@@ -380,15 +381,15 @@ public:
     night_temp->value(desk.ini.get_int(N, "Temperature", 4000));
     night_temp->when(FL_WHEN_RELEASE);
     night_temp->callback(ncb, this);
-    nf.note("Sunset and sunrise are worked out from the time zone (Date & Time).");
+    nf.note(_("Sunset and sunrise are worked out from the time zone (Date & Time)."));
     update_night();
 
     // how fl-wm draws the screen (wm.ini [behaviour] renderer=, read at login)
     Form rf(g, X + 24, nf.y() + 16, lw);
-    rf.heading("Graphics");
-    rf.row("Drawing:", 28, wx, wy, ww);
+    rf.heading(_("Graphics"));
+    rf.row(_("Drawing:"), 28, wx, wy, ww);
     Fl_Choice *rend = new Fl_Choice(wx, wy, std::min(ww, 300), 28);
-    rend->add("Automatic|Graphics card (OpenGL ES)|Graphics card (Vulkan, experimental)|Software (least memory)");
+    rend->add(_("Automatic|Graphics card (OpenGL ES)|Graphics card (Vulkan, experimental)|Software (least memory)"));
     static const char *const kRenderers[] = {"auto", "gles2", "vulkan", "pixman"};
     {
       ConfigFile wm(wm_ini_path());
@@ -417,7 +418,7 @@ public:
       wl_display_roundtrip(dpy);
       wl_display_roundtrip(dpy);
     }
-    if (!M.mgr) status->label("The compositor does not support output management (wlr-output-management).");
+    if (!M.mgr) status->label(_("The compositor does not support output management (wlr-output-management)."));
     refresh();
   }
 
@@ -439,7 +440,7 @@ public:
       bool in_form = oy < top + 400 && w->x() + (single ? 0 : 210) >= form_x - 200;
       w->position(w->x() + (in_form ? dx : 0), w->y() + dy);
       // the position row (its label too) is for arranging
-      if (w == px || w == py || (w->label() && !strcmp(w->label(), "Position:"))) single ? w->hide() : w->show();
+      if (w == px || w == py || (w->label() && !strcmp(w->label(), _("Position:")))) single ? w->hide() : w->show();
     }
     single ? arr->hide() : arr->show();
     single ? list->hide() : list->show();
@@ -506,8 +507,8 @@ public:
     Fl_Double_Window w(400, 130, "Keep Display Settings?");
     Fl_Box *msg = new Fl_Box(16, 12, 368, 60);
     msg->align(FL_ALIGN_INSIDE | FL_ALIGN_WRAP | FL_ALIGN_LEFT);
-    Fl_Button *revert = new Fl_Button(176, 86, 100, 30, "Revert");
-    Fl_Return_Button *keep = new Fl_Return_Button(284, 86, 100, 30, "Keep");
+    Fl_Button *revert = new Fl_Button(176, 86, 100, 30, _("Revert"));
+    Fl_Return_Button *keep = new Fl_Return_Button(284, 86, 100, 30, _("Keep"));
     static int result;
     result = 0;
     static std::string text;
@@ -586,19 +587,19 @@ public:
     std::vector<HeadConfig> before = current_config();
     bool any_enabled = false;
     for (auto &c : edited) if (c.enabled) any_enabled = true;
-    if (!any_enabled) { fl_alert("At least one display must stay enabled."); return; }
+    if (!any_enabled) { fl_alert(_("At least one display must stay enabled.")); return; }
     if (!apply(edited)) {
-      fl_alert("The display configuration could not be applied.");
+      fl_alert(_("The display configuration could not be applied."));
       dirty = false;
       refresh();
       return;
     }
     if (confirm()) {
       save_config();
-      status->label("Saved.");
+      status->label(_("Saved."));
     } else {
       apply(before);
-      status->label("Reverted.");
+      status->label(_("Reverted."));
     }
     dirty = false;
     apply_btn->deactivate();
@@ -617,8 +618,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new DisplaysPage(x, y, w, 
 } // namespace
 
 PageInfo page_displays() {
-  return {"displays", "Displays", "video-display", "Hardware",
-          "display monitor screen resolution scale hidpi rotation position output refresh night light warm colour color temperature brightness backlight", create};
+  return {"displays", _("Displays"), "video-display", "Hardware",
+          _("display monitor screen resolution scale hidpi rotation position output refresh night light warm colour color temperature brightness backlight"), create};
 }
 
 } // namespace fld

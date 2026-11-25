@@ -1,4 +1,5 @@
 // Privacy: recently used files, and the camera and microphone indicator
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -65,12 +66,12 @@ public:
     int wx, wy, ww;
     auto cb = [](Fl_Widget *, void *d) { ((PrivacyPage *)d)->save(); };
 
-    f.heading("Recent Files");
+    f.heading(_("Recent Files"));
     f.row("", 26, wx, wy, ww);
-    remember = new fld::CheckButton(wx, wy, ww, 26, "Remember the files I open");
+    remember = new fld::CheckButton(wx, wy, ww, 26, _("Remember the files I open"));
     remember->value(desk.ini.get_bool("Privacy", "RememberRecent", true));
     remember->callback(cb, this);
-    f.row("Keep them for:", 28, wx, wy, ww);
+    f.row(_("Keep them for:"), 28, wx, wy, ww);
     keep = new Fl_Choice(wx, wy, 200, 28);
     keep->add(kDayLabels);
     int days = desk.ini.get_int("Privacy", "RecentDays", 30);
@@ -79,23 +80,23 @@ public:
       if (kDays[i] == days) keep->value(i);
     keep->callback(cb, this);
     f.row("", 30, wx, wy, ww);
-    Fl_Button *clear = new Fl_Button(wx, wy, 180, 30, "Clear Recent Files");
+    Fl_Button *clear = new Fl_Button(wx, wy, 180, 30, _("Clear Recent Files"));
     clear->callback([](Fl_Widget *, void *) {
-      if (fl_choice("Forget the list of recently used files?", "Cancel", "Clear", nullptr) == 1) clear_recent();
+      if (fl_choice(_("Forget the list of recently used files?"), _("Cancel"), _("Clear"), nullptr) == 1) clear_recent();
     });
-    f.note("Programs show the files you opened recently in their menus and file dialogs. The files themselves "
-           "are not touched.", 2);
+    f.note(_("Programs show the files you opened recently in their menus and file dialogs. The files themselves "
+           "are not touched."), 2);
 
-    f.heading("Camera and Microphone");
+    f.heading(_("Camera and Microphone"));
     f.row("", 26, wx, wy, ww);
-    indicator = new fld::CheckButton(wx, wy, ww, 26, "Show in the panel when the camera or microphone is in use");
+    indicator = new fld::CheckButton(wx, wy, ww, 26, _("Show in the panel when the camera or microphone is in use"));
     indicator->value(panel.ini.get_bool("Panel", "PrivacyIndicator", true));
     indicator->callback(cb, this);
-    f.row("Camera in use by:", 26, wx, wy, ww);
+    f.row(_("Camera in use by:"), 26, wx, wy, ww);
     cam_now = new Fl_Box(wx, wy, ww, 26);
     cam_now->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP);
-    f.note("The panel's indicator also names the programs recording from a microphone. Sound > Recording "
-           "shows them with their volume.", 2);
+    f.note(_("The panel's indicator also names the programs recording from a microphone. Sound > Recording "
+           "shows them with their volume."), 2);
     g->end();
     end();
     update();
@@ -140,8 +141,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new PrivacyPage(x, y, w, h
 }  // namespace
 
 PageInfo page_privacy() {
-  return {"privacy", "Privacy", "preferences-system-privacy", "Personal",
-          "privacy recent files history recently used camera webcam microphone mic indicator", create};
+  return {"privacy", _("Privacy"), "preferences-system-privacy", "Personal",
+          _("privacy recent files history recently used camera webcam microphone mic indicator"), create};
 }
 
 }  // namespace fld

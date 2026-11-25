@@ -1,3 +1,4 @@
+#include "fld/i18n.h"
 #include "fld/widgets.h"
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Return_Button.H>
@@ -329,7 +330,7 @@ void about_dialog(const char *app_name, const char *icon_n, const char *descript
   v->labelcolor(palette().fg_dim);
   Fl_Box *d = new Fl_Box(20, 146, 320, 60, description);
   d->align(FL_ALIGN_INSIDE | FL_ALIGN_WRAP | FL_ALIGN_TOP);
-  Fl_Button *ok = new Fl_Button(140, 216, 80, 30, "Close");
+  Fl_Button *ok = new Fl_Button(140, 216, 80, 30, _("Close"));
   ok->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
   w->end();
   w->show();
@@ -351,7 +352,7 @@ bool ask_text(const char *title, const char *prompt, std::string &text, int sele
   in->insert_position(sel, 0); // selected: typing replaces it
   static int result;
   result = 0;
-  Fl_Button *cancel = new Fl_Button(W - 196, H - 44, 86, 30, "Cancel");
+  Fl_Button *cancel = new Fl_Button(W - 196, H - 44, 86, 30, _("Cancel"));
   cancel->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
   Fl_Return_Button *ok = new Fl_Return_Button(W - 102, H - 44, 86, 30, ok_label);
   ok->callback([](Fl_Widget *b, void *) {

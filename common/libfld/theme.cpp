@@ -7,6 +7,7 @@
 #include "fld/text.h"
 #include "fld/util.h"
 #include "fld/atspi.h"
+#include "fld/i18n.h"
 #ifndef FLD_HAVE_ATSPI
 namespace fld {
 // without the bridge there is nobody to tell
@@ -63,6 +64,7 @@ std::string desktop_config_path() {
 }
 
 void init_app(const char *app_id, int argc, char **argv) {
+  i18n_init();
   Ini cfg;
   cfg.load(desktop_config_path());
   const std::string A = "Appearance";

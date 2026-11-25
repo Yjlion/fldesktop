@@ -1,5 +1,6 @@
 // Accessibility: seeing (contrast, text size, pointer size, zoom), hearing
 // the screen (Orca), typing (sticky and bounce keys)
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
@@ -47,43 +48,43 @@ public:
     int wx, wy, ww;
     auto cb = [](Fl_Widget *, void *d) { ((AccessibilityPage *)d)->save(); };
 
-    f.heading("Seeing");
-    contrast = check(f, "High contrast", lower(desk.ini.get("Appearance", "Contrast", "normal")) == "high");
-    f.row("Text size:", 28, wx, wy, ww);
+    f.heading(_("Seeing"));
+    contrast = check(f, _("High contrast"), lower(desk.ini.get("Appearance", "Contrast", "normal")) == "high");
+    f.row(_("Text size:"), 28, wx, wy, ww);
     text = new Fl_Choice(wx, wy, 220, 28);
-    text->add("Default|Large (125%)|Larger (150%)|Largest (200%)");
+    text->add(_("Default|Large (125%)|Larger (150%)|Largest (200%)"));
     double ts = desk.ini.get_double("Appearance", "TextScale", 1.0);
     int ti = 0;
     for (int i = 0; i < 4; i++)
       if (std::fabs(kTextScales[i] - ts) < 0.01) ti = i;
     text->value(ti);
     text->callback(cb, this);
-    f.row("Pointer size:", 28, wx, wy, ww);
+    f.row(_("Pointer size:"), 28, wx, wy, ww);
     cursor = new Fl_Choice(wx, wy, 220, 28);
-    cursor->add("Default|Large|Larger|Largest");
+    cursor->add(_("Default|Large|Larger|Largest"));
     int cs = wm.ini.get_int("cursor", "size", 24), ci = 0;
     for (int i = 0; i < 4; i++)
       if (kCursorSizes[i] <= cs) ci = i;
     cursor->value(ci);
     cursor->callback(cb, this);
-    f.note("Programs that are open take the contrast and the text size when they start again.", 2);
-    f.row("Zoom:", 26, wx, wy, ww);
-    Fl_Box *zoom = new Fl_Box(wx, wy, ww, 26, "Super+= zooms in, Super+- out, Super+0 back");
+    f.note(_("Programs that are open take the contrast and the text size when they start again."), 2);
+    f.row(_("Zoom:"), 26, wx, wy, ww);
+    Fl_Box *zoom = new Fl_Box(wx, wy, ww, 26, _("Super+= zooms in, Super+- out, Super+0 back"));
     zoom->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
 
-    f.heading("Screen Reader");
+    f.heading(_("Screen Reader"));
     bool have_orca = !which("orca").empty();
-    reader = check(f, "Read the screen aloud (Orca)", have_orca && file_exists(orca_autostart()));
+    reader = check(f, _("Read the screen aloud (Orca)"), have_orca && file_exists(orca_autostart()));
     if (!have_orca) {
       reader->deactivate();
-      f.note("Install Orca for a screen reader. It reads the fldesktop programs (started after it) as well "
-             "as GTK and Qt programs.", 2);
+      f.note(_("Install Orca for a screen reader. It reads the fldesktop programs (started after it) as well "
+             "as GTK and Qt programs."), 2);
     } else {
-      f.note("Orca reads the fldesktop programs started after it, and GTK and Qt programs.");
+      f.note(_("Orca reads the fldesktop programs started after it, and GTK and Qt programs."));
     }
 
-    f.heading("Typing");
-    sticky = check(f, "Sticky keys: press Shift, Ctrl, Alt or Super, then the key",
+    f.heading(_("Typing"));
+    sticky = check(f, _("Sticky keys: press Shift, Ctrl, Alt or Super, then the key"),
                    wm.ini.get_bool("accessibility", "sticky_keys", false));
     int bms = wm.ini.get_int("accessibility", "bounce_keys", 0);
     f.row("", 28, wx, wy, ww);
@@ -150,9 +151,9 @@ Fl_Group *create(int x, int y, int w, int h) { return new AccessibilityPage(x, y
 } // namespace
 
 PageInfo page_accessibility() {
-  return {"accessibility", "Accessibility", "preferences-desktop-accessibility", "Personal",
-          "accessibility a11y contrast text size large font zoom magnifier screen reader orca sticky bounce keys "
-          "pointer cursor size",
+  return {"accessibility", _("Accessibility"), "preferences-desktop-accessibility", "Personal",
+          _("accessibility a11y contrast text size large font zoom magnifier screen reader orca sticky bounce keys "
+          "pointer cursor size"),
           create};
 }
 

@@ -1,5 +1,6 @@
 // fl-panel: the battery button from UPower, power profiles, and the low
 // battery warnings and action ([Power] in desktop.ini).
+#include "fld/i18n.h"
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Round_Button.H>
@@ -164,7 +165,7 @@ void battery_cb(Fl_Widget *, void *) {
   keep.reserve(st.profiles.size() + others.size() + 1);
 #ifdef FLD_HAVE_BACKLIGHT
   if (bright >= 0) {
-    Fl_Box *bl_label = new Fl_Box(10, y, W - 20, 28, "Brightness");
+    Fl_Box *bl_label = new Fl_Box(10, y, W - 20, 28, _("Brightness"));
     bl_label->labelfont(FL_HELVETICA_BOLD);
     bl_label->labelsize(13);
     bl_label->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
@@ -182,7 +183,7 @@ void battery_cb(Fl_Widget *, void *) {
   }
 #endif
   if (st.profiles_available) {
-    Fl_Box *pl = new Fl_Box(10, y, W - 20, 28, "Power Mode");
+    Fl_Box *pl = new Fl_Box(10, y, W - 20, 28, _("Power Mode"));
     pl->labelfont(FL_HELVETICA_BOLD);
     pl->labelsize(13);
     pl->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
@@ -215,7 +216,7 @@ void battery_cb(Fl_Widget *, void *) {
     b->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
     y += 26;
   }
-  Fl_Button *settings_btn = new Fl_Button(W - 160, H - 38, 150, 28, "Power Settings");
+  Fl_Button *settings_btn = new Fl_Button(W - 160, H - 38, 150, 28, _("Power Settings"));
   settings_btn->labelsize(12);
   settings_btn->callback([](Fl_Widget *b, void *) {
     fld::spawn({"fl-settings", "power"});

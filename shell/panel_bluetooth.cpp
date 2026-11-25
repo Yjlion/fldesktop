@@ -1,5 +1,6 @@
 // fl-panel: the Bluetooth button (shown when there is an adapter).
 // The panel also hosts the pairing agent, so devices can pair at any time.
+#include "fld/i18n.h"
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -77,7 +78,7 @@ void bt_cb(Fl_Widget *w, void *) {
   int rows = a->powered ? std::max<int>(1, paired.size()) : 0;
   int H = 44 + rows * 44 + 46;
   PanelPopup pop(W, std::min(H, 440));
-  Fl_Check_Button *power = new fld::CheckButton(10, 8, 200, 28, "Bluetooth");
+  Fl_Check_Button *power = new fld::CheckButton(10, 8, 200, 28, _("Bluetooth"));
   power->labelfont(FL_HELVETICA_BOLD);
   power->value(a->powered);
   power->callback([](Fl_Widget *b, void *) {
@@ -127,12 +128,12 @@ void bt_cb(Fl_Widget *w, void *) {
       y += 44;
     }
     if (paired.empty()) {
-      Fl_Box *none = new Fl_Box(10, y, W - 20, 40, "No paired devices");
+      Fl_Box *none = new Fl_Box(10, y, W - 20, 40, _("No paired devices"));
       none->labelcolor(fld::palette().fg_dim);
       y += 44;
     }
   }
-  Fl_Button *settings = new Fl_Button(W - 160, pop.h() - 38, 150, 28, "Bluetooth Settings");
+  Fl_Button *settings = new Fl_Button(W - 160, pop.h() - 38, 150, 28, _("Bluetooth Settings"));
   settings->labelsize(12);
   settings->callback([](Fl_Widget *b, void *) {
     fld::spawn({"fl-bluetooth"});

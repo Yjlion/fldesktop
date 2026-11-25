@@ -1,4 +1,5 @@
 // Language & Region: LANG and the formats locale (written to the session environment)
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Choice.H>
@@ -53,10 +54,10 @@ public:
     if (cur_fmt.empty()) cur_fmt = getenv_or("LC_TIME", cur_lang);
     cur_lang = locale_env::normalize(cur_lang);
     cur_fmt = locale_env::normalize(cur_fmt);
-    f.heading("Language");
-    f.row("Language:", 28, wx, wy, ww);
+    f.heading(_("Language"));
+    f.row(_("Language:"), 28, wx, wy, ww);
     lang = new Fl_Choice(wx, wy, ww, 28);
-    f.row("Formats:", 28, wx, wy, ww);
+    f.row(_("Formats:"), 28, wx, wy, ww);
     formats = new Fl_Choice(wx, wy, ww, 28);
     for (size_t i = 0; i < locales.size(); i++) {
       std::string label = escape_at(locales[i].description + "  —  " + locales[i].name);
@@ -69,30 +70,30 @@ public:
     }
     lang->callback([](Fl_Widget *, void *d) { ((LanguagePage *)d)->save(); }, this);
     formats->callback([](Fl_Widget *, void *d) { ((LanguagePage *)d)->save(); }, this);
-    f.note("Formats are used for dates, times, numbers, currency and paper size.", 1);
-    f.heading("Preview");
+    f.note(_("Formats are used for dates, times, numbers, currency and paper size."), 1);
+    f.heading(_("Preview"));
     f.row("", 70, wx, wy, ww);
     preview = new Fl_Box(wx, wy, ww, 70);
     preview->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP);
     preview->labelfont(FL_COURIER);
-    f.note("Changes take effect the next time you log in.", 1);
-    if (locales.empty()) f.note("No UTF-8 locales are installed (see locale-gen or the locales package).", 2);
+    f.note(_("Changes take effect the next time you log in."), 1);
+    if (locales.empty()) f.note(_("No UTF-8 locales are installed (see locale-gen or the locales package)."), 2);
 #ifdef FLD_HAVE_SPELL
     // the dictionaries the spell checkers use (fl-edit, ...)
-    f.heading("Spell checking");
+    f.heading(_("Spell checking"));
     std::vector<std::string> dicts = spell::installed_languages();
     if (dicts.empty()) {
-      f.note("No dictionaries are installed (hunspell-en-us, hunspell-de-de, ...).", 1);
+      f.note(_("No dictionaries are installed (hunspell-en-us, hunspell-de-de, ...)."), 1);
     } else {
       int lh = std::min(150, 24 * (int)dicts.size() + 4);
-      f.row("Check in:", lh, wx, wy, ww);
+      f.row(_("Check in:"), lh, wx, wy, ww);
       spelling = new Fl_Check_Browser(wx, wy, ww, lh);
       std::vector<std::string> on = spell::configured_languages();
       for (auto &d : dicts)
         spelling->add(d.c_str(), std::find(on.begin(), on.end(), d) != on.end() ? 1 : 0);
       spelling->callback([](Fl_Widget *, void *d) { ((LanguagePage *)d)->save_spelling(); }, this);
       spelling->when(FL_WHEN_CHANGED);
-      f.note("Words are checked in all the languages chosen.", 1);
+      f.note(_("Words are checked in all the languages chosen."), 1);
     }
 #endif
     g->end();
@@ -129,8 +130,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new LanguagePage(x, y, w, 
 } // namespace
 
 PageInfo page_language() {
-  return {"language", "Language & Region", "preferences-desktop-locale", "Personal",
-          "language locale region formats date time currency numbers translation", create};
+  return {"language", _("Language & Region"), "preferences-desktop-locale", "Personal",
+          _("language locale region formats date time currency numbers translation"), create};
 }
 
 } // namespace fld

@@ -1,4 +1,5 @@
 // Default Applications: web, mail, files, terminal, text, images, music, video, PDF
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Choice.H>
 
@@ -74,13 +75,13 @@ public:
         c->add(e.c_str());
         if (have_def && apps[i].id == def.id) sel = (int)i;
       }
-      if (apps.empty()) { c->add("(no application installed)"); c->deactivate(); }
+      if (apps.empty()) { c->add(_("(no application installed)")); c->deactivate(); }
       c->value(sel < 0 ? 0 : sel);
       c->callback([](Fl_Widget *w, void *d) { ((DefaultAppsPage *)d)->changed((Fl_Choice *)w); }, this);
       choices.push_back(c);
       candidates.push_back(apps);
     }
-    f.row("Terminal:", 28, wx, wy, ww);
+    f.row(_("Terminal:"), 28, wx, wy, ww);
     terminal = new Fl_Choice(wx, wy, ww, 28);
     Ini cfg;
     cfg.load(desktop_ini_path());
@@ -101,13 +102,13 @@ public:
     }, this);
     // GnuPG: who asks for passphrases (gpg-agent.conf pinentry-program)
     if (!which("gpg-agent").empty() || !which("gpgconf").empty()) {
-      f.row("GnuPG passphrases:", 28, wx, wy, ww);
+      f.row(_("GnuPG passphrases:"), 28, wx, wy, ww);
       pinentry = new Fl_Choice(wx, wy, ww, 28);
       std::string conf, cur_p;
       read_file(gnupg_conf::conf_path(), conf);
       cur_p = gnupg_conf::pinentry(conf);
       pinentries.push_back("");
-      pinentry->add("GnuPG's default");
+      pinentry->add(_("GnuPG's default"));
       for (const char *p : {"pinentry-fldesktop", "pinentry-gnome3", "pinentry-qt", "pinentry-gtk", "pinentry-gtk-2",
                             "pinentry-curses"}) {
         std::string path = which(p);
@@ -125,7 +126,7 @@ public:
           pinentry->value(0);
         }
       }
-      pinentry->tooltip("The window gpg-agent opens to ask for a passphrase (gpg-agent.conf: pinentry-program)");
+      pinentry->tooltip(_("The window gpg-agent opens to ask for a passphrase (gpg-agent.conf: pinentry-program)"));
       pinentry->callback([](Fl_Widget *, void *d) { ((DefaultAppsPage *)d)->set_pinentry(); }, this);
     }
     g->end();
@@ -158,8 +159,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new DefaultAppsPage(x, y, 
 } // namespace
 
 PageInfo page_defaultapps() {
-  return {"defaultapps", "Default Applications", "preferences-desktop-default-applications", "Personal",
-          "default applications browser mail email file manager terminal editor image viewer music video pdf open with",
+  return {"defaultapps", _("Default Applications"), "preferences-desktop-default-applications", "Personal",
+          _("default applications browser mail email file manager terminal editor image viewer music video pdf open with"),
           create};
 }
 

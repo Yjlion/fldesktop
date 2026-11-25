@@ -1,6 +1,7 @@
 // fl-panel: the clipboard history (recorded by fl-cliphist). A click on the
 // button lists what was copied; a click on an entry puts it on the
 // clipboard again; entries can be pinned (kept) and removed.
+#include "fld/i18n.h"
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_PNG_Image.H>
@@ -138,13 +139,13 @@ void clipboard_cb(Fl_Widget *w, void *) {
   int H = 44 + std::max(60, std::min(460, list_h)) + 1;
   PanelPopup pop(W, H);
   const fld::Palette &p = fld::palette();
-  Fl_Box *title = new Fl_Box(10, 8, 200, 28, "Clipboard");
+  Fl_Box *title = new Fl_Box(10, 8, 200, 28, _("Clipboard"));
   title->labelfont(FL_HELVETICA_BOLD);
   title->labelsize(14);
   title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-  Fl_Button *clear = new Fl_Button(W - 82, 9, 72, 26, "Clear");
+  Fl_Button *clear = new Fl_Button(W - 82, 9, 72, 26, _("Clear"));
   clear->labelsize(12);
-  clear->tooltip("Remove everything except the pinned entries");
+  clear->tooltip(_("Remove everything except the pinned entries"));
   clear->callback([](Fl_Widget *b, void *) {
     cliphist::Store().clear(true);
     b->window()->hide();
@@ -180,7 +181,7 @@ fld::FlatButton *clipboard_indicator_create() {
   g_btn->hover_color(panel_hover());
   if (Fl_Image *i = fld::symbolic_icon("edit-paste", 18, panel_fg())) g_btn->icon_image(i);
   else g_btn->icon_name("edit-paste", 20);
-  g_btn->tooltip("Clipboard history");
+  g_btn->tooltip(_("Clipboard history"));
   g_btn->callback(clipboard_cb);
   panel_context_menu(g_btn, [](fld::Menu &m) {
     bool on = history_on();

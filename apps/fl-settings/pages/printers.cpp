@@ -1,4 +1,5 @@
 // Printers: the CUPS view of fl-printers
+#include "fld/i18n.h"
 #include "printers_ui.h"
 #include "settings_common.h"
 #include "settings_page.h"
@@ -24,8 +25,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new PrintersPage(x, y, w, 
 } // namespace
 
 PageInfo page_printers() {
-  return {"printers", "Printers", "printer", "Hardware",
-          "printers printing cups queue jobs paper scanner driver ipp default printer", create};
+  return {"printers", _("Printers"), "printer", "Hardware",
+          _("printers printing cups queue jobs paper scanner driver ipp default printer"), create};
 }
 
 } // namespace fld

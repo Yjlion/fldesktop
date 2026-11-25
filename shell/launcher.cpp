@@ -7,6 +7,7 @@
 // `fl-launcher --daemon` (started with the session) builds the window once and
 // keeps it hidden; SIGUSR1 (fld::toggle_launcher, fl-wm's Super+Space) shows
 // or hides it, so it opens in one frame instead of a program start.
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Double_Window.H>
@@ -220,7 +221,7 @@ static void add_to_desktop(const fld::DesktopEntry &e) {
   std::string dst = fld::path_join(dir, fld::ends_with(e.id, ".desktop") ? e.id : e.id + ".desktop");
   std::string data;
   if (!fld::read_file(e.path, data) || !fld::write_file(dst, data)) {
-    fl_alert("Could not copy the launcher to %s.", dir.c_str());
+    fl_alert(_("Could not copy the launcher to %s."), dir.c_str());
     return;
   }
   chmod(dst.c_str(), 0755); // desktop files on the desktop must be executable to be trusted
@@ -455,11 +456,11 @@ static void make_power_bar(int X, int Y, int W, int H) {
   line->box(FL_FLAT_BOX);
   line->color(p.border);
   const int B = 36, pad = (H - B) / 2;
-  fld::FlatButton *set = new fld::FlatButton(X + 8, Y + pad, 120, B, "Settings");
+  fld::FlatButton *set = new fld::FlatButton(X + 8, Y + pad, 120, B, _("Settings"));
   set->icon_name("preferences-system", 20);
   set->color(p.bg);
   set->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_IMAGE_NEXT_TO_TEXT);
-  set->tooltip("Open Settings");
+  set->tooltip(_("Open Settings"));
   set->callback([](Fl_Widget *, void *) {
     fld::spawn({"fl-settings"});
     quit_launcher();
@@ -570,11 +571,11 @@ int main(int argc, char **argv) {
   Fl_Box *bg = new Fl_Box(1, 1, W - 2, 52);
   bg->box(FL_FLAT_BOX);
   bg->color(fld::palette().bg);
-  g_search = new SearchInput(12, 12, W - 24, 32, "Search applications");
+  g_search = new SearchInput(12, 12, W - 24, 32, _("Search applications"));
   g_search->textsize(15);
   g_search->color(fld::palette().bg2);
   g_search->when(FL_WHEN_CHANGED);
-  g_search->tooltip("Type to search, Enter to start, Esc to close");
+  g_search->tooltip(_("Type to search, Enter to start, Esc to close"));
 
   g_cats = new CategoryList(1, 53, SIDE, H - 54 - BAR);
   g_list = new AppList(SIDE + 1, 53, W - SIDE - 14, H - 54 - BAR);

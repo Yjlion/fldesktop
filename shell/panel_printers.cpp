@@ -3,6 +3,7 @@
 // A worker thread asks CUPS for the user's active jobs (every 1.5 s while
 // there are some, else every 3 s). When a job leaves the queue the panel
 // sends a notification saying whether it was printed.
+#include "fld/i18n.h"
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/fl_draw.H>
@@ -146,7 +147,7 @@ void printers_cb(Fl_Widget *w, void *) {
   int H = 44 + n * 50 + 46;
   PanelPopup pop(W, std::min(H, 420));
   const fld::Palette &p = fld::palette();
-  Fl_Box *title = new Fl_Box(10, 8, W - 20, 28, "Printing");
+  Fl_Box *title = new Fl_Box(10, 8, W - 20, 28, _("Printing"));
   title->labelfont(FL_HELVETICA_BOLD);
   title->labelsize(14);
   title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
@@ -164,7 +165,7 @@ void printers_cb(Fl_Widget *w, void *) {
     s->labelsize(12);
     s->labelcolor(p.fg_dim);
     s->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
-    Fl_Button *c = new Fl_Button(W - 100, y + 8, 88, 28, "Cancel");
+    Fl_Button *c = new Fl_Button(W - 100, y + 8, 88, 28, _("Cancel"));
     c->labelsize(12);
     c->callback([](Fl_Widget *b, void *d) {
       prn::cancel_job((int)(long)d);
@@ -174,11 +175,11 @@ void printers_cb(Fl_Widget *w, void *) {
     y += 50;
   }
   if (g_jobs.empty()) {
-    Fl_Box *none = new Fl_Box(12, y, W - 24, 40, "Nothing is printing.");
+    Fl_Box *none = new Fl_Box(12, y, W - 24, 40, _("Nothing is printing."));
     none->labelcolor(p.fg_dim);
     y += 50;
   }
-  Fl_Button *settings = new Fl_Button(W - 152, pop.h() - 38, 140, 28, "Printer Settings");
+  Fl_Button *settings = new Fl_Button(W - 152, pop.h() - 38, 140, 28, _("Printer Settings"));
   settings->labelsize(12);
   settings->callback([](Fl_Widget *b, void *) {
     fld::spawn({"fl-printers"});

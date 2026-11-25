@@ -1,4 +1,5 @@
 // Screen Lock: idle timeout, lock on suspend, what the lock screen shows
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -29,57 +30,57 @@ public:
     int wx, wy, ww;
     auto cb = [](Fl_Widget *, void *d) { ((LockPage *)d)->save(); };
 
-    f.heading("Locking");
+    f.heading(_("Locking"));
     int idle = wm.ini.get_int("lock", "idle_minutes", 0);
     f.row("", 28, wx, wy, ww);
-    auto_lock = new fld::CheckButton(wx, wy, 230, 28, "Lock the screen after");
+    auto_lock = new fld::CheckButton(wx, wy, 230, 28, _("Lock the screen after"));
     auto_lock->value(idle > 0);
     auto_lock->callback(cb, this);
     minutes = new Fl_Spinner(wx + 236, wy, 70, 28);
     minutes->range(1, 240);
     minutes->value(idle > 0 ? idle : 10);
     minutes->callback(cb, this);
-    Fl_Box *mlabel = new Fl_Box(wx + 312, wy, 200, 28, "minutes of inactivity");
+    Fl_Box *mlabel = new Fl_Box(wx + 312, wy, 200, 28, _("minutes of inactivity"));
     mlabel->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
     // [power] blank_minutes may be fractional; the default is 10
     double blank = wm.ini.get_double("power", "blank_minutes", 10);
     f.row("", 28, wx, wy, ww);
-    auto_blank = new fld::CheckButton(wx, wy, 230, 28, "Turn the screen off after");
+    auto_blank = new fld::CheckButton(wx, wy, 230, 28, _("Turn the screen off after"));
     auto_blank->value(blank > 0);
     auto_blank->callback(cb, this);
     blank_minutes = new Fl_Spinner(wx + 236, wy, 70, 28);
     blank_minutes->range(1, 240);
     blank_minutes->value(blank >= 1 ? (int)blank : 10);
     blank_minutes->callback(cb, this);
-    Fl_Box *blabel = new Fl_Box(wx + 312, wy, 200, 28, "minutes of inactivity");
+    Fl_Box *blabel = new Fl_Box(wx + 312, wy, 200, 28, _("minutes of inactivity"));
     blabel->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    f.note("Programs playing a video or a presentation can hold the lock and the screen off.");
+    f.note(_("Programs playing a video or a presentation can hold the lock and the screen off."));
     f.row("", 26, wx, wy, ww);
-    on_suspend = new fld::CheckButton(wx, wy, ww, 26, "Lock the screen before the computer suspends");
+    on_suspend = new fld::CheckButton(wx, wy, ww, 26, _("Lock the screen before the computer suspends"));
     on_suspend->value(desk.ini.get_bool("Lock", "OnSuspend", true));
     on_suspend->callback(cb, this);
     f.row("", 30, wx, wy, ww);
-    Fl_Button *now = new Fl_Button(wx, wy, 140, 30, "Lock Now");
+    Fl_Button *now = new Fl_Button(wx, wy, 140, 30, _("Lock Now"));
     now->callback([](Fl_Widget *, void *) { spawn({"fl-lock"}); });
-    Fl_Box *hint = new Fl_Box(wx + 150, wy, ww - 150, 30, "or press Super+L");
+    Fl_Box *hint = new Fl_Box(wx + 150, wy, ww - 150, 30, _("or press Super+L"));
     hint->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
     hint->labelcolor(palette().fg_dim);
 
-    f.heading("Lock Screen");
+    f.heading(_("Lock Screen"));
     f.row("", 26, wx, wy, ww);
-    clock = new fld::CheckButton(wx, wy, 200, 26, "Show the clock");
+    clock = new fld::CheckButton(wx, wy, 200, 26, _("Show the clock"));
     clock->value(desk.ini.get_bool("Lock", "ShowClock", true));
     clock->callback(cb, this);
-    clock24 = new fld::CheckButton(wx + 210, wy, 200, 26, "24-hour clock");
+    clock24 = new fld::CheckButton(wx + 210, wy, 200, 26, _("24-hour clock"));
     clock24->value(desk.ini.get_bool("Lock", "Clock24", true));
     clock24->callback(cb, this);
     f.row("", 26, wx, wy, ww);
-    keyboard = new fld::CheckButton(wx, wy, ww, 26, "Offer the on-screen keyboard");
+    keyboard = new fld::CheckButton(wx, wy, ww, 26, _("Offer the on-screen keyboard"));
     keyboard->value(desk.ini.get_bool("Lock", "Keyboard", true));
     keyboard->callback(cb, this);
-    f.row("Background:", 26, wx, wy, ww);
+    f.row(_("Background:"), 26, wx, wy, ww);
     std::string bg = expand_tilde(desk.ini.get("Lock", "Background", ""));
-    same_bg = new fld::CheckButton(wx, wy, ww, 26, "The desktop wallpaper");
+    same_bg = new fld::CheckButton(wx, wy, ww, 26, _("The desktop wallpaper"));
     same_bg->value(bg.empty());
     same_bg->callback([](Fl_Widget *, void *d) {
       LockPage *p = (LockPage *)d;
@@ -132,8 +133,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new LockPage(x, y, w, h); 
 }  // namespace
 
 PageInfo page_lock() {
-  return {"lock", "Screen Lock", "system-lock-screen", "Personal",
-          "lock screen locker idle timeout suspend password privacy blank screen off dpms power saving", create};
+  return {"lock", _("Screen Lock"), "system-lock-screen", "Personal",
+          _("lock screen locker idle timeout suspend password privacy blank screen off dpms power saving"), create};
 }
 
 }  // namespace fld

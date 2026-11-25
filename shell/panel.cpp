@@ -3,6 +3,7 @@
 // A borderless FLTK window with app_id "fldesktop.panel"; fl-wm pins it to the
 // bottom (or top) edge of the primary output and reserves its height. The
 // task list comes from the wlr-foreign-toplevel-management protocol.
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -759,21 +760,21 @@ static void volume_cb(Fl_Widget *w, void *) {
   s->value(std::min(100, P.volume_pct));
   s->callback([](Fl_Widget *sl, void *) { set_volume((int)((Fl_Slider *)sl)->value()); });
   s->when(FL_WHEN_CHANGED);
-  Fl_Check_Button *m = new fld::CheckButton(200, oy + 12, 56, 26, "Mute");
+  Fl_Check_Button *m = new fld::CheckButton(200, oy + 12, 56, 26, _("Mute"));
   m->value(P.muted);
   m->callback([](Fl_Widget *, void *) { toggle_mute(); });
   Fl_Box *more = new Fl_Box(12, oy + 40, 236, 20);
   more->labelsize(11);
   more->labelcolor(fld::palette().fg_dim);
-  more->label("On the icon: scroll to adjust, middle-click to mute");
+  more->label(_("On the icon: scroll to adjust, middle-click to mute"));
   more->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
-  Fl_Button *settings = new Fl_Button(12, oy + 62, 116, 26, "Sound Settings");
+  Fl_Button *settings = new Fl_Button(12, oy + 62, 116, 26, _("Sound Settings"));
   settings->labelsize(12);
   settings->callback([](Fl_Widget *b, void *) {
     fld::spawn({"fl-settings", "sound"});
     b->window()->hide();
   });
-  Fl_Button *mixer = new Fl_Button(132, oy + 62, 116, 26, "Volume Mixer");
+  Fl_Button *mixer = new Fl_Button(132, oy + 62, 116, 26, _("Volume Mixer"));
   mixer->labelsize(12);
   mixer->callback([](Fl_Widget *b, void *) {
     fld::spawn({"fl-mixer"});
@@ -1220,7 +1221,7 @@ int main(int argc, char **argv) {
   P.win->border(0);
 
   P.menu_btn = make_btn(96, "start-here", "Applications (Super+Space)", launcher_cb);
-  P.menu_btn->copy_label("Apps");
+  P.menu_btn->copy_label(_("Apps"));
   if (!fld::icon("start-here", 20)) P.menu_btn->icon_name("view-app-grid-symbolic", 20);
   if (!fld::icon("start-here", 20) && !fld::icon("view-app-grid-symbolic", 20))
     P.menu_btn->icon_name("applications-other", 20);

@@ -6,6 +6,7 @@
 // click on a row joins it. It stays open while connecting and follows
 // NetworkManager's changes (network_popup_refresh), so "Connecting…" and the
 // results of the scan it starts show up in place.
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -302,13 +303,13 @@ void build(PanelPopup *pop) {
   // header: the Wi-Fi switch (turning all networking off is in the
   // right-click menu and in Network Settings: not one stray click away)
   if (have_wifi && st.networking) {
-    Fl_Check_Button *wifi = new fld::CheckButton(10, 8, 150, 28, "Wi-Fi");
+    Fl_Check_Button *wifi = new fld::CheckButton(10, 8, 150, 28, _("Wi-Fi"));
     wifi->labelfont(FL_HELVETICA_BOLD);
     wifi->value(st.wireless);
     wifi->tooltip(st.wireless ? "Turn Wi-Fi off" : "Turn Wi-Fi on");
     if (!st.wireless_hw) {
       wifi->deactivate();
-      wifi->tooltip("Wi-Fi is turned off by a hardware switch");
+      wifi->tooltip(_("Wi-Fi is turned off by a hardware switch"));
     }
     wifi->callback([](Fl_Widget *b, void *) {
       nm::Client::get().set_wireless(((Fl_Check_Button *)b)->value(), report);
@@ -321,10 +322,10 @@ void build(PanelPopup *pop) {
   int y = HEAD;
 
   if (!st.networking) {
-    Fl_Box *off = new Fl_Box(14, y, W - 28, 36, "Networking is off");
+    Fl_Box *off = new Fl_Box(14, y, W - 28, 36, _("Networking is off"));
     off->labelcolor(p.fg_dim);
     off->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    Fl_Button *on = new Fl_Button(14, y + 40, 110, 28, "Turn On");
+    Fl_Button *on = new Fl_Button(14, y + 40, 110, 28, _("Turn On"));
     on->labelsize(12);
     on->callback([](Fl_Widget *, void *) { nm::Client::get().set_networking(true, report); });
   } else {
@@ -361,7 +362,7 @@ void build(PanelPopup *pop) {
     int others = 0;
     for (auto &r : g_rows) others += !r.active;
     if (others || (have_wifi && st.wireless)) {
-      Fl_Box *h = new Fl_Box(14, y, W - 28, 22, "Available networks");
+      Fl_Box *h = new Fl_Box(14, y, W - 28, 22, _("Available networks"));
       h->labelsize(12);
       h->labelcolor(p.fg_dim);
       h->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
@@ -397,16 +398,16 @@ void build(PanelPopup *pop) {
 
   // footer
   if (have_wifi && st.networking && st.wireless) {
-    fld::FlatButton *hidden = new fld::FlatButton(8, H - 38, 130, 28, "Hidden Network…");
+    fld::FlatButton *hidden = new fld::FlatButton(8, H - 38, 130, 28, _("Hidden Network…"));
     hidden->labelsize(12);
     hidden->color(p.bg2);
-    hidden->tooltip("Join a network that does not show its name (in Network Settings)");
+    hidden->tooltip(_("Join a network that does not show its name (in Network Settings)"));
     hidden->callback([](Fl_Widget *, void *) {
       close_popup();
       fld::spawn({"fl-network"});
     });
   }
-  Fl_Button *settings = new Fl_Button(W - 160, H - 38, 150, 28, "Network Settings");
+  Fl_Button *settings = new Fl_Button(W - 160, H - 38, 150, 28, _("Network Settings"));
   settings->labelsize(12);
   settings->callback([](Fl_Widget *, void *) {
     close_popup();

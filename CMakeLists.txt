@@ -317,6 +317,7 @@ if(FLD_BUILD_PORTAL)
 endif()
 
 add_subdirectory(data)
+add_subdirectory(po)
 
 if(BUILD_TESTING)
   add_subdirectory(tests)

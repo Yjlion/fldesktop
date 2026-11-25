@@ -767,10 +767,10 @@ public:
         case SORT_TYPE: r = strcasecmp(fld::extension(x.name).c_str(), fld::extension(y.name).c_str()); break;
         case SORT_PERMS: r = (x.mode & 07777) < (y.mode & 07777) ? -1 : (x.mode & 07777) > (y.mode & 07777) ? 1 : 0; break;
         case SORT_OWNER: r = owner_name(x.uid).compare(owner_name(y.uid)); break;
-        case SORT_LOCATION: r = strcasecmp(fld::dirname(x.path).c_str(), fld::dirname(y.path).c_str()); break;
+        case SORT_LOCATION: r = fld::natural_compare(fld::dirname(x.path), fld::dirname(y.path)); break;
         default: break;
       }
-      if (r == 0) r = strcasecmp(x.name.c_str(), y.name.c_str());
+      if (r == 0) r = fld::natural_compare(x.name, y.name);
       return V.desc ? r > 0 : r < 0;
     };
     std::stable_sort(items.begin(), items.end(), cmp);
@@ -1175,9 +1175,95 @@ public:
 // ---------------------------------------------------------------------------
 // Operations
 
+// ---- Undo (Ctrl+Z): renames, new folders and files, copies, moves and
+// moving to the Trash. Deleting permanently can't be undone.
+struct UndoStep {
+  enum Kind { RENAME, CREATE, COPY, MOVE, TRASH } kind;
+  std::vector<std::pair<std::string, std::string>> items; // from, to ("" for TRASH; CREATE: "", the new path)
+};
+static std::vector<UndoStep> g_undo;
+
+static void push_undo(UndoStep::Kind k, std::vector<std::pair<std::string, std::string>> items) {
+  if (items.empty()) return;
+  g_undo.push_back({k, std::move(items)});
+  if (g_undo.size() > 50) g_undo.erase(g_undo.begin());
+}
+
+static const char *undo_label() {
+  if (g_undo.empty()) return "&Undo";
+  switch (g_undo.back().kind) {
+    case UndoStep::RENAME: return "&Undo Rename";
+    case UndoStep::CREATE: return "&Undo Create";
+    case UndoStep::COPY: return "&Undo Copy";
+    case UndoStep::MOVE: return "&Undo Move";
+    case UndoStep::TRASH: return "&Undo Move to Trash";
+  }
+  return "&Undo";
+}
+
+// the item of the trash that `path` became (the latest one with that origin)
+static bool trash_item_for(const std::string &path, fld::TrashItem &out) {
+  bool found = false;
+  for (auto &t : fld::trash_list())
+    if (t.original_path == path && (!found || t.deletion_date >= out.deletion_date)) {
+      out = t;
+      found = true;
+    }
+  return found;
+}
+
+static void undo() {
+  if (g_undo.empty()) return;
+  UndoStep st = g_undo.back();
+  g_undo.pop_back();
+  std::vector<std::string> errs;
+  for (auto it = st.items.rbegin(); it != st.items.rend(); ++it) {
+    const std::string &from = it->first, &to = it->second;
+    std::string err;
+    switch (st.kind) {
+      case UndoStep::RENAME:
+      case UndoStep::MOVE:
+        // back where it was, unless something else took its place since
+        if (!fld::file_exists(to)) errs.push_back(fld::basename(to) + " is no longer there");
+        else if (fld::file_exists(from)) errs.push_back(fld::basename(from) + " already exists again");
+        else if (!fld::move_path(to, from, &err)) errs.push_back(err);
+        break;
+      case UndoStep::COPY:
+        // the copies go to the Trash: nothing is lost if they were changed
+        if (fld::file_exists(to) && !fld::trash(to, &err)) errs.push_back(err);
+        break;
+      case UndoStep::CREATE: {
+        struct stat sb;
+        if (lstat(to.c_str(), &sb) != 0) break;
+        bool empty = S_ISDIR(sb.st_mode) ? fld::list_dir(to, true).empty() : sb.st_size == 0;
+        if (empty ? (S_ISDIR(sb.st_mode) ? rmdir(to.c_str()) : unlink(to.c_str())) != 0 : !fld::trash(to, &err))
+          errs.push_back(err.empty() ? std::string(strerror(errno)) : err);
+        break;
+      }
+      case UndoStep::TRASH: {
+        fld::TrashItem t;
+        if (!trash_item_for(from, t)) errs.push_back(fld::basename(from) + " is no longer in the Trash");
+        else if (fld::file_exists(from)) errs.push_back(fld::basename(from) + " already exists again");
+        else if (!fld::trash_restore(t, &err)) errs.push_back(err);
+        break;
+      }
+    }
+  }
+  refresh();
+  if (!errs.empty()) fl_alert("Could not undo everything:\n%s", fld::join(errs, "\n").c_str());
+}
+
+// a finished operation becomes an undo step (deleting permanently does not)
+static void record_op(FileOp *o) {
+  if (o->kind == FileOp::DELETE) return;
+  push_undo(o->kind == FileOp::COPY ? UndoStep::COPY : o->kind == FileOp::MOVE ? UndoStep::MOVE : UndoStep::TRASH,
+            o->done);
+}
+
 static void run_op(FileOp::Kind k, const std::vector<std::string> &src, const std::string &dest) {
   fld::run_file_op(k, src, dest, [](FileOp *o) {
     if (g_clip.cut && o->kind == FileOp::MOVE) { g_clip.paths.clear(); g_clip.cut = false; }
+    record_op(o);
     refresh();
   });
 }
@@ -1246,25 +1332,35 @@ static void restore_selected() {
 
 static void new_item(bool folder) {
   if (in_trash() || in_search() || in_network()) return;
-  const char *n = fl_input(folder ? "Folder name:" : "File name:", folder ? "New Folder" : "New File");
-  if (!n || !*n) return;
+  std::string name = folder ? "New Folder" : "New File";
+  if (!fld::ask_text(folder ? "New Folder" : "New File", folder ? "Folder name:" : "File name:", name, -1, "Create"))
+    return;
+  name = fld::trim(name);
+  const char *n = name.c_str();
+  if (!*n) return;
   if (strchr(n, '/')) { fl_alert("Names cannot contain '/'."); return; }
   std::string p = fld::path_join(g_cwd, n);
   if (fld::file_exists(p)) { fl_alert("\"%s\" already exists.", n); return; }
   bool ok = folder ? mkdir(p.c_str(), 0755) == 0 : fld::write_file(p, "");
   if (!ok) { fl_alert("Could not create \"%s\": %s", n, strerror(errno)); return; }
+  push_undo(UndoStep::CREATE, {{"", p}});
   g_view->load(g_cwd, n);
 }
 
 void FileView::start_rename(int i) {
   if (i < 0 || in_trash() || in_network()) return;
   Entry &e = entry(i);
-  const char *n = fl_input("Rename to:", e.name.c_str());
-  if (!n || !*n || e.name == n) return;
+  // the name without its extension is selected: typing keeps ".jpg"
+  std::string name = e.name;
+  int stem = e.is_dir ? -1 : (int)frename::split_ext(e.name).first.size();
+  if (!fld::ask_text("Rename", "New name:", name, stem, "Rename")) return;
+  const char *n = name.c_str();
+  if (!*n || e.name == n) return;
   if (strchr(n, '/')) { fl_alert("Names cannot contain '/'."); return; }
   std::string dst = fld::path_join(fld::dirname(e.path), n);
   if (fld::file_exists(dst) && strcasecmp(n, e.name.c_str()) != 0) { fl_alert("\"%s\" already exists.", n); return; }
   if (rename(e.path.c_str(), dst.c_str()) != 0) { fl_alert("Rename failed: %s", strerror(errno)); return; }
+  push_undo(UndoStep::RENAME, {{e.path, dst}});
   if (in_search()) {
     e.path = dst;
     e.name = n;
@@ -2115,7 +2211,7 @@ int FileView::handle_view(int e) {
       end_drag();
       if (!drop && a == fld::DROP_NONE) return 1;
       if (drop && a != fld::DROP_NONE && dest != g_cwd) pulse(dest);
-      fld::run_drop(a, paths, dest, [](FileOp *) { refresh(); });
+      fld::run_drop(a, paths, dest, [](FileOp *o) { record_op(o); refresh(); });
       return 1;
     }
     case FL_KEYBOARD: {
@@ -2327,8 +2423,9 @@ static void remove_bookmark(const std::string &uri) {
 }
 
 static void rename_bookmark(const std::string &uri, const std::string &old_label) {
-  const char *n = fl_input("Bookmark name:", old_label.c_str());
-  if (!n) return;
+  std::string label = old_label;
+  if (!fld::ask_text("Rename Bookmark", "Bookmark name:", label, -1, "Rename")) return;
+  const char *n = label.c_str();
   std::string bm, out;
   if (!fld::read_file(bookmarks_path(), bm)) return;
   for (auto &line : fld::split(bm, '\n')) {
@@ -2535,7 +2632,7 @@ public:
         if (!drop_target(line)) return 1;
         const std::string dest = g_place_list[(size_t)line - 1].path;
         fld::run_drop(fld::drop_action(paths, dest, Fl::event_state()), paths, dest,
-                      [](FileOp *) { refresh(); });
+                      [](FileOp *o) { record_op(o); refresh(); });
         return 1;
       }
     }
@@ -2632,7 +2729,7 @@ public:
         auto paths = fld::parse_uri_list(std::string(Fl::event_text(), Fl::event_length()));
         const std::string dest = f->second;
         fld::run_drop(fld::drop_action(paths, dest, Fl::event_state()), paths, dest,
-                      [](FileOp *) { refresh(); });
+                      [](FileOp *o) { record_op(o); refresh(); });
         return 1;
       }
     }
@@ -2661,7 +2758,7 @@ static void tree_populate(Fl_Tree_Item *it) {
   std::vector<std::string> names;
   for (auto &n : fld::list_dir(dir, S.show_hidden))
     if (fld::is_dir(fld::path_join(dir, n))) names.push_back(n);
-  std::sort(names.begin(), names.end(), [](auto &a, auto &b) { return strcasecmp(a.c_str(), b.c_str()) < 0; });
+  std::sort(names.begin(), names.end(), [](auto &a, auto &b) { return fld::natural_compare(a, b) < 0; });
   for (auto &n : names) tree_add(it, n, fld::path_join(dir, n));
 }
 
@@ -3896,6 +3993,7 @@ static int global_keys(int e) {
     case 'c': copy_to_clipboard(false); return 1;
     case 'x': copy_to_clipboard(true); return 1;
     case 'v': if (!in_search()) paste_into(g_cwd); return 1;
+    case 'z': undo(); return 1;
   }
   return 0;
 }
@@ -3992,6 +4090,7 @@ static void build_menu(fld::Menu &m, bool for_bar) {
   m.end_submenu();
 
   m.submenu("&Edit");
+  m.item(undo_label(), [] { undo(); }, (g_undo.empty() ? FL_MENU_INACTIVE : 0) | FL_MENU_DIVIDER, FL_CTRL + 'z');
   m.item("Cu&t", [] { copy_to_clipboard(true); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
   m.item("&Copy", [] { copy_to_clipboard(false); }, have_sel && !trash ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
   m.item("&Paste", [] { paste_into(g_cwd); }, trash || search ? FL_MENU_INACTIVE : 0, FL_CTRL + 'v');

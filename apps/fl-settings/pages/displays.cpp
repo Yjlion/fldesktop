@@ -4,6 +4,7 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
+#include <cstdlib>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Return_Button.H>
@@ -381,6 +382,33 @@ public:
     night_temp->callback(ncb, this);
     nf.note("Sunset and sunrise are worked out from the time zone (Date & Time).");
     update_night();
+
+    // how fl-wm draws the screen (wm.ini [behaviour] renderer=, read at login)
+    Form rf(g, X + 24, nf.y() + 16, lw);
+    rf.heading("Graphics");
+    rf.row("Drawing:", 28, wx, wy, ww);
+    Fl_Choice *rend = new Fl_Choice(wx, wy, std::min(ww, 300), 28);
+    rend->add("Automatic|Graphics card (OpenGL ES)|Graphics card (Vulkan, experimental)|Software (least memory)");
+    static const char *const kRenderers[] = {"auto", "gles2", "vulkan", "pixman"};
+    {
+      ConfigFile wm(wm_ini_path());
+      std::string r = wm.ini.get("behaviour", "renderer", "auto");
+      int v = 0;
+      for (int i = 0; i < 4; i++)
+        if (r == kRenderers[i]) v = i;
+      rend->value(v);
+    }
+    rend->callback([](Fl_Widget *w, void *) {
+      ConfigFile wm(wm_ini_path());
+      wm.ini.set("behaviour", "renderer", kRenderers[((Fl_Choice *)w)->value()]);
+      save_wm(wm);
+    });
+    static std::string rnote;
+    const char *cur = getenv("FLWM_RENDERER");
+    rnote = std::string("Takes effect at the next login") + (cur && *cur ? std::string(" (now: ") + cur + ")" : "") +
+            ". Software drawing needs about 50 MB less memory on older graphics cards, but more processor time"
+            " while windows move.";
+    rf.note(rnote.c_str(), 3);
     g->end();
     end();
     if (wl_display *dpy = fl_wl_display()) {

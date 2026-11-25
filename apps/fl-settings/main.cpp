@@ -113,6 +113,12 @@ static void rebuild_list() {
   }
   for (size_t i = 0; i < g_entries.size(); i++)
     if (g_entries[i].page_id == g_current) g_list->value((int)i + 1);
+  // selecting scrolls the line into view, which could hide the heading
+  // above it ("Personal" above "Appearance"): start from the top unless
+  // that would leave the selected line out of sight
+  int sel = g_list->value();
+  g_list->topline(1);
+  if (sel > 0 && !g_list->displayed(sel)) g_list->middleline(sel);
 }
 
 // The page area scrolls: pages keep the height their widgets need and a
@@ -363,7 +369,8 @@ int main(int argc, char **argv) {
   const int SIDE = sw > 0 && sw < 960 ? 190 : 230;
   const int W = sw > 0 ? std::max(600, std::min(1020, sw - 40)) : 1020;
   // at most 85% of the screen height: room above and below on 768 px screens
-  const int H = sh > 0 ? std::max(320, std::min(680, sh * 85 / 100)) : 680;
+  // (780 on a 1080p screen: the Appearance page fits, Wallpaper included)
+  const int H = sh > 0 ? std::max(320, std::min(780, sh * 85 / 100)) : 680;
   const fld::Palette &p = fld::palette();
   g_win = new Fl_Double_Window(W, H, "Settings");
   Fl_Group *side = new Fl_Group(0, 0, SIDE, H);

@@ -40,6 +40,8 @@ struct Pixels {
 
 Pixels crop(const Pixels &p, int x, int y, int w, int h); // clamped to the image
 Pixels resize(const Pixels &p, int w, int h);              // area averaging down, bilinear up
+// the same from pixels in memory: d bytes a pixel, rows `ld` bytes apart
+Pixels resize(const unsigned char *data, int src_w, int src_h, int d, int ld, int w, int h);
 // the other side for a new width or height that keeps the aspect ratio
 int keep_aspect(int old_w, int old_h, int new_side, bool new_is_width);
 

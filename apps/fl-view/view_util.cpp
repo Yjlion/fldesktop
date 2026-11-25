@@ -266,13 +266,19 @@ Pixels crop(const Pixels &p, int x, int y, int w, int h) {
   return out;
 }
 
-Pixels resize(const Pixels &p, int w, int h) {
+Pixels resize(const Pixels &p, int w, int h) { return resize(p.data.data(), p.w, p.h, p.d, p.w * p.d, w, h); }
+
+Pixels resize(const unsigned char *data, int src_w, int src_h, int d, int ld, int w, int h) {
+  struct Src {
+    const unsigned char *data;
+    int w, h, d, ld;
+  } p{data, src_w, src_h, d, ld};
   Pixels out;
   out.w = std::max(1, w);
   out.h = std::max(1, h);
   out.d = p.d;
   out.data.assign((size_t)out.w * out.h * p.d, 0);
-  if (p.w <= 0 || p.h <= 0) return out;
+  if (p.w <= 0 || p.h <= 0 || !data) return out;
   double sx = (double)p.w / out.w, sy = (double)p.h / out.h;
   for (int y = 0; y < out.h; y++) {
     for (int x = 0; x < out.w; x++) {
@@ -285,7 +291,7 @@ Pixels resize(const Pixels &p, int w, int h) {
           double wy = std::min(y1, yy + 1.0) - std::max(y0, (double)yy);
           for (int xx = (int)x0; xx < std::min(p.w, (int)std::ceil(x1)); xx++) {
             double wx = std::min(x1, xx + 1.0) - std::max(x0, (double)xx), wt = wx * wy;
-            const unsigned char *s = p.data.data() + ((size_t)yy * p.w + xx) * p.d;
+            const unsigned char *s = p.data + (size_t)yy * p.ld + (size_t)xx * p.d;
             for (int c = 0; c < p.d; c++) acc[c] += s[c] * wt;
             wsum += wt;
           }
@@ -298,7 +304,7 @@ Pixels resize(const Pixels &p, int w, int h) {
         int x1 = std::min(x0 + 1, p.w - 1), y1 = std::min(y0 + 1, p.h - 1);
         double ax = fx - x0, ay = fy - y0;
         for (int c = 0; c < p.d; c++) {
-          auto px = [&](int xx, int yy) { return (double)p.data[((size_t)yy * p.w + xx) * p.d + c]; };
+          auto px = [&](int xx, int yy) { return (double)p.data[(size_t)yy * p.ld + (size_t)xx * p.d + c]; };
           double v = (px(x0, y0) * (1 - ax) + px(x1, y0) * ax) * (1 - ay) + (px(x0, y1) * (1 - ax) + px(x1, y1) * ax) * ay;
           o[c] = (unsigned char)std::lround(std::max(0.0, std::min(255.0, v)));
         }

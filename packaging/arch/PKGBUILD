@@ -8,7 +8,7 @@ pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
          fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring
-         fldesktop-passwords fldesktop-secrets fldesktop-pinentry fldesktop-logs fldesktop-services fldesktop-paint fldesktop-fonts fldesktop-clock fldesktop-remote fldesktop-scan fldesktop-welcome)
+         fldesktop-passwords fldesktop-pinentry fldesktop-logs fldesktop-services fldesktop-paint fldesktop-fonts fldesktop-clock fldesktop-remote fldesktop-scan fldesktop-welcome)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
 pkgdesc="Lightweight Wayland desktop built with FLTK"
@@ -92,6 +92,8 @@ package_fldesktop() {
               'fldesktop-clock: clocks, alarms and timers'
               'fldesktop-remote: VNC and RDP remote desktop viewer'
               'fldesktop-scan: document scanner (SANE)'
+              'gnome-keyring: saved passwords'
+              'orca: screen reader'
               'plymouth: boot splash'
               'fldesktop-plymouth-theme: the fldesktop boot splash')
   arch=(any)
@@ -218,7 +220,7 @@ package_fldesktop-web() {
   pkgdesc="fldesktop web browser (WPE WebKit)"
   depends=(fltk glib2 wpewebkit libxml2)
   optdepends=("xdg-utils: open other kinds of links" "gst-plugins-good: audio and video in pages"
-              "fldesktop-secrets: saved passwords (or another Secret Service: gnome-keyring, keepassxc)")
+              "gnome-keyring: saved passwords (or another Secret Service, e.g. keepassxc)")
   _app web
 }
 
@@ -234,16 +236,6 @@ package_fldesktop-media-player() {
   _app media-player
   _install_files usr/bin/fl-video usr/share/man/man1/fl-video.1
 }
-package_fldesktop-secrets() {
-  pkgdesc="fldesktop password store (Secret Service), in place of GNOME Keyring"
-  depends=(glib2 openssl pam fltk)
-  optdepends=('libsecret: secret-tool')
-  install=fldesktop-secrets.install
-  _stage
-  _install_files usr/bin/fl-secretd usr/lib/security/pam_fldesktop_keyring.so \
-    usr/share/dbus-1/services/org.fldesktop.Secrets.service usr/share/man/man1/fl-secretd.1
-}
-
 package_fldesktop-pinentry() {
   pkgdesc="fldesktop passphrase prompt for GnuPG (pinentry)"
   depends=(fltk glib2)
@@ -255,7 +247,7 @@ package_fldesktop-pinentry() {
 package_fldesktop-passwords() {
   pkgdesc="fldesktop passwords and keys (Secret Service, SSH, GPG)"
   depends=(fltk glib2)
-  optdepends=('fldesktop-secrets: the password store (or gnome-keyring)' 'openssh: SSH keys' 'gnupg: GPG keys')
+  optdepends=('gnome-keyring: a password store' 'openssh: SSH keys' 'gnupg: GPG keys')
   _app keyring
 }
 

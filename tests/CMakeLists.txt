@@ -588,14 +588,3 @@ if(TARGET fl-pinentry-util)
   endif()
 endif()
 
-# fl-secretd: keyring files and the Secret Service transport crypto; then the
-# whole service through libsecret's secret-tool on a private bus
-if(TARGET fl-secretd-store)
-  add_executable(test_secretd test_secretd.cpp)
-  target_link_libraries(test_secretd PRIVATE fl-secretd-store)
-  add_test(NAME secretd COMMAND test_secretd)
-  if(TARGET fl-secretd)
-    add_test(NAME secretd-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/secretd-smoke.sh $<TARGET_FILE:fl-secretd>)
-    set_tests_properties(secretd-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
-  endif()
-endif()

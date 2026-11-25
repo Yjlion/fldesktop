@@ -33,11 +33,17 @@ public:
   void draw() override;
   int handle(int e) override;
   void resize(int x, int y, int w, int h) override;
+  void show() override;
+  void hide() override;
 
 private:
   unsigned mods() const;
   void send_key(bool down);
   std::unique_ptr<Backend> backend_;
+  // GPU frames straight to the compositor (null: read back and drawn here)
+  std::unique_ptr<wl_present::Presenter> presenter_;
+  bool direct_shown_ = false; // the last frame went to the presenter
+  void update_presenter();
   WebKitWebView *view_ = nullptr;
   std::shared_ptr<const Frame> frame_;
   std::vector<unsigned char> rgb_; // frame_ as RGB, rgb_w_ x rgb_h_

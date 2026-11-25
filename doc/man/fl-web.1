@@ -102,6 +102,16 @@ Show or hide the menu bar.
 \fB\-\-adblock\-convert\fR \fILIST\fR...
 Print the WebKit content blocker rules made from filter list files (the rule and skipped filter
 counts go to standard error).
+.SH ENVIRONMENT
+.TP
+\fBFL_WEB_SOFTWARE\fR=1
+WebKit renders with the CPU instead of the GPU.
+.TP
+\fBFL_WEB_READBACK\fR=1
+Frames rendered by the GPU are copied back into memory and drawn by fl-web.
+Normally they go to the compositor as they are (DMA-BUF
+buffers on a subsurface of the window), which costs no copying; fl-web falls
+back to copying by itself when the compositor cannot take them.
 .SH FILES
 .TP
 \fI~/.config/fldesktop/web.ini\fR

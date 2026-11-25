@@ -273,6 +273,7 @@ public:
   Fl_Input *find_input;
   Fl_Box *find_count;
   Fl_Box *status;
+  Fl_Window *status_win; // a subwindow: kept above the page's own subsurface
   std::vector<Tab *> tabs;
   int cur = -1;
   bool fullscreen = false;
@@ -381,13 +382,8 @@ public:
     findbar->resizable(fill);
     findbar->end();
     findbar->hide();
-    status = new Fl_Box(0, H - 22, 10, 22);
-    status->box(FL_FLAT_BOX);
-    status->color(p.bg2);
-    status->labelsize(12);
-    status->labelcolor(p.fg);
-    status->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
-    status->hide();
+    status_win = nullptr; // the link under the pointer (set_status)
+    status = nullptr;
     win->resizable(content);
     win->end();
     win->size_range(400, 300);
@@ -706,17 +702,48 @@ public:
   void set_status(const std::string &s, double secs = 0) {
     status_text = fld::escape_at(s);
     Fl::remove_timeout(hide_status, this);
-    if (s.empty()) { status->hide(); win->redraw(); return; }
+    if (s.empty()) {
+      remove_status();
+      win->redraw();
+      return;
+    }
     fl_font(FL_HELVETICA, 12);
     int w = std::min(win->w() - 20, (int)fl_width(status_text.c_str()) + 16);
     int y = content->y() + content->h() - 22;
-    status->resize(0, y, w, 22);
+    // A subwindow over the page (pages may be subsurfaces of their own), made
+    // at its size each time: FLTK does not redraw a resized subwindow at once
+    if (!status_win || status_win->x() != 0 || status_win->y() != y || status_win->w() != w) {
+      remove_status();
+      win->begin();
+      status_win = new Fl_Window(0, y, w, 22);
+      status = new Fl_Box(0, 0, w, 22);
+      status->box(FL_FLAT_BOX);
+      status->color(fld::palette().bg2);
+      status->labelsize(12);
+      status->labelcolor(fld::palette().fg);
+      status->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
+      status_win->end();
+      win->end();
+      web::wl_present::set_overlay(win, status_win);
+    }
     status->label(status_text.c_str());
-    status->show();
+    status->redraw();
+    status_win->show();
+    web::wl_present::pass_input(status_win); // the pointer goes on to the page
+    web::wl_present::overlays_changed(win);
     win->redraw();
     if (secs > 0) Fl::add_timeout(secs, hide_status, this);
   }
   static void hide_status(void *d) { ((Browser *)d)->set_status(""); }
+  void remove_status() {
+    if (!status_win) return;
+    web::wl_present::set_overlay(win, nullptr);
+    status_win->hide();
+    win->remove(status_win);
+    Fl::delete_widget(status_win);
+    status_win = nullptr;
+    status = nullptr;
+  }
 
   // ---- find in page
   void find_open() {
@@ -891,6 +918,8 @@ void BrowserWindow::hide() {
       delete t;
     }
     g_windows.erase(std::remove(g_windows.begin(), g_windows.end(), b), g_windows.end());
+    Fl::remove_timeout(Browser::hide_status, b);
+    b->remove_status();
     Fl::delete_widget(b->win);
     delete b;
   }, b);

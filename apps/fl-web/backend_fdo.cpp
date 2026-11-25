@@ -1,7 +1,9 @@
 // Backend for WPE WebKit with libwpe and WPEBackend-fdo (Debian 13's
 // WebKit). With a GPU, WebKit renders with it and the view backend exports
-// EGL images, which are read back into memory for FLTK to draw; otherwise it
-// renders with the CPU and exports shared memory buffers.
+// EGL images: their DMA-BUFs go to the compositor as they are
+// (wl_present.h), or they are read back into memory for FLTK to draw when it
+// cannot take them. Without a GPU WebKit renders with the CPU and exports
+// shared memory buffers.
 #include "backend.h"
 #include "gl_readback.h"
 
@@ -12,6 +14,10 @@
 #include <wpe/wpe.h>
 
 #include <cstring>
+#include <map>
+#include <tuple>
+#include <unistd.h>
+#include <sys/stat.h>
 
 namespace web {
 namespace {
@@ -61,7 +67,10 @@ public:
     }
     proxy_->exportable = exportable_;
   }
-  ~FdoBackend() override { proxy_->owner = nullptr; }
+  ~FdoBackend() override {
+    proxy_->owner = nullptr;
+    for (auto &k : keys_) wl_present::forget(k.second.first.get());
+  }
 
   WebKitWebView *create_view(WebKitWebView *related, WebKitSettings *settings, WebKitNetworkSession *session,
                              WebKitUserContentManager *ucm) override {
@@ -173,7 +182,89 @@ private:
       wpe_view_backend_exportable_fdo_dispatch_frame_complete(p->exportable);
       return;
     }
+    if (p->owner->direct && p->owner->on_dmabuf && p->owner->present(image)) return;
     p->owner->copy_image(image);
+  }
+
+  // EGL_MESA_image_dma_buf_export: the DMA-BUF behind an EGL image
+  static bool exporter(PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC &query, PFNEGLEXPORTDMABUFIMAGEMESAPROC &exp) {
+    static int state = 0;
+    static PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC q = nullptr;
+    static PFNEGLEXPORTDMABUFIMAGEMESAPROC e = nullptr;
+    if (!state) {
+      state = -1;
+      EGLDisplay dpy = gpu_display();
+      const char *ext = dpy != EGL_NO_DISPLAY ? eglQueryString(dpy, EGL_EXTENSIONS) : nullptr;
+      if (ext && strstr(ext, "EGL_MESA_image_dma_buf_export")) {
+        q = (PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC)eglGetProcAddress("eglExportDMABUFImageQueryMESA");
+        e = (PFNEGLEXPORTDMABUFIMAGEMESAPROC)eglGetProcAddress("eglExportDMABUFImageMESA");
+        if (q && e) state = 1;
+      }
+    }
+    query = q;
+    exp = e;
+    return state > 0;
+  }
+
+  // the image's DMA-BUF to the compositor; false: read it back instead
+  bool present(wpe_fdo_egl_exported_image *image) {
+    PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC query;
+    PFNEGLEXPORTDMABUFIMAGEMESAPROC exp;
+    EGLDisplay dpy = gpu_display();
+    EGLImageKHR img = wpe_fdo_egl_exported_image_get_egl_image(image);
+    Dmabuf b;
+    b.width = (int)wpe_fdo_egl_exported_image_get_width(image);
+    b.height = (int)wpe_fdo_egl_exported_image_get_height(image);
+    int fourcc = 0, planes = 0;
+    EGLuint64KHR mod = 0;
+    EGLint strides[4] = {}, offsets[4] = {};
+    if (!exporter(query, exp) || !query(dpy, img, &fourcc, &planes, &mod) || planes < 1 || planes > 4 ||
+        !exp(dpy, img, b.fd, strides, offsets)) {
+      direct = false;
+      g_message("fl-web: WebKit's images cannot be handed to the compositor, reading them back");
+      return false;
+    }
+    b.fourcc = (uint32_t)fourcc;
+    b.modifier = mod;
+    b.planes = planes;
+    for (int i = 0; i < planes; i++) {
+      b.stride[i] = (uint32_t)strides[i];
+      b.offset[i] = (uint32_t)offsets[i];
+    }
+    // the same buffer comes back as a new image each frame: known by its file
+    struct stat st = {};
+    fstat(b.fd[0], &st);
+    const void *key = key_for(st.st_dev, st.st_ino, b);
+    wpe_view_backend_exportable_fdo *e = exportable_;
+    bool ok = on_dmabuf(
+        key, b, {}, true, [e] { wpe_view_backend_exportable_fdo_dispatch_frame_complete(e); },
+        [e, image] { wpe_view_backend_exportable_fdo_egl_dispatch_release_exported_image(e, image); });
+    for (int i = 0; i < planes; i++)
+      if (b.fd[i] >= 0) close(b.fd[i]);
+    if (!ok) {
+      direct = false;
+      g_message("fl-web: the compositor does not take WebKit's buffers, reading them back");
+    }
+    return ok;
+  }
+  // A stable key per buffer: the newest few are kept (WebKit cycles through
+  // two or three of the same size); older ones are forgotten
+  using BufId = std::tuple<dev_t, ino_t, int, int, uint32_t, uint64_t>;
+  const void *key_for(dev_t dev, ino_t ino, const Dmabuf &b) {
+    BufId id{dev, ino, b.width, b.height, b.fourcc, b.modifier};
+    auto it = keys_.find(id);
+    if (it == keys_.end()) {
+      if (keys_.size() >= 6) {
+        auto oldest = keys_.begin();
+        for (auto k = keys_.begin(); k != keys_.end(); ++k)
+          if (k->second.second < oldest->second.second) oldest = k;
+        wl_present::forget(oldest->second.first.get());
+        keys_.erase(oldest);
+      }
+      it = keys_.emplace(id, std::make_pair(std::make_unique<char>(), 0ull)).first;
+    }
+    it->second.second = ++use_;
+    return it->second.first.get();
   }
   // Two frames are kept and reused: the newest goes to the view, the next one
   // is read into the other. Comparing it with the newest gives the damage
@@ -233,6 +324,8 @@ private:
     if (f) deliver(f);
   }
 
+  std::map<BufId, std::pair<std::unique_ptr<char>, unsigned long long>> keys_;
+  unsigned long long use_ = 0;
   std::shared_ptr<Frame> frames_[2];
   int cur_ = 0; // frames_[cur_] is the newest
   wpe_view_backend_exportable_fdo *exportable_ = nullptr;

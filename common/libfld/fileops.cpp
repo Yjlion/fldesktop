@@ -80,7 +80,20 @@ std::string dest_for(const std::string &dir, const std::string &src, FileOp::Con
   }
 }
 
+// whether dest_for will remove a file of the same name to make room
+bool replaces_file(const std::string &dir, const std::string &src, FileOp::Conflict c) {
+  if (c != FileOp::REPLACE) return false;
+  std::string d = fld::path_join(dir, fld::basename(src));
+  struct stat st;
+  return lstat(d.c_str(), &st) == 0 && fld::abs_path(d) != fld::abs_path(src);
+}
+
 } // namespace
+
+void FileOp::record(const std::string &src, const std::string &dst) {
+  std::lock_guard<std::mutex> l(mtx);
+  done.emplace_back(src, dst);
+}
 
 void FileOp::run() {
   if (kind == COPY || kind == MOVE) {
@@ -95,6 +108,7 @@ void FileOp::run() {
     switch (kind) {
       case COPY: {
         bool skip;
+        bool replaces = replaces_file(dest_dir, src, conflict);
         std::string dst = dest_for(dest_dir, src, conflict, skip);
         if (skip) break;
         if (fld::starts_with(fld::abs_path(dst) + "/", fld::abs_path(src) + "/")) {
@@ -102,11 +116,13 @@ void FileOp::run() {
           break;
         }
         if (!fld::copy_recursive(src, dst, &err, progress_cb, this)) error(err);
+        else if (!replaces) record(src, dst);
         break;
       }
       case MOVE: {
         bool skip;
         if (fld::abs_path(fld::dirname(src)) == fld::abs_path(dest_dir)) break; // already there
+        bool replaces = replaces_file(dest_dir, src, conflict);
         std::string dst = dest_for(dest_dir, src, conflict, skip);
         if (skip) break;
         if (fld::starts_with(fld::abs_path(dst) + "/", fld::abs_path(src) + "/")) {
@@ -115,9 +131,11 @@ void FileOp::run() {
         }
         if (rename(src.c_str(), dst.c_str()) == 0) {
           done_bytes += tree_size(dst);
+          if (!replaces) record(src, dst);
         } else if (errno == EXDEV) {
           if (!fld::copy_recursive(src, dst, &err, progress_cb, this)) error(err);
           else if (!fld::remove_recursive(src)) error("Copied, but could not remove " + src);
+          else if (!replaces) record(src, dst);
         } else {
           error(fld::basename(src) + ": " + strerror(errno));
         }
@@ -128,6 +146,7 @@ void FileOp::run() {
         break;
       case TRASH:
         if (!fld::trash(src, &err)) error(err);
+        else record(src, "");
         break;
     }
     done_items++;

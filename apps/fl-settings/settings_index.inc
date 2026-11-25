@@ -137,6 +137,8 @@
 {"displays", "When"},
 {"displays", "From"},
 {"displays", "Warmth"},
+{"displays", "Graphics"},
+{"displays", "Drawing"},
 {"sound", "Open Volume Mixer"},
 {"proxy", "Use the proxy settings the session started with"},
 {"proxy", "No proxy"},

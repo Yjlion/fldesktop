@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "calc_engine.h"
+#include "fld/atspi.h"
 #include "fld/window_move.h"
 #include "fld/ini.h"
 #include "fld/menus.h"
@@ -104,7 +105,7 @@ static void input(const std::string &t) {
   if (S.just_evaluated) {
     // continuing with an operator keeps the result, anything else starts fresh
     bool op = t == "+" || t == "−" || t == "-" || t == "×" || t == "÷" || t == "*" || t == "/" || t == "^" ||
-              t == "!" || t == "%" || t == "²";
+              t == "!" || t == "%" || t == "²" || (!t.empty() && t[0] == '^'); // x² inserts "^2"
     if (S.error) S.expr.clear();
     else if (op) S.expr = "ans";
     else S.expr.clear();
@@ -114,12 +115,23 @@ static void input(const std::string &t) {
   update();
 }
 
+// √ and ∛ work on what is already there (9 √ → √(9) = 3), like x²; with
+// nothing to apply to they open a bracket for what follows.
+static void root_key(const char *sym) {
+  if (S.just_evaluated) {
+    S.expr = S.error ? "" : "ans";
+    S.just_evaluated = false;
+  }
+  S.expr = calc::apply_function(S.expr, sym);
+  update();
+}
+
 static void backspace() {
   if (S.just_evaluated) { S.just_evaluated = false; S.expr.clear(); update(); return; }
   if (S.expr.empty()) return;
   // remove a whole function name like "sin(" at once
   static const char *funcs[] = {"asin(", "acos(", "atan(", "sinh(", "cosh(", "tanh(", "sin(", "cos(",
-                                "tan(", "sqrt(", "log(", "ln(", "exp(", "abs(", "ans", "pi"};
+                                "tan(", "sqrt(", "√(", "∛(", "cbrt(", "log(", "ln(", "exp(", "abs(", "ans", "pi"};
   for (auto f : funcs) {
     if (fld::ends_with(S.expr, f)) {
       S.expr.erase(S.expr.size() - strlen(f));
@@ -163,7 +175,8 @@ struct Key {
 static void key_cb(Fl_Widget *w, void *data) {
   const Key *k = (const Key *)data;
   std::string lab = k->label;
-  if (k->insert) input(k->insert);
+  if (lab == "√" || lab == "∛") root_key(k->label);
+  else if (k->insert) input(k->insert);
   else if (lab == "C") clear_all();
   else if (lab == "⌫") backspace();
   else if (lab == "=") evaluate();
@@ -207,7 +220,7 @@ static Fl_Button *make_key(int x, int y, int w, int h, const Key *k) {
 }
 
 static const Key kBasic[] = {
-    {"%", "%", 2}, {"x²", "^2", 2}, {"√", "sqrt(", 2}, {"⌫", nullptr, 3},
+    {"%", "%", 2}, {"x²", "^2", 2}, {"√", nullptr, 2}, {"⌫", nullptr, 3},
     {"C", nullptr, 3}, {"(", "(", 1}, {")", ")", 1}, {"÷", "÷", 1},
     {"7", "7", 0}, {"8", "8", 0}, {"9", "9", 0}, {"×", "×", 1},
     {"4", "4", 0}, {"5", "5", 0}, {"6", "6", 0}, {"−", "−", 1},
@@ -220,7 +233,7 @@ static const Key kSci[] = {
     {"sin", "sin(", 2}, {"cos", "cos(", 2}, {"tan", "tan(", 2}, {"π", "pi", 2},
     {"sin⁻¹", "asin(", 2}, {"cos⁻¹", "acos(", 2}, {"tan⁻¹", "atan(", 2}, {"e", "e", 2},
     {"ln", "ln(", 2}, {"log", "log(", 2}, {"eˣ", "exp(", 2}, {"n!", "!", 2},
-    {"sinh", "sinh(", 2}, {"cosh", "cosh(", 2}, {"tanh", "tanh(", 2}, {"∛", "cbrt(", 2},
+    {"sinh", "sinh(", 2}, {"cosh", "cosh(", 2}, {"tanh", "tanh(", 2}, {"∛", nullptr, 2},
     {"MC", nullptr, 3}, {"MR", nullptr, 3}, {"M+", nullptr, 3}, {"M−", nullptr, 3},
 };
 
@@ -316,6 +329,9 @@ int main(int argc, char **argv) {
   g_menu->add("&View/C&lear History", 0, menu_cb, (void *)6);
   g_menu->add("&Help/&About", 0, menu_cb, (void *)7);
   g_display = new Display(0, MENU_H, 320, DISP_H);
+  // screen readers: the expression and its result
+  fld::atspi_describe(g_display, 61 /* ROLE_TEXT */, "Result");
+  fld::atspi_describe_text(g_display, [] { return S.expr.empty() ? S.result : S.expr + " = " + S.result; });
 
   g_sci = new Fl_Group(8, 0, 4 * KW + 3 * GAP, 6 * KH + 5 * GAP);
   for (int i = 0; i < 24; i++) {

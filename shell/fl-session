@@ -74,6 +74,10 @@ if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-run-session >/dev/null 
 	exec dbus-run-session -- "$0" "$@"
 fi
 
+# this fl-wm is the session's compositor: it exports WAYLAND_DISPLAY and the
+# rest to D-Bus and systemd activated services (a nested fl-wm doesn't)
+export FLWM_SESSION=1
+
 # fl-wm falls back to software rendering itself when the GPU's renderer
 # can't be created. If it still dies right away (a driver that crashes,
 # EGL that fails later), start it once more with software rendering.

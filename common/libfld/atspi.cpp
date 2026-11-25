@@ -125,6 +125,7 @@ int g_next_id = 1;
 std::map<int, Fl_Widget *> g_widget_of; // node -> widget (FLTK thread only)
 std::map<int, int> g_item_of;           // node -> list item index (1-based) or tab child
 std::map<Fl_Widget *, std::pair<unsigned, std::string>> g_described;
+std::map<Fl_Widget *, std::function<std::string()>> g_text_of;
 
 int id_for(const void *w, int item, std::map<std::pair<const void *, int>, int> &seen) {
   auto key = std::make_pair(w, item);
@@ -175,6 +176,62 @@ struct Builder {
     }
     n.name = accessible_name(w->label() ? w->label() : "", w->tooltip() ? w->tooltip() : "");
     if (n.name.empty() && w->label() == nullptr && w->tooltip()) n.name = clean_label(w->tooltip());
+  }
+
+  // the items of a menu array from `first` up to its end (a null label),
+  // submenus as menus with their own items; item_of holds the item's index
+  void add_menu_items(Fl_Menu_ *mb, const Fl_Menu_Item *menu, int first, int size, Node &parent, Fl_Widget *w) {
+    if (!menu) return;
+    for (int i = first; i < size && menu[i].label();) {
+      const Fl_Menu_Item &m = menu[i];
+      int next = (int)(m.next() - menu);
+      if (!m.visible()) {
+        if (next <= i) break;
+        i = next;
+        continue;
+      }
+      Node c;
+      c.id = id_for(w, 200000 + i, seen);
+      c.parent = parent.id;
+      c.name = clean_label(m.label());
+      c.states = bit(STATE_VISIBLE) | bit(STATE_SHOWING);
+      if (m.active()) c.states |= bit(STATE_ENABLED) | bit(STATE_SENSITIVE);
+      c.x = parent.x;
+      c.y = parent.y;
+      c.w = parent.w;
+      c.h = parent.h;
+      if (m.submenu()) {
+        c.role = ROLE_MENU;
+        s.nodes[c.id] = c;
+        if (!(m.flags & FL_SUBMENU_POINTER)) add_menu_items(mb, menu, i + 1, size, s.nodes[c.id], w);
+        else add_menu_items(mb, (const Fl_Menu_Item *)m.user_data(), 0, 1 << 16, s.nodes[c.id], w);
+      } else {
+        bool radio = m.flags & FL_MENU_RADIO, toggle = m.flags & FL_MENU_TOGGLE;
+        c.role = radio ? ROLE_RADIO_MENU_ITEM : toggle ? ROLE_CHECK_MENU_ITEM : ROLE_MENU_ITEM;
+        c.action = "click";
+        if (radio || toggle) {
+          c.states |= bit(STATE_CHECKABLE);
+          if (m.value()) c.states |= bit(STATE_CHECKED);
+        }
+        // the shortcut, as a screen reader says it ("Ctrl+S")
+        if (m.shortcut()) {
+          const char *sc = fl_shortcut_label(m.shortcut());
+          if (sc && *sc) c.description = sc;
+        }
+        // activated by its place in the menu bar's array (items of a
+        // submenu pointer outside it are only read)
+        long idx = &m - mb->menu();
+        if (idx >= 0 && idx < mb->size()) {
+          widget_of[c.id] = w;
+          item_of[c.id] = 200000 + (int)idx;
+        } else
+          c.action.clear();
+        s.nodes[c.id] = c;
+      }
+      parent.children.push_back(c.id);
+      if (next <= i) break;
+      i = next;
+    }
   }
 
   int add(Fl_Widget *w, int parent, int ox, int oy) {
@@ -250,24 +307,9 @@ struct Builder {
       if (b->visible_focus()) n.states |= bit(STATE_FOCUSABLE);
     } else if (auto *mb = dynamic_cast<Fl_Menu_Bar *>(w)) {
       n.role = ROLE_MENU_BAR;
-      // the top level menus, by name
-      const Fl_Menu_Item *m = mb->menu();
-      for (int i = 0; m && i < mb->size() && m[i].label(); i = (int)(m[i].next() - m)) {
-        Node c;
-        c.id = id_for(w, i, seen);
-        c.parent = n.id;
-        c.role = ROLE_MENU;
-        c.name = clean_label(m[i].label());
-        c.states = bit(STATE_VISIBLE) | bit(STATE_SHOWING) | bit(STATE_ENABLED) | bit(STATE_SENSITIVE);
-        c.x = n.x;
-        c.y = n.y;
-        c.w = n.w;
-        c.h = n.h;
-        widget_of[c.id] = w;
-        n.children.push_back(c.id);
-        s.nodes[c.id] = c;
-        if (!m[i].next()) break;
-      }
+      // the menus and their items (File › Save): a screen reader can reach
+      // and activate every item, as from the keyboard
+      add_menu_items(mb, mb->menu(), 0, mb->size(), n, w);
     } else if (auto *ch = dynamic_cast<Fl_Menu_ *>(w)) {
       n.role = ROLE_COMBO_BOX;
       if (const Fl_Menu_Item *mv = ch->mvalue()) n.description = clean_label(mv->label() ? mv->label() : "");
@@ -399,6 +441,12 @@ struct Builder {
       if (d->second.first) n.role = d->second.first;
       if (!d->second.second.empty()) n.name = d->second.second;
     }
+    auto t = g_text_of.find(w);
+    if (t != g_text_of.end()) {
+      n.has_text = true;
+      n.text = t->second();
+      n.states |= bit(STATE_READ_ONLY) | bit(STATE_MULTI_LINE);
+    }
     if (descend)
       if (Fl_Group *g = w->as_group())
         for (int i = 0; i < g->children(); i++) {
@@ -482,6 +530,16 @@ bool do_action(int id) {
     if (b->type() == FL_RADIO_BUTTON || dynamic_cast<Fl_Round_Button *>(w)) b->setonly();
     else if (check || b->type() == FL_TOGGLE_BUTTON) b->value(!b->value());
     b->do_callback();
+    return true;
+  }
+  if (auto *bar = dynamic_cast<Fl_Menu_Bar *>(w)) {
+    // an item of the menu bar: chosen as if from the menu
+    if (item == g_item_of.end() || item->second < 200000) return false;
+    int idx = item->second - 200000;
+    if (!bar->menu() || idx >= bar->size()) return false;
+    const Fl_Menu_Item *m = bar->menu() + idx;
+    if (!m->label() || m->submenu() || !m->active() || !bar->active_r()) return false;
+    bar->picked(m);
     return true;
   }
   if (auto *mb = dynamic_cast<Fl_Menu_Button *>(w)) {
@@ -1140,5 +1198,10 @@ void atspi_start(const std::string &app_name) {
 bool atspi_running() { return g_running && g_bus; }
 
 void atspi_describe(Fl_Widget *w, unsigned role, const std::string &name) { g_described[w] = {role, name}; }
+void atspi_describe_text(Fl_Widget *w, std::function<std::string()> text) { g_text_of[w] = std::move(text); }
+void atspi_forget(Fl_Widget *w) {
+  g_described.erase(w);
+  g_text_of.erase(w);
+}
 
 } // namespace fld

@@ -10,11 +10,12 @@
 
 #include "fld/icons.h"
 #include "fld/theme.h"
+#include "fld/text.h"
 #include "panel.h"
 
 namespace {
 
-const int W = 260, H = 64;
+const int W = 300, H = 64; // wide enough for "Built-in Audio Analog Stereo"
 const double kShowSeconds = 1.6;
 
 class OsdWindow : public Fl_Double_Window {
@@ -56,7 +57,10 @@ public:
       if (!text.empty()) {
         fl_font(FL_HELVETICA, fld::ui_font_size() - 2);
         fl_color(p.fg_dim);
-        fl_draw(text.c_str(), x, 4, bw, by - 6, FL_ALIGN_LEFT | FL_ALIGN_BOTTOM | FL_ALIGN_CLIP);
+        // the whole width up to the edge (the value is on the bar's line);
+        // a long device name ends with "…" instead of being cut off
+        std::string t = fld::ellipsize(text, right - x);
+        fl_draw(fld::escape_at(t).c_str(), x, 4, right - x, by - 6, FL_ALIGN_LEFT | FL_ALIGN_BOTTOM | FL_ALIGN_CLIP);
       }
     } else {
       fl_font(FL_HELVETICA_BOLD, fld::ui_font_size() + 1);

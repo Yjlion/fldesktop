@@ -1,4 +1,5 @@
 #include "term_widget.h"
+#include "fld/atspi.h"
 
 #include <FL/Fl.H>
 #include <FL/Fl_Scrollbar.H>
@@ -70,9 +71,13 @@ TermWidget::TermWidget(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
   vterm_state_set_bold_highbright(state_, 1);
   vterm_screen_reset(screen_, 1);
   measure_font();
+  // screen readers: a terminal with the text it shows
+  fld::atspi_describe(this, 60 /* ROLE_TERMINAL */, "Terminal");
+  fld::atspi_describe_text(this, [this] { return screen_text(); });
 }
 
 TermWidget::~TermWidget() {
+  fld::atspi_forget(this);
   Fl::remove_timeout(blink_cb, this);
   Fl::remove_timeout(repaint_cb, this);
   if (fd_ >= 0) {
@@ -505,6 +510,28 @@ std::vector<std::u32string> TermWidget::all_lines() const {
     while (!line.empty() && line.back() == U' ') line.pop_back();
     out.push_back(std::move(line));
   }
+  return out;
+}
+
+std::string TermWidget::screen_text() const {
+  std::string out;
+  long first = (long)sb_.size() - scroll_;
+  VTermScreenCell cell;
+  for (long l = first; l < first + rows_; l++) {
+    std::string line;
+    for (int c = 0; c < cols_; c++) {
+      if (!get_cell(l, c, cell)) break;
+      if (cell.chars[0] == (uint32_t)-1) continue; // the second column of a wide character
+      uint32_t ch = cell.chars[0] ? cell.chars[0] : ' ';
+      char buf[8];
+      int n = fl_utf8encode(ch, buf);
+      line.append(buf, (size_t)n);
+    }
+    while (!line.empty() && line.back() == ' ') line.pop_back();
+    out += line;
+    out += '\n';
+  }
+  while (!out.empty() && out.back() == '\n') out.pop_back();
   return out;
 }
 

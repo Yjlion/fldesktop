@@ -30,7 +30,7 @@ static int g_failures = 0, g_checks = 0;
   do {                                                                             \
     g_checks++;                                                                    \
     double _a = (a), _b = (b);                                                     \
-    if (std::fabs(_a - _b) > 1e-9 * (1 + std::fabs(_b))) {                         \
+    if (!(std::fabs(_a - _b) <= 1e-9 * (1 + std::fabs(_b)))) { /* NaN fails too */  \
       g_failures++;                                                                \
       fprintf(stderr, "%s:%d: %s = %.15g, expected %.15g\n", __FILE__, __LINE__, #a, _a, _b); \
     }                                                                              \

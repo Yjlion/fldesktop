@@ -43,7 +43,9 @@ private:
     rep("÷", "/");
     rep("−", "-");
     rep("π", "pi");
-    rep("√", "sqrt");
+    // a space after the name: "√9" is sqrt of 9, not a name "sqrt9"
+    rep("√", "sqrt ");
+    rep("∛", "cbrt ");
     rep("²", "^2");
     return s;
   }
@@ -258,6 +260,27 @@ std::string format(double v) {
   // "-0" -> "0"
   if (s == "-0") s = "0";
   return s;
+}
+
+std::string apply_function(const std::string &e, const std::string &fn) {
+  size_t i = e.size();
+  if (i == 0) return fn + "(";
+  if (e[i - 1] == ')') {
+    int depth = 0;
+    while (i > 0) {
+      char c = e[--i];
+      if (c == ')') depth++;
+      else if (c == '(' && --depth == 0) break;
+    }
+    if (depth != 0) return e + fn + "(";
+    // the function name in front of the bracket (sin, √, ...) goes with it
+    while (i > 0 && (isalpha((unsigned char)e[i - 1]) || ((unsigned char)e[i - 1] & 0x80))) i--;
+  } else {
+    unsigned char last = (unsigned char)e[i - 1];
+    if (!isalnum(last) && last != '.') return e + fn + "(";
+    while (i > 0 && (isalnum((unsigned char)e[i - 1]) || e[i - 1] == '.')) i--;
+  }
+  return e.substr(0, i) + fn + "(" + e.substr(i) + ")";
 }
 
 } // namespace calc

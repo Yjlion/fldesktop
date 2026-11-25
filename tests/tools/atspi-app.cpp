@@ -6,6 +6,7 @@
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Output.H>
 
 #include "fld/theme.h"
@@ -21,6 +22,10 @@ int main(int argc, char **argv) {
   vol.tooltip("Volume");
   vol.range(0, 100);
   vol.step(1);
+  Fl_Menu_Bar bar(0, 0, 400, 18);
+  bar.add("&File/&Save", FL_CTRL + 's', [](Fl_Widget *, void *r) { ((Fl_Output *)r)->value("saved"); }, &result);
+  bar.add("&File/&Quit", FL_CTRL + 'q', [](Fl_Widget *, void *) { exit(0); });
+  bar.add("&View/&History", 0, nullptr, nullptr, FL_MENU_TOGGLE);
   Fl_Hold_Browser list(90, 190, 200, 100);
   list.add("Apple");
   list.add("@bBanana");

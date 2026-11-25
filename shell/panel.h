@@ -158,4 +158,5 @@ void privacy_video(const std::vector<std::string> &users, bool running);
 void dnd_menu_items(fld::Menu &m);
 // panel_network.cpp: the network button's popup and right-click menu
 void network_popup(Fl_Widget *button);
+void network_popup_refresh(); // the open popup follows a change of NetworkManager's state
 void network_context_menu(fld::Menu &m);

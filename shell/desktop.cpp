@@ -11,6 +11,7 @@
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 #include <FL/fl_utf8.h>
+#include <FL/platform.H>
 
 #include <algorithm>
 #include <cerrno>
@@ -72,7 +73,10 @@ public:
   // only the wallpaper scaled to the screen is kept: the file is decoded
   // again when the screen size or the wallpaper changes (a 4K photo is
   // about 33 MB decoded)
-  std::unique_ptr<Fl_Image> wp_scaled;
+  // It is drawn once into an offscreen buffer and the image is freed: the
+  // image's pixels and FLTK's cached copy of them would be two more
+  // screen-sized buffers (about 16 MB at 1080p).
+  Fl_Offscreen wp_off = 0;
   bool wp_missing = false;
   int wp_w = 0, wp_h = 0;
   // rubber band
@@ -231,7 +235,7 @@ public:
     int best = kDefaultIcon;
     for (int s : kIconSizes) if (std::abs(s - size) < std::abs(best - size)) best = s;
     set_icon_size(best);
-    wp_scaled.reset();
+    free_wallpaper();
     wp_missing = false;
     wp_w = wp_h = 0;
     redraw();
@@ -306,37 +310,61 @@ public:
     layout_items();
   }
 
-  void draw_wallpaper() {
+  void free_wallpaper() {
+    if (wp_off) fl_delete_offscreen(wp_off);
+    wp_off = 0;
+  }
+
+  // the wallpaper (and the colour around it) as it fills this widget
+  void render_wallpaper(Fl_Image *img, int ox, int oy) {
     fl_color(bg_color);
-    fl_rectf(x(), y(), w(), h());
-    if ((!wp_scaled || wp_w != w() || wp_h != h()) && !(wp_missing && wp_w == w() && wp_h == h())) {
-      wp_scaled.reset();
-      wp_w = w();
-      wp_h = h();
-      std::unique_ptr<Fl_Image> wp_src(fld::load_image(wallpaper));
-      wp_missing = !wp_src;
-      if (!wp_src) return;
-      int iw = wp_src->w(), ih = wp_src->h();
-      double sx = (double)w() / iw, sy = (double)h() / ih;
-      double s = mode == "fit" ? std::min(sx, sy) : mode == "center" || mode == "tile" ? 1.0 : std::max(sx, sy);
-      if (mode == "stretch") {
-        wp_scaled.reset(wp_src->copy(w(), h()));
-      } else {
-        int nw = std::max(1, (int)std::lround(iw * s)), nh = std::max(1, (int)std::lround(ih * s));
-        wp_scaled.reset(wp_src->copy(nw, nh));
-      }
-      // the copy of an SVG draws it at the new size: make that now, while
-      // the source is still here
-      if (auto *rgb = dynamic_cast<Fl_RGB_Image *>(wp_scaled.get())) rgb->normalize();
-    }
-    if (!wp_scaled) return;
-    Fl_Image *img = wp_scaled.get();
+    fl_rectf(ox, oy, w(), h());
+    if (!img) return;
     if (mode == "tile") {
       for (int ty = 0; ty < h(); ty += img->h())
-        for (int tx = 0; tx < w(); tx += img->w()) img->draw(x() + tx, y() + ty);
+        for (int tx = 0; tx < w(); tx += img->w()) img->draw(ox + tx, oy + ty);
     } else {
-      img->draw(x() + (w() - img->w()) / 2, y() + (h() - img->h()) / 2);
+      img->draw(ox + (w() - img->w()) / 2, oy + (h() - img->h()) / 2);
     }
+  }
+
+  void draw_wallpaper() {
+    if (!wp_off || wp_w != w() || wp_h != h()) {
+      free_wallpaper();
+      wp_w = w();
+      wp_h = h();
+      std::unique_ptr<Fl_Image> scaled;
+      {
+        std::unique_ptr<Fl_Image> wp_src(fld::load_image(wallpaper));
+        wp_missing = !wp_src;
+        if (wp_src) {
+          int iw = wp_src->w(), ih = wp_src->h();
+          double sx = (double)w() / iw, sy = (double)h() / ih;
+          double s = mode == "fit" ? std::min(sx, sy) : mode == "center" || mode == "tile" ? 1.0 : std::max(sx, sy);
+          if (mode == "stretch") {
+            scaled.reset(wp_src->copy(w(), h()));
+          } else {
+            int nw = std::max(1, (int)std::lround(iw * s)), nh = std::max(1, (int)std::lround(ih * s));
+            scaled.reset(wp_src->copy(nw, nh));
+          }
+          // the copy of an SVG draws it at the new size: make that now,
+          // while the source is still here
+          if (auto *rgb = dynamic_cast<Fl_RGB_Image *>(scaled.get())) rgb->normalize();
+        }
+      }
+      wp_off = fl_create_offscreen(w(), h());
+      if (wp_off) {
+        fl_begin_offscreen(wp_off);
+        render_wallpaper(scaled.get(), 0, 0);
+        fl_end_offscreen();
+      } else {
+        // no offscreen: draw it directly this time
+        render_wallpaper(scaled.get(), x(), y());
+        wp_w = 0; // try again next time
+        return;
+      }
+    }
+    fl_copy_offscreen(x(), y(), w(), h(), wp_off, 0, 0);
   }
 
   void draw() override {

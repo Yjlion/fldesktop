@@ -47,6 +47,9 @@ std::vector<std::string> list_dir(const std::string &dir, bool hidden = false);
 // Strings
 std::string trim(const std::string &s);
 std::string lower(std::string s);
+// Compares file names the way people count: "file2" < "file10". Runs of
+// digits compare by value, the rest case-insensitively; <0, 0 or >0.
+int natural_compare(const std::string &a, const std::string &b);
 bool starts_with(const std::string &s, const std::string &p);
 bool ends_with(const std::string &s, const std::string &p);
 std::vector<std::string> split(const std::string &s, char sep, bool keep_empty = false);

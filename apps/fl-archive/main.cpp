@@ -480,7 +480,7 @@ static void build_tree() {
       if (n.dir) n.items = g_tree.count(n.path) ? (int)g_tree[n.path].size() : 0;
     std::sort(kv.second.begin(), kv.second.end(), [](const Node &a, const Node &b) {
       if (a.dir != b.dir) return a.dir;
-      return strcasecmp(a.name.c_str(), b.name.c_str()) < 0;
+      return fld::natural_compare(a.name, b.name) < 0;
     });
   }
   // folder item counts (children of folders inserted above)

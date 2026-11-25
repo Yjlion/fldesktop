@@ -95,7 +95,7 @@ Description: lightweight Wayland desktop built with FLTK (metapackage)
 Package: fldesktop-wm
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils, xwayland
+Recommends: fldesktop-shell, fldesktop-lock, fldesktop-icon-theme, xdg-utils, xwayland, systemd-coredump
 Suggests: grim, wl-clipboard, fcitx5
 Description: fldesktop Wayland compositor
  fl-wm is a stacking Wayland compositor based on wlroots with server side

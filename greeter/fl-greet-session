@@ -13,4 +13,15 @@ elif [ -d /usr/share/icons/fldesktop-cursors/cursors ]; then
 	export XCURSOR_THEME=fldesktop-cursors
 fi
 [ -n "$size" ] && export XCURSOR_SIZE="$size"
+# cage draws the frame (-d), so libdecor needs none of its plugins. Its GTK
+# plugin would load GTK, which asks xdg-desktop-portal for its settings: that
+# starts the portal, its GTK backend and the AT-SPI bus before anyone has
+# logged in. An empty, private plugin directory keeps them all off (as in
+# fl-session).
+if [ -z "$LIBDECOR_PLUGIN_DIR" ] && [ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+	nodecor="$XDG_RUNTIME_DIR/fldesktop-libdecor-none"
+	if mkdir -p -m 700 "$nodecor" 2>/dev/null && [ -O "$nodecor" ]; then
+		export LIBDECOR_PLUGIN_DIR="$nodecor"
+	fi
+fi
 exec cage -s -d -- fl-greet "$@"

@@ -151,7 +151,7 @@ public:
       if (!fld::is_dir(p) && is_image(p)) files.push_back(p);
     }
     std::sort(files.begin(), files.end(), [](const std::string &a, const std::string &b) {
-      return strcasecmp(fld::basename(a).c_str(), fld::basename(b).c_str()) < 0;
+      return fld::natural_compare(fld::basename(a), fld::basename(b)) < 0;
     });
     index = 0;
     std::string ap = fld::abs_path(path);
@@ -336,6 +336,26 @@ public:
     redraw();
   }
 
+  // A copy of an image larger than the screen, the size of the screen
+  // (nullptr for smaller ones). The image's own drawing copy is dropped.
+  static Fl_Image *screen_copy(Fl_Image *img) {
+    auto *rgb = dynamic_cast<Fl_RGB_Image *>(img);
+    if (!rgb || rgb->count() < 1 || rgb->d() < 1 || !rgb->data()[0]) return nullptr;
+    int sx, sy, sw, sh;
+    Fl::screen_xywh(sx, sy, sw, sh);
+    float sc = Fl::screen_scale(0);
+    sw = (int)(sw * sc);
+    sh = (int)(sh * sc);
+    int W = rgb->data_w(), H = rgb->data_h();
+    if (W <= sw * 5 / 4 && H <= sh * 5 / 4) return nullptr;
+    double f = std::min((double)sw / W, (double)sh / H);
+    int nw = std::max(1, (int)std::lround(W * f)), nh = std::max(1, (int)std::lround(H * f));
+    int ld = rgb->ld() ? rgb->ld() : W * rgb->d();
+    Fl_RGB_Image *out = from_pixels(view::resize((const unsigned char *)rgb->data()[0], W, H, rgb->d(), ld, nw, nh));
+    if (out) rgb->uncache();
+    return out;
+  }
+
   // Rotates (multiples of 90°) and mirrors an image into a new RGB image.
   static Fl_Image *make_transformed(Fl_Image *src_img, int rot, bool flip) {
     if (rot == 0 && !flip) return nullptr;
@@ -401,9 +421,20 @@ public:
       anim->scale(dw, dh, 0, 1);
       ((Fl_Image *)anim)->draw(dx, dy);
     } else {
-      // FLTK 1.4 draws scaled images directly (cairo does the filtering)
-      img->scale(dw, dh, 0, 1);
-      img->draw(dx, dy);
+      // Fitted, an image larger than the screen is drawn from a copy of
+      // screen size (area averaged, made once). FLTK would otherwise keep a
+      // converted copy of the whole image to scale from (4 bytes a pixel:
+      // about 75 MB for a 20 MP photo) besides the decoded one. Zoomed in,
+      // the full image is drawn (cairo scales it).
+      Fl_Image *draw_img = img;
+      if (fit && !cropping) {
+        if (!scaled) scaled.reset(screen_copy(img));
+        if (scaled) draw_img = scaled.get();
+      } else if (scaled) {
+        scaled.reset();
+      }
+      draw_img->scale(dw, dh, 0, 1);
+      draw_img->draw(dx, dy);
     }
     if (cropping && crop_sel) {
       // the part that goes is shaded with a stipple of dark lines
@@ -674,7 +705,7 @@ static bool save_to(const std::string &path) {
       !g_view->files.empty() && fld::dirname(ap) == fld::dirname(g_view->files[0])) {
     g_view->files.push_back(ap);
     std::sort(g_view->files.begin(), g_view->files.end(), [](const std::string &a, const std::string &b) {
-      return strcasecmp(fld::basename(a).c_str(), fld::basename(b).c_str()) < 0;
+      return fld::natural_compare(fld::basename(a), fld::basename(b)) < 0;
     });
   }
   if (g_strip) g_strip->thumbs.erase(ap);

@@ -156,6 +156,37 @@ std::string dirname(const std::string &path) {
   return p.substr(0, s);
 }
 
+int natural_compare(const std::string &a, const std::string &b) {
+  size_t i = 0, j = 0, na = a.size(), nb = b.size();
+  int zeros = 0; // tie-break: fewer leading zeros first ("a1" < "a01")
+  while (i < na && j < nb) {
+    unsigned char ca = (unsigned char)a[i], cb = (unsigned char)b[j];
+    if (isdigit(ca) && isdigit(cb)) {
+      size_t zi = i, zj = j;
+      while (zi < na && a[zi] == '0') zi++;
+      while (zj < nb && b[zj] == '0') zj++;
+      size_t ei = zi, ej = zj;
+      while (ei < na && isdigit((unsigned char)a[ei])) ei++;
+      while (ej < nb && isdigit((unsigned char)b[ej])) ej++;
+      // the value: more significant digits is larger, then digit by digit
+      if (ei - zi != ej - zj) return ei - zi < ej - zj ? -1 : 1;
+      for (size_t k = 0; k < ei - zi; k++)
+        if (a[zi + k] != b[zj + k]) return a[zi + k] < b[zj + k] ? -1 : 1;
+      if (!zeros && (zi - i) != (zj - j)) zeros = (zi - i) < (zj - j) ? -1 : 1;
+      i = ei;
+      j = ej;
+      continue;
+    }
+    int la = tolower(ca), lb = tolower(cb);
+    if (la != lb) return la < lb ? -1 : 1;
+    i++;
+    j++;
+  }
+  if (i < na || j < nb) return i < na ? 1 : -1;
+  if (zeros) return zeros;
+  return a.compare(b) < 0 ? -1 : a.compare(b) > 0 ? 1 : 0;
+}
+
 std::string extension(const std::string &path) {
   std::string b = basename(path);
   size_t d = b.rfind('.');

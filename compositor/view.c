@@ -663,25 +663,52 @@ void views_reconfigure_maximized(struct flwm_server *server) {
 	}
 }
 
+/* Super+D: the first press minimizes every window of the workspace and
+ * remembers them; the next one brings back exactly those, in their stacking
+ * order. The views are collected first: minimizing the focused one moves it
+ * in server->views (the focus order), which would end a loop over the list. */
 void views_show_desktop(struct flwm_server *server) {
-	bool any_visible = false;
 	struct flwm_view *view;
+	int n = 0;
+	wl_list_for_each(view, &server->views, link) n++;
+	if (n == 0) return;
+	struct flwm_view **list = calloc((size_t)n, sizeof *list);
+	if (!list) return;
+	int nvis = 0, nhid = 0;
 	wl_list_for_each(view, &server->views, link)
-		if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized && view_on_current(view))
-			any_visible = true;
-	if (any_visible) {
-		wl_list_for_each(view, &server->views, link) {
-			if (view->mapped && view->role == FLWM_ROLE_NORMAL && !view->minimized && view_on_current(view)) {
-				view_set_minimized(view, true);
-				view->hidden_by_show_desktop = true;
-			}
+		if (view->mapped && view->role == FLWM_ROLE_NORMAL && view_on_current(view) && !view->minimized) nvis++;
+	if (nvis > 0) {
+		/* server->views is most recent first: keep that order */
+		wl_list_for_each(view, &server->views, link)
+			if (view->mapped && view->role == FLWM_ROLE_NORMAL && view_on_current(view) && !view->minimized)
+				list[nhid++] = view;
+		wl_list_for_each(view, &server->views, link) view->hidden_by_show_desktop = false;
+		for (int i = 0; i < nhid; i++) {
+			view_set_minimized(list[i], true);
+			list[i]->hidden_by_show_desktop = true;
+			list[i]->show_desktop_order = i;
 		}
 	} else {
-		struct flwm_view *tmp;
-		wl_list_for_each_safe(view, tmp, &server->views, link)
-			if (view->hidden_by_show_desktop && view_on_current(view)) view_set_minimized(view, false);
-		view_focus_next_available(server);
+		wl_list_for_each(view, &server->views, link)
+			if (view->mapped && view->hidden_by_show_desktop && view->minimized && view_on_current(view))
+				list[nhid++] = view;
+		/* back in the order they had: the bottom one first, so each raise
+		 * puts the next one above it; the top one gets the focus */
+		for (int i = 0; i < nhid; i++)
+			for (int j = i + 1; j < nhid; j++)
+				if (list[j]->show_desktop_order < list[i]->show_desktop_order) {
+					struct flwm_view *t = list[i];
+					list[i] = list[j];
+					list[j] = t;
+				}
+		for (int i = nhid - 1; i >= 0; i--) {
+			view_set_minimized(list[i], false);
+			view_raise(list[i]);
+		}
+		if (nhid > 0) view_focus(list[0]);
+		else view_focus_next_available(server);
 	}
+	free(list);
 }
 
 /* ---- shell role placement ------------------------------------------------ */

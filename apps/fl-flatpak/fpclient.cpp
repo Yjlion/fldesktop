@@ -7,7 +7,9 @@
 #include <flatpak.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <set>
 #include <sys/stat.h>
@@ -359,6 +361,81 @@ bool parse_appstream_text(const std::string &remote, const std::string &base, co
   return ok;
 }
 
+// ---- a cache of what was read from a remote's AppStream file -----------------
+// Reading Flathub's catalog takes 1.5 s of processor time on a slow laptop,
+// at every start; it only changes when the catalog is downloaded again. The
+// apps read from it are kept in ~/.cache/fldesktop/flatpak, with the file's
+// size and time and the languages they were read for.
+
+namespace {
+
+void put(std::string &o, const std::string &v) {
+  o += std::to_string(v.size());
+  o += ':';
+  o += v;
+}
+bool get(const char *&p, const char *end, std::string &v) {
+  char *colon = nullptr;
+  unsigned long n = strtoul(p, &colon, 10);
+  if (!colon || colon >= end || *colon != ':' || (size_t)(end - colon - 1) < n) return false;
+  v.assign(colon + 1, n);
+  p = colon + 1 + n;
+  return true;
+}
+
+std::string catalog_key(const std::string &path, const std::vector<std::string> &langs) {
+  struct stat st;
+  if (stat(path.c_str(), &st) != 0) return "";
+  return "fl-flatpak-catalog 1 " + std::to_string((long long)st.st_mtime) + " " + std::to_string((long long)st.st_size) +
+         " " + fld::join(langs, ",") + "\n";
+}
+
+std::string catalog_cache_path(const std::string &remote, const std::string &path) {
+  // the remote's name and where its file is (system or user installation)
+  std::string id = remote + "-" + std::to_string(std::hash<std::string>()(path));
+  for (auto &c : id)
+    if (c == '/') c = '_';
+  return fld::cache_home() + "/fldesktop/flatpak/" + id + ".cache";
+}
+
+bool read_catalog_cache(const std::string &cache, const std::string &key, std::map<std::string, App> &out) {
+  std::string data;
+  if (key.empty() || !fld::read_file(cache, data, 256u << 20) || data.compare(0, key.size(), key) != 0) return false;
+  const char *p = data.data() + key.size(), *end = data.data() + data.size();
+  std::map<std::string, App> apps;
+  while (p < end) {
+    App a;
+    std::string cats, flags;
+    for (std::string *f : {&a.id, &a.name, &a.summary, &a.description, &a.developer, &a.license, &a.version,
+                           &a.homepage, &a.icon, &a.icon_stock, &a.icon_url, &a.ref, &a.remote, &cats, &flags})
+      if (!get(p, end, *f)) return false;
+    if (!cats.empty()) a.categories = fld::split(cats, '\x1f');
+    a.in_catalog = flags.find('c') != std::string::npos;
+    a.runtime = flags.find('r') != std::string::npos;
+    apps[a.id] = std::move(a);
+  }
+  out = std::move(apps);
+  return true;
+}
+
+void write_catalog_cache(const std::string &cache, const std::string &key, const std::map<std::string, App> &apps) {
+  if (key.empty()) return;
+  std::string o = key;
+  for (auto &kv : apps) {
+    const App &a = kv.second;
+    for (const std::string *f : {&a.id, &a.name, &a.summary, &a.description, &a.developer, &a.license, &a.version,
+                                 &a.homepage, &a.icon, &a.icon_stock, &a.icon_url, &a.ref, &a.remote})
+      put(o, *f);
+    put(o, fld::join(a.categories, "\x1f"));
+    put(o, std::string(a.in_catalog ? "c" : "") + (a.runtime ? "r" : ""));
+  }
+  fld::mkdir_p(fld::dirname(cache), 0700);
+  std::string tmp = cache + ".tmp";
+  if (fld::write_file(tmp, o)) rename(tmp.c_str(), cache.c_str());
+}
+
+} // namespace
+
 static void parse_appstream(const std::string &remote, GFile *dir, std::map<std::string, App> &out) {
   bool gz = true;
   GFile *f = g_file_get_child(dir, "appstream.xml.gz");
@@ -366,6 +443,20 @@ static void parse_appstream(const std::string &remote, GFile *dir, std::map<std:
     g_object_unref(f);
     f = g_file_get_child(dir, "appstream.xml");
     gz = false;
+  }
+  // read before: the apps from the cache (the first of each id is kept, as
+  // when reading)
+  gchar *fpath = g_file_get_path(f);
+  std::string path = fpath ? fpath : "";
+  g_free(fpath);
+  std::vector<std::string> langs = locale_langs();
+  std::string key = path.empty() ? "" : catalog_key(path, langs);
+  std::string cache = catalog_cache_path(remote, path);
+  std::map<std::string, App> mine;
+  if (read_catalog_cache(cache, key, mine)) {
+    g_object_unref(f);
+    for (auto &kv : mine) out.emplace(kv.first, std::move(kv.second));
+    return;
   }
   GFileInputStream *fin = g_file_read(f, nullptr, nullptr);
   g_object_unref(f);
@@ -379,12 +470,14 @@ static void parse_appstream(const std::string &remote, GFile *dir, std::map<std:
   gchar *dpath = g_file_get_path(dir);
   std::string base = dpath ? dpath : "";
   g_free(dpath);
-  parse_appstream_stream(remote, base, in, locale_langs(), out);
+  bool ok = parse_appstream_stream(remote, base, in, langs, mine);
   if (z) {
     g_object_unref(in);
     g_object_unref(z);
   }
   g_object_unref(fin);
+  if (ok) write_catalog_cache(cache, key, mine);
+  for (auto &kv : mine) out.emplace(kv.first, std::move(kv.second));
 }
 
 namespace {

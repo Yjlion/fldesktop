@@ -474,12 +474,48 @@ static bool have_pactl() { static int v = -1; if (v < 0) v = !fld::which("pactl"
 static AudioBackend *g_audio = nullptr;
 
 static void update_volume_widget();
+
+// What the panel itself just set. PipeWire reports a change a little later,
+// and the reports in between (the route of a sound card and its node are
+// separate objects) still carry the old level or mute: for a moment the
+// panel keeps its own values, so the next key press steps from the level it
+// set and Mute toggles what is really there.
+static struct {
+  int pct = -1, muted = -1;
+  double until = 0;
+} g_vol_pending;
+static double mono_now() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+static void vol_pending(int pct, int muted) {
+  if (pct >= 0) g_vol_pending.pct = pct;
+  if (muted >= 0) g_vol_pending.muted = muted;
+  g_vol_pending.until = mono_now() + 0.6;
+}
+
 static void audio_changed() {
   const Audio::Device *d = g_audio->defaultDevice(Audio::Sink);
   bool was_visible = P.volume->visible();
   if (d && g_audio->isConnected()) {
-    P.volume_pct = (int)lround(Audio::level(d->volumes) * 100);
-    P.muted = d->muted;
+    int pct = (int)lround(Audio::level(d->volumes) * 100);
+    bool muted = d->muted;
+    if (mono_now() < g_vol_pending.until) {
+      // a report that agrees ends the wait; an older one is ignored
+      if (g_vol_pending.pct >= 0) {
+        if (pct == g_vol_pending.pct) g_vol_pending.pct = -1;
+        else pct = g_vol_pending.pct;
+      }
+      if (g_vol_pending.muted >= 0) {
+        if ((int)muted == g_vol_pending.muted) g_vol_pending.muted = -1;
+        else muted = g_vol_pending.muted;
+      }
+    } else {
+      g_vol_pending.pct = g_vol_pending.muted = -1;
+    }
+    P.volume_pct = pct;
+    P.muted = muted;
   } else {
     P.volume_pct = -1;
   }
@@ -546,7 +582,10 @@ static void set_volume(int pct) {
   pct = std::max(0, std::min(150, pct));
 #ifdef FLD_HAVE_AUDIO
   if (g_audio) {
-    if (const Audio::Device *d = g_audio->defaultDevice(Audio::Sink)) g_audio->setDeviceLevel(d->id, pct / 100.0f);
+    if (const Audio::Device *d = g_audio->defaultDevice(Audio::Sink)) {
+      g_audio->setDeviceLevel(d->id, pct / 100.0f);
+      vol_pending(pct, -1);
+    }
     P.volume_pct = pct;
     update_volume_widget();
     return;
@@ -568,7 +607,14 @@ static void set_volume(int pct) {
 static void toggle_mute() {
 #ifdef FLD_HAVE_AUDIO
   if (g_audio) {
-    g_audio->toggleDefaultMute(Audio::Sink);
+    // set what the panel shows the opposite of, not what the last report said
+    if (const Audio::Device *d = g_audio->defaultDevice(Audio::Sink)) {
+      bool muted = !P.muted;
+      g_audio->setDeviceMute(d->id, muted);
+      vol_pending(-1, muted);
+      P.muted = muted;
+      update_volume_widget();
+    }
     return;
   }
 #endif
@@ -602,7 +648,8 @@ void panel_volume_step(int delta) {
 void panel_volume_toggle_mute() {
   bool muted = !P.muted;
   toggle_mute();
-  if (P.volume_pct >= 0) osd_show(volume_icon(P.volume_pct, muted), muted ? 0 : P.volume_pct, muted ? "Muted" : sink_name());
+  // muted: the level that comes back on unmute, with "Muted" over it
+  if (P.volume_pct >= 0) osd_show(volume_icon(P.volume_pct, muted), P.volume_pct, muted ? "Muted" : sink_name());
 }
 
 void panel_mic_toggle_mute() {
@@ -886,6 +933,7 @@ static void network_changed() {
   for (auto &c : st.connections)
     if (c.active && (c.type == "vpn" || c.type == "wireguard")) g_net_tip += "\nVPN: " + c.id;
   P.network->tooltip(g_net_tip.c_str());
+  network_popup_refresh();
   if (!P.network->visible()) { P.network->show(); relayout(); }
   P.network->redraw();
 }
@@ -1161,6 +1209,12 @@ int main(int argc, char **argv) {
   }
 
   P.win = new PanelWindow(1024, PANEL_H, "fldesktop.panel");
+  // Escape must not close the panel (FLTK's default for a window): after a
+  // popup closes the panel keeps the keyboard, and a second Escape quit it
+  P.win->callback([](Fl_Widget *w, void *) {
+    if ((Fl::event() == FL_SHORTCUT || Fl::event() == FL_KEYBOARD) && Fl::event_key() == FL_Escape) return;
+    w->hide();
+  });
   P.win->color(panel_bg());
   P.win->box(FL_FLAT_BOX);
   P.win->border(0);

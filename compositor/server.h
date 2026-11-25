@@ -415,6 +415,7 @@ struct flwm_view {
 	struct wl_event_source *close_timer; /* a close waiting for the menus to go */
 	int close_tries;
 	bool hidden_by_show_desktop;
+	int show_desktop_order;       /* its place in the stack when Show Desktop hid it (0 = top) */
 	bool no_taskbar;   /* not in the panel's window list (X11 menus, splash screens) */
 	int workspace;     /* 0-based; see view_on_current() */
 	bool sticky;       /* shown on every workspace */

@@ -5,6 +5,8 @@
 #  2. xdg-dialog-v1 (wlroots 0.19+): clicking a window with a modal dialog
 #     focuses the dialog
 #  3. xdg-toplevel-icon-v1 (wlroots 0.19+): fl-wm takes the icon name
+#  4. Show Desktop (Super+D): one press hides all windows, the next brings
+#     back the same ones in the same stacking order
 # usage: toplevel-smoke.sh <bindir> <fl-toplevel> <fl-vptr>
 set -u
 BIN="$1"
@@ -64,5 +66,27 @@ else
 	tail -1 "$T/modal.out" | grep -q "enter dialog" || fail "the click focused the window under the modal dialog: $(cat "$T/modal.out")"
 fi
 wait $top
+
+# 4. Show Desktop
+"$TOP" 8 >/dev/null 2>&1 & t1=$!
+sleep 0.4
+"$TOP" 8 >/dev/null 2>&1 & t2=$!
+sleep 0.4
+"$TOP" 8 >/dev/null 2>&1 & t3=$!
+sleep 0.8
+windows() { kill -USR2 $WM; sleep 0.3; grep -c ' main$' "$T/run/fl-wm-windows"; }
+order() { kill -USR2 $WM; sleep 0.3; grep ' main$' "$T/run/fl-wm-windows" | cut -d' ' -f1,2 | tr '\n' ';'; }
+[ "$(windows)" = 3 ] || fail "3 windows expected before Show Desktop: $(cat "$T/run/fl-wm-windows")"
+before=$(order)
+wtype -M logo -k d -m logo
+sleep 0.5
+[ "$(windows)" = 0 ] || fail "Show Desktop left windows shown: $(cat "$T/run/fl-wm-windows")"
+wtype -M logo -k d -m logo
+sleep 0.5
+[ "$(windows)" = 3 ] || fail "the second Super+D did not bring the 3 windows back: $(cat "$T/run/fl-wm-windows")"
+after=$(order)
+[ "$before" = "$after" ] || fail "stacking order or places changed: '$before' -> '$after'"
+kill $t1 $t2 $t3 2>/dev/null
+wait $t1 $t2 $t3 2>/dev/null
 echo "toplevel smoke test passed"
 exit 0

@@ -235,6 +235,20 @@ int main(int argc, char *argv[]) {
 	config_load_first(&server.config, server.config_cli_path);
 	config_load_global_shortcuts(&server.config);
 
+	/* Only the session compositor hands its environment to D-Bus and systemd
+	 * activated services. A nested or headless fl-wm (a test, a second
+	 * instance) must not: its WAYLAND_DISPLAY would outlive it there and
+	 * services started later would connect to a compositor that is gone.
+	 * fl-session says so with FLWM_SESSION=1; otherwise guess from the
+	 * environment it was started in. */
+	bool export_env;
+	const char *fs = getenv("FLWM_SESSION");
+	const char *backends = getenv("WLR_BACKENDS");
+	if (fs && *fs) export_env = strcmp(fs, "0") != 0;
+	else export_env = !getenv("WAYLAND_DISPLAY") && !getenv("DISPLAY") &&
+		(!backends || (!strstr(backends, "wayland") && !strstr(backends, "x11") && !strstr(backends, "headless")));
+	unsetenv("FLWM_SESSION"); /* not for the session's programs */
+
 	/* children get a clean environment describing this session */
 	setenv("XDG_CURRENT_DESKTOP", "fldesktop", 0);
 	setenv("XDG_SESSION_DESKTOP", "fldesktop", 0);
@@ -336,7 +350,7 @@ int main(int argc, char *argv[]) {
 	struct wl_event_source *sig_usr2 = wl_event_loop_add_signal(server.event_loop, SIGUSR2, handle_signal, &server);
 
 	/* export the session to D-Bus / systemd activated services when available */
-	flwm_spawn(&server, xwayland_display(&server)
+	if (export_env) flwm_spawn(&server, xwayland_display(&server)
 		? "command -v dbus-update-activation-environment >/dev/null && "
 		  "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP "
 		  "XDG_SESSION_TYPE FLWM_PID FLWM_RENDERER 2>/dev/null"

@@ -379,7 +379,8 @@ Description: fldesktop notification server
 Package: xdg-desktop-portal-fl
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, xdg-desktop-portal
-Recommends: grim, slurp, pipewire, xdg-desktop-portal-gtk
+Recommends: grim, slurp, pipewire
+Suggests: xdg-desktop-portal-gtk
 Description: xdg-desktop-portal backend for fldesktop
  Implements the file chooser, "open with" dialog, settings (color scheme,
  accent color, fonts), screenshot and color picker, access and account

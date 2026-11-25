@@ -148,6 +148,7 @@ public:
   std::string path;
   bool modified = false;
   bool loading = false;
+  bool is_new = false;             // a path that does not exist yet: created on save
   Fl_Text_Buffer *buf, *style;
   Editor *ed;
   syntax::Language lang = syntax::NONE;
@@ -453,6 +454,7 @@ public:
     buf->canUndo(1);
     path = fld::abs_path(p);
     modified = false;
+    is_new = false;
     std::string first = data.substr(0, data.find('\n'));
     if (!lang_forced) lang = syntax::detect(path, first);
     apply_settings();
@@ -482,6 +484,7 @@ public:
       lspc::saved(lsp, path);
     }
     modified = false;
+    is_new = false;
     update_tab_label(this);
     return true;
   }
@@ -806,6 +809,7 @@ static void update_status() {
            : d->buf->selected()  ? "Selection"
                                  : "");
   std::string st = buf;
+  if (d->is_new) st += "    New file";
   // the language server, its problem count and the problem on this line
   std::string server = lspc::name(d->lsp);
   if (!server.empty()) {
@@ -1041,9 +1045,11 @@ static void open_file(const std::string &p) {
   if (!fld::file_exists(p)) {
     // a new file: remember the path, create on save
     d->path = fld::abs_path(p);
+    d->is_new = true;
     d->lang = syntax::detect(d->path, "");
     d->apply_settings();
     update_tab_label(d);
+    update_status();
     return;
   }
   if (d->load(p)) add_recent(d->path);

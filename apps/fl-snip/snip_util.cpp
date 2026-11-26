@@ -184,4 +184,17 @@ std::string record_pipeline(int fd, uint32_t node, bool audio) {
   return p;
 }
 
+std::string hex_color(uint8_t r, uint8_t g, uint8_t b) {
+  char buf[8];
+  snprintf(buf, sizeof buf, "#%02x%02x%02x", r, g, b);
+  return buf;
+}
+
+std::string ruler_label(int x1, int y1, int x2, int y2) {
+  int dx = std::abs(x2 - x1), dy = std::abs(y2 - y1);
+  char buf[64];
+  snprintf(buf, sizeof buf, "%d \xc3\x97 %d px, %.1f px", dx, dy, std::sqrt((double)dx * dx + (double)dy * dy));
+  return buf;
+}
+
 } // namespace snip

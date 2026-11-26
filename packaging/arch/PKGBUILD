@@ -4,7 +4,7 @@
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-sysinfo fldesktop-disks fldesktop-media-player fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
-         fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-mixer
+         fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-diskusage fldesktop-recorder fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
          fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring
@@ -78,6 +78,8 @@ package_fldesktop() {
               'fldesktop-packages: software updates through PackageKit'
               'fldesktop-flatpak: Flatpak app store'
               'fldesktop-firewall: firewall settings'
+              'fldesktop-diskusage: disk usage analyser'
+              'fldesktop-recorder: sound recorder'
               'fldesktop-media-player: video and music player'
               'fldesktop-webcam: camera app'
               'fldesktop-archive: archive manager'
@@ -340,6 +342,13 @@ package_fldesktop-charmap() {
   optdepends=('unicode-character-database: character names')
   _app charmap
   _install_files usr/share/fldesktop/charmap
+}
+package_fldesktop-diskusage() { pkgdesc="fldesktop disk usage analyser"; depends=(fltk); _app diskusage; }
+package_fldesktop-recorder() {
+  pkgdesc="fldesktop sound recorder"
+  depends=(fltk gstreamer gst-plugins-base gst-plugins-good)
+  optdepends=("gst-plugin-pipewire: recording through PipeWire" "gst-plugins-good: Opus, FLAC and WAV" "gst-plugins-ugly: MP3")
+  _app recorder
 }
 package_fldesktop-mixer() {
   pkgdesc="fldesktop volume mixer for PipeWire"

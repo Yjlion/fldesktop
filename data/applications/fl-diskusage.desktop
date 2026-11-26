@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Disk Usage
+GenericName=Disk Usage Analyser
+Comment=See which folders and files take the space on a disk
+Exec=fl-diskusage %f
+Icon=fl-diskusage
+Categories=System;Filesystem;Utility;
+Keywords=disk;space;usage;size;treemap;folders;storage;free;
+MimeType=inode/directory;
+StartupWMClass=fl-diskusage

@@ -1,0 +1,6 @@
+add_library(fl-recorder-util STATIC rec_util.cpp)  # formats, names, the meter (unit tested)
+target_include_directories(fl-recorder-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fl-recorder-util PUBLIC fld)
+add_executable(fl-recorder main.cpp)
+target_link_libraries(fl-recorder PRIVATE fl-recorder-util fld-gst fld)
+install(TARGETS fl-recorder RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

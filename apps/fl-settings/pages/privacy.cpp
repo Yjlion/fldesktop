@@ -82,7 +82,7 @@ public:
     f.row("", 30, wx, wy, ww);
     Fl_Button *clear = new Fl_Button(wx, wy, 180, 30, _("Clear Recent Files"));
     clear->callback([](Fl_Widget *, void *) {
-      if (fl_choice(_("Forget the list of recently used files?"), _("Cancel"), _("Clear"), nullptr) == 1) clear_recent();
+      if (fl_choice("%s", _("Cancel"), _("Clear"), nullptr, _("Forget the list of recently used files?")) == 1) clear_recent();
     });
     f.note(_("Programs show the files you opened recently in their menus and file dialogs. The files themselves "
            "are not touched."), 2);

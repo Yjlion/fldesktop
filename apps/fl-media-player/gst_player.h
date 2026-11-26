@@ -2,7 +2,9 @@
 // order with shuffle and repeat), resume positions, track selection, speed,
 // frame stepping, screenshots, and the tags and cover art of music.
 #pragma once
+#include <atomic>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -49,7 +51,10 @@ public:
   bool save_playlist(const std::string &path, std::string &err) const; // .m3u or .pls
   void set_shuffle(bool s);
   bool shuffle() const { return shuffle_; }
-  void set_repeat(media::Repeat r) { repeat_ = r; }
+  void set_repeat(media::Repeat r) {
+    repeat_ = r;
+    prepare_gapless();
+  }
   media::Repeat repeat() const { return repeat_; }
   // the current item's tags (music), and a file with its cover art ("" if none)
   const std::string &artist() const { return tag_artist_; }
@@ -80,7 +85,15 @@ public:
 
   void set_rate(double r);
   double rate() const { return rate_; }
-  void set_loop(bool l) { repeat_ = l ? media::Repeat::One : media::Repeat::Off; }
+  void set_loop(bool l) { set_repeat(l ? media::Repeat::One : media::Repeat::Off); }
+  // the next local item is queued before this one ends: no gap between
+  // tracks (on by default)
+  void set_gapless(bool g) {
+    gapless_ = g;
+    prepare_gapless();
+  }
+  bool gapless() const { return gapless_; }
+  int gapless_switches() const { return gapless_switches_; } // items started without a gap
   bool loop() const { return repeat_ == media::Repeat::One; }
 
   // tracks
@@ -167,4 +180,16 @@ private:
   void append(const Item &it);
   void set_cover(const std::string &bytes, const std::string &mime, bool from_tags);
   void find_folder_cover();
+
+  // gapless playback: the UI thread keeps the next item's URI ready, the
+  // streaming thread (about-to-finish) queues it, STREAM_START switches over
+  bool gapless_ = true;
+  std::mutex gapless_mu_;
+  std::string gapless_uri_;
+  int gapless_index_ = -1;
+  std::atomic<int> gapless_queued_{-1};
+  int gapless_switches_ = 0;
+  void prepare_gapless();
+  void gapless_started(int index);
+  static void about_to_finish(GstElement *, void *self);
 };

@@ -157,6 +157,11 @@ std::vector<int> shuffle_order(int n, int first, unsigned seed) {
 
 Repeat next_repeat(Repeat r) { return r == Repeat::Off ? Repeat::All : r == Repeat::All ? Repeat::One : Repeat::Off; }
 
+int gapless_next(const std::vector<int> &order, int cur, Repeat repeat, const std::vector<bool> &local) {
+  int n = step(order, cur, 1, repeat);
+  return n >= 0 && n < (int)local.size() && local[(size_t)n] ? n : -1;
+}
+
 int step(const std::vector<int> &order, int cur, int dir, Repeat repeat) {
   if (order.empty()) return -1;
   if (repeat == Repeat::One && cur >= 0) return cur;

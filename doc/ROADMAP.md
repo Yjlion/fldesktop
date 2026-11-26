@@ -116,6 +116,9 @@ Changes:
 - **fl-web:** password CSV import, per-site zoom memory, userscripts.
 - **fl-media-player:** an equalizer, gapless playback, ReplayGain, chapters.
 - **fl-docs:** annotations and highlights saved to the PDF, form filling.
+  *Needs poppler-glib (November 2026):* fl-docs reads PDF through poppler-cpp, which has no API for
+  annotations or form fields. poppler-glib has both (`poppler_page_add_annot`, `PopplerFormField`,
+  `poppler_document_save`), so this means a second PDF dependency, or moving the PDF backend to it.
 - **fl-paint:** layered save (ORA), and pen pressure from the existing tablet-v2 support.
 
 ### 7. Engineering & project hygiene

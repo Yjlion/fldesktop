@@ -30,5 +30,9 @@ Repeat next_repeat(Repeat r);
 // The item after `cur` in `order` (indices into the playlist), or -1 at the
 // end; `dir` -1 goes back.
 int step(const std::vector<int> &order, int cur, int dir, Repeat repeat);
+// The item that may follow `cur` without a gap (queued into the same
+// pipeline before `cur` ends): the next one in the order when it is a local
+// file (local[i]), else -1. Web streams and the end of the list stop.
+int gapless_next(const std::vector<int> &order, int cur, Repeat repeat, const std::vector<bool> &local);
 
 } // namespace media

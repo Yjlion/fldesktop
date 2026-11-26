@@ -75,6 +75,7 @@ static void save_settings() {
   cfg.set_bool("Editor", "AutoIndent", S.auto_indent);
   cfg.set_bool("Editor", "MatchBrackets", S.brackets);
   cfg.set_bool("Editor", "Minimap", S.minimap);
+  cfg.set_bool("Editor", "GitGutter", S.git_gutter);
   cfg.set_bool("Editor", "CheckSpelling", S.spell);
   cfg.set_bool("Editor", "LanguageServers", S.lsp);
   cfg.set_bool("Editor", "RestoreSession", S.restore_session);
@@ -95,6 +96,7 @@ static void load_settings() {
   S.auto_indent = cfg.get_bool("Editor", "AutoIndent", true);
   S.brackets = cfg.get_bool("Editor", "MatchBrackets", true);
   S.minimap = cfg.get_bool("Editor", "Minimap", true);
+  S.git_gutter = cfg.get_bool("Editor", "GitGutter", true);
   S.spell = cfg.get_bool("Editor", "CheckSpelling", true);
   S.lsp = cfg.get_bool("Editor", "LanguageServers", true);
   S.restore_session = cfg.get_bool("Editor", "RestoreSession", true);
@@ -336,6 +338,11 @@ static void menu_cb(Fl_Widget *, void *v) {
     case 26: next_problem(false); break;
     case 27: next_problem(true); break;
     case 42: S.minimap = !S.minimap; apply_all(); break;
+    case 46:
+      S.git_gutter = !S.git_gutter;
+      save_settings();
+      for (Doc *x : g_docs) x->refresh_git();
+      break;
     case 45: S.spell = !S.spell; apply_all(); break;
     case 43:
       S.lsp = !S.lsp;
@@ -699,6 +706,7 @@ int main(int argc, char **argv) {
   g_menu->add("&View/&Syntax Highlighting", 0, menu_cb, (void *)32, FL_MENU_TOGGLE | (S.highlight ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Highlight Matching Brackets", 0, menu_cb, (void *)41, FL_MENU_TOGGLE | (S.brackets ? FL_MENU_VALUE : 0));
   g_menu->add("&View/&Minimap", 0, menu_cb, (void *)42, FL_MENU_TOGGLE | (S.minimap ? FL_MENU_VALUE : 0));
+  g_menu->add("&View/&Git Changes", 0, menu_cb, (void *)46, FL_MENU_TOGGLE | (S.git_gutter ? FL_MENU_VALUE : 0));
 #ifdef FLD_HAVE_SPELL
   g_menu->add("&View/Check S&pelling", FL_F + 7, menu_cb, (void *)45, FL_MENU_TOGGLE | (S.spell ? FL_MENU_VALUE : 0));
 #endif

@@ -49,6 +49,11 @@ bool Player::ensure_engine() {
   if (vsink_) g_object_set(playbin_, "video-sink", vsink_, NULL);
   fgst::set_scale_to(vsink_, scale_w_, scale_h_);
   build_filters();
+  g_signal_connect(playbin_, "about-to-finish", G_CALLBACK(about_to_finish), this);
+  // another audio output, as a pipeline description (tests: "fakesink sync=true")
+  if (const char *as = getenv("FLD_AUDIO_SINK")) {
+    if (GstElement *sink = gst_parse_bin_from_description(as, TRUE, nullptr)) g_object_set(playbin_, "audio-sink", sink, NULL);
+  }
   if (getenv("FLD_VIDEO_DEBUG")) gst_debug_set_threshold_from_string("*:2", TRUE);
   set_volume(volume_);
   set_mute(muted_);
@@ -131,6 +136,7 @@ void Player::append(const Item &it) {
   } else {
     order_.push_back(i);
   }
+  prepare_gapless();
 }
 
 void Player::load(const std::string &loc, bool append_it) {
@@ -207,6 +213,7 @@ void Player::rebuild_order() {
 void Player::set_shuffle(bool s) {
   shuffle_ = s;
   rebuild_order();
+  prepare_gapless();
 }
 
 void Player::remove(int i) {
@@ -226,6 +233,7 @@ void Player::remove(int i) {
     // the item that took its place plays
     start_item(std::min(i, (int)list_.size() - 1), !paused_);
   }
+  prepare_gapless();
   if (on_playlist) on_playlist();
   if (on_media) on_media();
 }
@@ -248,6 +256,7 @@ void Player::move(int from, int to) {
   } else {
     rebuild_order();
   }
+  prepare_gapless();
   if (on_playlist) on_playlist();
   if (on_media) on_media();
 }
@@ -266,6 +275,7 @@ void Player::clear() {
   tag_track_.clear();
   cover_path_.clear();
   slot_.clear();
+  prepare_gapless();
   if (on_playlist) on_playlist();
   if (on_media) on_media();
   if (on_state) on_state();
@@ -381,7 +391,59 @@ void Player::start_item(int i, bool play) {
   }
   set_volume(volume_);
   set_mute(muted_);
+  gapless_queued_ = -1;
+  prepare_gapless();
   set_state_playing(play);
+  if (on_media) on_media();
+  if (on_tags) on_tags();
+}
+
+// ---- gapless playback ---------------------------------------------------------------------
+
+void Player::prepare_gapless() {
+  std::vector<bool> local;
+  for (auto &it : list_) local.push_back(it.resolved.empty() && !video::is_url(it.location));
+  int n = gapless_ && cur_ >= 0 ? media::gapless_next(order_, cur_, repeat_, local) : -1;
+  std::lock_guard<std::mutex> lock(gapless_mu_);
+  gapless_index_ = n;
+  gapless_uri_ = n >= 0 ? video::to_uri(list_[(size_t)n].location) : "";
+}
+
+// in a streaming thread, shortly before the current item ends
+void Player::about_to_finish(GstElement *pb, void *self) {
+  Player *p = (Player *)self;
+  std::lock_guard<std::mutex> lock(p->gapless_mu_);
+  if (p->gapless_index_ < 0 || p->gapless_uri_.empty()) return;  // EOS comes, finish_item() goes on
+  g_object_set(pb, "uri", p->gapless_uri_.c_str(), "suburi", nullptr, NULL);
+  p->gapless_queued_ = p->gapless_index_;
+}
+
+// the queued item started playing in the same pipeline
+void Player::gapless_started(int i) {
+  if (i < 0 || i >= (int)list_.size()) return;
+  gapless_switches_++;
+  if (cur_ >= 0) {
+    double d = duration();
+    if (d > 0) list_[(size_t)cur_].length = d;
+    if (resume_) {
+      fld::Ini ini;
+      ini.load(positions_path());
+      video::resume_put(ini, list_[(size_t)cur_].location, 0, 0);
+      ini.save(positions_path());
+    }
+  }
+  cur_ = i;
+  eos_ = false;
+  tag_title_.clear();
+  tag_artist_.clear();
+  tag_album_.clear();
+  tag_track_.clear();
+  cover_path_.clear();
+  cover_from_tags_ = false;
+  last_pos_ = last_dur_ = -1;
+  chapters_.clear();
+  pending_seek_ = -1;
+  prepare_gapless();
   if (on_media) on_media();
   if (on_tags) on_tags();
 }
@@ -934,6 +996,8 @@ void Player::handle(GstMessage *m) {
       break;
     }
     case GST_MESSAGE_STREAM_START:
+      if (gapless_queued_ >= 0) gapless_started(gapless_queued_.exchange(-1));
+      // fall through
     case GST_MESSAGE_STREAMS_SELECTED:
       if (on_tracks) on_tracks();
       if (on_media) on_media();

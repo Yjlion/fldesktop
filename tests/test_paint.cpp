@@ -1,3 +1,4 @@
+#include <cmath>
 // fl-paint: brushes, shapes, fill, crop, scale, layers, colours
 #include "paint_util.h"
 #include "test.h"
@@ -94,5 +95,13 @@ int main() {
   CHECK(from_hex("#01020304", h) && h == rgba(1, 2, 3, 4));
   CHECK(!from_hex("12abff", h));
   CHECK(!from_hex("#12abfz", h));
+  // pen pressure: a fifth of the size at a light touch, all of it pressed hard
+  CHECK(std::fabs(paint::pressure_size(10, 0) - 2) < 1e-9);
+  CHECK(std::fabs(paint::pressure_size(10, 1) - 10) < 1e-9);
+  CHECK(std::fabs(paint::pressure_size(10, 0.5) - 6) < 1e-9);
+  CHECK(paint::pressure_size(10, 5) == 10);      // out of range: clamped
+  CHECK(paint::pressure_size(10, -1) == 2);
+  CHECK(paint::pressure_size(2, 0) == 1);         // never under a pixel
+  CHECK(paint::pressure_size(10, std::nan("")) == 2);
   return test_result("paint");
 }

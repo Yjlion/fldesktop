@@ -45,6 +45,9 @@ Color over(Color top, Color bottom);
 // A round brush of `size` pixels from (x0,y0) to (x1,y1), soft edged.
 // erase: rubs out instead of painting.
 void stroke(Canvas &c, double x0, double y0, double x1, double y1, Color col, double size, bool erase = false);
+// The brush size at a pen pressure (0..1): a fifth of the size at the
+// lightest touch, all of it pressed hard; never under 1 px.
+double pressure_size(double size, double pressure);
 void line(Canvas &c, double x0, double y0, double x1, double y1, Color col, double width);
 // outlines with `width`, or filled (fill = true)
 void rectangle(Canvas &c, Rect r, Color col, double width, bool fill);

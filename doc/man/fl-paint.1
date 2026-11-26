@@ -15,6 +15,12 @@ can be resized, its canvas enlarged, rotated and flipped.
 PNG, JPEG, BMP and GIF pictures open; pictures are saved as PNG (the layers
 merged). Copying also puts the selection on the clipboard as a PNG
 (\fBwl-copy\fR).
+.SH PEN PRESSURE
+\fBView > Pen Pressure\fR (\fBPenPressure=true\fR in \fB[Paint]\fR of
+\fI~/.config/fldesktop/paint.ini\fR) makes the brush and the eraser follow how hard a tablet's pen
+presses: a fifth of the size at the lightest touch, all of it pressed hard. It uses the Wayland
+tablet protocol, from the next start; the compositor then gives the pen to fl-paint as a pen rather
+than as a mouse. Off by default.
 .SH OPENRASTER
 Pictures with layers can be saved as OpenRaster (\fI.ora\fR), the layered format MyPaint,
 Krita and GIMP read and write: every layer is kept with its name, opacity and visibility, and

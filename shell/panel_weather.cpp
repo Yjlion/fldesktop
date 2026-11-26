@@ -198,7 +198,7 @@ void popup(Fl_Widget *w, void *) {
 } // namespace
 
 void weather_menu_items(fld::Menu &m) {
-  if (!g_have_place) m.item("Show the Weather…", [] { choose_place(); });
+  if (!g_have_place) m.item(_("Show the Weather…"), [] { choose_place(); });
 }
 
 fld::FlatButton *weather_create() {
@@ -212,9 +212,9 @@ fld::FlatButton *weather_create() {
   g_fahrenheit = fld::lower(ini.get("Weather", "Units", "")) == "fahrenheit";
   g_have_place = ini.get_bool("Weather", "Enabled", false) && !g_city.empty();
   panel_context_menu(g_btn, [](fld::Menu &m) {
-    m.item("Update Now", [] { start_fetch(); });
-    m.item("Change Place…", [] { choose_place(); });
-    m.item("Hide the Weather", [] {
+    m.item(_("Update Now"), [] { start_fetch(); });
+    m.item(_("Change Place…"), [] { choose_place(); });
+    m.item(_("Hide the Weather"), [] {
       fld::Ini c;
       c.load(ini_path());
       c.set_bool("Weather", "Enabled", false);

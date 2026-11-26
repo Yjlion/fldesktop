@@ -18,7 +18,7 @@ class MousePage : public Fl_Group {
 public:
   ConfigFile wm{wm_ini_path()};
   Fl_Value_Slider *speed;
-  Fl_Check_Button *left, *natural, *tap, *dwt, *middle, *ffm, *gestures, *gnatural;
+  Fl_Check_Button *left, *natural, *tap, *dwt, *middle, *gestures, *gnatural;
   Fl_Choice *scroll, *fingers, *gup, *gdown;
 
   Fl_Check_Button *check(Form &f, const char *label, bool v) {
@@ -52,7 +52,7 @@ public:
 
   MousePage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Mouse & Touchpad", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Mouse & Touchpad"), cy);
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
@@ -94,8 +94,12 @@ public:
     gup = action_choice(f, _("Swipe up:"), wm.ini.get(G, "swipe_up", "launcher"));
     gdown = action_choice(f, _("Swipe down:"), wm.ini.get(G, "swipe_down", "show-desktop"));
     f.note(_("Other gestures, such as pinching to zoom, go to the program under the pointer."), 2);
-    f.heading(_("Windows"));
-    ffm = check(f, _("Focus follows the mouse"), wm.ini.get_bool("behaviour", "focus_follows_mouse", false));
+    f.note(_("Focus follows the mouse: Windows & Workspaces."));
+    f.space(8);
+    reset_page_button(f.widget_x(), f.y(), {{wm_ini_path(), {{"pointer", "accel"}, {"pointer", "left_handed"}, {"pointer", "middle_emulation"},
+                                         {"pointer", "natural_scroll"}, {"pointer", "scroll_method"}, {"pointer", "tap_to_click"},
+                                         {"pointer", "disable_while_typing"}, {"gestures", "enabled"}, {"gestures", "fingers"},
+                                         {"gestures", "natural"}, {"gestures", "swipe_up"}, {"gestures", "swipe_down"}}}});
     g->end();
     end();
   }
@@ -114,7 +118,6 @@ public:
     else wm.ini.set(P, "scroll_method", sm[scroll->value()]);
     wm.ini.set_bool(P, "tap_to_click", tap->value());
     wm.ini.set_bool(P, "disable_while_typing", dwt->value());
-    wm.ini.set_bool("behaviour", "focus_follows_mouse", ffm->value());
     const std::string G = "gestures";
     wm.ini.set_bool(G, "enabled", gestures->value());
     wm.ini.set(G, "fingers", fingers->value() == 1 ? "4" : "3");
@@ -131,7 +134,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new MousePage(x, y, w, h);
 
 PageInfo page_mouse() {
   return {"mouse", _("Mouse & Touchpad"), "input-mouse", "Hardware",
-          _("mouse touchpad pointer speed acceleration tap click scroll natural left handed focus gestures swipe fingers"), create};
+          _("mouse touchpad pointer speed acceleration tap click scroll natural left handed gestures swipe fingers"), create};
 }
 
 } // namespace fld

@@ -39,7 +39,7 @@ public:
 
   PowerPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Power", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Power"), cy);
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
@@ -105,6 +105,9 @@ public:
     action_at->callback(cb, this);
     unit(wx + 270, wy);
     f.note(_("The panel warns once at each level and waits 30 seconds before acting."));
+    f.space(8);
+    reset_page_button(f.widget_x(), f.y(), {{desktop_ini_path(), {{"Power", "ShowPercentage"}, {"Power", "ActionBattery"}, {"Power", "CriticalBattery"},
+                                             {"Power", "LowBattery"}, {"Power", "CriticalAction"}}}});
 
     g->end();
     end();

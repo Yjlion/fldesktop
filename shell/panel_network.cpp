@@ -522,5 +522,5 @@ void network_context_menu(fld::Menu &m) {
     m.toggle("Wi-Fi", st.wireless, [on = !st.wireless] { nm::Client::get().set_wireless(on, report); },
              st.wireless_hw && st.networking ? 0 : FL_MENU_INACTIVE);
   m.divider();
-  m.item("Network Settings…", [] { fld::spawn({"fl-network"}); });
+  m.item(_("Network Settings…"), [] { fld::spawn({"fl-network"}); });
 }

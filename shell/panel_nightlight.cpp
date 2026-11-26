@@ -59,7 +59,7 @@ fld::FlatButton *nightlight_indicator_create() {
   g_btn->callback([](Fl_Widget *, void *) { set_enabled(false); });
   panel_context_menu(g_btn, [](fld::Menu &m) {
     nightlight_menu_items(m);
-    m.item("Night Light Settings…", [] { fld::spawn({"fl-settings", "displays"}); }).divider();
+    m.item(_("Night Light Settings…"), [] { fld::spawn({"fl-settings", "nightlight"}); }).divider();
     panel_menu_items(m);
   });
   if (!enabled()) g_btn->hide();

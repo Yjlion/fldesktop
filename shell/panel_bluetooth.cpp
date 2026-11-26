@@ -155,8 +155,8 @@ fld::FlatButton *bluetooth_indicator_create() {
     const bt::Adapter *a = bt::Client::get().state().adapter();
     bool on = a && a->powered;
     m.toggle("Bluetooth", on, [on] { bt::Client::get().set_powered(!on); }, a ? 0 : FL_MENU_INACTIVE).divider();
-    m.item("Bluetooth Devices…", [] { fld::spawn({"fl-bluetooth"}); });
-    m.item("Bluetooth Settings…", [] { fld::spawn({"fl-settings", "bluetooth"}); }).divider();
+    m.item(_("Bluetooth Devices…"), [] { fld::spawn({"fl-bluetooth"}); });
+    m.item(_("Bluetooth Settings…"), [] { fld::spawn({"fl-settings", "bluetooth"}); }).divider();
     panel_menu_items(m);
   });
   g_btn->hide();

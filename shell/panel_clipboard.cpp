@@ -192,7 +192,7 @@ fld::FlatButton *clipboard_indicator_create() {
       c.set_bool("Clipboard", "History", !on);
       c.save(path);
     });
-    m.item("Clear History", [] { cliphist::Store().clear(true); }).divider();
+    m.item(_("Clear History"), [] { cliphist::Store().clear(true); }).divider();
     panel_menu_items(m);
   });
   fld::Ini c;

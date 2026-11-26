@@ -34,7 +34,7 @@ int main() {
   // the generated table is there and names pages
   CHECK(index().size() > 100);
   bool night = false;
-  for (auto &it : index()) night = night || std::string(it.label) == "Night Light";
+  for (auto &it : index()) night = night || std::string(it.label) == "Warmer colours at night";
   CHECK(night);
   return test_result("settings-search");
 }

@@ -1,6 +1,7 @@
 // fl-panel: the workspace pager (ext-workspace-v1). One numbered cell per
 // workspace; a click goes there, the mouse wheel steps through them. Hidden
 // while the compositor offers fewer than two workspaces.
+#include "fld/i18n.h"
 #include <FL/fl_draw.H>
 #include <FL/platform.H>
 
@@ -180,7 +181,7 @@ Fl_Widget *pager_create() {
   g_pager = new Pager();
   g_pager->hide();
   panel_context_menu(g_pager, [](fld::Menu &m) {
-    m.item("Workspace Settings…", [] { fld::spawn({"fl-settings", "shortcuts"}); }).divider();
+    m.item(_("Workspace Settings…"), [] { fld::spawn({"fl-settings", "windows"}); }).divider();
     panel_menu_items(m);
   });
   return g_pager;

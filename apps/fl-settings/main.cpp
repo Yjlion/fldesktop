@@ -25,6 +25,7 @@
 #include "fld/widgets.h"
 #include "fld/window_size.h"
 #include "settings_page.h"
+#include "settings_cli.h"
 #include "settings_search.h"
 
 static Fl_Double_Window *g_win;
@@ -275,6 +276,20 @@ static void show_page(const std::string &id) {
   g_win->redraw();
 }
 
+namespace fld {
+void reload_current_page() {
+  auto it = g_created.find(g_current);
+  if (it == g_created.end()) return;
+  Fl_Group *g = it->second;
+  g_content->remove(g);
+  g_page_min_h.erase(g);
+  g_page_min_w.erase(g);
+  g_created.erase(it);
+  Fl::delete_widget(g);
+  show_page(g_current);
+}
+} // namespace fld
+
 // ---- pointing at a setting found by the search ------------------------------------
 
 static Fl_Widget *g_flash;
@@ -349,11 +364,21 @@ static void list_cb(Fl_Widget *, void *) {
 
 int main(int argc, char **argv) {
   fld::i18n_init(); // the page titles are read before init_app()
+  if (argc > 1) {
+    int rc = settings_cli::run(argc - 1, argv + 1, fld::fld_config_dir());
+    if (rc >= 0) return rc;
+  }
   std::string start;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "-h" || a == "--help") {
-      printf("Usage: fl-settings [PAGE]\n       fl-settings --list\n");
+      printf("Usage: fl-settings [PAGE]\n"
+             "       fl-settings --list\n"
+             "       fl-settings --get FILE.SECTION.KEY       (e.g. wm.behaviour.workspaces)\n"
+             "       fl-settings --set FILE.SECTION.KEY=VALUE\n"
+             "       fl-settings --unset FILE.SECTION.KEY\n"
+             "       fl-settings --export ARCHIVE.tar.gz      (all of ~/.config/fldesktop)\n"
+             "       fl-settings --import ARCHIVE.tar.gz\n");
       return 0;
     }
     if (a == "--list") {

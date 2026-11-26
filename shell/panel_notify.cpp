@@ -273,8 +273,8 @@ void bell_cb(Fl_Widget *w, void *) {
 void dnd_menu_items(fld::Menu &m) {
   m.toggle("Do Not Disturb", g_dnd, [] { set_dnd(!g_dnd, 0); });
   if (!g_dnd) {
-    m.item("Do Not Disturb for 1 Hour", [] { set_dnd(true, time(nullptr) + 3600); });
-    m.item("Do Not Disturb Until Tomorrow", [] { set_dnd(true, tomorrow_morning()); });
+    m.item(_("Do Not Disturb for 1 Hour"), [] { set_dnd(true, time(nullptr) + 3600); });
+    m.item(_("Do Not Disturb Until Tomorrow"), [] { set_dnd(true, tomorrow_morning()); });
   }
 }
 
@@ -286,12 +286,12 @@ fld::FlatButton *notify_indicator_create() {
   g_bell->callback(bell_cb);
   panel_context_menu(g_bell, [](fld::Menu &m) {
     dnd_menu_items(m);
-    m.item("Clear All", [] {
+    m.item(_("Clear All"), [] {
       fld::NotifyHistory::get().clear();
       g_list.clear();
       update_button();
     }, g_list.empty() ? FL_MENU_INACTIVE : 0).divider();
-    m.item("Notification Settings…", [] { fld::spawn({"fl-settings", "notifications"}); });
+    m.item(_("Notification Settings…"), [] { fld::spawn({"fl-settings", "notifications"}); });
   });
   g_bell->hide();
   fld::NotifyHistory::get().on_changed = refresh;

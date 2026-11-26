@@ -74,7 +74,7 @@ public:
   std::string info;
   AboutPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "About", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("About"), cy);
     resizable(g);
     Fl_Box *logo = new Fl_Box(X + 24, cy, 96, 96);
     logo->image(icon("fldesktop", 96));

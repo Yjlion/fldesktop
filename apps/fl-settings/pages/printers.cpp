@@ -11,7 +11,7 @@ class PrintersPage : public Fl_Group {
 public:
   PrintersPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Printers", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Printers"), cy);
     resizable(g);
     prn::PrintersView *v = new prn::PrintersView(X + 16, cy, W - 32, H - (cy - Y) - 12);
     g->resizable(v);

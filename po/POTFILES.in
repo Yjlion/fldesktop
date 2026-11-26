@@ -1,7 +1,9 @@
 # files with translatable text (written by tools/update-po.py)
 apps/fl-settings/main.cpp
+apps/fl-settings/settings_common.cpp
 apps/fl-settings/pages/about.cpp
 apps/fl-settings/pages/accessibility.cpp
+apps/fl-settings/pages/advanced.cpp
 apps/fl-settings/pages/appearance.cpp
 apps/fl-settings/pages/bluetooth.cpp
 apps/fl-settings/pages/datetime.cpp
@@ -15,6 +17,7 @@ apps/fl-settings/pages/lock.cpp
 apps/fl-settings/pages/login.cpp
 apps/fl-settings/pages/mouse.cpp
 apps/fl-settings/pages/network.cpp
+apps/fl-settings/pages/nightlight.cpp
 apps/fl-settings/pages/notifications.cpp
 apps/fl-settings/pages/panel.cpp
 apps/fl-settings/pages/power.cpp
@@ -24,10 +27,14 @@ apps/fl-settings/pages/proxy.cpp
 apps/fl-settings/pages/sharing.cpp
 apps/fl-settings/pages/shortcuts.cpp
 apps/fl-settings/pages/sound.cpp
+apps/fl-settings/pages/startup.cpp
 apps/fl-settings/pages/updates.cpp
 apps/fl-settings/pages/users.cpp
+apps/fl-settings/pages/windows.cpp
 common/libfld/file_dialog.cpp
 common/libfld/fileops_ui.cpp
+common/libfld/menus.cpp
+common/libfld/pickers.cpp
 common/libfld/session.cpp
 common/libfld/widgets.cpp
 common/libfld/fld/i18n.h
@@ -39,6 +46,9 @@ shell/panel_clipboard.cpp
 shell/panel_network.cpp
 shell/panel_nightlight.cpp
 shell/panel_notify.cpp
+shell/panel_pager.cpp
 shell/panel_power.cpp
 shell/panel_printers.cpp
+shell/panel_privacy.cpp
+shell/panel_sysmon.cpp
 shell/panel_weather.cpp

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-25 23:58-0600\n"
+"POT-Creation-Date: 2026-11-26 11:07-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2155,7 +2155,7 @@ msgstr ""
 msgid "Applications"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:47 apps/fl-settings/pages/windows.cpp:175
+#: apps/fl-settings/pages/windows.cpp:47 apps/fl-settings/pages/windows.cpp:178
 msgid "Windows & Workspaces"
 msgstr ""
 
@@ -2184,74 +2184,78 @@ msgid "Number of workspaces:"
 msgstr ""
 
 #: apps/fl-settings/pages/windows.cpp:66
-msgid "All screens switch workspaces together."
+msgid "Each screen switches its own workspace"
 msgstr ""
 
 #: apps/fl-settings/pages/windows.cpp:67
-msgid "Reopen the windows of the last session at login"
+msgid "Off: all screens switch workspaces together"
 msgstr ""
 
 #: apps/fl-settings/pages/windows.cpp:68
+msgid "Reopen the windows of the last session at login"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:69
 msgid "The programs start again and their windows go back to their workspace, place and size"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:70
+#: apps/fl-settings/pages/windows.cpp:71
 msgid "Snapping and Moving"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:71
+#: apps/fl-settings/pages/windows.cpp:72
 msgid "Tile the windows (the oldest on the left, the others beside it)"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:72
+#: apps/fl-settings/pages/windows.cpp:73
 msgid "Super+Shift+T tiles or stacks the windows of one workspace"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:73
+#: apps/fl-settings/pages/windows.cpp:74
 msgid "Snap windows dragged to an edge or a corner of the screen"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:74
+#: apps/fl-settings/pages/windows.cpp:75
 msgid "Snap assist: after snapping a window to a side, offer the others for the rest"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:75
+#: apps/fl-settings/pages/windows.cpp:76
 msgid "Move windows with:"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:77
+#: apps/fl-settings/pages/windows.cpp:78
 msgid "Super+drag|Alt+drag|Super or Alt+drag|Only the title bar"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:78
+#: apps/fl-settings/pages/windows.cpp:79
 msgid "Hold this key and drag with the left button to move a window, with the right button to resize it"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:81
+#: apps/fl-settings/pages/windows.cpp:82
 msgid "Hot Corners"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:89
+#: apps/fl-settings/pages/windows.cpp:90
 msgid "Title Bars and Shadows"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:90
+#: apps/fl-settings/pages/windows.cpp:91
 msgid "Title bar height:"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:97
+#: apps/fl-settings/pages/windows.cpp:98
 msgid "The active window's border has the accent color"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:98
+#: apps/fl-settings/pages/windows.cpp:99
 msgid "Shadows under windows"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:99
+#: apps/fl-settings/pages/windows.cpp:100
 msgid "Title bar colors follow the theme (Appearance)."
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:176
+#: apps/fl-settings/pages/windows.cpp:179
 msgid "windows workspaces virtual desktops focus follows mouse snap snapping tiling assist drag move modifier super alt hot corners title bar height shadows border alt tab switcher session restore reopen"
 msgstr ""
 
@@ -2263,11 +2267,11 @@ msgstr ""
 msgid "Use the default values for the settings on this page?"
 msgstr ""
 
-#: apps/fl-snip/main.cpp:467
+#: apps/fl-snip/capture.cpp:246
 msgid "Click a pixel to copy its colour · Esc cancels"
 msgstr ""
 
-#: apps/fl-snip/main.cpp:468
+#: apps/fl-snip/capture.cpp:247
 msgid "Drag to measure · Enter copies · Esc closes"
 msgstr ""
 

@@ -39,7 +39,7 @@ apps/fl-settings/pages/users.cpp
 apps/fl-settings/pages/users_dialogs.cpp
 apps/fl-settings/pages/wallpaper.cpp
 apps/fl-settings/pages/windows.cpp
-apps/fl-snip/main.cpp
+apps/fl-snip/capture.cpp
 common/libfld/file_dialog.cpp
 common/libfld/fileops_ui.cpp
 common/libfld/menus.cpp

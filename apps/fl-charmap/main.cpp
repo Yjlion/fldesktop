@@ -218,7 +218,7 @@ static void show_details(uint32_t cp) {
   g_current = cp;
   static std::string big, name, info;
   big = utf8(cp);
-  g_big->label(fld::escape_at(big).c_str());
+  g_big->copy_label(fld::escape_at(big).c_str()); // the escaped text is a temporary
   g_big->labelfont(g_font);
   name = g_names.name(cp);
   if (name.empty()) name = g_names.empty() ? "(install unicode-data for names)" : "(unassigned)";

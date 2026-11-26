@@ -390,7 +390,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 		} else if (!strcasecmp(section, "power")) {
 			if (!strcmp(k, "blank_minutes")) {
 				double m = atof(v);
-				c->blank_ms = m > 0 ? (int)(m * 60000) : 0;
+				c->blank_ms = m > 0 && m < 10000 ? (int)(m * 60000) : 0; /* at most about a week */
 			}
 		} else if (!strcasecmp(section, "accessibility")) {
 			if (!strcmp(k, "sticky_keys")) c->sticky_keys = parse_bool(v);
@@ -401,15 +401,20 @@ bool config_load(struct flwm_config *c, const char *path) {
 		} else if (!strcasecmp(section, "environment")) {
 			env_apply(k, v);
 		} else if (!strcasecmp(section, "output")) {
-			if (!strcmp(k, "scale")) c->default_scale = (float)atof(v);
+			if (!strcmp(k, "scale")) {
+				double sc = atof(v);
+				if (sc >= 0.25 && sc <= 10) c->default_scale = (float)sc;
+			}
 		} else if (!strncasecmp(section, "output:", 7)) {
 			struct flwm_output_config *o = output_config(c, section + 7);
 			if (!o) continue;
-			if (!strcmp(k, "scale")) o->scale = (float)atof(v);
-			else if (!strcmp(k, "mode")) {
+			if (!strcmp(k, "scale")) {
+				double sc = atof(v);
+				o->scale = sc >= 0.25 && sc <= 10 ? (float)sc : 0; /* else the default */
+			} else if (!strcmp(k, "mode")) {
 				double hz = 0;
 				if (sscanf(v, "%dx%d@%lf", &o->width, &o->height, &hz) >= 2)
-					o->refresh_mhz = (int)(hz * 1000);
+					o->refresh_mhz = hz > 0 && hz < 1000 ? (int)(hz * 1000) : 0; /* else any */
 			} else if (!strcmp(k, "position")) {
 				o->has_position = sscanf(v, "%d,%d", &o->x, &o->y) == 2;
 			} else if (!strcmp(k, "enabled")) o->disabled = !parse_bool(v);

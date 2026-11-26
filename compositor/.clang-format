@@ -1,0 +1,12 @@
+# fl-wm is C with tabs, in the style of wlroots
+BasedOnStyle: LLVM
+UseTab: ForIndentation
+IndentWidth: 8
+TabWidth: 8
+ColumnLimit: 120
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+PointerAlignment: Right
+SortIncludes: Never
+IncludeBlocks: Preserve

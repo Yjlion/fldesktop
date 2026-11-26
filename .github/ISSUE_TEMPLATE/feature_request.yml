@@ -1,0 +1,19 @@
+name: Feature request
+description: An idea for fldesktop
+labels: [enhancement]
+body:
+  - type: input
+    id: component
+    attributes:
+      label: Program
+  - type: textarea
+    id: what
+    attributes:
+      label: What you would like, and why
+    validations:
+      required: true
+  - type: textarea
+    id: roadmap
+    attributes:
+      label: Related roadmap item
+      description: If it is in doc/ROADMAP.md, which one.

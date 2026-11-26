@@ -1,4 +1,5 @@
 #include "sysinfo.h"
+#include <fld/util.h>
 
 #include <dirent.h>
 #include <ifaddrs.h>
@@ -622,14 +623,12 @@ std::map<std::string, std::string> colon_values(const std::string &text, size_t 
   return m;
 }
 
-std::string run_tool(const std::string &cmd) {
+// Runs a tool without a shell, with a 3 s time limit; stdout only.
+std::string run_tool(std::vector<std::string> argv) {
   std::string out;
-  FILE *f = popen(("timeout 3 " + cmd + " 2>/dev/null").c_str(), "r");
-  if (!f) return out;
-  char buf[4096];
-  size_t n;
-  while ((n = fread(buf, 1, sizeof buf, f)) > 0 && out.size() < (1u << 20)) out.append(buf, n);
-  pclose(f);
+  argv.insert(argv.begin(), {"timeout", "3"});
+  fld::run_capture(argv, out);
+  if (out.size() > (1u << 20)) out.resize(1u << 20);
   return out;
 }
 
@@ -742,13 +741,13 @@ std::vector<Group> probe_graphics() {
   std::vector<Group> out;
   bool egl = on_path("eglinfo"), glx = on_path("glxinfo");
   Group gl{"OpenGL", {}};
-  if (egl && getenv("WAYLAND_DISPLAY")) gl = parse_eglinfo(run_tool("eglinfo -B"));
-  if (gl.rows.empty() && glx) gl = parse_glxinfo(run_tool("glxinfo -B"));
-  if (gl.rows.empty() && egl) gl = parse_eglinfo(run_tool("eglinfo -B"));
+  if (egl && getenv("WAYLAND_DISPLAY")) gl = parse_eglinfo(run_tool({"eglinfo", "-B"}));
+  if (gl.rows.empty() && glx) gl = parse_glxinfo(run_tool({"glxinfo", "-B"}));
+  if (gl.rows.empty() && egl) gl = parse_eglinfo(run_tool({"eglinfo", "-B"}));
   if (gl.rows.empty() && !egl && !glx) add(gl, "Details", "Install mesa-utils to see the OpenGL renderer");
   if (!gl.rows.empty()) out.push_back(gl);
   if (on_path("vulkaninfo")) {
-    auto vk = parse_vulkaninfo(run_tool("vulkaninfo --summary"));
+    auto vk = parse_vulkaninfo(run_tool({"vulkaninfo", "--summary"}));
     if (vk.empty()) vk.push_back({"Vulkan", {{"Devices", "none (no Vulkan driver)"}}});
     for (auto &g : vk) out.push_back(g);
   } else {

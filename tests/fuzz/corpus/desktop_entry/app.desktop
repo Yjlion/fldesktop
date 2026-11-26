@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Files
+Name[fr]=Fichiers
+Exec=fl-files %U --x="a b" \\s
+Icon=folder
+Categories=System;FileManager;
+Actions=new;
+
+[Desktop Action new]
+Name=New
+Exec=fl-files --new

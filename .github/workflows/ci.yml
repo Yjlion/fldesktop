@@ -12,6 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
+      - name: Cache packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/pacman/pkg
+          key: pacman-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: pacman-${{ github.job }}-
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm --needed base-devel git cmake ninja pkgconf wayland-protocols \
@@ -34,8 +40,15 @@ jobs:
     runs-on: ubuntu-latest
     container: debian:trixie
     steps:
+      - name: Cache packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-trixie-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: apt-trixie-
       - name: Install dependencies
         run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential devscripts debhelper git ca-certificates cmake ninja-build pkgconf \
@@ -53,6 +66,58 @@ jobs:
           cmake --build build
           export XDG_RUNTIME_DIR=$(mktemp -d)
           ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    name: Arch Linux, ASan + UBSan and fuzzing (clang)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Cache packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/pacman/pkg
+          key: pacman-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: pacman-${{ github.job }}-
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed base-devel clang git cmake ninja pkgconf wayland-protocols \
+            fltk wlroots0.20 libvterm pango cairo librsvg libinput libxkbcommon pixman shared-mime-info \
+            glib2 libpipewire polkit libnm fontconfig xkeyboard-config ttf-dejavu \
+            libcups packagekit flatpak appstream libjxl libarchive poppler libxml2 wpewebkit gstreamer gst-plugins-base gst-plugins-good gst-plugin-pipewire wireplumber wtype dbus python-dbusmock xdg-desktop-portal \
+            libxcb xcb-util-wm xorg-xwayland avahi enchant hunspell-en_us libsecret
+      - uses: actions/checkout@v4
+      - name: Build with sanitizers
+        run: |
+          CC=clang CXX=clang++ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DFLD_SANITIZE=address,undefined -DFLD_FUZZ=ON
+          cmake --build build
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d)
+          ctest --test-dir build --output-on-failure
+      - name: Fuzz each parser for a minute
+        run: |
+          for f in build/bin/fuzz_*; do
+            n=${f##*/fuzz_}
+            mkdir -p "fuzz-out/$n"
+            "$f" -max_total_time=60 -timeout=10 -artifact_prefix="fuzz-out/$n/" "fuzz-out/$n" "tests/fuzz/corpus/$n"
+          done
+      - name: Keep what the fuzzers found
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: fuzz-out/*/crash-*
+
+  reuse:
+    name: REUSE licensing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v5
 
   # packages for reviewers; pushes to main and tags publish them (repo.yml)
   packages:

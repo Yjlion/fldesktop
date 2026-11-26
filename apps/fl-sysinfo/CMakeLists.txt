@@ -1,4 +1,5 @@
 add_library(fl-sysinfo-info STATIC sysinfo.cpp)
+target_link_libraries(fl-sysinfo-info PUBLIC fld)
 target_include_directories(fl-sysinfo-info PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(fl-sysinfo main.cpp)
 target_link_libraries(fl-sysinfo PRIVATE fl-sysinfo-info fld)

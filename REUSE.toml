@@ -1,0 +1,39 @@
+# Licensing of the files, for `reuse lint` (https://reuse.software).
+# Keep in step with packaging/debian/copyright.
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Yjlion and fldesktop contributors"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = [
+  "protocols/wlr-data-control-unstable-v1.xml",
+  "protocols/wlr-foreign-toplevel-management-unstable-v1.xml",
+  "protocols/wlr-gamma-control-unstable-v1.xml",
+  "protocols/wlr-layer-shell-unstable-v1.xml",
+  "protocols/wlr-output-management-unstable-v1.xml",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "wlroots protocol authors (see each file)"
+SPDX-License-Identifier = "HPND-sell-variant"
+
+[[annotations]]
+path = [
+  "protocols/input-method-unstable-v2.xml",
+  "protocols/virtual-keyboard-unstable-v1.xml",
+  "protocols/wlr-output-power-management-unstable-v1.xml",
+  "protocols/wlr-screencopy-unstable-v1.xml",
+  "protocols/wlr-virtual-pointer-unstable-v1.xml",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Wayland protocol authors (see each file)"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "data/charmap/Blocks.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "1991-2026 Unicode, Inc."
+SPDX-License-Identifier = "Unicode-3.0"

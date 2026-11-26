@@ -1,0 +1,21 @@
+# Fuzz targets for parsers that read untrusted input. With FLD_FUZZ=ON (clang):
+#   ./build/bin/fuzz_ini -max_total_time=60 tests/fuzz/corpus/ini
+# Otherwise ctest replays the seed corpus through the same entry points.
+# (fuzz_wm_config is declared in compositor/CMakeLists.txt.)
+if(TARGET fld)
+  fld_fuzz_target(ini fuzz_ini.cpp fld)
+  fld_fuzz_target(json fuzz_json.cpp fld)
+  fld_fuzz_target(desktop_entry fuzz_desktop_entry.cpp fld)
+endif()
+if(TARGET fl-docs-util)
+  fld_fuzz_target(markdown fuzz_markdown.cpp fl-docs-util)
+endif()
+if(TARGET fl-media-player-util)
+  fld_fuzz_target(playlist fuzz_playlist.cpp fl-media-player-util)
+endif()
+if(TARGET fld-nm)
+  fld_fuzz_target(wg_quick fuzz_wg_quick.cpp fld-nm)
+endif()
+if(TARGET fl-remote-util)
+  fld_fuzz_target(rfb fuzz_rfb.cpp fl-remote-util)
+endif()

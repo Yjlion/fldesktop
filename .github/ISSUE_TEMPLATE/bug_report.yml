@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in fldesktop does not work as it should
+labels: [bug]
+body:
+  - type: input
+    id: component
+    attributes:
+      label: Program
+      description: fl-wm, fl-panel, fl-files, fl-settings, ...
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open ...\n2. Click ...\n3. ..."
+  - type: input
+    id: version
+    attributes:
+      label: fldesktop version
+      description: Settings > About, or `fl-wm --version`
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution and wlroots version
+      placeholder: Arch Linux, wlroots 0.20
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or crash report
+      description: From fl-logs (Report button) or `journalctl --user -b`; remove anything private.
+      render: text

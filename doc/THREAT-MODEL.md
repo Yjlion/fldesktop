@@ -101,6 +101,11 @@ Fuzz targets (`tests/fuzz`, see CONTRIBUTING.md) cover: `fld::Ini`, `fld::Json`,
 sniffing, Markdown (fl-docs), M3U/PLS playlists, wg-quick files, the RFB (VNC) client, and fl-wm's wm.ini.
 ctest replays their seed corpora on every build; CI also runs the whole test suite with ASan and UBSan.
 
+**Found by the fuzzer in this review:** the RFB client allocated the screen a server asked for, up to
+65535 × 65535 pixels (17 GB), and waited for names and clipboard texts of up to 4 GB, so a hostile VNC
+server could make fl-remote use all memory. Screens are now limited to 8192 × 8192, texts to 1 MB, and
+pictures must lie on the screen (`apps/fl-remote/rfb.cpp`, tests in `test_remote.cpp`).
+
 Not yet fuzzed: the EPUB and ODT readers of fl-docs (they live in the fl-docs executable; they need to move
 into `fl-docs-util` first). `.ovpn` files are parsed by NetworkManager's plugins, not by fldesktop.
 

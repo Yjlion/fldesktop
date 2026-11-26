@@ -60,7 +60,7 @@ private:
   int rects_left_ = 0;
   bool step();
   bool fail(const std::string &why);
-  void resize(int w, int h);
+  bool resize(int w, int h); // false: too large (the connection failed)
   void client_init_messages();
 };
 

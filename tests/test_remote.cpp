@@ -123,6 +123,26 @@ int main() {
     p.password_given();
     CHECK_EQ(p.take_output(), rfb::vnc_auth_response(std::string(16, 'z'), "pw"));
   }
+  // a hostile server: a screen of 65535 x 65535 (17 GB), a huge name, a
+  // picture outside the screen
+  {
+    std::string pf(16, '\0');
+    auto init = [&](int w, int h, uint32_t nl) {
+      std::string si = std::string(1, (char)(w >> 8)) + (char)(w & 255) + (char)(h >> 8) + (char)(h & 255) + pf + be32(nl);
+      return std::string("RFB 003.003\n") + be32(1) + si;
+    };
+    rfb::Client big;
+    std::string s = init(65535, 65535, 0);
+    CHECK(!big.feed(s.data(), s.size()));
+    CHECK_EQ(big.error(), std::string("The server's screen is too large."));
+    rfb::Client name;
+    s = init(64, 64, 0x7fffffff);
+    CHECK(!name.feed(s.data(), s.size()));
+    rfb::Client outside;
+    s = init(64, 64, 0) + std::string("\0\0\0\x01", 4) + std::string("\0\0\0\0\0\x80\0\x80", 8) + be32(0);
+    CHECK(!outside.feed(s.data(), s.size()));
+    CHECK_EQ(outside.error(), std::string("The server sent a picture outside the screen."));
+  }
   {
     rfb::Client c;
     std::string s = "SSH-2.0-OpenSSH_9.6\r\n";

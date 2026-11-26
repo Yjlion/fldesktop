@@ -1,0 +1,50 @@
+# Contributor: fldesktop contributors
+# Alpine Linux package for fldesktop, built from the checkout this file is in:
+#   cd packaging/alpine && abuild -r
+# Alpine has no systemd: fl-wm, fl-settings and fl-services use OpenRC,
+# elogind or seatd, and fl-autostart starts PipeWire.
+pkgname=fldesktop
+pkgver=0.1.4
+pkgrel=0
+pkgdesc="Lightweight Wayland desktop built with FLTK"
+url="https://github.com/Yjlion/fldesktop"
+arch="all"
+license="GPL-2.0-or-later"
+depends="xdg-desktop-portal shared-mime-info polkit pipewire wireplumber"
+makedepends="
+	cmake samurai pkgconf gettext wayland-protocols wayland-dev
+	fltk-dev>=1.4 wlroots-dev libxkbcommon-dev libinput-dev pango-dev cairo-dev librsvg-dev
+	libdrm-dev pixman-dev libvterm-dev glib-dev pipewire-dev polkit-dev networkmanager-dev
+	fontconfig-dev openssl-dev cups-dev flatpak-dev appstream-dev libjxl-dev libarchive-dev
+	poppler-dev libxml2-dev gstreamer-dev gst-plugins-base-dev mesa-dev linux-pam-dev
+	avahi-dev enchant2-dev libxcb-dev xcb-util-wm-dev
+	"
+checkdepends="python3"
+subpackages="$pkgname-doc $pkgname-lang"
+options="!check" # the session tests need a seat; the unit tests run in CI
+source=""
+builddir="$srcdir/build"
+
+_src() {
+	echo "${FLDESKTOP_SRC:-$startdir/../..}"
+}
+
+build() {
+	cmake -S "$(_src)" -B "$builddir" -G Ninja \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBEXECDIR=lib \
+		-DCMAKE_BUILD_TYPE=MinSizeRel \
+		-DFLD_PAM_STACK=base-auth \
+		-DFLD_BUILD_WEB=OFF \
+		-DFLD_VERSION="$pkgver"
+	cmake --build "$builddir"
+}
+
+check() {
+	ctest --test-dir "$builddir" --output-on-failure \
+		-E "wm-smoke|session-keys|notify-smoke|portal-smoke|bt-mock|lock-smoke|xwayland-smoke"
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install "$builddir"
+}

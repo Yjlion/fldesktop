@@ -6,6 +6,7 @@ add_library(fld STATIC
   accents.cpp
   ini.cpp
   i18n.cpp
+  crash.cpp
   desktop_entry.cpp
   icons.cpp
   mime.cpp

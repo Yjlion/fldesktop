@@ -14,5 +14,13 @@ shown entries can be saved as text.
 .PP
 Reading the system journal needs membership of the \fBsystemd-journal\fR or
 \fBadm\fR group; reading the files in \fI/var/log\fR may need \fBadm\fR.
+.SH CRASH REPORTS
+When an fldesktop program crashes it writes a short report (program, version,
+system, signal and a backtrace) to \fI$XDG_STATE_HOME/fldesktop/crashes\fR
+(\fI~/.local/state/fldesktop/crashes\fR) before the system's core dump
+handler runs. \fBCrashes…\fR lists them, with the core dumps of fl-* programs
+that \fBcoredumpctl\fR(1) knows of; \fBReport on GitHub…\fR opens a new
+issue in the web browser with the report filled in (look at it before sending;
+nothing is sent by itself). Set \fBFLD_NO_CRASH_HANDLER=1\fR to turn the reports off.
 .SH SEE ALSO
 \fBjournalctl\fR(1), \fBfl-services\fR(1)

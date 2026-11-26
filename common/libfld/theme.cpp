@@ -8,6 +8,7 @@
 #include "fld/util.h"
 #include "fld/atspi.h"
 #include "fld/i18n.h"
+#include "fld/crash.h"
 #ifndef FLD_HAVE_ATSPI
 namespace fld {
 // without the bridge there is nobody to tell
@@ -65,6 +66,7 @@ std::string desktop_config_path() {
 
 void init_app(const char *app_id, int argc, char **argv) {
   i18n_init();
+  install_crash_handler(argc > 0 && argv && argv[0] ? argv[0] : app_id);
   Ini cfg;
   cfg.load(desktop_config_path());
   const std::string A = "Appearance";

@@ -4,6 +4,7 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
+#include "fld/crash.h"
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
@@ -29,6 +30,7 @@
 #include <vector>
 
 #include "fld/menus.h"
+#include "fld/mime.h"
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
@@ -388,6 +390,66 @@ void export_shown() {
 
 } // namespace
 
+// ---- crash reports ---------------------------------------------------------
+
+// fldesktop's own reports (fld::install_crash_handler) and, with systemd,
+// coredumpctl's list of crashed fl-* programs
+void crashes_dialog() {
+  static std::vector<fld::CrashReport> reports;
+  reports = fld::crash_reports();
+  std::string cores;
+  if (!fld::which("coredumpctl").empty()) {
+    std::string out;
+    if (fld::run_capture({"coredumpctl", "list", "--no-pager", "--no-legend", "-r", "-q"}, out) == 0)
+      for (auto &l : fld::split(out, '\n'))
+        if (l.find(" fl-") != std::string::npos || l.find("/fl-") != std::string::npos ||
+            l.find("xdg-desktop-portal-fl") != std::string::npos)
+          cores += l + "\n";
+  }
+  Fl_Double_Window d(640, 460, "Crash Reports");
+  d.set_modal();
+  static Fl_Hold_Browser *list;
+  static Fl_Text_Buffer *buf;
+  list = new Fl_Hold_Browser(10, 10, 620, 150);
+  buf = new Fl_Text_Buffer();
+  Fl_Text_Display *view = new Fl_Text_Display(10, 168, 620, 240);
+  view->buffer(buf);
+  view->textfont(FL_COURIER);
+  view->textsize(12);
+  for (auto &r : reports) {
+    char when[32];
+    strftime(when, sizeof when, "%Y-%m-%d %H:%M", localtime(&r.when));
+    list->add((std::string(when) + "   " + fld::escape_at(r.program) + "   " + r.signal).c_str());
+  }
+  if (reports.empty()) list->add("@iNo crash reports from fldesktop programs");
+  if (!cores.empty()) buf->text(("Core dumps of fldesktop programs (coredumpctl):\n" + cores).c_str());
+  list->callback([](Fl_Widget *, void *) {
+    int i = list->value() - 1;
+    if (i >= 0 && i < (int)reports.size()) buf->text(reports[i].text.c_str());
+  });
+  Fl_Button *report = new Fl_Button(10, 420, 160, 30, "Report on GitHub…");
+  report->tooltip("Open a new issue with this report filled in (in the web browser); look at it before you send it");
+  report->callback([](Fl_Widget *, void *) {
+    int i = list->value() - 1;
+    if (i < 0 || i >= (int)reports.size()) return;
+    fld::open_path(fld::crash_issue_url(reports[i]));
+  });
+  Fl_Button *del = new Fl_Button(176, 420, 100, 30, "Delete");
+  del->callback([](Fl_Widget *w, void *) {
+    int i = list->value() - 1;
+    if (i < 0 || i >= (int)reports.size()) return;
+    unlink(reports[i].path.c_str());
+    reports.erase(reports.begin() + i);
+    list->remove(i + 1);
+    buf->text("");
+  });
+  Fl_Button *close = new Fl_Button(530, 420, 100, 30, "Close");
+  close->callback([](Fl_Widget *w, void *) { w->window()->hide(); });
+  d.end();
+  d.show();
+  while (d.shown()) Fl::wait();
+}
+
 int main(int argc, char **argv) {
   fld::init_app("fl-logs", argc, argv);
   std::string want_file;
@@ -440,6 +502,9 @@ int main(int argc, char **argv) {
   g_follow->value(1);
   g_follow->tooltip("Show new entries as they come");
   g_follow->callback([](Fl_Widget *, void *) { start_follow(); });
+  Fl_Button *crashes = new Fl_Button(W - 292, y, 90, 28, "Crashes…");
+  crashes->tooltip("Crash reports of the fldesktop programs, to look at or report");
+  crashes->callback([](Fl_Widget *, void *) { crashes_dialog(); });
   Fl_Button *save = new Fl_Button(W - 196, y, 90, 28, "Save…");
   save->tooltip("Save the shown entries as text");
   save->callback([](Fl_Widget *, void *) { export_shown(); });

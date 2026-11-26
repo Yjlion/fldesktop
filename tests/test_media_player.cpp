@@ -173,6 +173,14 @@ int main() {
     CHECK_EQ(step(ord, 1, 1, Repeat::All), 2);
     CHECK_EQ(step(ord, 2, -1, Repeat::All), 1);
     CHECK_EQ(step(ord, 2, -1, Repeat::Off), -1);
+    // gapless: the next item when it is a local file
+    std::vector<bool> local = {true, false, true};  // item 1 is a web stream
+    CHECK_EQ(gapless_next(ord, 2, Repeat::Off, local), 0);
+    CHECK_EQ(gapless_next(ord, 0, Repeat::Off, local), -1);  // the next one (1) streams
+    CHECK_EQ(gapless_next(ord, 1, Repeat::Off, local), -1);  // the end
+    CHECK_EQ(gapless_next(ord, 1, Repeat::All, local), 2);
+    CHECK_EQ(gapless_next(ord, 0, Repeat::One, local), 0);   // the same item again
+    CHECK_EQ(gapless_next(ord, 2, Repeat::Off, std::vector<bool>{}), -1);
     CHECK_EQ(step(ord, 0, 1, Repeat::One), 0);
     CHECK_EQ(step(ord, -1, 1, Repeat::Off), 2);
     CHECK(next_repeat(Repeat::Off) == Repeat::All);

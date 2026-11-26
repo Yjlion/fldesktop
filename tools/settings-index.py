@@ -14,7 +14,7 @@ pages = re.findall(r"^fld_settings_page\((\w+)\s+([^\s)]+)", cm, re.M)
 ctor = re.compile(r'new\s+(?:fld::)?(?:Fl_\w+|\w*Button|\w*Switch|\w*Slider|\w*Choice|\w*Input|\w*Box)\s*\(([^;]*?)\)\s*;', re.S)
 setl = re.compile(r'(?:->|\.)(?:label|copy_label)\(\s*(?:_\(\s*)?"((?:[^"\\]|\\.)+)"\s*\)')
 # the page helpers: f.row("Speed:"), f.heading("Pointer"), check(f, "Natural scrolling")...
-section = re.compile(r'(?:\.row|\.heading|\bcheck|\b(?!fl_)\w+_choice)\s*\([^;"]*?"((?:[^"\\]|\\.)+)"')
+section = re.compile(r'(?:\.row|\brow_label|\.heading|\bcheck|\b(?!fl_)\w+_choice)\s*\([^;"]*?"((?:[^"\\]|\\.)+)"')
 lit = re.compile(r'"((?:[^"\\]|\\.)+)"')
 
 def clean(s):
@@ -29,8 +29,12 @@ def good(s):
         and not re.fullmatch(r"[a-z0-9_.-]+", s)  # identifiers, file names
 
 rows = []
+# a page built from a shared view names its source: "// settings-index: also <path from the top>"
+also = re.compile(r"^//\s*settings-index:\s*also\s+(\S+)", re.M)
 for pid, f in pages:
     src = open(os.path.join(sdir, f)).read()
+    for extra in also.findall(src):
+        src += open(os.path.join(top, extra)).read()
     found = []
     for m in ctor.finditer(src):
         for l in lit.findall(m.group(1)):

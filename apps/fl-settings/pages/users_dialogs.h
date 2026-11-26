@@ -17,8 +17,6 @@
 namespace fld {
 namespace users_ui {
 
-// fl-users-helper (next to fl-settings in a build tree, else in libexec)
-std::string users_helper_path();
 
 // One helper call; input goes to its stdin (passwords).
 struct Job {

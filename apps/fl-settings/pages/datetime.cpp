@@ -162,7 +162,7 @@ public:
       update();
       return;
     } else {
-      cmd = {"pkexec", settings_helper_path()};
+      cmd = {"pkexec", settings_helper_path(), "system"};
       cmd.insert(cmd.end(), helper.begin(), helper.end());
     }
     std::string w = what;

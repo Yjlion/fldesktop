@@ -5,12 +5,12 @@
 | Directory | What it holds |
 |-----------|---------------|
 | `compositor/` | **fl-wm**, the wlroots compositor (C11) |
-| `shell/` | fl-panel, fl-launcher, fl-desktop, fl-cliphist, fl-nightlight, fl-autostart, the `fl-session` script |
+| `shell/` | fl-panel (applet plugins: `fld_applet.h`, doc/APPLETS.md), fl-launcher, fl-desktop, fl-cliphist, fl-nightlight, fl-autostart, the `fl-session` script |
 | `greeter/` | fl-greet, the greetd greeter |
 | `apps/` | the 38 applications (one directory each; testable logic in a `*-util` static library) |
 | `portal/` | xdg-desktop-portal-fl |
 | `common/libfld` | the shared FLTK library: theme and styles, widgets, menus, INI, JSON, desktop entries, MIME, processes, file operations, AT-SPI |
-| `common/*` | client libraries shared by an app, the panel and Settings: `audio` (PipeWire), `nm` (NetworkManager), `bt` (BlueZ), `printers` (CUPS), `firewall`, `power` (UPower), `udisks`, `gvfs`, `mpris`, `backlight`, `fprint`, `secret`, `mdns`, `spell`, `gst` |
+| `common/*` | client libraries shared by an app, the panel and Settings: `audio` (PipeWire), `nm` (NetworkManager), `bt` (BlueZ), `printers` (CUPS), `firewall`, `power` (UPower), `udisks`, `gvfs`, `mpris`, `backlight`, `fprint`, `secret`, `mdns`, `spell`, `gst`, `displays` (wlr-output-management, for Settings and fl-displays) |
 | `protocols/` | Wayland protocol XML not shipped by wayland-protocols |
 | `data/` | desktop entries, icons, wallpapers, D-Bus services, the session file, example configs |
 | `tests/` | unit tests, headless smoke tests, fuzz targets (`tests/fuzz`) |

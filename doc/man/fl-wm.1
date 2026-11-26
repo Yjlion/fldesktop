@@ -39,6 +39,30 @@ screen (arrows and Enter or a click choose, Escape or Super leaves it;
 Super+drag or Alt+drag moves a window from anywhere in it, Super or Alt with
 the right button resizes it (\fBdrag_modifier=\fR super, alt, super+alt or
 none; Alt+Shift and other combinations still reach the application).
+.SH WINDOW RULES
+Sections named
+.B [rule:\fIname\fB]
+in wm.ini set where and how windows open. A rule matches by
+.B app_id
+and/or
+.B title
+(globs, case-insensitive) and can set
+.BR workspace " (1-based), " output ", " size " (WxH), " position " (center or X,Y), "
+.BR maximized ", " fullscreen ", " sticky ", " always_on_top " and " opacity " (0.1 to 1)."
+Rules apply in file order when a window first maps; a later rule overrides an earlier one.
+See wm.ini.example.
+.SH TILING
+\fBSuper+Shift+T\fR (the action \fBtoggle\-tiling\fR) tiles the windows of the current
+workspace: the oldest window takes the left part of each output (\fBtile_ratio\fR, 0.55), the
+others share the right part one above the other, with \fBtile_gap\fR pixels between them.
+New windows join, closed ones leave room for the others; dialogs, windows of a fixed size,
+fullscreen, minimized and sticky windows float. The same key stacks them again.
+\fBtiling=true\fR in [behaviour] tiles every workspace from the start.
+.SH SESSIONS
+With \fBrestore_session=true\fR in [behaviour] (Settings > Windows & Workspaces), fl-wm writes
+the open windows to \fI$XDG_STATE_HOME/fldesktop/session.ini\fR when the session ends;
+\fBfl-autostart\fR(1) starts their programs at the next login and fl-wm puts each window back on
+its workspace, output, place and size (in the first three minutes of the session).
 .SH TABLET MODE
 When a convertible is folded into a tablet (libinput's tablet mode switch),
 the on-screen keyboard (\fBfl-osk\fR(1)) comes up when a text field gets the

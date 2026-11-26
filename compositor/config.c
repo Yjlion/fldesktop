@@ -57,7 +57,7 @@ static bool parse_action(const char *action, enum flwm_action_type *type_out, ch
 		{"snap-right", FLWM_ACTION_SNAP_RIGHT}, {"snap-up", FLWM_ACTION_SNAP_UP},
 		{"snap-down", FLWM_ACTION_SNAP_DOWN}, {"resize-mode", FLWM_ACTION_RESIZE_MODE},
 		{"launcher", FLWM_ACTION_LAUNCHER},
-		{"quit", FLWM_ACTION_QUIT}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
+		{"quit", FLWM_ACTION_QUIT}, {"toggle-tiling", FLWM_ACTION_TOGGLE_TILING}, {"reload", FLWM_ACTION_RELOAD}, {"lock", FLWM_ACTION_LOCK},
 		{"show-desktop", FLWM_ACTION_SHOW_DESKTOP},
 		{"workspace", FLWM_ACTION_WORKSPACE}, {"workspace-next", FLWM_ACTION_WORKSPACE_NEXT},
 		{"workspace-prev", FLWM_ACTION_WORKSPACE_PREV},
@@ -200,6 +200,8 @@ void config_init_defaults(struct flwm_config *c) {
 	c->gesture_up.type = FLWM_ACTION_LAUNCHER;
 	c->gesture_down.type = FLWM_ACTION_SHOW_DESKTOP;
 	c->drag_snap = true;
+	c->tile_ratio = 0.55;
+	c->tile_gap = 6;
 	c->lock_color = 0xff1e1f22;
 	c->blank_ms = 10 * 60000;
 
@@ -213,6 +215,7 @@ void config_init_defaults(struct flwm_config *c) {
 	add_binding(c, "Super+Up", "snap-up");
 	add_binding(c, "Super+Down", "snap-down");
 	add_binding(c, "Super+r", "resize-mode");
+	add_binding(c, "Super+Shift+t", "toggle-tiling");
 	add_binding(c, "Super+Left", "snap-left");
 	add_binding(c, "Super+Right", "snap-right");
 	add_binding(c, "Super+Alt+Left", "snap-third-left");
@@ -295,6 +298,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 	set_str(&c->path, path);
 	char line[1024], section[128] = "";
 	bool autostart_reset = false;
+	struct flwm_rule *cur_rule = NULL;
 	while (fgets(line, sizeof line, f)) {
 		char *l = trim(line);
 		if (!*l || *l == '#' || *l == ';') continue;
@@ -302,6 +306,15 @@ bool config_load(struct flwm_config *c, const char *path) {
 			char *e = strchr(l, ']');
 			if (e) *e = 0;
 			snprintf(section, sizeof section, "%s", l + 1);
+			cur_rule = NULL;
+			if (!strncasecmp(section, "rule:", 5)) {
+				if (c->nrules < FLWM_MAX_RULES) {
+					cur_rule = &c->rules[c->nrules++];
+					rule_init(cur_rule);
+				} else {
+					wlr_log(WLR_ERROR, "%s: more than %d window rules, [%s] is left out", path, FLWM_MAX_RULES, section);
+				}
+			}
 			continue;
 		}
 		char *eq = strchr(l, '=');
@@ -327,6 +340,10 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "launcher")) set_str(&c->launcher_cmd, v);
 			else if (!strcmp(k, "switcher")) c->switcher = parse_bool(v);
 			else if (!strcmp(k, "snap_assist")) c->snap_assist = parse_bool(v);
+			else if (!strcmp(k, "restore_session")) c->restore_session = parse_bool(v);
+			else if (!strcmp(k, "tiling")) c->tiling = parse_bool(v);
+			else if (!strcmp(k, "tile_ratio")) c->tile_ratio = atof(v);
+			else if (!strcmp(k, "tile_gap")) c->tile_gap = atoi(v);
 			else if (!strcmp(k, "drag_modifier")) {
 				/* super, alt, super+alt (or none) */
 				uint32_t m = 0;
@@ -425,6 +442,9 @@ bool config_load(struct flwm_config *c, const char *path) {
 				continue;
 			}
 			add_binding(c, k, v);
+		} else if (!strncasecmp(section, "rule:", 5)) {
+			if (cur_rule && !rule_set(cur_rule, k, v))
+				wlr_log(WLR_ERROR, "%s: [%s] %s = %s: unknown key or bad value", path, section, k, v);
 		} else if (!strcasecmp(section, "autostart")) {
 			if (!autostart_reset) {
 				/* an [autostart] section replaces the defaults */
@@ -511,6 +531,7 @@ void config_free(struct flwm_config *c) {
 	for (int i = 0; i < c->nbindings; i++) free(c->bindings[i].arg);
 	for (int i = 0; i < c->nautostart; i++) free(c->autostart[i]);
 	for (int i = 0; i < c->noutputs; i++) free(c->outputs[i].name);
+	for (int i = 0; i < c->nrules; i++) rule_free(&c->rules[i]);
 	memset(c, 0, sizeof *c);
 }
 

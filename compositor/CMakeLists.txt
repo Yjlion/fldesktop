@@ -34,7 +34,7 @@ foreach(p staging/tearing-control/tearing-control-v1 staging/content-type/conten
   endif()
 endforeach()
 
-add_executable(fl-wm main.c config.c output.c view.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c popup_place.c zoom.c a11y.c protocols.c)
+add_executable(fl-wm main.c config.c output.c view.c view_layout.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c rules.c session.c tile.c popup_place.c zoom.c a11y.c protocols.c)
 # wlroots has the glue code of the standard protocols; our own one is here
 target_sources(fl-wm PRIVATE ${FLD_PROTO_OUT}/fldesktop-window-v1-protocol.c)
 
@@ -88,7 +88,7 @@ install(TARGETS fl-wm RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(BUILD_TESTING OR FLD_FUZZ)
   fld_fuzz_target(wm_config ${CMAKE_SOURCE_DIR}/tests/fuzz/fuzz_wm_config.c)
   if(TARGET fuzz_wm_config)
-    target_sources(fuzz_wm_config PRIVATE config.c)
+    target_sources(fuzz_wm_config PRIVATE config.c rules.c session.c)
     target_include_directories(fuzz_wm_config PRIVATE ${FLD_PROTO_OUT}/server ${FLD_PROTO_OUT} ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(fuzz_wm_config PRIVATE WLR_USE_UNSTABLE _GNU_SOURCE)
     target_link_libraries(fuzz_wm_config PRIVATE PkgConfig::WLROOTS PkgConfig::WM_DEPS m)

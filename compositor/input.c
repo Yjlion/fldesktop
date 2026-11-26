@@ -253,7 +253,15 @@ bool input_run_action(struct flwm_server *server, enum flwm_action_type action, 
 	}
 	case FLWM_ACTION_STICKY:
 		if (v) view_set_sticky(v, !v->sticky);
+		view_tile_arrange(server);
 		return true;
+	case FLWM_ACTION_TOGGLE_TILING: {
+		bool *t = &server->tiled[server->cur_workspace];
+		*t = !*t;
+		wlr_log(WLR_INFO, "workspace %d: %s", server->cur_workspace + 1, *t ? "tiled" : "stacked");
+		view_tile_arrange(server);
+		return true;
+	}
 	case FLWM_ACTION_ZOOM_IN:
 		zoom_step(server, 1);
 		return true;

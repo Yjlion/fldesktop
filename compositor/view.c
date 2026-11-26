@@ -17,6 +17,7 @@
 
 #include "server.h"
 #include "popup_place.h"
+#include "view_internal.h"
 #if FLWM_WLR_AT_LEAST(0, 19)
 #include <wlr/types/wlr_xdg_dialog_v1.h>
 #include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
@@ -24,12 +25,12 @@
 
 /* ---- geometry helpers -------------------------------------------------- */
 
-static int deco_top(struct flwm_view *v) {
+int deco_top(struct flwm_view *v) {
 	return (v->ssd && !v->fullscreen && v->role == FLWM_ROLE_NORMAL)
 		? decor_title_height(v->server) + decor_border(v->server) : 0;
 }
 
-static int deco_side(struct flwm_view *v) {
+int deco_side(struct flwm_view *v) {
 	return (v->ssd && !v->fullscreen && v->role == FLWM_ROLE_NORMAL) ? decor_border(v->server) : 0;
 }
 
@@ -37,7 +38,7 @@ bool view_is_normal(struct flwm_view *view) {
 	return view->role == FLWM_ROLE_NORMAL;
 }
 
-static bool is_x11(struct flwm_view *view) {
+bool is_x11(struct flwm_view *view) {
 	return view->type == FLWM_VIEW_XWAYLAND;
 }
 
@@ -61,7 +62,7 @@ static const char *title_or(struct flwm_view *view, const char *fallback) {
 }
 
 /* the content geometry relative to the surface */
-static void content_geometry(struct flwm_view *view, struct wlr_box *geo) {
+void content_geometry(struct flwm_view *view, struct wlr_box *geo) {
 	if (is_x11(view)) {
 		*geo = (struct wlr_box){0, 0, 0, 0};
 		xwayland_view_size(view, &geo->width, &geo->height);
@@ -437,7 +438,7 @@ static void usable_area_for(struct flwm_view *view, struct wlr_box *ua) {
 	else *ua = (struct wlr_box){0, 0, 1280, 720};
 }
 
-static void apply_box(struct flwm_view *view, struct wlr_box *box) {
+void apply_box(struct flwm_view *view, struct wlr_box *box) {
 	/* box is the outer frame (decorations included) */
 	int T = deco_top(view), B = deco_side(view);
 	int w = box->width - 2 * B, h = box->height - T - B;
@@ -579,7 +580,7 @@ void view_set_fullscreen(struct flwm_view *view, bool fullscreen) {
 		}
 	} else {
 		view->fullscreen = false;
-		wlr_scene_node_reparent(&view->tree->node, server->layer_views);
+		wlr_scene_node_reparent(&view->tree->node, view->above ? server->layer_above : server->layer_views);
 		if (view->maximized) {
 			struct wlr_box ua;
 			usable_area_for(view, &ua);
@@ -918,7 +919,7 @@ static struct flwm_view *view_from_toplevel(struct flwm_server *server, struct w
 	return NULL;
 }
 
-static struct flwm_view *view_parent(struct flwm_view *view) {
+struct flwm_view *view_parent(struct flwm_view *view) {
 	if (is_x11(view)) return xwayland_view_parent(view);
 	return view->xdg_toplevel->parent ? view_from_toplevel(view->server, view->xdg_toplevel->parent) : NULL;
 }
@@ -1024,6 +1025,8 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 		return;
 	}
 	if (!view->placed) place_new_view(view);
+	if (!view->serial) view->serial = ++server->map_serial;
+	view_apply_rules(view, &maximized, &fullscreen, &focus);
 	view_ftl_create(view);
 	capture_view_map(view);
 	decor_update(view);
@@ -1031,6 +1034,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 	if (fullscreen) view_set_fullscreen(view, true);
 	if (focus) view_focus(view);
 	else view_raise(view);
+	view_tile_arrange(server);
 }
 
 static void view_map(struct wl_listener *listener, void *data) {
@@ -1054,6 +1058,7 @@ void view_handle_unmap(struct flwm_view *view) {
 	}
 	bool was_focused = view_focused(server) == view;
 	view->mapped = false;
+	view_tile_arrange(server);
 	/* the decorations are ours, not the surface's: hide them with it */
 	wlr_scene_node_set_enabled(&view->tree->node, false);
 	if (view->ftl) {
@@ -1113,6 +1118,7 @@ static void view_commit(struct wl_listener *listener, void *data) {
 void view_handle_commit(struct flwm_view *view) {
 	update_surface_offset(view);
 	if (!view->mapped) return;
+	if (view->opacity > 0 && view->opacity < 1) view_apply_opacity(view);
 	if (view->role != FLWM_ROLE_NORMAL) {
 		struct wlr_box geo;
 		content_geometry(view, &geo);

@@ -31,6 +31,14 @@ drag_snap=true
 renderer=auto
 # run X11 programs through Xwayland (started with the first one); read at startup
 xwayland=true
+# tile the windows of every workspace (Super+Shift+T switches one workspace):
+# the oldest window on the left (tile_ratio of the width), the others on the right
+tiling=false
+tile_ratio=0.55
+tile_gap=6
+# at logout remember the open windows; at the next login fl-autostart starts
+# their programs again and fl-wm puts the windows back (workspace, place, size)
+restore_session=false
 # number of workspaces (1-9); all outputs switch together
 workspaces=4
 # after snapping a window to a side (or a third), offer the other windows
@@ -133,6 +141,7 @@ Alt+F4=close
 Super+Up=snap-up
 Super+Down=snap-down
 Super+r=resize-mode
+Super+Shift+t=toggle-tiling
 Super+Left=snap-left
 Super+Right=snap-right
 Super+Alt+Left=snap-third-left
@@ -184,6 +193,22 @@ Super+Ctrl+Right=workspace-next
 Super+Ctrl+Left=workspace-prev
 Super+Ctrl+Shift+Right=move-to-workspace-next
 Super+Ctrl+Shift+Left=move-to-workspace-prev
+
+# Window rules: [rule:<any name>] sections, applied in this order when a
+# window first opens (later rules override earlier ones). app_id and title
+# are globs (* ?), case-insensitive; a rule needs at least one of them.
+# kill -USR2 $FLWM_PID logs the app ids and titles of the open windows.
+#[rule:terminal]
+#app_id=fl-term
+#workspace=2
+#size=1000x640
+#position=center        # or X,Y within the output's usable area
+#[rule:video]
+#title=*YouTube*
+#output=HDMI-A-1
+#maximized=true        # also: fullscreen, sticky (on every workspace)
+#always_on_top=true
+#opacity=0.95          # 0.1 .. 1
 
 # An [autostart] section replaces the default list
 # (fl-desktop, fl-panel, fl-autostart)

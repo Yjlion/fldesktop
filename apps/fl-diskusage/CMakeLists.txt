@@ -1,0 +1,7 @@
+add_library(fl-diskusage-model STATIC du_model.cpp)  # scanning and the treemap layout (unit tested)
+target_include_directories(fl-diskusage-model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+find_package(Threads REQUIRED)
+target_link_libraries(fl-diskusage-model PUBLIC Threads::Threads)
+add_executable(fl-diskusage main.cpp)
+target_link_libraries(fl-diskusage PRIVATE fl-diskusage-model fld)
+install(TARGETS fl-diskusage RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

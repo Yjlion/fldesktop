@@ -1,0 +1,25 @@
+.TH FL-DISKUSAGE 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-diskusage \- disk usage analyser
+.SH SYNOPSIS
+\fBfl-diskusage\fR [\fIfolder\fR]
+.SH DESCRIPTION
+Scans a folder (the home folder unless one is given) in the background and
+draws it as a treemap: every rectangle is a file or a folder, its area its
+size on disk, three levels deep. Folders are tinted in the accent colour,
+files by their kind (pictures, videos, music, archives, documents).
+.PP
+Click a folder to show only it, \fBBackspace\fR or \fBUp\fR to go back.
+The right-click menu opens a file, shows its folder in fl-files or moves it to
+the trash (the sizes above it are updated). \fBWhole Disk\fR scans \fI/\fR;
+folders you may not read are left out, and other file systems mounted inside
+the scanned folder are not counted.
+.SH KEYS
+.TP
+\fBCtrl+O\fR
+Choose a folder.
+.TP
+\fBF5\fR
+Scan again.
+.SH SEE ALSO
+\fBfl-files\fR(1), \fBfl-disks\fR(1)

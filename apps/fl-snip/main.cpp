@@ -1,3 +1,4 @@
+#include "fld/i18n.h"
 // fl-snip: screenshots, like a snipping tool
 //
 // The screen is captured first (grim) and shown frozen in an overlay over all
@@ -61,7 +62,8 @@ static double now_s() {
 // ---------------------------------------------------------------------------
 // Settings
 
-enum class Mode { Rect, Freeform, Window, Full };
+// Pick and Ruler are tools (fl-snip --pick-color, --ruler), not ways to snip
+enum class Mode { Rect, Freeform, Window, Full, Pick, Ruler };
 
 static struct Settings {
   bool copy = true;      // copy each snip to the clipboard
@@ -100,6 +102,8 @@ static const char *mode_name(Mode m) {
     case Mode::Freeform: return "Freeform";
     case Mode::Window: return "Window";
     case Mode::Full: return "Full Screen";
+    case Mode::Pick: return "Colour Picker";
+    case Mode::Ruler: return "Ruler";
   }
   return "";
 }
@@ -299,7 +303,7 @@ public:
     bright_img_->scale(w(), h(), 0, 1);
     dim_img_->scale(w(), h(), 0, 1);
     if (mode_ == Mode::Window) windows_ = wm_windows();
-    make_bar();
+    if (!tool()) make_bar();
     end();
     cursor(FL_CURSOR_CROSS);
   }
@@ -307,9 +311,11 @@ public:
   // the chosen part in image pixels (empty: cancelled)
   Image result;
   bool done = false;
+  std::string picked; // Pick: "#rrggbb"; Ruler: the measurement copied
+  bool tool() const { return mode_ == Mode::Pick || mode_ == Mode::Ruler; }
 
   int handle(int e) override {
-    if (Fl_Double_Window::handle(e) && (e == FL_PUSH || e == FL_RELEASE) && Fl::event_inside(bar_)) return 1;
+    if (Fl_Double_Window::handle(e) && (e == FL_PUSH || e == FL_RELEASE) && bar_ && Fl::event_inside(bar_)) return 1;
     int ex = Fl::event_x(), ey = Fl::event_y();
     switch (e) {
       case FL_FOCUS: case FL_UNFOCUS: return 1;
@@ -328,7 +334,12 @@ public:
           finish(false);
           return 1;
         }
+        if (mode_ == Mode::Pick) {
+          pick(ex, ey);
+          return 1;
+        }
         dragging_ = true;
+        measured_ = false;
         ax_ = ex;
         ay_ = ey;
         sel_ = snip::span(ex, ey, ex, ey);
@@ -351,6 +362,12 @@ public:
       case FL_RELEASE:
         if (!dragging_) return 1;
         dragging_ = false;
+        if (mode_ == Mode::Ruler) {
+          // stays on the screen: Enter or C copies it, Esc closes
+          measured_ = true;
+          redraw();
+          return 1;
+        }
         if (mode_ == Mode::Window) {
           if (hover_win_ >= 0) {
             Rect r = windows_[(size_t)hover_win_].r;
@@ -421,7 +438,42 @@ public:
       fl_yxline(mx_, 0, h());
       fl_line_style(0);
     }
-    if (mode_ == Mode::Rect || mode_ == Mode::Freeform) magnifier();
+    if (mode_ == Mode::Ruler && (dragging_ || measured_)) {
+      fl_color(p.accent);
+      fl_line_style(FL_SOLID, 2);
+      fl_line(ax_, ay_, mx_, my_);
+      fl_line_style(0);
+      fl_color(fl_color_average(p.accent, FL_WHITE, 0.5f));
+      fl_line_style(FL_DOT, 1);
+      fl_xyline(ax_, ay_, mx_);
+      fl_yxline(mx_, ay_, my_);
+      fl_line_style(0);
+      std::string l = measurement();
+      fl_font(FL_HELVETICA_BOLD, 13);
+      int tw = (int)fl_width(l.c_str()) + 16, th = 24, tx = mx_ + 14, ty = my_ + 14;
+      if (tx + tw > w()) tx = mx_ - tw - 14;
+      if (ty + th > h()) ty = my_ - th - 14;
+      fl_color(p.accent);
+      fl_rounded_rectf(tx, ty, tw, th, 4);
+      fl_color(p.accent_fg);
+      fl_draw(l.c_str(), tx, ty, tw, th, FL_ALIGN_CENTER);
+    }
+    if (tool() && !dragging_ && !measured_) {
+      fl_color(fl_color_average(p.accent, FL_WHITE, 0.6f));
+      fl_line_style(FL_DOT, 1);
+      fl_xyline(0, my_, w());
+      fl_yxline(mx_, 0, h());
+      fl_line_style(0);
+      const char *hint = mode_ == Mode::Pick ? _("Click a pixel to copy its colour · Esc cancels")
+                                             : _("Drag to measure · Enter copies · Esc closes");
+      fl_font(FL_HELVETICA_BOLD, 14);
+      int tw = (int)fl_width(hint) + 24;
+      fl_color(p.bg);
+      fl_rounded_rectf((w() - tw) / 2, 16, tw, 32, 6);
+      fl_color(p.fg);
+      fl_draw(hint, (w() - tw) / 2, 16, tw, 32, FL_ALIGN_CENTER);
+    }
+    if (mode_ == Mode::Rect || mode_ == Mode::Freeform || tool()) magnifier();
     draw_children();
   }
 
@@ -438,6 +490,31 @@ private:
   std::vector<Point> poly_;
   Fl_Group *bar_ = nullptr;
   std::vector<GlyphButton *> mode_btns_;
+  bool measured_ = false;
+
+  // image pixels: the ruler measures what the picture has, not logical units
+  std::string measurement() const {
+    return snip::ruler_label((int)lround(ax_ * cap_.sx), (int)lround(ay_ * cap_.sy), (int)lround(mx_ * cap_.sx),
+                             (int)lround(my_ * cap_.sy));
+  }
+
+  bool pixel(int ex, int ey, uint8_t rgb[3]) const {
+    int ix = (int)(ex * cap_.sx), iy = (int)(ey * cap_.sy);
+    if (ix < 0 || iy < 0 || ix >= cap_.img.w || iy >= cap_.img.h) return false;
+    const uint8_t *px = const_cast<Image &>(cap_.img).at(ix, iy);
+    rgb[0] = px[0];
+    rgb[1] = px[1];
+    rgb[2] = px[2];
+    return true;
+  }
+
+  void pick(int ex, int ey) {
+    uint8_t c[3];
+    if (!pixel(ex, ey, c)) return;
+    picked = snip::hex_color(c[0], c[1], c[2]);
+    done = true;
+    hide();
+  }
 
   void make_bar() {
     const int B = 40, n = 4, W = n * (B + 4) + 4 + 8 + 90;
@@ -479,6 +556,17 @@ private:
   }
 
   int key(int k) {
+    if (tool()) {
+      if (k == FL_Escape) finish(false);
+      else if ((k == FL_Enter || k == FL_KP_Enter || k == 'c') && mode_ == Mode::Ruler && measured_) {
+        picked = measurement();
+        done = true;
+        hide();
+      } else if ((k == FL_Enter || k == FL_KP_Enter) && mode_ == Mode::Pick) {
+        pick(mx_, my_);
+      }
+      return 1;
+    }
     switch (k) {
       case FL_Escape: finish(false); return 1;
       case 'r': set_mode(Mode::Rect); return 1;
@@ -547,6 +635,12 @@ private:
     fl_rect(bx + (N / 2) * Z, by + (N / 2) * Z, Z, Z);
     char buf[48];
     snprintf(buf, sizeof buf, "%d, %d", (int)(mx_ * cap_.sx), (int)(my_ * cap_.sy));
+    uint8_t c[3];
+    if (mode_ == Mode::Pick && pixel(mx_, my_, c)) {
+      snprintf(buf, sizeof buf, "%s", snip::hex_color(c[0], c[1], c[2]).c_str());
+      fl_color(fl_rgb_color(c[0], c[1], c[2]));
+      fl_rectf(bx + 4, by + S2 + 4, 16, 16);
+    }
     fl_color(fld::palette().fg);
     fl_font(FL_HELVETICA, 12);
     fl_draw(buf, bx, by + S2, S2, 24, FL_ALIGN_CENTER);
@@ -595,6 +689,34 @@ static Image take_snip(Mode mode, int delay, std::string &err) {
   }
   for (auto *w : hidden) w->show();
   return result;
+}
+
+// The colour picker and the ruler: a frozen picture of the screen; the colour
+// ("#rrggbb") or the measurement is printed and copied. Returns 1 when cancelled.
+static int run_tool(Mode mode) {
+  std::string err;
+  double until = now_s() + 0.2;
+  while (now_s() < until) Fl::wait(0.05);
+  Capture cap;
+  if (!grab_screen(cap, err)) {
+    fprintf(stderr, "fl-snip: %s\n", err.c_str());
+    return 1;
+  }
+  Overlay o(cap, mode);
+  o.show();
+  o.take_focus();
+  while (!o.done && o.shown()) Fl::wait();
+  if (o.picked.empty()) return 1;
+  printf("%s\n", o.picked.c_str());
+  fflush(stdout);
+  // wl-copy keeps it on the clipboard after we exit
+  if (!fld::which("wl-copy").empty()) {
+    std::string out;
+    fld::run_capture_input({"wl-copy", "--", o.picked}, "", out);
+  } else {
+    Fl::copy(o.picked.c_str(), (int)o.picked.size(), 1);
+  }
+  return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1424,6 +1546,8 @@ static void make_main_window() {
       if (g_editors.empty() && g_main) g_main->hide();
     });
 #endif
+    m.item("Pick a Colour on the Screen", [] { fld::spawn({"fl-snip", "--pick-color"}); });
+    m.item("Measure on the Screen", [] { fld::spawn({"fl-snip", "--ruler"}); }).divider();
     m.item("Open Screenshots Folder", [] {
       fld::mkdir_p(screenshots_dir());
       fld::spawn({"fl-files", screenshots_dir()});
@@ -1527,6 +1651,8 @@ static const char *kUsage =
     "  --window        choose a window; save and copy it\n"
     "  --full          the whole screen; save and copy it (Print)\n"
     "  --freeform      draw a shape around a part; save and copy it\n"
+    "  --pick-color    pick a colour on the screen; print and copy it (#rrggbb)\n"
+    "  --ruler         measure on the screen in pixels; Enter prints and copies it\n"
     "  --delay N       wait N seconds first\n"
     "  --edit FILE     open an image in the editor\n"
 #ifdef FLD_HAVE_RECORD
@@ -1540,7 +1666,7 @@ static const char *kUsage =
     "Quick snips print the saved file's path.\n";
 
 int main(int argc, char **argv) {
-  enum { MAIN, SNIP, QUICK, EDIT, RECORD } what = MAIN;
+  enum { MAIN, SNIP, QUICK, EDIT, RECORD, TOOL } what = MAIN;
 #ifdef FLD_HAVE_RECORD
   record::Options rec;
 #endif
@@ -1562,6 +1688,8 @@ int main(int argc, char **argv) {
     else if (a == "--window") { what = QUICK; mode = Mode::Window; }
     else if (a == "--full") { what = QUICK; mode = Mode::Full; }
     else if (a == "--freeform") { what = QUICK; mode = Mode::Freeform; }
+    else if (a == "--pick-color" || a == "--pick-colour") { what = TOOL; mode = Mode::Pick; }
+    else if (a == "--ruler") { what = TOOL; mode = Mode::Ruler; }
     else if (a == "--delay" && i + 1 < argc) delay = std::max(0, std::min(60, atoi(argv[++i])));
     else if (a == "--edit" && i + 1 < argc) { what = EDIT; edit_file = argv[++i]; }
 #ifdef FLD_HAVE_RECORD
@@ -1588,6 +1716,7 @@ int main(int argc, char **argv) {
   switch (what) {
     case QUICK: return quick(mode, delay, false);
     case SNIP: return quick(S.mode, delay, true);
+    case TOOL: return run_tool(mode);
     case EDIT: {
       std::unique_ptr<Fl_Image> im(fld::load_image(edit_file));
       Fl_RGB_Image *rgb = dynamic_cast<Fl_RGB_Image *>(im.get());

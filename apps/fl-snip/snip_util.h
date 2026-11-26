@@ -56,6 +56,10 @@ void pixelate(Image &img, Rect r, int block);
 
 // "Screenshot-2026-11-19-143005.png"
 std::string file_name(time_t t);
+// "#3584e4"
+std::string hex_color(uint8_t r, uint8_t g, uint8_t b);
+// a measurement between two points in image pixels: "120 × 45 px, 128.1 px"
+std::string ruler_label(int x1, int y1, int x2, int y2);
 // "Screencast-2026-11-19-221005.webm"
 std::string recording_name(time_t t);
 

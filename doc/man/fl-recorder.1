@@ -1,0 +1,20 @@
+.TH FL-RECORDER 1 "November 2026" "fldesktop 0.1.4" "fldesktop"
+.SH NAME
+fl-recorder \- sound recorder
+.SH SYNOPSIS
+\fBfl-recorder\fR
+.SH DESCRIPTION
+Records sound from the default microphone through GStreamer (PipeWire or
+PulseAudio) with a level meter. \fBRecord\fR (or \fBSpace\fR) starts and stops;
+the file goes to \fI$XDG_MUSIC_DIR/Recordings\fR, named after the date and
+time. Formats: Opus (the default), FLAC, WAV and MP3 (needs the lame
+GStreamer plugin).
+.PP
+The list shows the recordings, newest first: double-click one to play it; the
+right-click menu renames it or moves it to the trash.
+.SH FILES
+.TP
+\fI~/.config/fldesktop/recorder.ini\fR
+The format last used.
+.SH SEE ALSO
+\fBfl-mixer\fR(1), \fBfl-media-player\fR(1)

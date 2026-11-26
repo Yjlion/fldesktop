@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sound Recorder
+GenericName=Sound Recorder
+Comment=Record sound from the microphone
+Exec=fl-recorder
+Icon=fl-recorder
+Categories=AudioVideo;Audio;Recorder;
+Keywords=record;microphone;voice;memo;audio;sound;
+StartupWMClass=fl-recorder

@@ -152,7 +152,7 @@ APPS_MONO = {
     "fl-settings": "preferences-system", "fl-term": "utilities-terminal", "fl-view": "image-viewer",
     "fldesktop": "start-here", "fl-taskmgr": "utilities-system-monitor", "fl-media-player": "multimedia-video-player",
     "fl-lock": "system-lock-screen", "fl-webcam": "camera-web", "fl-archive": "application-x-archive",
-    "fl-sysinfo": "computer", "fl-disks": "drive-harddisk",
+    "fl-sysinfo": "computer", "fl-disks": "drive-harddisk", "fl-diskusage": "drive-harddisk", "fl-recorder": "audio-input-microphone",
     "fl-keyring": "dialog-password", "fl-logs": "text-x-generic", "fl-services": "applications-system",
     "fl-paint": "applications-graphics", "fl-fonts": "preferences-desktop-font", "fl-clock": "alarm",
     "fl-remote": "video-display", "fl-scan": "scanner", "fl-welcome": "help-about",

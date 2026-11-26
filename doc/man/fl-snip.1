@@ -6,6 +6,8 @@ fl-snip \- take and mark up screenshots
 .br
 \fBfl-snip\fR \fB\-\-edit\fR \fIFILE\fR
 .br
+\fBfl-snip\fR \fB\-\-pick\-color\fR|\fB\-\-ruler\fR
+.br
 \fBfl-snip\fR \fB\-\-record\fR [\fB\-\-audio\fR] [\fB\-\-seconds\fR \fIN\fR] [\fB\-o\fR \fIFILE\fR] [\fB\-\-no\-window\fR]
 .SH DESCRIPTION
 A snipping tool. The screen is captured first (with \fBgrim\fR(1)) and shown frozen over all
@@ -35,6 +37,12 @@ PNG (Ctrl+S, Ctrl+Shift+S), opens it in the image viewer or another program, or 
 The quick modes (\fB\-\-area\fR, \fB\-\-window\fR, \fB\-\-full\fR, \fB\-\-freeform\fR) save
 the snip to \fI~/Pictures/Screenshots\fR, copy it to the clipboard and print the file's path;
 a notification offers to open, edit or show it. \fB\-\-snip\fR opens the editor instead.
+.SH COLOUR PICKER AND RULER
+\fB\-\-pick\-color\fR shows the frozen screen with the magnifier and the colour under the
+pointer; a click (or Enter) prints the colour as \fI#rrggbb\fR and copies it.
+\fB\-\-ruler\fR measures: drag from one point to another to see the width, the height and
+the distance in screen pixels; Enter or C prints and copies the measurement, Esc closes.
+Both are also in the Snip window's More menu.
 .SH SCREEN RECORDING
 \fBRecord\fR in the Snip window (Ctrl+R), or \fB\-\-record\fR, records a screen or a
 window as a WebM video (VP8, 30 frames a second, the pointer included) to

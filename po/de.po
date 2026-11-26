@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-25 19:35-0600\n"
+"POT-Creation-Date: 2026-11-25 19:36-0600\n"
 "PO-Revision-Date: 2026-11-25 12:00+0000\n"
 "Last-Translator: fldesktop contributors\n"
 "Language-Team: German\n"
@@ -16,6 +16,117 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: apps/fl-diskusage/main.cpp:87
+msgid "Choose a folder to see what takes its space."
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:87
+msgid "Scanning…"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:128
+#, c-format
+msgid "%s in %s files"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:133
+#, c-format
+msgid "Scanning… %s in %s files"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:161
+#, c-format
+msgid "Cannot read %s."
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:170
+msgid "Folder to Analyse"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:171
+msgid "Analyse"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:183 apps/fl-settings/pages/keyboard.cpp:165
+#: apps/fl-settings/pages/panel.cpp:145 apps/fl-settings/pages/privacy.cpp:85
+#: apps/fl-settings/pages/shortcuts.cpp:285
+#: apps/fl-settings/pages/shortcuts.cpp:357
+#: apps/fl-settings/pages/shortcuts.cpp:384
+#: apps/fl-settings/pages/startup.cpp:60 apps/fl-settings/pages/users.cpp:112
+#: apps/fl-settings/pages/users.cpp:201 apps/fl-settings/pages/users.cpp:246
+#: apps/fl-settings/pages/users.cpp:444 apps/fl-settings/pages/users.cpp:711
+#: apps/fl-settings/settings_common.cpp:106 common/libfld/file_dialog.cpp:202
+#: common/libfld/file_dialog.cpp:441 common/libfld/file_dialog.cpp:458
+#: common/libfld/fileops_ui.cpp:127 common/libfld/fileops_ui.cpp:145
+#: common/libfld/session.cpp:258 common/libfld/session.cpp:262
+#: common/libfld/session.cpp:266 common/libfld/widgets.cpp:355
+#: shell/desktop.cpp:503 shell/panel_printers.cpp:168
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: apps/fl-diskusage/main.cpp:183 apps/fl-recorder/main.cpp:268
+msgid "Move to Trash"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:184
+#, c-format
+msgid "Move %s (%s) to the trash?"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:227
+#, fuzzy
+msgid "Show This Folder"
+msgstr "In Dateien öffnen"
+
+#: apps/fl-diskusage/main.cpp:228 shell/launcher.cpp:298 shell/panel.cpp:837
+msgid "Open"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:229
+#, fuzzy
+msgid "Open the Folder in Files"
+msgstr "In Dateien öffnen"
+
+#: apps/fl-diskusage/main.cpp:231
+msgid "Move to Trash…"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:260
+msgid "Disk Usage"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:264
+msgid "Folder…"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:265
+msgid "Choose the folder to analyse (Ctrl+O)"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:268
+msgid "Home"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:270
+msgid "Whole Disk"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:271
+msgid "The system disk (/); folders you may not read are left out"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:273
+msgid "Up"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:274
+msgid "The folder above (Backspace)"
+msgstr ""
+
+#: apps/fl-diskusage/main.cpp:277
+msgid "Rescan"
+msgstr ""
+
 #: apps/fl-notifyd/main.cpp:234
 msgid "Reply"
 msgstr ""
@@ -23,6 +134,90 @@ msgstr ""
 #: apps/fl-notifyd/main.cpp:359
 #, c-format
 msgid "Reply to %s:"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:92
+msgid "No recordings yet"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:97 apps/fl-recorder/main.cpp:238
+msgid "Record"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:97
+msgid "Stop"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:148
+#, c-format
+msgid "Recording failed: %s"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:175
+#, c-format
+msgid "Cannot record in this format: %s"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:180
+msgid "The microphone could not be opened."
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:206 shell/desktop.cpp:468
+msgid "New name:"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:212
+#, c-format
+msgid "%s exists already."
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:233
+msgid "Sound Recorder"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:242
+msgid "Start or stop recording (Space)"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:244
+msgid "Format:"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:254
+msgid "Recordings"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:266
+msgid "Play"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:267
+msgid "Rename…"
+msgstr ""
+
+#: apps/fl-recorder/main.cpp:269
+#, fuzzy
+msgid "Open the Folder"
+msgstr "In Dateien öffnen"
+
+#: apps/fl-recorder/main.cpp:271 common/libfld/file_dialog.cpp:217
+msgid "Open Folder"
+msgstr ""
+
+#: apps/fl-recorder/rec_util.cpp:11
+msgid "Opus (small, good quality)"
+msgstr ""
+
+#: apps/fl-recorder/rec_util.cpp:12
+msgid "FLAC (lossless)"
+msgstr ""
+
+#: apps/fl-recorder/rec_util.cpp:13
+msgid "WAV (uncompressed)"
+msgstr ""
+
+#: apps/fl-recorder/rec_util.cpp:14
+msgid "MP3 (plays everywhere)"
 msgstr ""
 
 #: apps/fl-settings/main.cpp:54
@@ -714,23 +909,6 @@ msgstr "Hier testen:"
 #: apps/fl-settings/pages/keyboard.cpp:164
 msgid "Variant:"
 msgstr "Variante:"
-
-#: apps/fl-settings/pages/keyboard.cpp:165 apps/fl-settings/pages/panel.cpp:145
-#: apps/fl-settings/pages/privacy.cpp:85
-#: apps/fl-settings/pages/shortcuts.cpp:285
-#: apps/fl-settings/pages/shortcuts.cpp:357
-#: apps/fl-settings/pages/shortcuts.cpp:384
-#: apps/fl-settings/pages/startup.cpp:60 apps/fl-settings/pages/users.cpp:112
-#: apps/fl-settings/pages/users.cpp:201 apps/fl-settings/pages/users.cpp:246
-#: apps/fl-settings/pages/users.cpp:444 apps/fl-settings/pages/users.cpp:711
-#: apps/fl-settings/settings_common.cpp:106 common/libfld/file_dialog.cpp:202
-#: common/libfld/file_dialog.cpp:441 common/libfld/file_dialog.cpp:458
-#: common/libfld/fileops_ui.cpp:127 common/libfld/fileops_ui.cpp:145
-#: common/libfld/session.cpp:258 common/libfld/session.cpp:262
-#: common/libfld/session.cpp:266 common/libfld/widgets.cpp:355
-#: shell/desktop.cpp:503 shell/panel_printers.cpp:168
-msgid "Cancel"
-msgstr "Abbrechen"
 
 #: apps/fl-settings/pages/keyboard.cpp:166 apps/fl-settings/pages/panel.cpp:146
 #: apps/fl-settings/pages/startup.cpp:61 apps/fl-settings/pages/users.cpp:202
@@ -2012,6 +2190,14 @@ msgstr ""
 msgid "Use the default values for the settings on this page?"
 msgstr ""
 
+#: apps/fl-snip/main.cpp:467
+msgid "Click a pixel to copy its colour · Esc cancels"
+msgstr ""
+
+#: apps/fl-snip/main.cpp:468
+msgid "Drag to measure · Enter copies · Esc closes"
+msgstr ""
+
 #: common/libfld/file_dialog.cpp:120
 msgid "Parent folder (Alt+Up)"
 msgstr ""
@@ -2026,10 +2212,6 @@ msgstr ""
 
 #: common/libfld/file_dialog.cpp:131
 msgid "Show hidden files (Ctrl+H)"
-msgstr ""
-
-#: common/libfld/file_dialog.cpp:217
-msgid "Open Folder"
 msgstr ""
 
 #: common/libfld/file_dialog.cpp:219 common/libfld/pickers.cpp:223
@@ -2166,10 +2348,6 @@ msgid ""
 "%s"
 msgstr ""
 
-#: shell/desktop.cpp:468
-msgid "New name:"
-msgstr ""
-
 #: shell/desktop.cpp:471
 #, c-format
 msgid "\"%s\" already exists."
@@ -2199,10 +2377,6 @@ msgstr ""
 #: shell/launcher.cpp:284
 #, c-format
 msgid "Could not copy the launcher to %s."
-msgstr ""
-
-#: shell/launcher.cpp:298 shell/panel.cpp:837
-msgid "Open"
 msgstr ""
 
 #: shell/launcher.cpp:307 shell/panel.cpp:853

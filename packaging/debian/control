@@ -78,7 +78,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-welcome (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-media-player,
-            fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
+            fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-diskusage, fldesktop-recorder, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
             fldesktop-passwords, fldesktop-pinentry, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
             plymouth, plymouth-themes, fldesktop-plymouth-theme, power-profiles-daemon, avahi-daemon, libnss-mdns,
@@ -321,6 +321,23 @@ Description: fldesktop on-screen keyboard
  fl-osk is an on-screen keyboard for touch screens. It types into the
  focused window through the Wayland virtual-keyboard protocol and offers
  US, German and French layouts plus a symbols page.
+
+Package: fldesktop-diskusage
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop disk usage analyser
+ fl-diskusage scans a folder or the whole disk and shows what takes the space
+ as a treemap; large files can be moved to the trash from it.
+
+Package: fldesktop-recorder
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good
+Recommends: gstreamer1.0-pipewire
+Suggests: gstreamer1.0-plugins-ugly
+Description: fldesktop sound recorder
+ fl-recorder records sound from the microphone to Opus, FLAC, WAV or MP3
+ files with a level meter, and lists the recordings to play, rename or
+ delete.
 
 Package: fldesktop-charmap
 Architecture: any

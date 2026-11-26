@@ -97,5 +97,10 @@ int main() {
     CHECK(n.rfind("Screencast-", 0) == 0);
     CHECK(n.size() > 5 && n.substr(n.size() - 5) == ".webm");
   }
+  // the colour picker and the ruler
+  CHECK_EQ(snip::hex_color(0x35, 0x84, 0xe4), std::string("#3584e4"));
+  CHECK_EQ(snip::hex_color(0, 0, 0), std::string("#000000"));
+  CHECK_EQ(snip::ruler_label(10, 10, 130, 55), std::string("120 \xc3\x97 45 px, 128.2 px"));
+  CHECK_EQ(snip::ruler_label(5, 5, 5, 5), std::string("0 \xc3\x97 0 px, 0.0 px"));
   return test_result("snip");
 }

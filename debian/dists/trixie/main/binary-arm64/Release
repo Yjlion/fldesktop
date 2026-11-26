@@ -1,0 +1,6 @@
+Archive: trixie
+Component: main
+Origin: fldesktop
+Label: fldesktop
+Architecture: arm64
+Description: fldesktop, a Wayland desktop built with FLTK (releases)

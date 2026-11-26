@@ -1,0 +1,39 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: fldesktop
+Label: fldesktop
+Suite: trixie-devel
+Codename: trixie-devel
+Date: Thu, 26 Nov 2026 21:47:40 UTC
+Architectures: amd64 arm64
+Components: main
+Description: fldesktop, a Wayland desktop built with FLTK (development builds of main)
+MD5Sum:
+ f9b42323988da61c161d4a2eb7007c90 51846 main/binary-amd64/Packages
+ f494c8730e0162afdd3a732c532db59e 13803 main/binary-amd64/Packages.gz
+ a057fab58e59640b2723cce2cf3c741b 180 main/binary-amd64/Release
+ 544955432d857a563e6d61b44210f116 51842 main/binary-arm64/Packages
+ 6dfc4c573135078701bde64a369a5d90 13789 main/binary-arm64/Packages.gz
+ 1302e2998a45f8a9f749bf58973475cc 180 main/binary-arm64/Release
+SHA1:
+ f0831e65d6c5f541505545de21ef3627a5d88cc1 51846 main/binary-amd64/Packages
+ 5501e92ab672e60f37a30db41608341edaa7b2dc 13803 main/binary-amd64/Packages.gz
+ 2b4a99879efa3120df8b5381cbe80fd3c83ec098 180 main/binary-amd64/Release
+ d774affe34d020d3029af18f2f8f64e8a7114ed5 51842 main/binary-arm64/Packages
+ d56e10328c572176922154403b75e7dcd8b1c233 13789 main/binary-arm64/Packages.gz
+ e86912c608f4ca486c9168887ea7e347c97b8340 180 main/binary-arm64/Release
+SHA256:
+ 7cca8b5f3115f5cc5e1f7bf8e81703f0a9e2871d2e168ec7e423087285d46de8 51846 main/binary-amd64/Packages
+ bcbf4a56765043addf7083cee40edc39da0dc3d1f396e7bb73c46a59d09fdfd1 13803 main/binary-amd64/Packages.gz
+ 7b50e0fb7ddecd9e6ba9e39833996297a021cc8e622560b83724857fde7f769d 180 main/binary-amd64/Release
+ b77a577df1df5a644f1b1704db0740aae735a5490d11c2eda89548adbc20c89e 51842 main/binary-arm64/Packages
+ 5d928c317b0bd0abd20eb4cc2e27cdfe6f4373394a17c8120688d913ede99052 13789 main/binary-arm64/Packages.gz
+ 78e5506ed92cc37e545f0eb871cf5daf9e638ec94e5eb54b40b214b952fb32ba 180 main/binary-arm64/Release
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQRKST0Deyb3YZRw+DBg+XM7B72qewUCawio/AAKCRBg+XM7B72q
+e6nJAQD8b/S7JjDQB0J5bOvc3LnJb9S72Vqj8gYpze2CKHcqMgD/VaE+5uSUBlIs
+Ii4hUr4Be5M7231cVPVPt3xdmLOWvwE=
+=BpLc
+-----END PGP SIGNATURE-----

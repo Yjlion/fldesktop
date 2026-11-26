@@ -1,0 +1,29 @@
+Origin: fldesktop
+Label: fldesktop
+Suite: trixie
+Codename: trixie
+Date: Thu, 26 Nov 2026 21:47:40 UTC
+Architectures: amd64 arm64
+Components: main
+Description: fldesktop, a Wayland desktop built with FLTK (releases)
+MD5Sum:
+ 50894f4efd0411e15045d3c114032227 49958 main/binary-amd64/Packages
+ 2e450242d8d2901d2eef785e8541a967 13736 main/binary-amd64/Packages.gz
+ 25553377663e552cb1e8986a006db101 156 main/binary-amd64/Release
+ 72795098b819bbae1ef1de56c77344c2 49954 main/binary-arm64/Packages
+ c58eccac9ea67c7fa6f2d40854f0b978 13698 main/binary-arm64/Packages.gz
+ b9a05bb869429c61bd1e019ea8acb371 156 main/binary-arm64/Release
+SHA1:
+ ffeabc0ade3a783284a817584a367133aad13a86 49958 main/binary-amd64/Packages
+ 601655ab1b32852a292b7da7910b65ddb2d06912 13736 main/binary-amd64/Packages.gz
+ 02f81d30d814e478fef3971e9e6d8d0617ed5ee1 156 main/binary-amd64/Release
+ cfecc11e19f4a2ee0e3aa345d626a3df407fb574 49954 main/binary-arm64/Packages
+ f3ed4242f1d9782484542180e1df90943cefaec1 13698 main/binary-arm64/Packages.gz
+ 8a1d39c8f26dff6d8dafa18fa0ee8ddb5c90b05b 156 main/binary-arm64/Release
+SHA256:
+ a273c57791e22d07c7e6c5fad81c6f4d0acb547a13d5fb269ef69d43920beeb1 49958 main/binary-amd64/Packages
+ cf5416d72eba09331aabebea95f4111d0ff5fa7061fc5280f24313dfd70c176c 13736 main/binary-amd64/Packages.gz
+ 5f3af6df3c8d56c3aad914f606ae1bb0e54834e9e69a0e83e0e9adbca1f1ccee 156 main/binary-amd64/Release
+ d7171b32d5904f69bc257328332abe916b19f39f7822f6f419b848982de0a8ab 49954 main/binary-arm64/Packages
+ ac6cde83a293e890becc406b2cfc1844b27c007e992497d4fcd12d551f55b3b0 13698 main/binary-arm64/Packages.gz
+ 8d6451fd194af3e7b6311b0086e6d4ad695f87a7c80bf2aa402f612e819fbbb2 156 main/binary-arm64/Release

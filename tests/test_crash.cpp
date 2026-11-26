@@ -9,6 +9,15 @@
 #include "fld/util.h"
 #include "test.h"
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define NO_HANDLER 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+#define NO_HANDLER 1
+#endif
+
 int main() {
   char tmpl[] = "/tmp/fld-crash-XXXXXX";
   std::string t = mkdtemp(tmpl);
@@ -26,16 +35,12 @@ int main() {
   }
   int st = 0;
   waitpid(pid, &st, 0);
+#ifndef NO_HANDLER
   CHECK(WIFSIGNALED(st) && WTERMSIG(st) == SIGSEGV); // the signal goes on
+#else
+  CHECK(!WIFEXITED(st) || WEXITSTATUS(st) != 0); // AddressSanitizer reports it and exits
+#endif
   auto reps = fld::crash_reports();
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define NO_HANDLER 1
-#endif
-#endif
-#if defined(__SANITIZE_ADDRESS__)
-#define NO_HANDLER 1
-#endif
 #ifndef NO_HANDLER
   CHECK_EQ(reps.size(), (size_t)1);
   if (!reps.empty()) {

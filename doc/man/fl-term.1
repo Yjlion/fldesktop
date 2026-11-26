@@ -58,6 +58,11 @@ the window open so the error stays readable.
 \fBssh-keygen\fR(1) for an Ed25519 key. When \fBsshfs\fR(1) is installed, \fBBrowse Files\fR mounts
 a host under \fI$XDG_RUNTIME_DIR/fl-sshfs/\fR and opens it in \fBfl-files\fR(1); the \fBUnmount\fR
 submenu lists those mounts.
+.PP
+Sixel images (\fBDCS q\fR, as \fBimg2sixel\fR, \fBchafa\fR or \fBgnuplot\fR make them) are shown at the
+cursor and scroll with the text; the text after an image starts on the line below it. The answer to
+Primary Device Attributes says so (\fB4\fR). An image is at most 4096 x 4096 pixels, and the
+terminal keeps at most 64 million pixels of images (the oldest go first).
 .SH OPTIONS
 .TP
 \fB\-e COMMAND...\fR

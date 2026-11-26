@@ -2,6 +2,7 @@
 #include "fld/atspi.h"
 
 #include <FL/Fl.H>
+#include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Scrollbar.H>
 #include <FL/Fl_Window.H>
 #include <FL/fl_ask.H>
@@ -27,6 +28,7 @@
 #include "fld/primary.h"
 #include "fld/theme.h"
 #include "fld/util.h"
+#include "sixel.h"
 
 #if defined(FLTK_USE_WAYLAND)
 #include <FL/platform.H>
@@ -70,6 +72,7 @@ TermWidget::TermWidget(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
   static VTermStateFallbacks fb;
   memset(&fb, 0, sizeof fb);
   fb.osc = osc_cb;
+  fb.dcs = dcs_cb;
   vterm_screen_set_unrecognised_fallbacks(screen_, &fb, this);
   static VTermSelectionCallbacks sel;
   sel.set = selection_set_cb;
@@ -258,7 +261,7 @@ void TermWidget::read_pty() {
   for (int i = 0; i < 16; i++) { // bounded so the UI stays responsive
     ssize_t n = read(fd_, buf, sizeof buf);
     if (n > 0) {
-      vterm_input_write(vt_, buf, n);
+      write_vt(buf, (size_t)n);
       got = true;
       continue;
     }
@@ -325,6 +328,13 @@ void TermWidget::do_handle_flush() { flush_output(); }
 
 void TermWidget::output_cb(const char *s, size_t len, void *user) {
   TermWidget *t = static_cast<TermWidget *>(user);
+  // libvterm's answer to "what are you" (DA1): add 4, Sixel graphics
+  static const char da1[] = "\x1b[?1;2c";
+  if (len == sizeof da1 - 1 && memcmp(s, da1, len) == 0) {
+    static const char ours[] = "\x1b[?1;2;4c";
+    t->write_pty(ours, sizeof ours - 1);
+    return;
+  }
   t->write_pty(s, len);
   if (t->typing_ && t->on_typed) t->on_typed(t, s, len);
 }
@@ -395,6 +405,10 @@ int TermWidget::sb_pushline_cb(int cols, const VTermScreenCell *cells, void *use
     t->link_line_--;
     t->links_.erase(std::remove_if(t->links_.begin(), t->links_.end(), [](const Link &l) { return l.line < 0; }),
                     t->links_.end());
+    for (auto &im : t->images_) im.line--;
+    t->images_.erase(std::remove_if(t->images_.begin(), t->images_.end(),
+                                    [](const SixelImage &im) { return im.line + im.rows <= 0; }),
+                     t->images_.end());
   }
   if (t->scroll_ > (int)t->sb_.size()) t->scroll_ = (int)t->sb_.size();
   return 1;
@@ -412,6 +426,7 @@ int TermWidget::sb_popline_cb(int cols, VTermScreenCell *cells, void *user) {
 int TermWidget::sb_clear_cb(void *user) {
   TermWidget *t = static_cast<TermWidget *>(user);
   t->links_.clear();
+  t->images_.clear();
   t->sb_.clear();
   t->scroll_ = 0;
   t->has_sel_ = false;
@@ -491,6 +506,66 @@ int TermWidget::osc_cb(int command, VTermStringFragment frag, void *user) {
   if (t->osc_buf_.size() + frag.len < 8192) t->osc_buf_.append(frag.str, frag.len);
   if (frag.final) t->osc8(t->osc_buf_);
   return 1;
+}
+
+// DCS: Sixel images ("P1;P2;P3q" then the picture); other DCS are ignored
+int TermWidget::dcs_cb(const char *command, size_t len, VTermStringFragment frag, void *user) {
+  TermWidget *t = static_cast<TermWidget *>(user);
+  if (frag.initial) {
+    t->dcs_buf_.clear();
+    t->dcs_sixel_ = len > 0 && command[len - 1] == 'q';
+  }
+  if (!t->dcs_sixel_) return 0;
+  // a bound on what a program can make us keep (32 MB of sixel data)
+  if (t->dcs_buf_.size() + frag.len <= (32u << 20)) t->dcs_buf_.append(frag.str, frag.len);
+  else t->dcs_sixel_ = false;
+  if (frag.final && t->dcs_sixel_) t->sixel_done(std::string(command, len > 0 ? len - 1 : 0));
+  return 1;
+}
+
+void TermWidget::sixel_done(const std::string &params) {
+  sixel::Image im;
+  bool ok = sixel::decode(params, dcs_buf_, im);
+  dcs_buf_.clear();
+  dcs_buf_.shrink_to_fit();
+  if (!ok) return;
+  VTermPos pos;
+  vterm_state_get_cursorpos(state_, &pos);
+  SixelImage s;
+  s.line = (long)sb_.size() + pos.row;
+  s.col = pos.col;
+  s.rows = std::max(1, (im.h + ch_ - 1) / std::max(1, ch_));
+  s.pixels.swap(im.rgba);
+  s.img.reset(new Fl_RGB_Image(s.pixels.data(), im.w, im.h, 4));
+  images_.push_back(std::move(s));
+  // at most 64 million pixels of images: the oldest go
+  long total = 0;
+  for (auto &x : images_) total += (long)x.img->w() * x.img->h();
+  while (images_.size() > 1 && total > (64L << 20)) {
+    total -= (long)images_.front().img->w() * images_.front().img->h();
+    images_.erase(images_.begin());
+  }
+  pending_rows_ = images_.back().rows;  // the cursor goes below it (after the ST)
+  mark_all();
+  schedule_repaint();
+}
+
+// Input for libvterm, cut after each string terminator (ESC \): an image
+// that just ended moves the cursor below itself before the text after it.
+void TermWidget::write_vt(const char *buf, size_t n) {
+  size_t start = 0;
+  for (size_t i = 0; i + 1 < n; i++) {
+    if (buf[i] != 0x1b || buf[i + 1] != '\\') continue;
+    vterm_input_write(vt_, buf + start, i + 2 - start);
+    start = i + 2;
+    if (pending_rows_ > 0) {
+      std::string mv(pending_rows_, '\n');
+      mv += '\r';
+      pending_rows_ = 0;
+      vterm_input_write(vt_, mv.data(), mv.size());
+    }
+  }
+  if (start < n) vterm_input_write(vt_, buf + start, n - start);
 }
 
 // "params;URI" opens a link at the cursor, "params;" (no URI) ends it
@@ -851,6 +926,17 @@ void TermWidget::draw_row(int r, bool focused) {
       if (cell.attrs.underline == VTERM_UNDERLINE_DOUBLE) fl_xyline(cx, ry + ch_ - 4, cx + cwidth - 1);
     }
     if (cell.attrs.strike) fl_xyline(cx, ry + ch_ / 2, cx + cwidth - 1);
+  }
+
+  // Sixel images: this row's slice of each image over it
+  for (auto &im : images_) {
+    if (line < im.line || line >= im.line + im.rows) continue;
+    int sy = (int)(line - im.line) * ch_;
+    int ih = std::min(ch_, im.img->h() - sy);
+    if (ih <= 0) continue;
+    int ix = x() + pad_ + im.col * cw_;
+    int iw = std::min(im.img->w(), x() + w() - ix);
+    if (iw > 0) im.img->draw(ix, ry, iw, ih, 0, sy);
   }
 
   // hyperlinks (OSC 8): a dotted underline; Ctrl+click opens them

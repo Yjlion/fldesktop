@@ -13,6 +13,7 @@
 #include <gst/gst.h>
 #include <algorithm>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <sys/stat.h>

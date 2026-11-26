@@ -16,6 +16,12 @@ if(TARGET fld)
   add_test(NAME fileops COMMAND test_fileops)
 endif()
 
+if(TARGET fl-launcher-providers)
+  add_executable(test_launcher_providers test_launcher_providers.cpp)
+  target_link_libraries(test_launcher_providers PRIVATE fl-launcher-providers)
+  add_test(NAME launcher-providers COMMAND test_launcher_providers)
+endif()
+
 if(TARGET fld-glib)
   add_executable(test_glib test_glib.cpp)
   target_link_libraries(test_glib PRIVATE fld-glib)

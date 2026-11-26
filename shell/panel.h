@@ -156,6 +156,19 @@ void privacy_audio(const std::vector<std::string> &recording);
 void privacy_video(const std::vector<std::string> &users, bool running);
 // panel_notify.cpp: do not disturb for a while ("Do Not Disturb" menus)
 void dnd_menu_items(fld::Menu &m);
+bool dnd_on();
+void dnd_set(bool on); // until turned off
+// panel_nightlight.cpp: for the quick settings
+bool nightlight_available();
+bool nightlight_on();
+void nightlight_set(bool on);
+// panel.cpp: the default output's volume (-1: unknown)
+int panel_volume_pct();
+bool panel_volume_muted();
+void panel_volume_set(int pct);
+// panel_quick.cpp: the quick settings popup (Wi-Fi, Bluetooth, Do Not
+// Disturb, Night Light, power mode, volume)
+fld::FlatButton *quick_settings_create();
 // panel_network.cpp: the network button's popup and right-click menu
 void network_popup(Fl_Widget *button);
 void network_popup_refresh(); // the open popup follows a change of NetworkManager's state

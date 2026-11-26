@@ -1,9 +1,11 @@
+#include "fld/i18n.h"
 // fl-notifyd: the fldesktop notification server (org.freedesktop.Notifications 1.2)
 //
 // D-Bus runs on the GLib thread (fld/glib_bridge.h); the popups are one
 // borderless FLTK window titled "fldesktop.notification", which fl-wm keeps
 // in the top right corner without giving it the keyboard focus.
 #include <FL/Fl.H>
+#include <FL/fl_ask.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/fl_draw.H>
@@ -52,6 +54,7 @@ const char *kIntrospection = R"XML(
     </method>
     <signal name="NotificationClosed"><arg type="u" name="id"/><arg type="u" name="reason"/></signal>
     <signal name="ActionInvoked"><arg type="u" name="id"/><arg type="s" name="action_key"/></signal>
+    <signal name="NotificationReplied"><arg type="u" name="id"/><arg type="s" name="text"/></signal>
     <signal name="ActivationToken"><arg type="u" name="id"/><arg type="s" name="activation_token"/></signal>
   </interface>
   <interface name="org.fldesktop.Notifications">
@@ -135,6 +138,10 @@ void emit_closed(uint32_t id, CloseReason r) {
 }
 void emit_action(uint32_t id, const std::string &key) {
   emit("org.freedesktop.Notifications", "ActionInvoked", g_variant_new("(us)", id, key.c_str()));
+}
+// the "inline-reply" action (as KDE Plasma has it): the text typed in answer
+void emit_reply(uint32_t id, const std::string &text) {
+  emit("org.freedesktop.Notifications", "NotificationReplied", g_variant_new("(us)", id, text.c_str()));
 }
 
 // ---- popups (FLTK thread) --------------------------------------------------
@@ -224,6 +231,7 @@ int measure_card(Card *c, int y) {
   bool any = false;
   for (auto &a : c->n.actions) {
     if (a.first == "default") continue;
+    if (a.first == "inline-reply" && a.second.empty()) a.second = _("Reply");
     fl_font(FL_HELVETICA, fld::ui_font_size());
     int bw = std::max(72, (int)fl_width(a.second.c_str()) + 24);
     if (bx + bw > kWidth - kPad) break;
@@ -345,6 +353,16 @@ public:
       }
       for (auto &b : c->buttons) {
         if (mx >= b.x && mx < b.x + b.w && my >= b.y && my < b.y + b.h) {
+          if (b.key == "inline-reply") {
+            // an answer to a message: typed here, sent back to the program
+            std::string summary = c->summary;
+            const char *t = fl_input("%s", "", fld::format(_("Reply to %s:"), {summary}).c_str());
+            if (t && *t) {
+              emit_reply(id, t);
+              close_card(id, DISMISSED);
+            }
+            return 1;
+          }
           emit_action(id, b.key);
           if (!c->n.resident) close_card(id, DISMISSED);
           return 1;
@@ -533,7 +551,7 @@ void method_call(GDBusConnection *, const char *, const char *, const char *ifac
   std::string m = method;
   if (!strcmp(iface, "org.freedesktop.Notifications")) {
     if (m == "GetCapabilities") {
-      const char *caps[] = {"actions", "body", "body-markup", "icon-static", "persistence", nullptr};
+      const char *caps[] = {"actions", "body", "body-markup", "icon-static", "persistence", "inline-reply", nullptr};
       g_dbus_method_invocation_return_value(inv, g_variant_new("(^as)", caps));
     } else if (m == "GetServerInformation") {
       g_dbus_method_invocation_return_value(inv, g_variant_new("(ssss)", "fl-notifyd", "fldesktop", FLD_VERSION, "1.2"));

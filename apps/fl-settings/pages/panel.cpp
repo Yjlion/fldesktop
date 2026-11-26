@@ -31,7 +31,7 @@ public:
   ConfigFile panel{panel_ini_path()}, wm{wm_ini_path()}, desk{desktop_ini_path()};
   Fl_Choice *position, *clock, *kbd;
   Fl_Hold_Browser *quick;
-  Fl_Check_Button *icons;
+  Fl_Check_Button *icons, *quick_settings;
   std::vector<std::string> quick_ids;
 
   PanelPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
@@ -69,6 +69,10 @@ public:
     std::string km = panel.ini.get("Panel", "KeyboardButton", "auto");
     kbd->value(km == "always" ? 1 : km == "never" ? 2 : 0);
     kbd->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
+    f.row("", 26, wx, wy, ww);
+    quick_settings = new fld::CheckButton(wx, wy, ww, 26, _("Quick settings button (Wi-Fi, Bluetooth, Do Not Disturb, …)"));
+    quick_settings->value(panel.ini.get_bool("Panel", "QuickSettings", true));
+    quick_settings->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
 
     f.row(_("Quick launch:"), 150, wx, wy, ww);
     quick = new Fl_Hold_Browser(wx, wy, ww - 110, 150);
@@ -101,7 +105,8 @@ public:
     icons->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
     f.note(_("The wallpaper is set on the Appearance page."));
     f.space(8);
-    reset_page_button(f.widget_x(), f.y(), {{panel_ini_path(), {{"Clock", "Format"}, {"Panel", "KeyboardButton"}, {"Panel", "QuickLaunch"}}},
+    reset_page_button(f.widget_x(), f.y(), {{panel_ini_path(), {{"Clock", "Format"}, {"Panel", "KeyboardButton"}, {"Panel", "QuickLaunch"},
+                                                             {"Panel", "QuickSettings"}}},
                        {desktop_ini_path(), {{"Desktop", "ShowIcons"}}},
                        {wm_ini_path(), {{"behaviour", "panel_position"}}}});
     g->end();
@@ -165,6 +170,7 @@ public:
     const char *km[] = {"auto", "always", "never"};
     panel.ini.set("Panel", "KeyboardButton", km[std::max(0, kbd->value())]);
     panel.ini.set("Panel", "QuickLaunch", join(quick_ids, ";"));
+    panel.ini.set_bool("Panel", "QuickSettings", quick_settings->value() != 0);
     panel.save();
     std::string pos = position->value() == 1 ? "top" : "bottom";
     if (lower(wm.ini.get("behaviour", "panel_position", "bottom")) != pos) {

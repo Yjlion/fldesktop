@@ -361,6 +361,7 @@ struct Panel {
   fld::FlatButton *bluetooth = nullptr;
   fld::FlatButton *printer = nullptr;
   fld::FlatButton *nightlight = nullptr;
+  fld::FlatButton *qsettings = nullptr; // quick settings ([Panel] QuickSettings)
   fld::FlatButton *weather = nullptr;
   fld::FlatButton *sysmon = nullptr;
   fld::FlatButton *privacy = nullptr;
@@ -632,6 +633,18 @@ static std::string sink_name() {
     if (const Audio::Device *d = g_audio->defaultDevice(Audio::Sink)) return d->description;
 #endif
   return "";
+}
+
+int panel_volume_pct() {
+  if (P.volume_pct < 0) query_volume();
+  return P.volume_pct;
+}
+
+bool panel_volume_muted() { return P.muted; }
+
+void panel_volume_set(int pct) {
+  if (P.muted) toggle_mute();
+  set_volume(std::clamp(pct, 0, 150));
 }
 
 void panel_volume_step(int delta) {
@@ -961,6 +974,10 @@ void relayout() {
   r -= 36;
   if (P.bell && P.bell->visible()) {
     P.bell->resize(r - 34, 2, 34, H - 4);
+    r -= 36;
+  }
+  if (P.qsettings && P.qsettings->visible()) {
+    P.qsettings->resize(r - 34, 2, 34, H - 4);
     r -= 36;
   }
   r -= 2;
@@ -1306,6 +1323,8 @@ int main(int argc, char **argv) {
   Fl::lock();
   P.bell = notify_indicator_create();
 #endif
+  P.qsettings = quick_settings_create();
+  if (!cfg.get_bool("Panel", "QuickSettings", true)) P.qsettings->hide();
   P.power = make_btn(34, "system-shutdown", "Power", power_cb);
   if (Fl_Image *pi = fld::symbolic_icon("system-shutdown", 18, panel_fg())) P.power->icon_image(pi);
   panel_context_menu(P.power, [](fld::Menu &m) {

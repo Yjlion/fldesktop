@@ -39,9 +39,14 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "fld/text.h"
+#include "launcher_providers.h"
 
 static std::vector<fld::DesktopEntry> g_apps;
 static std::vector<int> g_visible;         // indexes into g_apps
+// calculator, conversion, command and file results, shown above the apps
+static std::vector<launcher::Extra> g_extras;
+static int nx() { return (int)g_extras.size(); }
+static int row_count() { return nx() + (int)g_visible.size(); }
 static std::string g_category = "All";
 static std::vector<std::string> g_recent;  // desktop ids, most recent first
 static Fl_Double_Window *g_win;
@@ -109,7 +114,7 @@ public:
   }
   void update_sb() {
     if (!sb) return;
-    int n = (int)g_visible.size();
+    int n = row_count();
     sb->value(top, rows(), 0, std::max(n, rows()));
     if (n > rows()) sb->show(); else sb->hide();
   }
@@ -118,7 +123,7 @@ public:
     fl_push_clip(x(), y(), w(), h());
     fl_color(p.bg2);
     fl_rectf(x(), y(), w(), h());
-    int n = (int)g_visible.size();
+    int n = row_count();
     if (n == 0) {
       fl_font(FL_HELVETICA, 14);
       fl_color(p.fg_dim);
@@ -126,12 +131,31 @@ public:
               FL_ALIGN_CENTER | FL_ALIGN_WRAP);
     }
     for (int i = top; i < n && (i - top) * row_h < h(); i++) {
-      const fld::DesktopEntry &e = g_apps[g_visible[i]];
       int ry = y() + (i - top) * row_h;
       if (i == sel) {
         fl_color(p.accent);
         fl_rounded_rectf(x() + 4, ry + 2, w() - 8, row_h - 4, 6);
       }
+      if (i < nx()) {
+        const launcher::Extra &x_ = g_extras[i];
+        Fl_Image *xi = fld::icon_first({x_.icon, "system-search"}, 32);
+        if (xi) xi->draw(x() + 12, ry + (row_h - 32) / 2);
+        fl_font(FL_HELVETICA_BOLD, 14);
+        fl_color(i == sel ? p.accent_fg : p.fg);
+        fl_draw(fld::escape_at(fld::ellipsize(x_.title, w() - 64)).c_str(), x() + 54, ry + 4, w() - 64, 20,
+                FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+        const char *hint = x_.kind == launcher::Extra::Command ? _("Run in a terminal")
+                           : x_.kind == launcher::Extra::File  ? nullptr
+                                                               : _("Enter copies the result");
+        std::string sub = x_.subtitle.empty() ? "" : x_.subtitle;
+        if (hint) sub = sub.empty() ? hint : sub + "  ·  " + hint;
+        fl_font(FL_HELVETICA, 12);
+        fl_color(i == sel ? fl_color_average(p.accent_fg, p.accent, 0.8f) : p.fg_dim);
+        fl_draw(fld::escape_at(fld::ellipsize(sub, w() - 64)).c_str(), x() + 54, ry + 23, w() - 64, 18,
+                FL_ALIGN_LEFT | FL_ALIGN_CLIP);
+        continue;
+      }
+      const fld::DesktopEntry &e = g_apps[g_visible[i - nx()]];
       Fl_Image *img = fld::icon_first({e.icon, "application-x-executable"}, 32);
       if (img) img->draw(x() + 12, ry + (row_h - 32) / 2);
       Fl_Color fg = i == sel ? p.accent_fg : p.fg;
@@ -156,6 +180,33 @@ static Fl_Input *g_search;
 
 static void quit_launcher() { g_win->hide(); }
 
+static std::vector<std::string> terminal_argv() {
+  // as desktop entries with Terminal=true are started
+  std::vector<std::string> t = fld::shell_split(fld::terminal_command());
+  t.push_back("-e");
+  return t;
+}
+
+// files by name: locate after a short pause in typing
+static void file_search(void *) {
+  static std::string locate = !fld::which("plocate").empty() ? fld::which("plocate") : fld::which("locate");
+  auto argv = launcher::locate_command(g_search->value(), locate);
+  if (argv.empty()) return;
+  std::string out;
+  fld::run_capture(argv, out);
+  auto files = launcher::files_from_locate(out, 5);
+  if (files.empty()) return;
+  // after the quick results, before the applications
+  g_extras.insert(g_extras.end(), files.begin(), files.end());
+  g_list->update_sb();
+  g_list->redraw();
+}
+
+static void schedule_file_search() {
+  Fl::remove_timeout(file_search);
+  Fl::add_timeout(0.3, file_search);
+}
+
 static void refilter() {
   std::string q = fld::lower(fld::trim(g_search->value()));
   std::vector<std::pair<int, int>> scored;
@@ -169,15 +220,24 @@ static void refilter() {
     std::stable_sort(scored.begin(), scored.end(), [](auto &a, auto &b) { return a.first > b.first; });
   g_visible.clear();
   for (auto &s : scored) g_visible.push_back(s.second);
+  g_extras = launcher::quick(g_search->value(), terminal_argv());
+  schedule_file_search();
   g_list->sel = 0;
   g_list->top = 0;
   g_list->update_sb();
   g_list->redraw();
 }
 
-static void launch_index(int vis_index) {
-  if (vis_index < 0 || vis_index >= (int)g_visible.size()) return;
-  const auto &e = g_apps[g_visible[vis_index]];
+static void launch_index(int row) {
+  if (row < 0 || row >= row_count()) return;
+  if (row < nx()) {
+    launcher::Extra x = g_extras[row];
+    if (!x.copy.empty()) Fl::copy(x.copy.c_str(), (int)x.copy.size(), 1);
+    if (!x.argv.empty()) fld::spawn(x.argv);
+    quit_launcher();
+    return;
+  }
+  const auto &e = g_apps[g_visible[row - nx()]];
   e.launch();
   push_recent(e.id);
   quit_launcher();
@@ -228,8 +288,8 @@ static void add_to_desktop(const fld::DesktopEntry &e) {
 }
 
 static void app_menu(int vis_index) {
-  if (vis_index < 0 || vis_index >= (int)g_visible.size()) return;
-  const fld::DesktopEntry e = g_apps[g_visible[vis_index]]; // a copy: the list may change
+  if (vis_index < nx() || vis_index >= row_count()) return;
+  const fld::DesktopEntry e = g_apps[g_visible[vis_index - nx()]]; // a copy: the list may change
   std::string id = bare_id(e.id);
   auto ql = quick_launch();
   bool in_ql = std::find(ql.begin(), ql.end(), id) != ql.end();
@@ -272,7 +332,7 @@ int AppList::handle(int e) {
   switch (e) {
     case FL_PUSH: {
       int i = top + (Fl::event_y() - y()) / row_h;
-      if (i < (int)g_visible.size()) {
+      if (i < row_count()) {
         sel = i;
         redraw();
         if (Fl::event_button() == FL_LEFT_MOUSE) launch_index(i);
@@ -281,13 +341,13 @@ int AppList::handle(int e) {
       return 1;
     }
     case FL_MOUSEWHEEL:
-      top = std::max(0, std::min(top + Fl::event_dy() * 2, (int)g_visible.size() - rows()));
+      top = std::max(0, std::min(top + Fl::event_dy() * 2, row_count() - rows()));
       update_sb();
       redraw();
       return 1;
     case FL_MOVE: {
       int i = top + (Fl::event_y() - y()) / row_h;
-      if (i != sel && i < (int)g_visible.size()) {
+      if (i != sel && i < row_count()) {
         sel = i;
         redraw();
       }
@@ -357,7 +417,7 @@ public:
   int handle(int e) override {
     if (e == FL_KEYBOARD) {
       int k = Fl::event_key();
-      int n = (int)g_visible.size();
+      int n = row_count();
       switch (k) {
         case FL_Escape: quit_launcher(); return 1;
         case FL_Down: if (g_list->sel < n - 1) g_list->sel++; g_list->ensure_visible(); return 1;
@@ -575,7 +635,8 @@ int main(int argc, char **argv) {
   g_search->textsize(15);
   g_search->color(fld::palette().bg2);
   g_search->when(FL_WHEN_CHANGED);
-  g_search->tooltip(_("Type to search, Enter to start, Esc to close"));
+  g_search->tooltip(_("Type to search applications and files, Enter to start, Esc to close.\n"
+                      "Also: 2*(3+4) calculates, 10 km in mi converts, >command runs in a terminal."));
 
   g_cats = new CategoryList(1, 53, SIDE, H - 54 - BAR);
   g_list = new AppList(SIDE + 1, 53, W - SIDE - 14, H - 54 - BAR);

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-25 19:21-0600\n"
+"POT-Creation-Date: 2026-11-25 19:35-0600\n"
 "PO-Revision-Date: 2026-11-25 12:00+0000\n"
 "Last-Translator: fldesktop contributors\n"
 "Language-Team: German\n"
@@ -15,6 +15,15 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: apps/fl-notifyd/main.cpp:234
+msgid "Reply"
+msgstr ""
+
+#: apps/fl-notifyd/main.cpp:359
+#, c-format
+msgid "Reply to %s:"
+msgstr ""
 
 #: apps/fl-settings/main.cpp:54
 msgid "Hardware"
@@ -33,7 +42,7 @@ msgstr "Persönlich"
 msgid "System"
 msgstr "System"
 
-#: apps/fl-settings/main.cpp:108 shell/launcher.cpp:459
+#: apps/fl-settings/main.cpp:108 shell/launcher.cpp:519
 msgid "Settings"
 msgstr "Einstellungen"
 
@@ -348,6 +357,7 @@ msgstr ""
 
 #: apps/fl-settings/pages/bluetooth.cpp:17
 #: apps/fl-settings/pages/bluetooth.cpp:32 shell/panel_bluetooth.cpp:81
+#: shell/panel_quick.cpp:69
 msgid "Bluetooth"
 msgstr "Bluetooth"
 
@@ -649,19 +659,19 @@ msgstr "Belegungen"
 
 #: apps/fl-settings/pages/keyboard.cpp:68
 #: apps/fl-settings/pages/notifications.cpp:86
-#: apps/fl-settings/pages/panel.cpp:77 apps/fl-settings/pages/shortcuts.cpp:241
+#: apps/fl-settings/pages/panel.cpp:81 apps/fl-settings/pages/shortcuts.cpp:241
 #: apps/fl-settings/pages/startup.cpp:99
 msgid "Add…"
 msgstr "Hinzufügen …"
 
 #: apps/fl-settings/pages/keyboard.cpp:70
 #: apps/fl-settings/pages/notifications.cpp:88
-#: apps/fl-settings/pages/panel.cpp:79 apps/fl-settings/pages/shortcuts.cpp:241
+#: apps/fl-settings/pages/panel.cpp:83 apps/fl-settings/pages/shortcuts.cpp:241
 #: apps/fl-settings/pages/startup.cpp:101 apps/fl-settings/pages/users.cpp:247
 msgid "Remove"
 msgstr "Entfernen"
 
-#: apps/fl-settings/pages/keyboard.cpp:79 apps/fl-settings/pages/panel.cpp:88
+#: apps/fl-settings/pages/keyboard.cpp:79 apps/fl-settings/pages/panel.cpp:92
 msgid "Move Up"
 msgstr "Nach oben"
 
@@ -705,7 +715,7 @@ msgstr "Hier testen:"
 msgid "Variant:"
 msgstr "Variante:"
 
-#: apps/fl-settings/pages/keyboard.cpp:165 apps/fl-settings/pages/panel.cpp:140
+#: apps/fl-settings/pages/keyboard.cpp:165 apps/fl-settings/pages/panel.cpp:145
 #: apps/fl-settings/pages/privacy.cpp:85
 #: apps/fl-settings/pages/shortcuts.cpp:285
 #: apps/fl-settings/pages/shortcuts.cpp:357
@@ -722,7 +732,7 @@ msgstr "Variante:"
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: apps/fl-settings/pages/keyboard.cpp:166 apps/fl-settings/pages/panel.cpp:141
+#: apps/fl-settings/pages/keyboard.cpp:166 apps/fl-settings/pages/panel.cpp:146
 #: apps/fl-settings/pages/startup.cpp:61 apps/fl-settings/pages/users.cpp:202
 msgid "Add"
 msgstr "Hinzufügen"
@@ -824,7 +834,7 @@ msgstr ""
 msgid "or press Super+L"
 msgstr ""
 
-#: apps/fl-settings/pages/lock.cpp:69 shell/panel.cpp:1032
+#: apps/fl-settings/pages/lock.cpp:69 shell/panel.cpp:1049
 msgid "Lock Screen"
 msgstr ""
 
@@ -885,7 +895,7 @@ msgstr ""
 msgid "Show:"
 msgstr ""
 
-#: apps/fl-settings/pages/login.cpp:154
+#: apps/fl-settings/pages/login.cpp:154 shell/panel_notify.cpp:237
 msgid "Other"
 msgstr ""
 
@@ -1066,7 +1076,7 @@ msgid "network wifi wi-fi wireless ethernet wired ip address dns gateway vpn net
 msgstr ""
 
 #: apps/fl-settings/pages/nightlight.cpp:33
-#: apps/fl-settings/pages/nightlight.cpp:132
+#: apps/fl-settings/pages/nightlight.cpp:132 shell/panel_quick.cpp:78
 msgid "Night Light"
 msgstr "Nachtlicht"
 
@@ -1103,7 +1113,7 @@ msgid "night light warm colour color temperature blue light evening sunset sunri
 msgstr ""
 
 #: apps/fl-settings/pages/notifications.cpp:34
-#: apps/fl-settings/pages/notifications.cpp:140 shell/panel_notify.cpp:232
+#: apps/fl-settings/pages/notifications.cpp:140 shell/panel_notify.cpp:283
 msgid "Notifications"
 msgstr "Benachrichtigungen"
 
@@ -1111,7 +1121,7 @@ msgstr "Benachrichtigungen"
 msgid "Popups"
 msgstr ""
 
-#: apps/fl-settings/pages/notifications.cpp:40 shell/panel_notify.cpp:236
+#: apps/fl-settings/pages/notifications.cpp:40 shell/panel_notify.cpp:287
 msgid "Do not disturb"
 msgstr ""
 
@@ -1155,7 +1165,7 @@ msgstr ""
 msgid "notifications popups do not disturb dnd history mute alerts"
 msgstr ""
 
-#: apps/fl-settings/pages/panel.cpp:39 apps/fl-settings/pages/panel.cpp:184
+#: apps/fl-settings/pages/panel.cpp:39 apps/fl-settings/pages/panel.cpp:190
 msgid "Panel & Desktop"
 msgstr ""
 
@@ -1188,26 +1198,30 @@ msgid "Always"
 msgstr "Immer"
 
 #: apps/fl-settings/pages/panel.cpp:73
+msgid "Quick settings button (Wi-Fi, Bluetooth, Do Not Disturb, …)"
+msgstr ""
+
+#: apps/fl-settings/pages/panel.cpp:77
 msgid "Quick launch:"
 msgstr ""
 
-#: apps/fl-settings/pages/panel.cpp:90
+#: apps/fl-settings/pages/panel.cpp:94
 msgid "Move Down"
 msgstr ""
 
-#: apps/fl-settings/pages/panel.cpp:97
+#: apps/fl-settings/pages/panel.cpp:101
 msgid "Desktop"
 msgstr ""
 
-#: apps/fl-settings/pages/panel.cpp:99
+#: apps/fl-settings/pages/panel.cpp:103
 msgid "Show icons on the desktop"
 msgstr ""
 
-#: apps/fl-settings/pages/panel.cpp:102
+#: apps/fl-settings/pages/panel.cpp:106
 msgid "The wallpaper is set on the Appearance page."
 msgstr ""
 
-#: apps/fl-settings/pages/panel.cpp:185
+#: apps/fl-settings/pages/panel.cpp:191
 msgid "taskbar panel clock quick launch desktop icons position top bottom"
 msgstr ""
 
@@ -1224,6 +1238,7 @@ msgid "Show the battery percentage in the panel"
 msgstr ""
 
 #: apps/fl-settings/pages/power.cpp:64 shell/panel_power.cpp:186
+#: shell/panel_quick.cpp:85
 msgid "Power Mode"
 msgstr ""
 
@@ -2173,145 +2188,155 @@ msgstr ""
 msgid "Permanently delete all items in the Trash?"
 msgstr ""
 
-#: shell/launcher.cpp:224
+#: shell/launcher.cpp:147
+msgid "Run in a terminal"
+msgstr ""
+
+#: shell/launcher.cpp:149
+msgid "Enter copies the result"
+msgstr ""
+
+#: shell/launcher.cpp:284
 #, c-format
 msgid "Could not copy the launcher to %s."
 msgstr ""
 
-#: shell/launcher.cpp:238 shell/panel.cpp:824
+#: shell/launcher.cpp:298 shell/panel.cpp:837
 msgid "Open"
 msgstr ""
 
-#: shell/launcher.cpp:247 shell/panel.cpp:840
+#: shell/launcher.cpp:307 shell/panel.cpp:853
 msgid "Remove from Quick Launch"
 msgstr ""
 
-#: shell/launcher.cpp:253
+#: shell/launcher.cpp:313
 msgid "Add to Quick Launch"
 msgstr ""
 
-#: shell/launcher.cpp:258
+#: shell/launcher.cpp:318
 msgid "Add to Desktop"
 msgstr ""
 
-#: shell/launcher.cpp:260
+#: shell/launcher.cpp:320
 msgid "Remove from Recent"
 msgstr ""
 
-#: shell/launcher.cpp:265
+#: shell/launcher.cpp:325
 msgid "Show Desktop File"
 msgstr ""
 
-#: shell/launcher.cpp:463
+#: shell/launcher.cpp:523
 msgid "Open Settings"
 msgstr ""
 
-#: shell/launcher.cpp:574
+#: shell/launcher.cpp:634
 msgid "Search applications"
 msgstr ""
 
-#: shell/launcher.cpp:578
-msgid "Type to search, Enter to start, Esc to close"
+#: shell/launcher.cpp:638
+msgid ""
+"Type to search applications and files, Enter to start, Esc to close.\n"
+"Also: 2*(3+4) calculates, 10 km in mi converts, >command runs in a terminal."
 msgstr ""
 
-#: shell/panel.cpp:702 shell/panel_privacy.cpp:126
+#: shell/panel.cpp:715 shell/panel_privacy.cpp:126
 #, fuzzy
 msgid "Sound Settings…"
 msgstr "Einstellungen"
 
-#: shell/panel.cpp:703
+#: shell/panel.cpp:716
 msgid "Volume Mixer…"
 msgstr ""
 
-#: shell/panel.cpp:763
+#: shell/panel.cpp:776
 msgid "Mute"
 msgstr ""
 
-#: shell/panel.cpp:769
+#: shell/panel.cpp:782
 msgid "On the icon: scroll to adjust, middle-click to mute"
 msgstr ""
 
-#: shell/panel.cpp:771
+#: shell/panel.cpp:784
 msgid "Sound Settings"
 msgstr ""
 
-#: shell/panel.cpp:777
+#: shell/panel.cpp:790
 msgid "Volume Mixer"
 msgstr ""
 
-#: shell/panel.cpp:830
+#: shell/panel.cpp:843
 #, fuzzy
 msgid "Move Left"
 msgstr "Nach oben"
 
-#: shell/panel.cpp:835
+#: shell/panel.cpp:848
 msgid "Move Right"
 msgstr ""
 
-#: shell/panel.cpp:856
+#: shell/panel.cpp:869
 msgid "Copy Date"
 msgstr ""
 
-#: shell/panel.cpp:857
+#: shell/panel.cpp:870
 msgid "Copy Time"
 msgstr ""
 
-#: shell/panel.cpp:858
+#: shell/panel.cpp:871
 #, fuzzy
 msgid "Copy Date and Time"
 msgstr "Datum & Uhrzeit"
 
-#: shell/panel.cpp:859
+#: shell/panel.cpp:872
 #, fuzzy
 msgid "Date && Time Settings…"
 msgstr "Datum & Uhrzeit"
 
-#: shell/panel.cpp:860
+#: shell/panel.cpp:873
 msgid "Clock Format…"
 msgstr ""
 
-#: shell/panel.cpp:1024
+#: shell/panel.cpp:1041
 #, fuzzy
 msgid "Panel Settings…"
 msgstr "Einstellungen"
 
-#: shell/panel.cpp:1030 shell/panel.cpp:1231 shell/panel_sysmon.cpp:80
+#: shell/panel.cpp:1047 shell/panel.cpp:1248 shell/panel_sysmon.cpp:80
 msgid "Task Manager…"
 msgstr ""
 
-#: shell/panel.cpp:1031
+#: shell/panel.cpp:1048
 #, fuzzy
 msgid "Applications…"
 msgstr "Standardanwendungen"
 
-#: shell/panel.cpp:1039
+#: shell/panel.cpp:1056
 msgid "Show a System Monitor"
 msgstr ""
 
-#: shell/panel.cpp:1047 shell/panel.cpp:1232
+#: shell/panel.cpp:1064 shell/panel.cpp:1249
 #, fuzzy
 msgid "Settings…"
 msgstr "Einstellungen"
 
-#: shell/panel.cpp:1224
+#: shell/panel.cpp:1241
 msgid "Apps"
 msgstr ""
 
-#: shell/panel.cpp:1230
+#: shell/panel.cpp:1247
 #, fuzzy
 msgid "Open Applications"
 msgstr "Standardanwendungen"
 
-#: shell/panel.cpp:1271
+#: shell/panel.cpp:1288
 msgid "Show On-screen Keyboard"
 msgstr ""
 
-#: shell/panel.cpp:1272
+#: shell/panel.cpp:1289
 #, fuzzy
 msgid "Keyboard Settings…"
 msgstr "Einstellungen durchsuchen"
 
-#: shell/panel.cpp:1320 shell/panel_power.cpp:247
+#: shell/panel.cpp:1339 shell/panel_power.cpp:247
 #, fuzzy
 msgid "Power Settings…"
 msgstr "Einstellungen"
@@ -2346,7 +2371,7 @@ msgstr ""
 msgid "Clipboard history"
 msgstr ""
 
-#: shell/panel_network.cpp:306
+#: shell/panel_network.cpp:306 shell/panel_quick.cpp:60
 msgid "Wi-Fi"
 msgstr ""
 
@@ -2382,36 +2407,36 @@ msgstr ""
 msgid "Network Settings…"
 msgstr ""
 
-#: shell/panel_nightlight.cpp:58
+#: shell/panel_nightlight.cpp:64
 msgid "Night light is on. Click to turn it off."
 msgstr ""
 
-#: shell/panel_nightlight.cpp:62
+#: shell/panel_nightlight.cpp:68
 #, fuzzy
 msgid "Night Light Settings…"
 msgstr "Nachtlicht"
 
-#: shell/panel_notify.cpp:240
+#: shell/panel_notify.cpp:291
 msgid "Clear all"
 msgstr ""
 
-#: shell/panel_notify.cpp:254
+#: shell/panel_notify.cpp:305
 msgid "No notifications"
 msgstr ""
 
-#: shell/panel_notify.cpp:276
+#: shell/panel_notify.cpp:336
 msgid "Do Not Disturb for 1 Hour"
 msgstr ""
 
-#: shell/panel_notify.cpp:277
+#: shell/panel_notify.cpp:337
 msgid "Do Not Disturb Until Tomorrow"
 msgstr ""
 
-#: shell/panel_notify.cpp:289
+#: shell/panel_notify.cpp:349
 msgid "Clear All"
 msgstr ""
 
-#: shell/panel_notify.cpp:294
+#: shell/panel_notify.cpp:354
 #, fuzzy
 msgid "Notification Settings…"
 msgstr "Benachrichtigungen"
@@ -2449,6 +2474,29 @@ msgstr ""
 #: shell/panel_privacy.cpp:125
 msgid "Privacy Settings…"
 msgstr ""
+
+#: shell/panel_quick.cpp:55
+#, fuzzy
+msgid "Quick Settings"
+msgstr "Einstellungen"
+
+#: shell/panel_quick.cpp:75
+msgid "Do Not Disturb"
+msgstr ""
+
+#: shell/panel_quick.cpp:102
+msgid "Volume"
+msgstr ""
+
+#: shell/panel_quick.cpp:111
+#, fuzzy
+msgid "All Settings…"
+msgstr "Einstellungen"
+
+#: shell/panel_quick.cpp:126
+#, fuzzy
+msgid "Quick settings"
+msgstr "Einstellungen durchsuchen"
 
 #: shell/panel_sysmon.cpp:81
 msgid "Hide the System Monitor"

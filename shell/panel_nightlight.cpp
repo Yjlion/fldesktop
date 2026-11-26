@@ -26,7 +26,7 @@ void set_enabled(bool on) {
   c.save(fld::desktop_config_path());
   // fl-nightlight is started with the session; start it if it is not running
   // (it was installed meanwhile, or it was stopped)
-  if (on) fld::spawn({"sh", "-c", "pgrep -u \"$(id -u)\" -x fl-nightlight >/dev/null || exec fl-nightlight"});
+  if (on) fld::ensure_running({"fl-nightlight"});
 }
 
 void update() {
@@ -39,6 +39,12 @@ void update() {
 }
 
 } // namespace
+
+bool nightlight_on() { return enabled(); }
+void nightlight_set(bool on) {
+  set_enabled(on);
+  update();
+}
 
 bool nightlight_available() { return !fld::which("fl-nightlight").empty(); }
 

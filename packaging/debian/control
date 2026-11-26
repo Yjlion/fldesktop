@@ -78,7 +78,7 @@ Depends: fldesktop-wm (>= ${source:Version}),
          fldesktop-welcome (>= ${source:Version}),
          ${misc:Depends}
 Recommends: fldesktop-greeter, adwaita-icon-theme, fonts-dejavu-core, fldesktop-media-player,
-            fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-diskusage, fldesktop-recorder, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
+            fldesktop-webcam, fldesktop-archive, fldesktop-disks, fldesktop-diskusage, fldesktop-displays, fldesktop-recorder, fldesktop-printers, fldesktop-bluetooth, fldesktop-packages,
             fldesktop-flatpak, fldesktop-firewall, fldesktop-web, fldesktop-docs,
             fldesktop-passwords, fldesktop-pinentry, fldesktop-logs, fldesktop-services, fldesktop-paint, fldesktop-fonts, fldesktop-clock, fldesktop-remote, fldesktop-scan,
             plymouth, plymouth-themes, fldesktop-plymouth-theme, power-profiles-daemon, avahi-daemon, libnss-mdns,
@@ -321,6 +321,14 @@ Description: fldesktop on-screen keyboard
  fl-osk is an on-screen keyboard for touch screens. It types into the
  focused window through the Wayland virtual-keyboard protocol and offers
  US, German and French layouts plus a symbols page.
+
+Package: fldesktop-displays
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: fldesktop screen arrangement
+ fl-displays sets the resolution, scale, rotation and position of the
+ screens. It uses wlr-output-management, so it also works on sway, labwc and
+ other wlroots compositors.
 
 Package: fldesktop-diskusage
 Architecture: any

@@ -1,0 +1,21 @@
+.TH FL-DISPLAYS 1 "November 2026" "fldesktop 0.1.8" "fldesktop"
+.SH NAME
+fl-displays \- screen arrangement
+.SH SYNOPSIS
+\fBfl-displays\fR
+.SH DESCRIPTION
+Shows the screens and sets the resolution and refresh rate, the scale, the
+rotation and the position of each one, or turns a screen off. The same editor
+is the Displays page of \fBfl-settings\fR(1).
+.PP
+\fBApply\fR changes the screens at once and asks whether to keep the new
+arrangement; without an answer it goes back to the old one after 15 seconds.
+At least one screen stays on.
+.PP
+fl-displays uses the wlr-output-management protocol, so it also works on
+other wlroots compositors such as sway, labwc and Hyprland. Under
+\fBfl-wm\fR(1) a kept arrangement is written to the \fB[output:\fIname\fB]\fR
+sections of \fI~/.config/fldesktop/wm.ini\fR; on other compositors it lasts
+until the compositor restarts.
+.SH SEE ALSO
+\fBfl-settings\fR(1), \fBfl-wm\fR(1)

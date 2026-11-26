@@ -32,7 +32,7 @@ fld_settings_page(keyboard   pages/keyboard.cpp)
 fld_settings_page(shortcuts  pages/shortcuts.cpp)
 fld_settings_page(mouse      pages/mouse.cpp)
 fld_settings_page(tablet     pages/tablet.cpp)
-fld_settings_page(displays   pages/displays.cpp)
+fld_settings_page(displays   pages/displays.cpp REQUIRES fld-displays)
 fld_settings_page(nightlight pages/nightlight.cpp)
 fld_settings_page(sound      pages/sound.cpp REQUIRES fld-audio-ui)
 fld_settings_page(network    pages/network.cpp REQUIRES fld-nm-ui)
@@ -82,8 +82,6 @@ ${_skipped}  };
 ")
 configure_file(${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp COPYONLY)
 
-set(DISPLAYS_PROTO)
-fld_wayland_protocol(DISPLAYS_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-output-management-unstable-v1.xml client)
 
 add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp greeter_config.cpp users_model.cpp autostart_model.cpp settings_cli.cpp datetime_sys.cpp
             settings_search.cpp sharing_util.cpp gnupg_conf.cpp helper_args.cpp)
@@ -91,7 +89,7 @@ target_include_directories(fl-settings-xkb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-settings-xkb PUBLIC fld)
 
 add_executable(fl-settings main.cpp settings_common.cpp pages/users_dialogs.cpp ${FLD_SETTINGS_PAGE_SRCS}
-               ${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp ${DISPLAYS_PROTO})
+               ${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp)
 target_include_directories(fl-settings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${FLD_PROTO_OUT})
 target_link_libraries(fl-settings PRIVATE fld fl-settings-xkb PkgConfig::WAYLAND_CLIENT ${FLD_SETTINGS_PAGE_LIBS})
 target_compile_definitions(fl-settings PRIVATE FLD_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}/fldesktop")

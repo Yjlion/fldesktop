@@ -4,7 +4,7 @@
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-sysinfo fldesktop-disks fldesktop-media-player fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
-         fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-diskusage fldesktop-recorder fldesktop-mixer
+         fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-diskusage fldesktop-displays fldesktop-recorder fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
          fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring
@@ -79,6 +79,7 @@ package_fldesktop() {
               'fldesktop-flatpak: Flatpak app store'
               'fldesktop-firewall: firewall settings'
               'fldesktop-diskusage: disk usage analyser'
+              'fldesktop-displays: screen arrangement (also for sway, labwc)'
               'fldesktop-recorder: sound recorder'
               'fldesktop-media-player: video and music player'
               'fldesktop-webcam: camera app'
@@ -343,6 +344,7 @@ package_fldesktop-charmap() {
   _app charmap
   _install_files usr/share/fldesktop/charmap
 }
+package_fldesktop-displays() { pkgdesc="fldesktop screen arrangement (wlr-output-management)"; depends=(fltk wayland); _app displays; }
 package_fldesktop-diskusage() { pkgdesc="fldesktop disk usage analyser"; depends=(fltk); _app diskusage; }
 package_fldesktop-recorder() {
   pkgdesc="fldesktop sound recorder"

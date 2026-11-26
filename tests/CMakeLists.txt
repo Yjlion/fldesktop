@@ -320,6 +320,12 @@ if(TARGET fl-settings-xkb)
   add_test(NAME settings-helper COMMAND test_settings_helper)
 endif()
 
+if(TARGET fld-displays)
+  add_executable(test_outputs test_outputs.cpp)
+  target_link_libraries(test_outputs PRIVATE fld-displays)
+  add_test(NAME outputs COMMAND test_outputs)
+endif()
+
 if(TARGET fl-calc-engine)
   add_executable(test_calc test_calc.cpp)
   target_link_libraries(test_calc PRIVATE fl-calc-engine)

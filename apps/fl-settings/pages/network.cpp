@@ -1,4 +1,4 @@
-// Network: the NetworkManager view of fl-network
+// Network: the NetworkManager view of fl-network, and Proxy as a tab
 #include "fld/i18n.h"
 #include <FL/Fl.H>
 

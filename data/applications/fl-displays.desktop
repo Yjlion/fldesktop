@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Displays
+GenericName=Display Settings
+Comment=Set the resolution, scale, rotation and position of the screens
+Exec=fl-displays
+Icon=fl-displays
+Categories=Settings;HardwareSettings;
+Keywords=display;monitor;screen;resolution;scale;hidpi;rotation;refresh;output;
+StartupWMClass=fl-displays

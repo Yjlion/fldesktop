@@ -311,7 +311,8 @@ Description: fldesktop settings center
  sound, printers, Bluetooth, network, proxy, firewall, screen lock, users
  (add, remove and change accounts), login screen, date and time, software
  updates and system information. Settings tools of other programs are
- listed as well.
+ listed as well. fl-users has the users and login screen pages on their own,
+ for systems that do not use the rest of fldesktop.
 
 Package: fldesktop-osk
 Architecture: any

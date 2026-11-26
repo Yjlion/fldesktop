@@ -7,6 +7,7 @@ apps/fl-recorder/main.cpp
 apps/fl-recorder/rec_util.cpp
 apps/fl-settings/main.cpp
 apps/fl-settings/settings_common.cpp
+apps/fl-settings/users_app.cpp
 apps/fl-settings/pages/about.cpp
 apps/fl-settings/pages/accessibility.cpp
 apps/fl-settings/pages/advanced.cpp

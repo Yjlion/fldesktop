@@ -333,6 +333,7 @@ package_fldesktop-settings() {
               'greetd: automatic login'
               'fldesktop-icon-theme: the fldesktop icons')
   _app settings
+  _app users
   _install_files usr/lib/fldesktop/fl-settings-helper \
     usr/share/polkit-1/actions/org.fldesktop.settings.policy
 }

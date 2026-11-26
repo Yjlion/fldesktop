@@ -4,10 +4,10 @@
 pkgbase=fldesktop
 pkgname=(fldesktop fldesktop-wm fldesktop-shell fldesktop-greeter fldesktop-term
          fldesktop-calc fldesktop-view fldesktop-files fldesktop-edit fldesktop-taskmgr fldesktop-sysinfo fldesktop-disks fldesktop-media-player fldesktop-webcam fldesktop-archive fldesktop-web fldesktop-docs
-         fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-diskusage fldesktop-recorder fldesktop-mixer
+         fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-diskusage fldesktop-displays fldesktop-recorder fldesktop-mixer
          fldesktop-polkit-agent fldesktop-network fldesktop-notifyd xdg-desktop-portal-fl
          fldesktop-printers fldesktop-bluetooth fldesktop-packages fldesktop-flatpak fldesktop-firewall
-         fldesktop-lock fldesktop-icon-theme fldesktop-plymouth-theme fldesktop-keyring
+         fldesktop-lock fldesktop-icon-theme fldesktop-l10n fldesktop-plymouth-theme fldesktop-keyring
          fldesktop-passwords fldesktop-pinentry fldesktop-logs fldesktop-services fldesktop-paint fldesktop-fonts fldesktop-clock fldesktop-remote fldesktop-scan fldesktop-welcome)
 pkgver=0.1.0.r18.ga0a76c4
 pkgrel=1
@@ -70,7 +70,7 @@ package_fldesktop() {
   depends=(fldesktop-wm fldesktop-shell fldesktop-term fldesktop-files fldesktop-edit
            fldesktop-calc fldesktop-view fldesktop-settings fldesktop-osk fldesktop-charmap fldesktop-taskmgr fldesktop-sysinfo
            fldesktop-mixer fldesktop-polkit-agent fldesktop-network fldesktop-notifyd
-           xdg-desktop-portal-fl fldesktop-lock fldesktop-icon-theme fldesktop-welcome)
+           xdg-desktop-portal-fl fldesktop-lock fldesktop-icon-theme fldesktop-l10n fldesktop-welcome)
   optdepends=('fldesktop-greeter: graphical login with greetd'
               'adwaita-icon-theme: default icon theme'
               'fldesktop-printers: printer settings'
@@ -79,6 +79,7 @@ package_fldesktop() {
               'fldesktop-flatpak: Flatpak app store'
               'fldesktop-firewall: firewall settings'
               'fldesktop-diskusage: disk usage analyser'
+              'fldesktop-displays: screen arrangement (also for sway, labwc)'
               'fldesktop-recorder: sound recorder'
               'fldesktop-media-player: video and music player'
               'fldesktop-webcam: camera app'
@@ -138,7 +139,8 @@ package_fldesktop-shell() {
     usr/bin/fl-cliphist etc/xdg/autostart/fl-cliphist.desktop \
     usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \
     usr/share/applications/fl-snip.desktop usr/share/icons/hicolor/scalable/apps/fl-snip.svg \
-    usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
+    usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg \
+    usr/include/fldesktop/fld_applet.h
   local m
   for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip fl-nightlight fl-cliphist fl-autorotate; do
     _install_files usr/share/man/man1/$m.1
@@ -188,6 +190,17 @@ _app() {
   _stage
   _install_files usr/bin/fl-$1 usr/share/applications/fl-$1.desktop \
     usr/share/icons/hicolor/scalable/apps/fl-$1.svg usr/share/man/man1/fl-$1.1
+}
+
+package_fldesktop-l10n() {
+  pkgdesc="fldesktop translations"
+  arch=(any)
+  _stage
+  local f
+  for f in "$srcdir"/stage/usr/share/locale/*/LC_MESSAGES/fldesktop.mo; do
+    [[ -e "$f" ]] && _install_files "${f#"$srcdir"/stage/}"
+  done
+  return 0
 }
 
 package_fldesktop-term()  { pkgdesc="fldesktop terminal emulator"; depends=(fltk libvterm); optdepends=("openssh: SSH connections" "sshfs: browse remote files"); _app term; }
@@ -332,7 +345,8 @@ package_fldesktop-settings() {
               'greetd: automatic login'
               'fldesktop-icon-theme: the fldesktop icons')
   _app settings
-  _install_files usr/lib/fldesktop/fl-settings-helper usr/lib/fldesktop/fl-users-helper \
+  _app users
+  _install_files usr/lib/fldesktop/fl-settings-helper \
     usr/share/polkit-1/actions/org.fldesktop.settings.policy
 }
 package_fldesktop-osk()   { pkgdesc="fldesktop on-screen keyboard"; depends=(fltk wayland libxkbcommon); _app osk; }
@@ -343,6 +357,7 @@ package_fldesktop-charmap() {
   _app charmap
   _install_files usr/share/fldesktop/charmap
 }
+package_fldesktop-displays() { pkgdesc="fldesktop screen arrangement (wlr-output-management)"; depends=(fltk wayland); _app displays; }
 package_fldesktop-diskusage() { pkgdesc="fldesktop disk usage analyser"; depends=(fltk); _app diskusage; }
 package_fldesktop-recorder() {
   pkgdesc="fldesktop sound recorder"

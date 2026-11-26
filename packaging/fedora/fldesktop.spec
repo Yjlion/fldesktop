@@ -74,6 +74,7 @@ center, system tools and a set of core applications.
 %{_datadir}/polkit-1/actions/*
 %{_datadir}/plymouth/themes/fldesktop/
 %{_mandir}/man1/*
+%{_includedir}/fldesktop/
 %config(noreplace) %{_sysconfdir}/pam.d/*
 %config(noreplace) %{_sysconfdir}/xdg/autostart/*
 

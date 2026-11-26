@@ -332,14 +332,16 @@ int main(int argc, char *argv[]) {
 	protocols_init(&server);
 	xwayland_init(&server); /* sets DISPLAY for the programs we start */
 
+	/* On these early failures fl-wm just exits: destroying the backend now
+	 * would trip wlroots' assertion that no listeners remain on it. */
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
 	if (!socket) {
-		wlr_backend_destroy(server.backend);
+		wlr_log(WLR_ERROR, "cannot create the Wayland socket in XDG_RUNTIME_DIR (%s)",
+			getenv("XDG_RUNTIME_DIR") ? getenv("XDG_RUNTIME_DIR") : "unset");
 		return 1;
 	}
 	if (!wlr_backend_start(server.backend)) {
-		wlr_backend_destroy(server.backend);
-		wl_display_destroy(server.wl_display);
+		wlr_log(WLR_ERROR, "cannot start the backend");
 		return 1;
 	}
 	setenv("WAYLAND_DISPLAY", socket, true);

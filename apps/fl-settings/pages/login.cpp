@@ -315,7 +315,7 @@ public:
       fl_alert(_("Cannot write %s"), tmp.c_str());
       return;
     }
-    std::vector<std::string> cmd{"pkexec", settings_helper_path(), "greeter-ini", tmp};
+    std::vector<std::string> cmd{"pkexec", settings_helper_path(), "system", "greeter-ini", tmp};
     if (!custom_background.empty()) cmd.push_back(custom_background);
     apply->deactivate();
     status->copy_label(_("Saving… (polkit asks for an administrator password)"));

@@ -1,6 +1,7 @@
 // fl-settings: the fldesktop settings center
 #include "fld/i18n.h"
 #include <FL/Fl.H>
+#include <FL/Fl_Tabs.H>
 #include <FL/Fl_Browser_.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hold_Browser.H>
@@ -86,7 +87,7 @@ static void rebuild_list() {
   for (const char *cat : kCategories) {
     bool any = false;
     for (auto &p : fld::all_pages()) {
-      if (p.category != cat) continue;
+      if (p.category != cat || !fld::page_in_sidebar(p)) continue;
       if (!q.empty() && !matches(p.title, q) && !matches(p.keywords, q) && !matches(p.id, q)) continue;
       if (!any) { add_header(_(cat)); any = true; }
       Entry e;
@@ -236,10 +237,30 @@ static bool fills_window(Fl_Group *g) {
   return false;
 }
 
-static void show_page(const std::string &id) {
-  const fld::PageInfo *info = nullptr;
-  for (auto &p : fld::all_pages()) if (p.id == id) info = &p;
+// shows the tab of `w` in every Fl_Tabs it is in
+static void select_tabs_of(Fl_Widget *w) {
+  for (Fl_Widget *c = w; c && c->parent(); c = c->parent())
+    if (Fl_Tabs *t = dynamic_cast<Fl_Tabs *>(c->parent())) t->value(c);
+}
+
+// the tab labelled `title` in a page
+static Fl_Widget *find_tab(Fl_Group *g, const std::string &title) {
+  for (int i = 0; i < g->children(); i++) {
+    Fl_Widget *c = g->child(i);
+    if (dynamic_cast<Fl_Tabs *>(g) && c->label() && title == c->label()) return c;
+    if (Fl_Group *cg = c->as_group())
+      if (Fl_Widget *w = find_tab(cg, title)) return w;
+  }
+  return nullptr;
+}
+
+static void show_page(const std::string &asked) {
+  const fld::PageInfo *info = fld::resolve_page(asked);
   if (!info) return;
+  const std::string id = info->id;
+  std::string tab; // the merged page's tab
+  if (id != asked)
+    for (auto &p : fld::all_pages()) if (p.id == asked) tab = p.title;
   for (auto &kv : g_created) kv.second->hide();
   Fl_Group *g;
   auto it = g_created.find(id);
@@ -261,6 +282,8 @@ static void show_page(const std::string &id) {
     g = it->second;
   }
   g->show();
+  if (!tab.empty())
+    if (Fl_Widget *t = find_tab(g, tab)) select_tabs_of(t);
   g_content->place(g);
   g_current = id;
   std::string title = fld::format(_("%s – Settings"), {info->title});
@@ -322,11 +345,14 @@ static void flash_tick(void *) {
 
 // scrolls the page to the setting with that label, gives it the focus and
 // makes its label blink a few times
-static void point_at(const std::string &page, const std::string &label, bool focus = true) {
-  auto it = g_created.find(page);
+static void point_at(const std::string &asked, const std::string &label, bool focus = true) {
+  const fld::PageInfo *info = fld::resolve_page(asked);
+  if (!info) return;
+  auto it = g_created.find(info->id);
   if (it == g_created.end()) return;
   Fl_Widget *w = find_label(it->second, settings_search::normalize(label));
   if (!w) return;
+  select_tabs_of(w);
   if (g_flash) {
     Fl::remove_timeout(flash_tick);
     g_flash->labelcolor(g_flash_label);
@@ -382,7 +408,13 @@ int main(int argc, char **argv) {
       return 0;
     }
     if (a == "--list") {
-      for (auto &p : fld::all_pages()) printf("%-12s %s\n", p.id.c_str(), p.title.c_str());
+      for (auto &p : fld::all_pages()) {
+        const fld::PageInfo *shown = fld::resolve_page(p.id);
+        if (shown && shown->id != p.id)
+          printf("%-12s %s (a tab of %s)\n", p.id.c_str(), p.title.c_str(), shown->title.c_str());
+        else
+          printf("%-12s %s\n", p.id.c_str(), p.title.c_str());
+      }
       for (auto &s : fld::skipped_pages())
         printf("%-12s (not in this build: needs %s)\n", s.first.c_str(), s.second.c_str());
       return 0;

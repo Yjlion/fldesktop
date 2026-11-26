@@ -1,5 +1,5 @@
 // Users page model: local accounts and groups from /etc/passwd and
-// /etc/group, the checks Settings and fl-users-helper both make, and the
+// /etc/group, the checks Settings and fl-settings-helper both make, and the
 // greetd automatic login section. No UI, no root: unit tested.
 #pragma once
 #include <string>

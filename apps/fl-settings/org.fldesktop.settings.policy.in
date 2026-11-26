@@ -2,6 +2,7 @@
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
+  <!-- one helper; its first argument picks the action (and what it may do) -->
   <vendor>fldesktop</vendor>
   <vendor_url>https://github.com/Yjlion/fldesktop</vendor_url>
   <action id="org.fldesktop.settings.login-screen">
@@ -14,6 +15,7 @@
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">@CMAKE_INSTALL_FULL_LIBEXECDIR@/fldesktop/fl-settings-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">system</annotate>
   </action>
   <action id="org.fldesktop.settings.users">
     <description>Manage user accounts</description>
@@ -24,6 +26,7 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">@CMAKE_INSTALL_FULL_LIBEXECDIR@/fldesktop/fl-users-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">@CMAKE_INSTALL_FULL_LIBEXECDIR@/fldesktop/fl-settings-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">users</annotate>
   </action>
 </policyconfig>

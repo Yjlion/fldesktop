@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-26 11:12-0600\n"
+"POT-Creation-Date: 2026-11-26 13:06-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -53,12 +53,12 @@ msgstr ""
 #: apps/fl-settings/pages/shortcuts.cpp:285
 #: apps/fl-settings/pages/shortcuts.cpp:357
 #: apps/fl-settings/pages/shortcuts.cpp:384
-#: apps/fl-settings/pages/startup.cpp:60 apps/fl-settings/pages/users.cpp:310
-#: apps/fl-settings/pages/users_dialogs.cpp:107
-#: apps/fl-settings/pages/users_dialogs.cpp:192
-#: apps/fl-settings/pages/users_dialogs.cpp:237
-#: apps/fl-settings/pages/users_dialogs.cpp:413
-#: apps/fl-settings/settings_common.cpp:106 common/libfld/file_dialog.cpp:202
+#: apps/fl-settings/pages/startup.cpp:60 apps/fl-settings/pages/users.cpp:306
+#: apps/fl-settings/pages/users_dialogs.cpp:93
+#: apps/fl-settings/pages/users_dialogs.cpp:178
+#: apps/fl-settings/pages/users_dialogs.cpp:223
+#: apps/fl-settings/pages/users_dialogs.cpp:399
+#: apps/fl-settings/settings_common.cpp:107 common/libfld/file_dialog.cpp:202
 #: common/libfld/file_dialog.cpp:441 common/libfld/file_dialog.cpp:458
 #: common/libfld/fileops_ui.cpp:127 common/libfld/fileops_ui.cpp:145
 #: common/libfld/session.cpp:258 common/libfld/session.cpp:262
@@ -80,7 +80,7 @@ msgstr ""
 msgid "Show This Folder"
 msgstr ""
 
-#: apps/fl-diskusage/main.cpp:228 shell/launcher.cpp:298 shell/panel.cpp:837
+#: apps/fl-diskusage/main.cpp:228 shell/launcher.cpp:298 shell/panel.cpp:839
 msgid "Open"
 msgstr ""
 
@@ -126,6 +126,30 @@ msgstr ""
 
 #: apps/fl-diskusage/main.cpp:277
 msgid "Rescan"
+msgstr ""
+
+#: apps/fl-displays/main.cpp:30
+msgid ""
+"Usage: fl-displays\n"
+"Sets the resolution, scale, rotation and position of the screens\n"
+"(any compositor with wlr-output-management).\n"
+msgstr ""
+
+#: apps/fl-displays/main.cpp:38 apps/fl-settings/pages/displays.cpp:59
+#: apps/fl-settings/pages/displays.cpp:131
+msgid "Displays"
+msgstr ""
+
+#: apps/fl-displays/main.cpp:47
+msgid "fl-displays needs a Wayland session."
+msgstr ""
+
+#: apps/fl-displays/main.cpp:49
+msgid "This compositor does not let programs change the screens (wlr-output-management)."
+msgstr ""
+
+#: apps/fl-displays/main.cpp:51
+msgid "The arrangement lasts until the compositor restarts: keep it in its own configuration."
 msgstr ""
 
 #: apps/fl-notifyd/main.cpp:234
@@ -243,37 +267,37 @@ msgstr ""
 msgid "MP3 (plays everywhere)"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:54
+#: apps/fl-settings/main.cpp:55
 msgid "Hardware"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:54 apps/fl-settings/pages/network.cpp:18
-#: apps/fl-settings/pages/network.cpp:34
+#: apps/fl-settings/main.cpp:55 apps/fl-settings/pages/network.cpp:24
+#: apps/fl-settings/pages/network.cpp:48
 msgid "Network"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:54
+#: apps/fl-settings/main.cpp:55
 msgid "Personal"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:54
+#: apps/fl-settings/main.cpp:55
 msgid "System"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:108 shell/launcher.cpp:519
+#: apps/fl-settings/main.cpp:109 shell/launcher.cpp:519
 msgid "Settings"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:122
+#: apps/fl-settings/main.cpp:123
 msgid "More"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:266
+#: apps/fl-settings/main.cpp:289
 #, c-format
 msgid "%s – Settings"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:426 apps/fl-settings/main.cpp:427
+#: apps/fl-settings/main.cpp:458 apps/fl-settings/main.cpp:459
 msgid "Search settings"
 msgstr ""
 
@@ -666,95 +690,35 @@ msgstr ""
 msgid "default applications browser mail email file manager terminal editor image viewer music video pdf open with"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:264
-#: apps/fl-settings/pages/displays.cpp:524
-msgid "Displays"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:280
-msgid "Enabled"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:282
-msgid "Resolution:"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:285
-msgid "Scale:"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:289
-msgid "Rotation:"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:293
-#: apps/fl-settings/pages/displays.cpp:378 apps/fl-settings/pages/panel.cpp:44
-msgid "Position:"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:301 apps/fl-settings/pages/proxy.cpp:115
-#: apps/fl-settings/pages/sharing.cpp:82
-msgid "Apply"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:312
+#: apps/fl-settings/pages/displays.cpp:72
 msgid "Rotate the built-in screen with the device"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:313
+#: apps/fl-settings/pages/displays.cpp:73
 msgid "For convertibles and tablets with a rotation sensor (iio-sensor-proxy)"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:328 shell/panel_power.cpp:168
+#: apps/fl-settings/pages/displays.cpp:89 shell/panel_power.cpp:168
 msgid "Brightness"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:329
+#: apps/fl-settings/pages/displays.cpp:90
 msgid "Built-in screen:"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:340
+#: apps/fl-settings/pages/displays.cpp:101
 msgid "The brightness keys change it too."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:345
+#: apps/fl-settings/pages/displays.cpp:107
 msgid "Warmer colours at night: Night Light."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:347
+#: apps/fl-settings/pages/displays.cpp:108
 msgid "How the screen is drawn (graphics card or software): Advanced."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:356
-msgid "The compositor does not support output management (wlr-output-management)."
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:445 apps/fl-settings/pages/login.cpp:179
-#: apps/fl-settings/pages/users.cpp:148
-msgid "Revert"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:446
-msgid "Keep"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:493
-msgid "At least one display must stay enabled."
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:495
-msgid "The display configuration could not be applied."
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:502
-msgid "Saved."
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:505
-msgid "Reverted."
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:525
+#: apps/fl-settings/pages/displays.cpp:132
 msgid "display monitor screen resolution scale hidpi rotation position output refresh brightness backlight"
 msgstr ""
 
@@ -882,7 +846,7 @@ msgstr ""
 #: apps/fl-settings/pages/notifications.cpp:88
 #: apps/fl-settings/pages/panel.cpp:83 apps/fl-settings/pages/shortcuts.cpp:241
 #: apps/fl-settings/pages/startup.cpp:101
-#: apps/fl-settings/pages/users_dialogs.cpp:238
+#: apps/fl-settings/pages/users_dialogs.cpp:224
 msgid "Remove"
 msgstr ""
 
@@ -932,7 +896,7 @@ msgstr ""
 
 #: apps/fl-settings/pages/keyboard.cpp:166 apps/fl-settings/pages/panel.cpp:146
 #: apps/fl-settings/pages/startup.cpp:61
-#: apps/fl-settings/pages/users_dialogs.cpp:193
+#: apps/fl-settings/pages/users_dialogs.cpp:179
 msgid "Add"
 msgstr ""
 
@@ -1033,7 +997,7 @@ msgstr ""
 msgid "or press Super+L"
 msgstr ""
 
-#: apps/fl-settings/pages/lock.cpp:69 shell/panel.cpp:1049
+#: apps/fl-settings/pages/lock.cpp:69 shell/panel.cpp:1090
 msgid "Lock Screen"
 msgstr ""
 
@@ -1074,7 +1038,7 @@ msgid "The image is copied to /etc/fldesktop so the login screen can read it"
 msgstr ""
 
 #: apps/fl-settings/pages/login.cpp:133 apps/fl-settings/pages/users.cpp:75
-#: apps/fl-settings/pages/users.cpp:396
+#: apps/fl-settings/pages/users.cpp:392 apps/fl-settings/users_app.cpp:94
 msgid "Users"
 msgstr ""
 
@@ -1130,11 +1094,16 @@ msgstr ""
 msgid "Saving the login screen settings needs an administrator password"
 msgstr ""
 
+#: apps/fl-settings/pages/login.cpp:179 apps/fl-settings/pages/users.cpp:148
+#: common/displays/displays_ui.cpp:219
+msgid "Revert"
+msgstr ""
+
 #: apps/fl-settings/pages/login.cpp:308
 msgid "pkexec (polkit) is needed to change the login screen."
 msgstr ""
 
-#: apps/fl-settings/pages/login.cpp:315 apps/fl-settings/pages/users.cpp:372
+#: apps/fl-settings/pages/login.cpp:315 apps/fl-settings/pages/users.cpp:368
 #, c-format
 msgid "Cannot write %s"
 msgstr ""
@@ -1272,8 +1241,17 @@ msgstr ""
 msgid "mouse touchpad pointer speed acceleration tap click scroll natural left handed gestures swipe fingers"
 msgstr ""
 
-#: apps/fl-settings/pages/network.cpp:35
-msgid "network wifi wi-fi wireless ethernet wired ip address dns gateway vpn networkmanager"
+#: apps/fl-settings/pages/network.cpp:31
+msgid "Connections"
+msgstr ""
+
+#: apps/fl-settings/pages/network.cpp:33 apps/fl-settings/pages/proxy.cpp:53
+#: apps/fl-settings/pages/proxy.cpp:206
+msgid "Proxy"
+msgstr ""
+
+#: apps/fl-settings/pages/network.cpp:49
+msgid "network wifi wi-fi wireless ethernet wired ip address dns gateway vpn networkmanager proxy"
 msgstr ""
 
 #: apps/fl-settings/pages/nightlight.cpp:33
@@ -1372,6 +1350,10 @@ msgstr ""
 
 #: apps/fl-settings/pages/panel.cpp:43
 msgid "Panel"
+msgstr ""
+
+#: apps/fl-settings/pages/panel.cpp:44 common/displays/displays_ui.cpp:113
+msgid "Position:"
 msgstr ""
 
 #: apps/fl-settings/pages/panel.cpp:46
@@ -1539,56 +1521,57 @@ msgstr ""
 msgid "privacy recent files history recently used camera webcam microphone mic indicator"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:52 apps/fl-settings/pages/proxy.cpp:203
-msgid "Proxy"
-msgstr ""
-
-#: apps/fl-settings/pages/proxy.cpp:60
+#: apps/fl-settings/pages/proxy.cpp:61
 msgid "Connection"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:62
+#: apps/fl-settings/pages/proxy.cpp:63
 msgid "Use the proxy settings the session started with"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:78
+#: apps/fl-settings/pages/proxy.cpp:79
 msgid "No proxy"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:81
+#: apps/fl-settings/pages/proxy.cpp:82
 msgid "Manual proxy configuration"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:87
+#: apps/fl-settings/pages/proxy.cpp:88
 msgid "Manual Proxies"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:99
+#: apps/fl-settings/pages/proxy.cpp:100
 msgid "host:port, e.g. proxy.example.com:3128"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:101
+#: apps/fl-settings/pages/proxy.cpp:102
 msgid "Use this proxy for HTTPS and FTP too"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:111
+#: apps/fl-settings/pages/proxy.cpp:112
 msgid "host:port of a SOCKS 5 proxy (all_proxy)"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:113
+#: apps/fl-settings/pages/proxy.cpp:114
 msgid "Comma separated hosts and domains that are reached directly (no_proxy)"
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:120
+#: apps/fl-settings/pages/proxy.cpp:116 apps/fl-settings/pages/sharing.cpp:82
+#: common/displays/displays_ui.cpp:122
+msgid "Apply"
+msgstr ""
+
+#: apps/fl-settings/pages/proxy.cpp:121
 msgid "Programs started from now on use the new settings; running programs keep theirs until they restart."
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:161
+#: apps/fl-settings/pages/proxy.cpp:162
 #, c-format
 msgid "\"%s\" is not a proxy address. Use host:port, for example proxy.example.com:3128."
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:204
+#: apps/fl-settings/pages/proxy.cpp:207
 msgid "proxy http https socks ftp no_proxy environment internet connection"
 msgstr ""
 
@@ -1790,7 +1773,7 @@ msgid "Application Shortcuts…"
 msgstr ""
 
 #: apps/fl-settings/pages/shortcuts.cpp:242
-#: apps/fl-settings/settings_common.cpp:99
+#: apps/fl-settings/settings_common.cpp:100
 msgid "Reset to Defaults"
 msgstr ""
 
@@ -1803,7 +1786,7 @@ msgid "Replace all shortcuts with the defaults?"
 msgstr ""
 
 #: apps/fl-settings/pages/shortcuts.cpp:285
-#: apps/fl-settings/settings_common.cpp:106
+#: apps/fl-settings/settings_common.cpp:107
 msgid "Reset"
 msgstr ""
 
@@ -1987,12 +1970,12 @@ msgid "Account type:"
 msgstr ""
 
 #: apps/fl-settings/pages/users.cpp:105
-#: apps/fl-settings/pages/users_dialogs.cpp:180
+#: apps/fl-settings/pages/users_dialogs.cpp:166
 msgid "Standard"
 msgstr ""
 
 #: apps/fl-settings/pages/users.cpp:106
-#: apps/fl-settings/pages/users_dialogs.cpp:181
+#: apps/fl-settings/pages/users_dialogs.cpp:167
 msgid "Administrator"
 msgstr ""
 
@@ -2036,12 +2019,12 @@ msgstr ""
 msgid "pkexec (polkit) is needed to change user accounts."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:293
+#: apps/fl-settings/pages/users.cpp:289
 #, c-format
 msgid "%s is the only administrator. Make someone else an administrator first."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:308
+#: apps/fl-settings/pages/users.cpp:304
 #, c-format
 msgid ""
 "Log %s in automatically, without a password, when the computer starts?\n"
@@ -2049,55 +2032,55 @@ msgid ""
 "Anyone who switches the computer on can then use the account."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:310
+#: apps/fl-settings/pages/users.cpp:306
 msgid "Log In Automatically"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:334
+#: apps/fl-settings/pages/users.cpp:330
 #, c-format
 msgid "%s is the only administrator and cannot be removed."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:366
+#: apps/fl-settings/pages/users.cpp:362
 #, c-format
 msgid "Cannot read %s"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:397
+#: apps/fl-settings/pages/users.cpp:393
 msgid "users accounts user password administrator admin add remove delete groups picture avatar face autologin automatic login"
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:100
+#: apps/fl-settings/pages/users_dialogs.cpp:86
 msgid "New password:"
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:103
+#: apps/fl-settings/pages/users_dialogs.cpp:89
 msgid "Again:"
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:108
+#: apps/fl-settings/pages/users_dialogs.cpp:94
 msgid "Change"
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:177
+#: apps/fl-settings/pages/users_dialogs.cpp:163
 msgid "Lower case letters, digits, - and _. It cannot be changed later."
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:386
+#: apps/fl-settings/pages/users_dialogs.cpp:372
 msgid "@iNone yet"
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:413 common/libfld/menus.cpp:172
+#: apps/fl-settings/pages/users_dialogs.cpp:399 common/libfld/menus.cpp:172
 #: common/libfld/menus.cpp:197
 msgid "Delete"
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:413
+#: apps/fl-settings/pages/users_dialogs.cpp:399
 #, c-format
 msgid "Delete all fingerprints of %s?"
 msgstr ""
 
-#: apps/fl-settings/pages/users_dialogs.cpp:415
+#: apps/fl-settings/pages/users_dialogs.cpp:401
 #, c-format
 msgid "The fingerprints were not deleted: %s"
 msgstr ""
@@ -2267,12 +2250,18 @@ msgstr ""
 msgid "windows workspaces virtual desktops focus follows mouse snap snapping tiling assist drag move modifier super alt hot corners title bar height shadows border alt tab switcher session restore reopen"
 msgstr ""
 
-#: apps/fl-settings/settings_common.cpp:102
+#: apps/fl-settings/settings_common.cpp:103
 msgid "Use the default values for the settings on this page"
 msgstr ""
 
-#: apps/fl-settings/settings_common.cpp:106
+#: apps/fl-settings/settings_common.cpp:107
 msgid "Use the default values for the settings on this page?"
+msgstr ""
+
+#: apps/fl-settings/users_app.cpp:86
+msgid ""
+"Usage: fl-users [users|login]\n"
+"Adds, removes and changes user accounts and sets up the login screen.\n"
 msgstr ""
 
 #: apps/fl-snip/capture.cpp:246
@@ -2281,6 +2270,63 @@ msgstr ""
 
 #: apps/fl-snip/capture.cpp:247
 msgid "Drag to measure · Enter copies · Esc closes"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:28
+msgid "Normal"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:96
+msgid "Enabled"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:99
+msgid "Resolution:"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:103
+msgid "Scale:"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:108
+msgid "Rotation:"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:131
+msgid "The compositor does not support output management (wlr-output-management)."
+msgstr ""
+
+#: common/displays/displays_ui.cpp:165
+msgid " (off)"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:216
+msgid "Keep Display Settings?"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:220
+msgid "Keep"
+msgstr ""
+
+#: common/displays/displays_ui.cpp:225
+#, c-format
+msgid "Do you want to keep these display settings? They are reverted in %s s."
+msgstr ""
+
+#: common/displays/displays_ui.cpp:252
+msgid "At least one display must stay enabled."
+msgstr ""
+
+#: common/displays/displays_ui.cpp:256
+msgid "The display configuration could not be applied."
+msgstr ""
+
+#: common/displays/displays_ui.cpp:263
+msgid "Saved."
+msgstr ""
+
+#: common/displays/displays_ui.cpp:266
+msgid "Reverted."
 msgstr ""
 
 #: common/libfld/file_dialog.cpp:120
@@ -2462,7 +2508,7 @@ msgstr ""
 msgid "Could not copy the launcher to %s."
 msgstr ""
 
-#: shell/launcher.cpp:307 shell/panel.cpp:853
+#: shell/launcher.cpp:307 shell/panel.cpp:855
 msgid "Remove from Quick Launch"
 msgstr ""
 
@@ -2496,95 +2542,95 @@ msgid ""
 "Also: 2*(3+4) calculates, 10 km in mi converts, >command runs in a terminal."
 msgstr ""
 
-#: shell/panel.cpp:715 shell/panel_privacy.cpp:126
+#: shell/panel.cpp:717 shell/panel_privacy.cpp:126
 msgid "Sound Settings…"
 msgstr ""
 
-#: shell/panel.cpp:716
+#: shell/panel.cpp:718
 msgid "Volume Mixer…"
 msgstr ""
 
-#: shell/panel.cpp:776
+#: shell/panel.cpp:778
 msgid "Mute"
 msgstr ""
 
-#: shell/panel.cpp:782
+#: shell/panel.cpp:784
 msgid "On the icon: scroll to adjust, middle-click to mute"
 msgstr ""
 
-#: shell/panel.cpp:784
+#: shell/panel.cpp:786
 msgid "Sound Settings"
 msgstr ""
 
-#: shell/panel.cpp:790
+#: shell/panel.cpp:792
 msgid "Volume Mixer"
 msgstr ""
 
-#: shell/panel.cpp:843
+#: shell/panel.cpp:845
 msgid "Move Left"
 msgstr ""
 
-#: shell/panel.cpp:848
+#: shell/panel.cpp:850
 msgid "Move Right"
 msgstr ""
 
-#: shell/panel.cpp:869
+#: shell/panel.cpp:871
 msgid "Copy Date"
 msgstr ""
 
-#: shell/panel.cpp:870
+#: shell/panel.cpp:872
 msgid "Copy Time"
 msgstr ""
 
-#: shell/panel.cpp:871
+#: shell/panel.cpp:873
 msgid "Copy Date and Time"
 msgstr ""
 
-#: shell/panel.cpp:872
+#: shell/panel.cpp:874
 msgid "Date && Time Settings…"
 msgstr ""
 
-#: shell/panel.cpp:873
+#: shell/panel.cpp:875
 msgid "Clock Format…"
 msgstr ""
 
-#: shell/panel.cpp:1041
+#: shell/panel.cpp:1082
 msgid "Panel Settings…"
 msgstr ""
 
-#: shell/panel.cpp:1047 shell/panel.cpp:1248 shell/panel_sysmon.cpp:80
+#: shell/panel.cpp:1088 shell/panel.cpp:1289 shell/panel_sysmon.cpp:80
 msgid "Task Manager…"
 msgstr ""
 
-#: shell/panel.cpp:1048
+#: shell/panel.cpp:1089
 msgid "Applications…"
 msgstr ""
 
-#: shell/panel.cpp:1056
+#: shell/panel.cpp:1097
 msgid "Show a System Monitor"
 msgstr ""
 
-#: shell/panel.cpp:1064 shell/panel.cpp:1249
+#: shell/panel.cpp:1105 shell/panel.cpp:1290
 msgid "Settings…"
 msgstr ""
 
-#: shell/panel.cpp:1241
+#: shell/panel.cpp:1282
 msgid "Apps"
 msgstr ""
 
-#: shell/panel.cpp:1247
+#: shell/panel.cpp:1288
 msgid "Open Applications"
 msgstr ""
 
-#: shell/panel.cpp:1288
+#: shell/panel.cpp:1329
 msgid "Show On-screen Keyboard"
 msgstr ""
 
-#: shell/panel.cpp:1289
+#: shell/panel.cpp:1330
 msgid "Keyboard Settings…"
 msgstr ""
 
-#: shell/panel.cpp:1339 shell/panel_power.cpp:247
+#: shell/panel.cpp:1381 shell/panel_power.cpp:247
 msgid "Power Settings…"
 msgstr ""
 

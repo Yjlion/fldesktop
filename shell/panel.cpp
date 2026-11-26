@@ -37,6 +37,7 @@
 #include "fld/theme.h"
 #include "fld/util.h"
 #include "fld/widgets.h"
+#include "applet_loader.h"
 #include "panel.h"
 
 
@@ -370,6 +371,7 @@ struct Panel {
   fld::FlatButton *bell = nullptr;
   fld::FlatButton *clock = nullptr;
   fld::FlatButton *power = nullptr;
+  std::vector<applets::Loaded> plugins; // applet plugins (fld_applet.h)
   bool top = false;
   std::string clock_fmt = "%a %d %b  %H:%M";
   int volume_pct = -1;
@@ -954,6 +956,38 @@ static void network_changed() {
 
 #endif
 
+// ---- applet plugins -------------------------------------------------------
+
+static const char *plugin_config(const char *id, const char *key, const char *def) {
+  static std::string v;
+  fld::Ini c;
+  c.load(fld::fld_config_dir() + "/panel.ini");
+  v = c.get(std::string("Applet:") + id, key, def ? def : "");
+  return v.c_str();
+}
+
+static void plugin_spawn(const char *const *argv) {
+  std::vector<std::string> a;
+  for (; argv && *argv; argv++) a.push_back(*argv);
+  if (!a.empty()) fld::spawn(a);
+}
+
+static void load_plugins(const fld::Ini &cfg) {
+  static fld_applet_host host;
+  host.abi_version = FLD_APPLET_ABI_VERSION;
+  host.height = PANEL_H - 4;
+  host.bg = panel_bg();
+  host.fg = panel_fg();
+  host.hover = panel_hover();
+  host.relayout = relayout;
+  host.config = plugin_config;
+  host.spawn = plugin_spawn;
+  std::vector<std::string> disabled;
+  for (auto &s : fld::split(cfg.get("Panel", "DisabledApplets", ""), ','))
+    if (!fld::trim(s).empty()) disabled.push_back(fld::trim(s));
+  P.plugins = applets::load(applets::search_dirs(FLD_LIBDIR), disabled, host);
+}
+
 void relayout() {
   if (!P.win) return;
   int W = P.win->w(), H = P.win->h();
@@ -1004,6 +1038,13 @@ void relayout() {
     int pw = P.privacy->w();
     P.privacy->resize(r - pw, 2, pw, H - 4);
     r -= pw + 2;
+  }
+  // applet plugins keep their own width
+  for (auto it = P.plugins.rbegin(); it != P.plugins.rend(); ++it) {
+    Fl_Widget *w = (Fl_Widget *)it->widget;
+    if (!w->visible()) continue;
+    w->resize(r - w->w(), 2, w->w(), H - 4);
+    r -= w->w() + 2;
   }
   for (fld::FlatButton *b : {P.nightlight, P.clipboard, P.printer, P.bluetooth}) {
     if (b && b->visible()) {
@@ -1323,6 +1364,7 @@ int main(int argc, char **argv) {
   Fl::lock();
   P.bell = notify_indicator_create();
 #endif
+  load_plugins(cfg);
   P.qsettings = quick_settings_create();
   if (!cfg.get_bool("Panel", "QuickSettings", true)) P.qsettings->hide();
   P.power = make_btn(34, "system-shutdown", "Power", power_cb);

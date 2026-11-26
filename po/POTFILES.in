@@ -1,11 +1,13 @@
 # files with translatable text (written by tools/update-po.py)
 apps/fl-diskusage/main.cpp
+apps/fl-displays/main.cpp
 apps/fl-notifyd/main.cpp
 apps/fl-paint/main.cpp
 apps/fl-recorder/main.cpp
 apps/fl-recorder/rec_util.cpp
 apps/fl-settings/main.cpp
 apps/fl-settings/settings_common.cpp
+apps/fl-settings/users_app.cpp
 apps/fl-settings/pages/about.cpp
 apps/fl-settings/pages/accessibility.cpp
 apps/fl-settings/pages/advanced.cpp
@@ -40,6 +42,7 @@ apps/fl-settings/pages/users_dialogs.cpp
 apps/fl-settings/pages/wallpaper.cpp
 apps/fl-settings/pages/windows.cpp
 apps/fl-snip/capture.cpp
+common/displays/displays_ui.cpp
 common/libfld/file_dialog.cpp
 common/libfld/fileops_ui.cpp
 common/libfld/menus.cpp

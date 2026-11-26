@@ -1,0 +1,21 @@
+.TH FL-USERS 1 "November 2026" "fldesktop 0.1.8" "fldesktop"
+.SH NAME
+fl-users \- user accounts and login screen
+.SH SYNOPSIS
+\fBfl-users\fR [\fBusers\fR|\fBlogin\fR]
+.SH DESCRIPTION
+The Users and Login Screen pages of \fBfl-settings\fR(1) as a program of their
+own, for systems that do not use the rest of fldesktop. \fBUsers\fR adds,
+removes and changes the accounts of people (full name, administrator,
+password, picture, groups, automatic login with greetd). \fBLogin Screen\fR
+sets up \fBfl-greet\fR (style, background, the list of users).
+.PP
+The changes are made as root by \fBfl-settings-helper\fR through pkexec, so
+an administrator password is asked (polkit actions
+\fBorg.fldesktop.settings.users\fR and \fBorg.fldesktop.settings.login-screen\fR).
+The argument names the tab to open.
+.PP
+In an fldesktop session the same pages are in Settings, so the menu entry is
+hidden there.
+.SH SEE ALSO
+\fBfl-settings\fR(1), \fBfl-greet\fR(1)

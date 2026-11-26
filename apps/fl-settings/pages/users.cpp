@@ -243,7 +243,7 @@ public:
   void run(std::vector<Job> jobs, const std::string &doing, const std::string &done_text) {
     if (jobs.empty()) return;
     if (which("pkexec").empty()) {
-      fl_alert(_("pkexec (polkit) is needed to change user accounts."));
+      fl_alert("%s", _("pkexec (polkit) is needed to change user accounts."));
       return;
     }
     busy = true;

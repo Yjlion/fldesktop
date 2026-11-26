@@ -102,5 +102,10 @@ Set to 1 to always use the software renderer.
 .TP
 \fBFLD_VIDEO_DEBUG\fR
 Print renderer messages, GStreamer warnings and error details.
+.SH SOUND AND CHAPTERS
+The right-click menu's \fBAudio\fR submenu turns volume levelling on and off (from ReplayGain tags,
+starting with the next track; on by default) and opens a 10-band \fBEqualizer\fR with presets
+(Flat, Bass, Treble, Voice, Loudness); it is heard at once and kept for the next start.
+Files with chapters (Matroska, MP4, Ogg) get a \fBChapters\fR submenu that jumps to one.
 .SH SEE ALSO
 \fBgst-launch-1.0\fR(1), \fByt-dlp\fR(1), \fBfl-files\fR(1)

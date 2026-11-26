@@ -24,6 +24,10 @@ void complete(Client *c, const std::string &path, int line, int col16,
               std::function<void(const std::vector<lsp::CompletionItem> &)> done);
 void definition(Client *c, const std::string &path, int line, int col16,
                 std::function<void(const std::vector<lsp::Location> &)> done);
+void format(Client *c, const std::string &path, int tab_size, bool insert_spaces,
+            std::function<void(const std::vector<lsp::TextEdit> &)> done);
+void rename(Client *c, const std::string &path, int line, int col16, const std::string &new_name,
+            std::function<void(const std::vector<std::pair<std::string, std::vector<lsp::TextEdit>>> &, const std::string &error)> done);
 std::string name(const Client *c); // e.g. "clangd"; "" when the server has exited
 void shutdown_all();
 

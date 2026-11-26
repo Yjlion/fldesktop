@@ -136,6 +136,29 @@ msgstr ""
 msgid "Reply to %s:"
 msgstr ""
 
+#: apps/fl-paint/main.cpp:351
+#, c-format
+msgid "%s is not an OpenRaster file."
+msgstr ""
+
+#: apps/fl-paint/main.cpp:363
+#, c-format
+msgid "%s has no layer list (stack.xml)."
+msgstr ""
+
+#: apps/fl-paint/main.cpp:374
+msgid "Layer"
+msgstr ""
+
+#: apps/fl-paint/main.cpp:382
+#, c-format
+msgid "%s has no layers fl-paint can read."
+msgstr ""
+
+#: apps/fl-paint/main.cpp:491
+msgid "Saved (the layers are merged in the PNG; OpenRaster .ora keeps them)."
+msgstr ""
+
 #: apps/fl-recorder/main.cpp:92
 msgid "No recordings yet"
 msgstr ""

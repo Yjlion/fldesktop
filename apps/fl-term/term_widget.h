@@ -1,5 +1,6 @@
 // fl-term terminal widget: libvterm emulation rendered with FLTK
 #pragma once
+#include <functional>
 #include <FL/Fl_Widget.H>
 #include <deque>
 #include <string>
@@ -25,6 +26,12 @@ class TermWidget : public Fl_Widget {
 public:
   TermWidget(int x, int y, int w, int h);
   ~TermWidget() override;
+
+  // What the user typed or pasted (not the terminal's own replies), after it
+  // went to this terminal's program: "Send Input to All Panes" passes it on.
+  std::function<void(TermWidget *, const char *, size_t)> on_typed;
+  // writes bytes to the program as if typed (for the panes' shared input)
+  void send_input(const char *data, size_t len) { write_pty(data, len); }
 
   // Starts argv (or the user's shell when empty) on a new pty.
   bool start(const std::vector<std::string> &argv, const std::string &cwd);
@@ -106,6 +113,27 @@ private:
   int cursor_shape_ = VTERM_PROP_CURSORSHAPE_BLOCK;
   int mouse_mode_ = VTERM_PROP_MOUSE_NONE;
   bool altscreen_ = false, reverse_video_ = false, focus_report_ = false;
+
+  // OSC 8 hyperlinks, in absolute line coordinates (as the selection)
+  struct Link {
+    long line;
+    int c0, c1; // columns, c1 not included
+    std::string uri;
+  };
+  std::vector<Link> links_;
+  bool link_open_ = false;
+  long link_line_ = 0;
+  int link_col_ = 0;
+  std::string link_uri_, osc_buf_;
+  void osc8(const std::string &payload);
+  const Link *link_at(long line, int col) const;
+  static int osc_cb(int command, VTermStringFragment frag, void *user);
+  // OSC 52: programs may set the clipboard (not read it)
+  std::string sel_buf_;
+  bool typing_ = false; // the key or paste being handled: output is the user's
+  char sel_scratch_[4096];
+  static int selection_set_cb(VTermSelectionMask mask, VTermStringFragment frag, void *user);
+  static int selection_query_cb(VTermSelectionMask mask, void *user);
 
   // selection in absolute line coordinates: line 0 = oldest scrollback line
   bool selecting_ = false, has_sel_ = false;

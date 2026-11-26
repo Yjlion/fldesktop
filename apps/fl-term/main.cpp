@@ -112,6 +112,7 @@ struct Tab {
   TabSpec spec;       // how it was started (Duplicate Tab)
   std::string custom; // a name given with Rename Tab (wins over the title)
   std::vector<TermWidget *> panes{}; // all of the tab's terminals
+  bool broadcast = false;            // what is typed in one pane goes to all
   term::PaneTree tree{0};            // how they share the tab
 };
 static const int PANE_GAP = 4;
@@ -431,6 +432,16 @@ static void split_pane(bool side_by_side) {
   if (tb.own_scheme && !tb.spec.scheme.empty()) t->set_colors(*scheme_colors(tb.spec.scheme));
   tb.tree.split((intptr_t)from, (intptr_t)t, side_by_side);
   tb.panes.push_back(t);
+  // the tab's shared input: what is typed in one pane goes to the others
+  t->on_typed = [](TermWidget *from, const char *s, size_t n) {
+    for (auto &tab : g.tabs) {
+      if (std::find(tab.panes.begin(), tab.panes.end(), from) == tab.panes.end()) continue;
+      if (!tab.broadcast) return;
+      for (TermWidget *p : tab.panes)
+        if (p != from) p->send_input(s, n);
+      return;
+    }
+  };
   tb.term = t;
   layout_tab(tb);
   if (!t->start(s.cmd, s.cwd)) {
@@ -852,7 +863,7 @@ enum MenuId {
   M_COPY = 1, M_PASTE, M_NEW_WINDOW, M_ZOOM_IN, M_ZOOM_OUT, M_ZOOM_RESET, M_OPEN_FOLDER, M_ABOUT,
   M_CLOSE_WINDOW, M_NEW_TAB, M_CLOSE_TAB, M_NEXT_TAB, M_PREV_TAB, M_MOVE_LEFT, M_MOVE_RIGHT,
   M_TOGGLE_MENUBAR, M_TABS_AUTO, M_TABS_ALWAYS, M_TABS_NEVER, M_PREFS,
-  M_SPLIT_H, M_SPLIT_V, M_CLOSE_PANE, M_FIND, M_PROFILES,
+  M_SPLIT_H, M_SPLIT_V, M_CLOSE_PANE, M_BROADCAST, M_FIND, M_PROFILES,
   M_PROFILE = 100, // + index: New Tab with that profile
   M_SSH_CONNECT = 40, M_SSH_MANAGE, M_SSH_COPY_KEY, M_SSH_GEN_KEY, M_SSH_BROWSE,
 };
@@ -887,6 +898,9 @@ static void menu_action(long id) {
     case M_PREFS: preferences_dialog(); break;
     case M_SPLIT_H: split_pane(true); break;
     case M_SPLIT_V: split_pane(false); break;
+    case M_BROADCAST:
+      if (!g.tabs.empty()) g.tabs[(size_t)g.current].broadcast = !g.tabs[(size_t)g.current].broadcast;
+      break;
     case M_CLOSE_PANE: if (t) close_pane(t); break;
     case M_FIND: search_bar(true); break;
     case M_PROFILES: profiles_dialog(); break;
@@ -980,6 +994,9 @@ static void pane_items(Items &m) {
   item(m, "Split Side by Side", FL_CTRL + FL_SHIFT + 'e', M_SPLIT_H);
   item(m, "Split Above and Below", FL_CTRL + FL_SHIFT + 'o', M_SPLIT_V);
   item(m, "Close Pane", split ? FL_CTRL + FL_SHIFT + 'w' : 0, M_CLOSE_PANE, split ? 0 : FL_MENU_INACTIVE);
+  bool on = !g.tabs.empty() && g.tabs[(size_t)g.current].broadcast;
+  item(m, "Send Input to All Panes", FL_CTRL + FL_SHIFT + 'i', M_BROADCAST,
+       FL_MENU_TOGGLE | (on ? FL_MENU_VALUE : 0) | (split ? 0 : FL_MENU_INACTIVE));
 }
 
 static void profile_items(Items &m) {

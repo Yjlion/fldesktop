@@ -23,8 +23,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "fld/mime.h"
 #include "fld/primary.h"
 #include "fld/theme.h"
+#include "fld/util.h"
 
 #if defined(FLTK_USE_WAYLAND)
 #include <FL/platform.H>
@@ -65,6 +67,14 @@ TermWidget::TermWidget(int x, int y, int w, int h) : Fl_Widget(x, y, w, h) {
   cbs.sb_popline = sb_popline_cb;
   cbs.sb_clear = sb_clear_cb;
   vterm_screen_set_callbacks(screen_, &cbs, this);
+  static VTermStateFallbacks fb;
+  memset(&fb, 0, sizeof fb);
+  fb.osc = osc_cb;
+  vterm_screen_set_unrecognised_fallbacks(screen_, &fb, this);
+  static VTermSelectionCallbacks sel;
+  sel.set = selection_set_cb;
+  sel.query = selection_query_cb;
+  vterm_state_set_selection_callbacks(state_, &sel, this, sel_scratch_, sizeof sel_scratch_);
   vterm_screen_set_damage_merge(screen_, VTERM_DAMAGE_SCROLL);
   vterm_screen_enable_altscreen(screen_, 1);
   vterm_screen_enable_reflow(screen_, true);
@@ -314,7 +324,9 @@ void TermWidget::do_handle_flush() { flush_output(); }
 // ---- libvterm callbacks ------------------------------------------------------------
 
 void TermWidget::output_cb(const char *s, size_t len, void *user) {
-  static_cast<TermWidget *>(user)->write_pty(s, len);
+  TermWidget *t = static_cast<TermWidget *>(user);
+  t->write_pty(s, len);
+  if (t->typing_ && t->on_typed) t->on_typed(t, s, len);
 }
 
 int TermWidget::damage_cb(VTermRect rect, void *user) {
@@ -378,6 +390,12 @@ int TermWidget::sb_pushline_cb(int cols, const VTermScreenCell *cells, void *use
     t->sel_a_line_--;
     t->sel_b_line_--;
   }
+  if (dropped) {
+    for (auto &l : t->links_) l.line--;
+    t->link_line_--;
+    t->links_.erase(std::remove_if(t->links_.begin(), t->links_.end(), [](const Link &l) { return l.line < 0; }),
+                    t->links_.end());
+  }
   if (t->scroll_ > (int)t->sb_.size()) t->scroll_ = (int)t->sb_.size();
   return 1;
 }
@@ -393,6 +411,7 @@ int TermWidget::sb_popline_cb(int cols, VTermScreenCell *cells, void *user) {
 
 int TermWidget::sb_clear_cb(void *user) {
   TermWidget *t = static_cast<TermWidget *>(user);
+  t->links_.clear();
   t->sb_.clear();
   t->scroll_ = 0;
   t->has_sel_ = false;
@@ -462,6 +481,66 @@ bool TermWidget::get_cell(long line, int col, VTermScreenCell &cell) const {
   if (pos.row >= rows_ || col >= cols_) return false;
   return vterm_screen_get_cell(screen_, pos, &cell) != 0;
 }
+
+// ---- OSC 8 hyperlinks and OSC 52 clipboard ------------------------------------
+
+int TermWidget::osc_cb(int command, VTermStringFragment frag, void *user) {
+  if (command != 8) return 0;
+  TermWidget *t = static_cast<TermWidget *>(user);
+  if (frag.initial) t->osc_buf_.clear();
+  if (t->osc_buf_.size() + frag.len < 8192) t->osc_buf_.append(frag.str, frag.len);
+  if (frag.final) t->osc8(t->osc_buf_);
+  return 1;
+}
+
+// "params;URI" opens a link at the cursor, "params;" (no URI) ends it
+void TermWidget::osc8(const std::string &payload) {
+  size_t semi = payload.find(';');
+  std::string uri = semi == std::string::npos ? "" : payload.substr(semi + 1);
+  VTermPos pos;
+  vterm_state_get_cursorpos(state_, &pos);
+  long line = (long)sb_.size() + pos.row;
+  if (link_open_) {
+    // the link covers what was printed since it was opened
+    for (long l = link_line_; l <= line; l++) {
+      int c0 = l == link_line_ ? link_col_ : 0, c1 = l == line ? pos.col : cols_;
+      if (c1 > c0) links_.push_back({l, c0, c1, link_uri_});
+    }
+    if (links_.size() > 4000) links_.erase(links_.begin(), links_.begin() + (links_.size() - 4000));
+    link_open_ = false;
+    mark_all();
+    schedule_repaint();
+  }
+  // only links a program may sensibly offer; others are ignored
+  if (!uri.empty() && (fld::starts_with(uri, "http://") || fld::starts_with(uri, "https://") ||
+                       fld::starts_with(uri, "file://") || fld::starts_with(uri, "mailto:"))) {
+    link_open_ = true;
+    link_line_ = line;
+    link_col_ = pos.col;
+    link_uri_ = uri;
+  }
+}
+
+const TermWidget::Link *TermWidget::link_at(long line, int col) const {
+  for (auto it = links_.rbegin(); it != links_.rend(); ++it)
+    if (it->line == line && col >= it->c0 && col < it->c1) return &*it;
+  return nullptr;
+}
+
+int TermWidget::selection_set_cb(VTermSelectionMask mask, VTermStringFragment frag, void *user) {
+  TermWidget *t = static_cast<TermWidget *>(user);
+  if (frag.initial) t->sel_buf_.clear();
+  if (t->sel_buf_.size() + frag.len < (1u << 20)) t->sel_buf_.append(frag.str, frag.len);
+  if (frag.final && !t->sel_buf_.empty()) {
+    if (mask & VTERM_SELECTION_CLIPBOARD) Fl::copy(t->sel_buf_.data(), (int)t->sel_buf_.size(), 1);
+    if (mask & (VTERM_SELECTION_PRIMARY | VTERM_SELECTION_SELECT))
+      Fl::copy(t->sel_buf_.data(), (int)t->sel_buf_.size(), 0);
+  }
+  return 1;
+}
+
+// reading the clipboard would let any program in the terminal see it: answer nothing
+int TermWidget::selection_query_cb(VTermSelectionMask, void *) { return 1; }
 
 void TermWidget::cell_at(int ex, int ey, int &row, int &col) const {
   col = (ex - x() - pad_) / cw_;
@@ -774,6 +853,15 @@ void TermWidget::draw_row(int r, bool focused) {
     if (cell.attrs.strike) fl_xyline(cx, ry + ch_ / 2, cx + cwidth - 1);
   }
 
+  // hyperlinks (OSC 8): a dotted underline; Ctrl+click opens them
+  for (auto &lk : links_) {
+    if (lk.line != line) continue;
+    fl_color(rgbc(colors_.fg));
+    fl_line_style(FL_DOT, 1);
+    fl_xyline(x() + pad_ + lk.c0 * cw_, ry + ch_ - 1, x() + pad_ + lk.c1 * cw_ - 1);
+    fl_line_style(0);
+  }
+
   // the other cursor shapes, and an outline without the focus
   if (cursor_i >= 0 && !block) {
     int cx = x() + pad_ + row_cols_[cursor_i] * cw_, cwidth = cw_ * row_cells_[cursor_i].width;
@@ -930,6 +1018,11 @@ int TermWidget::handle(int e) {
       return 1;
 
     case FL_KEYBOARD: {
+      struct Typing {
+        bool &f;
+        explicit Typing(bool &x) : f(x) { f = true; }
+        ~Typing() { f = false; }
+      } typing(typing_);
       int key = Fl::event_key();
       int st = Fl::event_state();
       bool ctrl = st & FL_CTRL, shift = st & FL_SHIFT, alt = st & FL_ALT;
@@ -942,7 +1035,7 @@ int TermWidget::handle(int e) {
           // menu bar, preferences, moving tabs, split panes, find, moving
           // between panes
           case 'n': case 't': case 'w': case 'q': case 's': case 'm': case 'p':
-          case 'e': case 'o': case 'f':
+          case 'e': case 'o': case 'f': case 'i':
           case FL_Page_Up: case FL_Page_Down:
           case FL_Left: case FL_Right: case FL_Up: case FL_Down:
             return 0;
@@ -999,6 +1092,7 @@ int TermWidget::handle(int e) {
         if (ch == '\n') ch = '\r';
       vterm_keyboard_start_paste(vt_);
       write_pty(text.data(), text.size());
+      if (on_typed) on_typed(this, text.data(), text.size());
       vterm_keyboard_end_paste(vt_);
       if (scroll_) scroll_to(0);
       return 1;
@@ -1050,6 +1144,12 @@ int TermWidget::handle(int e) {
       }
       if (e == FL_MOVE) return 1;
       long line = abs_line_of_row(row);
+      if (e == FL_PUSH && Fl::event_button() == FL_LEFT_MOUSE && (Fl::event_state() & FL_CTRL)) {
+        if (const Link *lk = link_at(line, col)) {
+          fld::open_path(lk->uri);
+          return 1;
+        }
+      }
       if (e == FL_PUSH) {
         if (Fl::event_button() == FL_MIDDLE_MOUSE) { paste(0); return 1; }
         if (Fl::event_button() == FL_RIGHT_MOUSE) {

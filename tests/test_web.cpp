@@ -253,5 +253,43 @@ int main() {
   std::string fill = login_fill_script("me", "a'b\"c</script>");
   CHECK(fill.find("(\"me\", \"a'b\\\"c</script>\")") != std::string::npos);
   CHECK(std::string(login_capture_script()).find("flwebLogin") != std::string::npos);
+  // password CSV exports
+  {
+    std::string ff = "\"url\",\"username\",\"password\",\"httpRealm\"\r\n"
+                     "\"https://example.com:443/login\",\"me\",\"p,\"\"q\",\"\"\r\n"
+                     "\"ftp://x\",\"a\",\"b\",\"\"\r\n";
+    auto l = web::parse_password_csv(ff);
+    CHECK_EQ(l.size(), (size_t)1);
+    if (!l.empty()) {
+      CHECK_EQ(l[0].origin, std::string("https://example.com"));
+      CHECK_EQ(l[0].user, std::string("me"));
+      CHECK_EQ(l[0].pass, std::string("p,\"q"));
+    }
+    std::string chrome = "\xef\xbb\xbfname,url,username,password,note\nsite,http://a.org/x,u,pw,\nsite2,https://b.org,,pw2,\"multi\nline\"\n";
+    l = web::parse_password_csv(chrome);
+    CHECK_EQ(l.size(), (size_t)2);
+    if (l.size() == 2) {
+      CHECK_EQ(l[0].origin, std::string("http://a.org"));
+      CHECK_EQ(l[1].user, std::string(""));
+    }
+    std::string err;
+    CHECK(web::parse_password_csv("a,b\n1,2\n", &err).empty());
+    CHECK(!err.empty());
+  }
+  // userscripts
+  {
+    web::UserScript us;
+    std::string src = "// ==UserScript==\n// @name   Dark\n// @match  https://*.example.com/*\n// @exclude https://x.example.com/*\n"
+                      "// @run-at document-start\n// ==/UserScript==\ndocument.body.style.background='black';\n";
+    CHECK(web::parse_userscript(src, us));
+    CHECK_EQ(us.name, std::string("Dark"));
+    CHECK_EQ(us.matches.size(), (size_t)1);
+    CHECK_EQ(us.excludes[0], std::string("https://x.example.com/*"));
+    CHECK(us.at_start);
+    CHECK(!web::parse_userscript("alert(1)", us));
+    CHECK(!web::parse_userscript("// ==UserScript==\n// @name x\n// ==/UserScript==\n", us)); // no @match
+    CHECK(web::parse_userscript("// ==UserScript==\n// @include *\n// ==/UserScript==\n", us));
+    CHECK_EQ(us.matches[0], std::string("*://*/*"));
+  }
   return test_result("web");
 }

@@ -11,6 +11,8 @@
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Slider.H>
+#include <FL/Fl_Choice.H>
+#include <FL/Fl_Button.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 
@@ -43,6 +45,8 @@ struct Settings {
   bool playlist = false; // the sidebar shows
   bool shuffle = false;
   int repeat = 0;        // media::Repeat
+  bool replaygain = true; // volume levelling from ReplayGain tags
+  std::vector<double> eq = std::vector<double>(10, 0.0); // the equalizer, dB
 } S;
 
 static std::string settings_path() { return fld::fld_config_dir() + "/media-player.ini"; }
@@ -56,6 +60,9 @@ static void load_settings() {
   S.playlist = c.get_bool("Player", "ShowPlaylist", false);
   S.shuffle = c.get_bool("Player", "Shuffle", false);
   S.repeat = std::max(0, std::min(2, c.get_int("Player", "Repeat", 0)));
+  S.replaygain = c.get_bool("Player", "ReplayGain", true);
+  auto eq = fld::split(c.get("Player", "Equalizer", ""), ',');
+  for (size_t i = 0; i < eq.size() && i < 10; i++) S.eq[i] = atof(eq[i].c_str());
 }
 
 static void save_settings() {
@@ -66,6 +73,14 @@ static void save_settings() {
   c.set_bool("Player", "ShowPlaylist", S.playlist);
   c.set_bool("Player", "Shuffle", S.shuffle);
   c.set_int("Player", "Repeat", S.repeat);
+  c.set_bool("Player", "ReplayGain", S.replaygain);
+  std::string eq;
+  for (size_t i = 0; i < S.eq.size(); i++) {
+    char b[16];
+    snprintf(b, sizeof b, "%s%.1f", i ? "," : "", S.eq[i]);
+    eq += b;
+  }
+  c.set("Player", "Equalizer", eq);
   c.save(settings_path());
 }
 
@@ -611,8 +626,53 @@ static void toggle_mute() {
 }
 
 enum { M_OPEN = 1, M_ADD, M_URL, M_SUBS, M_SHOT, M_FULL, M_RESUME, M_LOOP, M_ABOUT, M_QUIT, M_SUB_OFF, M_WEB,
-       M_SIDEBAR, M_SHUFFLE, M_SAVE_LIST, M_REPEAT_OFF, M_REPEAT_ALL, M_REPEAT_ONE,
-       M_TRACK = 1000, M_SPEED = 2000, M_PLAYLIST = 3000 };
+       M_SIDEBAR, M_SHUFFLE, M_SAVE_LIST, M_REPEAT_OFF, M_REPEAT_ALL, M_REPEAT_ONE, M_REPLAYGAIN, M_EQUALIZER,
+       M_TRACK = 1000, M_SPEED = 2000, M_PLAYLIST = 3000, M_CHAPTER = 4000 };
+
+// the equalizer: ten sliders and a few presets; changes are heard at once
+static void equalizer_dialog() {
+  static const char *bands[] = {"31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"};
+  static const struct { const char *name; double g[10]; } presets[] = {
+      {"Flat", {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+      {"Bass", {6, 5, 4, 2, 0, 0, 0, 0, 0, 0}},
+      {"Treble", {0, 0, 0, 0, 0, 1, 2, 4, 5, 6}},
+      {"Voice", {-3, -2, 0, 2, 4, 4, 3, 1, 0, -2}},
+      {"Loudness", {5, 4, 2, 0, -1, 0, 1, 3, 4, 5}},
+  };
+  Fl_Double_Window d(460, 300, "Equalizer");
+  d.set_modal();
+  static Fl_Slider *sl[10];
+  for (int i = 0; i < 10; i++) {
+    sl[i] = new Fl_Slider(20 + i * 42, 20, 24, 200, bands[i]);
+    sl[i]->type(FL_VERT_NICE_SLIDER);
+    sl[i]->bounds(12, -24); // up is louder
+    sl[i]->step(0.5);
+    sl[i]->value(S.eq[(size_t)i]);
+    sl[i]->align(FL_ALIGN_BOTTOM);
+    sl[i]->labelsize(11);
+    sl[i]->callback([](Fl_Widget *, void *) {
+      for (int k = 0; k < 10; k++) S.eq[(size_t)k] = sl[k]->value();
+      g_player->set_equalizer(S.eq);
+    });
+  }
+  Fl_Choice *pre = new Fl_Choice(80, 252, 140, 28, "Preset:");
+  for (auto &p : presets) pre->add(p.name);
+  pre->callback([](Fl_Widget *w, void *) {
+    int i = ((Fl_Choice *)w)->value();
+    if (i < 0) return;
+    for (int k = 0; k < 10; k++) {
+      S.eq[(size_t)k] = presets[i].g[k];
+      sl[k]->value(S.eq[(size_t)k]);
+    }
+    g_player->set_equalizer(S.eq);
+  });
+  Fl_Button *close = new Fl_Button(350, 252, 90, 28, "Close");
+  close->callback([](Fl_Widget *w, void *) { w->window()->hide(); });
+  d.end();
+  d.show();
+  while (d.shown()) Fl::wait();
+  save_settings();
+}
 
 // ---- web videos: our own yt-dlp and QuickJS-ng --------------------------------------------
 
@@ -710,6 +770,27 @@ static void show_menu(int mx, int my) {
   };
   submenu("Video", "video", false);
   submenu("Audio", "audio", false);
+  // the audio submenu ends with the sound settings
+  m.pop_back();
+  m.back().flags |= FL_MENU_DIVIDER;
+  m.push_back({"Volume Levelling (ReplayGain)", 0, nullptr, (void *)M_REPLAYGAIN,
+               FL_MENU_TOGGLE | (S.replaygain ? FL_MENU_VALUE : 0)});
+  m.push_back({"Equalizer…", 0, nullptr, (void *)M_EQUALIZER, g_player->has_equalizer() ? 0 : FL_MENU_INACTIVE});
+  m.push_back({nullptr});
+  const auto &chapters = g_player->chapters();
+  if (!chapters.empty()) {
+    m.push_back({"Chapters", 0, nullptr, nullptr, FL_SUBMENU});
+    double pos = g_player->position();
+    for (size_t i = 0; i < chapters.size() && i < 100; i++) {
+      bool here = pos >= chapters[i].start && (i + 1 == chapters.size() || pos < chapters[i + 1].start);
+      std::string l = video::format_time(chapters[i].start) + "  " +
+                      (chapters[i].title.empty() ? "Chapter " + std::to_string(i + 1) : chapters[i].title);
+      g_labels.push_back(esc(l));
+      m.push_back({g_labels.back().c_str(), 0, nullptr, (void *)(long)(M_CHAPTER + i),
+                   FL_MENU_RADIO | (here ? FL_MENU_VALUE : 0)});
+    }
+    m.push_back({nullptr});
+  }
   submenu("Subtitles", "sub", true);
   m.push_back({"Speed", 0, nullptr, nullptr, FL_SUBMENU});
   for (size_t i = 0; i < video::speeds().size(); i++) {
@@ -751,7 +832,10 @@ static void show_menu(int mx, int my) {
   const Fl_Menu_Item *r = m[0].popup(mx, my);
   if (!r) return;
   long id = (long)r->user_data();
-  if (id >= M_PLAYLIST) {
+  if (id >= M_CHAPTER) {
+    size_t i = (size_t)(id - M_CHAPTER);
+    if (i < g_player->chapters().size()) g_player->seek(g_player->chapters()[i].start, true);
+  } else if (id >= M_PLAYLIST) {
     g_player->play_index((int)(id - M_PLAYLIST));
   } else if (id >= M_SPEED) {
     set_speed(video::speeds()[(size_t)(id - M_SPEED)]);
@@ -765,6 +849,14 @@ static void show_menu(int mx, int my) {
       case M_URL: open_url(); break;
       case M_SUBS: add_subtitles(); break;
       case M_SUB_OFF: g_player->subtitles_off(); break;
+      case M_REPLAYGAIN:
+        S.replaygain = !S.replaygain;
+        g_player->set_replaygain(S.replaygain);
+        save_settings();
+        g_surface->show_message(S.replaygain ? "Volume levelling: on (from the next track)"
+                                             : "Volume levelling: off (from the next track)");
+        break;
+      case M_EQUALIZER: equalizer_dialog(); break;
       case M_SHOT: take_screenshot(); break;
       case M_FULL: toggle_fullscreen(); break;
       case M_LOOP: toggle_loop(); break;
@@ -948,6 +1040,8 @@ int main(int argc, char **argv) {
 
   // GStreamer starts with the first file played (see Player::ensure_engine)
   g_player = new Player();
+  g_player->set_replaygain(S.replaygain);
+  g_player->set_equalizer(S.eq);
   g_player->set_resume(S.resume);
   g_player->set_volume(S.volume);
   g_player->set_shuffle(S.shuffle);

@@ -1,4 +1,5 @@
 #include "browser_util.h"
+#include <sstream>
 
 #include <algorithm>
 #include <cctype>
@@ -343,6 +344,96 @@ std::string login_fill_script(const std::string &user, const std::string &pass) 
          "  set(pw, p);\n"
          "  return 1;\n"
          "})(" + fld::Json(user).dump() + ", " + fld::Json(pass).dump() + ")";
+}
+
+std::vector<std::string> csv_record(const std::string &t, size_t &pos) {
+  std::vector<std::string> f;
+  std::string cur;
+  bool quoted = false, any = false;
+  for (; pos < t.size(); pos++) {
+    char c = t[pos];
+    any = true;
+    if (quoted) {
+      if (c == '"') {
+        if (pos + 1 < t.size() && t[pos + 1] == '"') {
+          cur += '"';
+          pos++;
+        } else {
+          quoted = false;
+        }
+      } else {
+        cur += c;
+      }
+    } else if (c == '"') {
+      quoted = true;
+    } else if (c == ',') {
+      f.push_back(cur);
+      cur.clear();
+    } else if (c == '\n' || c == '\r') {
+      if (c == '\r' && pos + 1 < t.size() && t[pos + 1] == '\n') pos++;
+      pos++;
+      break;
+    } else {
+      cur += c;
+    }
+  }
+  if (any) f.push_back(cur);
+  return f;
+}
+
+std::vector<CsvLogin> parse_password_csv(const std::string &text, std::string *err) {
+  std::vector<CsvLogin> out;
+  size_t pos = 0;
+  if (text.compare(0, 3, "\xef\xbb\xbf") == 0) pos = 3; // a byte order mark
+  std::vector<std::string> head = csv_record(text, pos);
+  int iu = -1, in = -1, ip = -1;
+  for (size_t i = 0; i < head.size(); i++) {
+    std::string h = head[i];
+    for (auto &ch : h) ch = (char)tolower((unsigned char)ch);
+    if (h == "url" || h == "origin" || h == "login_uri") iu = (int)i;
+    else if (h == "username" || h == "login_username") in = (int)i;
+    else if (h == "password" || h == "login_password") ip = (int)i;
+  }
+  if (iu < 0 || ip < 0) {
+    if (err) *err = "This is not a password export (it needs url and password columns).";
+    return out;
+  }
+  while (pos < text.size()) {
+    std::vector<std::string> r = csv_record(text, pos);
+    if ((int)r.size() <= std::max(iu, ip)) continue;
+    std::string origin = login_origin(r[(size_t)iu]);
+    if (origin.empty() || r[(size_t)ip].empty()) continue;
+    out.push_back({origin, in >= 0 && in < (int)r.size() ? r[(size_t)in] : "", r[(size_t)ip]});
+  }
+  return out;
+}
+
+bool parse_userscript(const std::string &text, UserScript &out) {
+  out = UserScript();
+  size_t a = text.find("// ==UserScript==");
+  size_t b = text.find("// ==/UserScript==");
+  if (a == std::string::npos || b == std::string::npos || b < a) return false;
+  std::istringstream in(text.substr(a, b - a));
+  std::string line;
+  while (std::getline(in, line)) {
+    size_t at = line.find('@');
+    if (at == std::string::npos) continue;
+    std::string rest = line.substr(at + 1);
+    size_t sp = rest.find_first_of(" \t");
+    std::string key = rest.substr(0, sp), val = sp == std::string::npos ? "" : rest.substr(sp);
+    size_t v0 = val.find_first_not_of(" \t"), v1 = val.find_last_not_of(" \t\r");
+    val = v0 == std::string::npos ? "" : val.substr(v0, v1 - v0 + 1);
+    if (key == "name") out.name = val;
+    else if (key == "match" || key == "include") {
+      if (val == "*") val = "*://*/*";
+      if (!val.empty()) out.matches.push_back(val);
+    } else if (key == "exclude" || key == "exclude-match") {
+      if (!val.empty()) out.excludes.push_back(val);
+    } else if (key == "run-at") out.at_start = val == "document-start";
+  }
+  out.source = text;
+  // without a @match it would run everywhere: only on purpose ("*")
+  return !out.matches.empty();
 }
 
 } // namespace web

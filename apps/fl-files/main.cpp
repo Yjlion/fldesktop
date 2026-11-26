@@ -45,10 +45,13 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
+#include <csignal>
+#include <sys/wait.h>
 #include <vector>
 
 #include "fld/fileops.h"
 #include "search.h"
+#include "preview_util.h"
 #include "rename_util.h"
 #ifdef FLD_HAVE_UDISKS
 #include "udclient.h"
@@ -68,6 +71,46 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "fld/text.h"
+
+
+// ---- quick look (Space) ------------------------------------------------------
+
+static time_t g_type_ahead_time = 0;
+static pid_t g_preview_pid = -1;
+static std::string g_preview_path;
+
+static void reap_preview(void *) {
+  if (g_preview_pid <= 0) return;
+  if (waitpid(g_preview_pid, nullptr, WNOHANG) != 0) g_preview_pid = -1; // ended (or not our child)
+  else Fl::repeat_timeout(1.0, reap_preview);
+}
+
+// Space shows the file in its viewer; Space on the same file again closes it
+static void quick_look(const std::string &path) {
+  if (g_preview_pid > 0 && kill(g_preview_pid, 0) == 0) {
+    kill(g_preview_pid, SIGTERM);
+    g_preview_pid = -1;
+    if (path == g_preview_path) return;
+  }
+  if (fld::is_dir(path)) return;
+  auto cmd = files::preview_command(path, fld::mime_type(path));
+  if (cmd.empty() || fld::which(cmd[0]).empty()) return; // nothing previews it
+  pid_t pid = fork();
+  if (pid == 0) {
+    setsid();
+    std::vector<char *> argv;
+    for (auto &a : cmd) argv.push_back(const_cast<char *>(a.c_str()));
+    argv.push_back(nullptr);
+    execvp(argv[0], argv.data());
+    _exit(127);
+  }
+  if (pid > 0) {
+    g_preview_pid = pid;
+    g_preview_path = path;
+    // reap it when it ends
+    Fl::add_timeout(1.0, reap_preview);
+  }
+}
 
 static const char *TRASH_URI = "trash:///";
 // the network neighbourhood (GVfs): servers and shares to connect to
@@ -2246,14 +2289,18 @@ int FileView::handle_view(int e) {
           return 1;
         case ' ':
           if (focus >= 0 && ctrl) { if (sel.count(focus)) sel.erase(focus); else sel.insert(focus); redraw(); return 1; }
+          // Space: quick look (unless a name with a space is being typed)
+          if (focus >= 0 && !(st & FL_ALT) && (type_ahead.empty() || time(nullptr) - g_type_ahead_time > 1)) {
+            quick_look(entry(focus).path);
+            return 1;
+          }
           break;
       }
       // type-ahead: jump to the first item starting with the typed text
       if (!ctrl && !(st & FL_ALT) && Fl::event_length() > 0 && (unsigned char)Fl::event_text()[0] >= ' ') {
-        static time_t last = 0;
         time_t t = time(nullptr);
-        if (t - last > 1) type_ahead.clear();
-        last = t;
+        if (t - g_type_ahead_time > 1) type_ahead.clear();
+        g_type_ahead_time = t;
         type_ahead += Fl::event_text();
         std::string ta = fld::lower(type_ahead);
         for (int i = 0; i < (int)items.size(); i++)

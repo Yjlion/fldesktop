@@ -1,8 +1,10 @@
+#include "fld/i18n.h"
 // fl-paint: a simple raster drawing program. Brush, eraser, lines,
 // rectangles and ellipses, fill, text, a rectangular selection (copy, cut,
 // paste, crop), a colour picker, a few layers, undo, zoom; PNG, JPEG, BMP and
 // GIF in, PNG out.
 #include <FL/Fl.H>
+#include <unistd.h>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -34,6 +36,7 @@
 #include "fld/util.h"
 #include "fld/widgets.h"
 #include "fld/window_size.h"
+#include "ora.h"
 #include "paint_util.h"
 
 using paint::Canvas;
@@ -325,7 +328,72 @@ void new_doc(int W, int H, bool white) {
   zoom_fit();
 }
 
+// an image's pixels as a canvas (any depth)
+Canvas canvas_of(const Fl_Image *img) {
+  int W = img->w(), H = img->h(), d = img->d();
+  const unsigned char *data = (const unsigned char *)img->data()[0];
+  int ld = img->ld() ? img->ld() : W * d;
+  Canvas c(W, H);
+  for (int y = 0; y < H; y++)
+    for (int x = 0; x < W; x++) {
+      const unsigned char *p = data + (size_t)y * ld + (size_t)x * d;
+      int r = p[0], g = d >= 3 ? p[1] : p[0], b = d >= 3 ? p[2] : p[0];
+      int a = d == 4 ? p[3] : d == 2 ? p[1] : 255;
+      c.px[(size_t)y * W + x] = paint::rgba(r, g, b, a);
+    }
+  return c;
+}
+
+bool load_ora(const std::string &path) {
+  std::string zip;
+  std::vector<ora::ZipEntry> entries;
+  if (!fld::read_file(path, zip, 1u << 30) || !ora::zip_read(zip, entries)) {
+    fl_alert("%s", fld::format(_("%s is not an OpenRaster file."), {path}).c_str());
+    return false;
+  }
+  auto find = [&](const std::string &n) -> const std::string * {
+    for (auto &e : entries)
+      if (e.name == n) return &e.data;
+    return nullptr;
+  };
+  int W = 0, H = 0;
+  std::vector<ora::LayerInfo> stack;
+  const std::string *sx = find("stack.xml");
+  if (!sx || !ora::parse_stack(*sx, W, H, stack)) {
+    fl_alert("%s", fld::format(_("%s has no layer list (stack.xml)."), {path}).c_str());
+    return false;
+  }
+  Doc doc;
+  // the file lists the top layer first
+  for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
+    const std::string *png = find(it->src);
+    if (!png) continue;
+    Fl_PNG_Image img(nullptr, (const unsigned char *)png->data(), (int)png->size());
+    if (img.fail() || img.w() <= 0) continue;
+    paint::Layer l;
+    l.name = it->name.empty() ? _("Layer") : it->name;
+    l.c = Canvas(W, H, 0);
+    paint::draw_over(l.c, canvas_of(&img), it->x, it->y);
+    l.visible = it->visible;
+    l.opacity = it->opacity;
+    doc.layers.push_back(l);
+  }
+  if (doc.layers.empty()) {
+    fl_alert("%s", fld::format(_("%s has no layers fl-paint can read."), {path}).c_str());
+    return false;
+  }
+  D = std::move(doc);
+  D.path = path;
+  D.active = (int)D.layers.size() - 1;
+  g_sel = paint::Rect();
+  fill_layers();
+  update_title();
+  zoom_fit();
+  return true;
+}
+
 bool load(const std::string &path) {
+  if (fld::lower(fld::extension(path)) == "ora") return load_ora(path);
   Fl_Shared_Image *si = Fl_Shared_Image::get(path.c_str());
   if (!si || si->fail() || si->w() <= 0) {
     if (si) si->release();
@@ -368,17 +436,59 @@ bool write_png(const Canvas &c, const std::string &path) {
   return fl_write_png(path.c_str(), buf.data(), c.w, c.h, 4) == 0;
 }
 
+// a canvas as PNG data
+bool png_bytes(const Canvas &c, std::string &out) {
+  std::string tmp = fld::getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-paint-" + std::to_string(getpid()) + ".png";
+  bool ok = write_png(c, tmp) && fld::read_file(tmp, out, 1u << 30);
+  unlink(tmp.c_str());
+  return ok;
+}
+
+// OpenRaster: every layer kept, with its name, opacity and visibility
+bool write_ora(const std::string &path) {
+  std::vector<ora::ZipEntry> entries = {{"mimetype", "image/openraster"}};
+  std::vector<ora::LayerInfo> stack;
+  for (size_t i = D.layers.size(); i-- > 0;) {
+    const paint::Layer &l = D.layers[i];
+    ora::LayerInfo info{l.name, "data/layer" + std::to_string(i) + ".png", 0, 0, l.opacity, l.visible};
+    std::string png;
+    if (!png_bytes(l.c, png)) return false;
+    entries.push_back({info.src, png});
+    stack.push_back(info);
+  }
+  entries.insert(entries.begin() + 1, ora::ZipEntry{"stack.xml", ora::stack_xml(img_w(), img_h(), stack)});
+  Canvas flat = paint::flatten(D.layers, 0);
+  std::string merged, thumb;
+  if (!png_bytes(flat, merged)) return false;
+  entries.push_back({"mergedimage.png", merged});
+  int tw = img_w(), th = img_h();
+  double f = std::min(1.0, 256.0 / std::max(tw, th));
+  if (png_bytes(paint::scale(flat, std::max(1, (int)(tw * f)), std::max(1, (int)(th * f))), thumb))
+    entries.push_back({"Thumbnails/thumbnail.png", thumb});
+  return fld::write_file(path, ora::zip_write(entries));
+}
+
 bool save_as();
 
 bool save() {
-  if (D.path.empty() || fld::extension(D.path) != "png") return save_as();
+  std::string ext = fld::lower(fld::extension(D.path));
+  if (ext == "ora") {
+    if (!write_ora(D.path)) {
+      fl_alert("Cannot write %s", D.path.c_str());
+      return false;
+    }
+    D.dirty = false;
+    update_title();
+    return true;
+  }
+  if (D.path.empty() || ext != "png") return save_as();
   if (!write_png(paint::flatten(D.layers, 0), D.path)) {
     fl_alert("Cannot write %s", D.path.c_str());
     return false;
   }
   D.dirty = false;
   update_title();
-  if (D.layers.size() > 1) status("Saved (the layers are merged in the PNG).");
+  if (D.layers.size() > 1) status(_("Saved (the layers are merged in the PNG; OpenRaster .ora keeps them)."));
   return true;
 }
 
@@ -386,14 +496,18 @@ bool save_as() {
   Fl_Native_File_Chooser fc;
   fc.title("Save Picture");
   fc.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
-  fc.filter("PNG image\t*.png");
+  fc.filter("PNG image\t*.png\nOpenRaster (keeps the layers)\t*.ora");
+  if (D.layers.size() > 1 || fld::lower(fld::extension(D.path)) == "ora") fc.filter_value(1);
   std::string dir = fld::user_dir("PICTURES");
   if (!dir.empty()) fc.directory(dir.c_str());
-  fc.preset_file(D.path.empty() ? "Untitled.png" : (fld::basename(D.path).substr(0, fld::basename(D.path).rfind('.')) + ".png").c_str());
+  std::string want = D.layers.size() > 1 || fld::lower(fld::extension(D.path)) == "ora" ? ".ora" : ".png";
+  fc.preset_file(D.path.empty() ? ("Untitled" + want).c_str()
+                                : (fld::basename(D.path).substr(0, fld::basename(D.path).rfind('.')) + want).c_str());
   fc.options(Fl_Native_File_Chooser::SAVEAS_CONFIRM);
   if (fc.show() != 0) return false;
   std::string p = fc.filename();
-  if (fld::extension(p) != "png") p += ".png";
+  std::string e = fld::lower(fld::extension(p));
+  if (e != "png" && e != "ora") p += fc.filter_value() == 1 ? ".ora" : ".png";
   D.path = p;
   return save();
 }
@@ -411,7 +525,7 @@ void open_dialog() {
   if (!confirm_discard()) return;
   Fl_Native_File_Chooser fc;
   fc.title("Open Picture");
-  fc.filter("Pictures\t*.{png,jpg,jpeg,bmp,gif}");
+  fc.filter("Pictures\t*.{png,jpg,jpeg,bmp,gif,ora}");
   std::string dir = fld::user_dir("PICTURES");
   if (!dir.empty()) fc.directory(dir.c_str());
   if (fc.show() != 0) return;

@@ -39,6 +39,8 @@ std::string did_save(const std::string &uri);
 std::string did_close(const std::string &uri);
 std::string completion(int id, const std::string &uri, int line, int col16);
 std::string definition(int id, const std::string &uri, int line, int col16);
+std::string formatting(int id, const std::string &uri, int tab_size, bool insert_spaces);
+std::string rename(int id, const std::string &uri, int line, int col16, const std::string &new_name);
 std::string shutdown(int id);
 std::string exit_notification();
 
@@ -70,6 +72,18 @@ Message parse(const std::string &body);
 
 std::vector<CompletionItem> parse_completion(const fld::Json &result);
 std::vector<Location> parse_locations(const fld::Json &result);
+
+// a change to a document: the range (UTF-16 columns) gets new_text
+struct TextEdit {
+  int line = 0, col = 0, end_line = 0, end_col = 0;
+  std::string new_text;
+};
+std::vector<TextEdit> parse_text_edits(const fld::Json &result);
+// a WorkspaceEdit (rename): the edits per file (changes or documentChanges)
+std::vector<std::pair<std::string, std::vector<TextEdit>>> parse_workspace_edit(const fld::Json &result);
+// the text with the edits made (they must not overlap); false when one is
+// outside the text
+bool apply_edits(std::string &text, std::vector<TextEdit> edits);
 
 // the answer to a request from the server that fl-edit does not handle
 std::string reply_null(int id);

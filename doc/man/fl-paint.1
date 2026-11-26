@@ -15,5 +15,11 @@ can be resized, its canvas enlarged, rotated and flipped.
 PNG, JPEG, BMP and GIF pictures open; pictures are saved as PNG (the layers
 merged). Copying also puts the selection on the clipboard as a PNG
 (\fBwl-copy\fR).
+.SH OPENRASTER
+Pictures with layers can be saved as OpenRaster (\fI.ora\fR), the layered format MyPaint,
+Krita and GIMP read and write: every layer is kept with its name, opacity and visibility, and
+the file also holds the merged picture and a thumbnail. Save As offers it when the picture
+has more than one layer; PNG merges the layers. OpenRaster files from other programs open
+with their layers (offsets are kept, groups are flattened into the layer list).
 .SH SEE ALSO
 \fBfl-view\fR(1), \fBfl-snip\fR(1)

@@ -123,6 +123,16 @@ public:
       more->tooltip(_("Processor, memory, graphics, disks, devices, batteries and temperatures in detail"));
       more->callback([](Fl_Widget *, void *) { spawn({"fl-sysinfo"}); });
     }
+    // pages this build does not have, and why
+    if (!skipped_pages().empty()) {
+      std::string missing;
+      for (auto &s : skipped_pages()) missing += (missing.empty() ? "" : ", ") + s.first + " (" + s.second + ")";
+      // the label is not copied: it has to stay
+      static std::string text;
+      text = format(_("Not in this build (a library was missing when fl-settings was built): %s"), {missing});
+      f.space(10);
+      f.note(text.c_str(), 2);
+    }
     g->end();
     end();
   }

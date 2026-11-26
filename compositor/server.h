@@ -166,6 +166,9 @@ struct flwm_config {
 	bool tap_to_click, natural_scroll;
 	bool left_handed, disable_while_typing, middle_emulation;
 	char *scroll_method; /* two-finger, edge, none (NULL = device default) */
+	/* [tablet]: pen tablets */
+	char *tablet_output;     /* the output the tablet covers (NULL: all of them) */
+	bool tablet_left_handed; /* turned by 180 degrees */
 	double pointer_accel;
 	/* cursor */
 	char *cursor_theme;

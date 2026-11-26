@@ -63,6 +63,10 @@ With \fBrestore_session=true\fR in [behaviour] (Settings > Windows & Workspaces)
 the open windows to \fI$XDG_STATE_HOME/fldesktop/session.ini\fR when the session ends;
 \fBfl-autostart\fR(1) starts their programs at the next login and fl-wm puts each window back on
 its workspace, output, place and size (in the first three minutes of the session).
+.SH PEN TABLETS
+\fB[tablet]\fR in wm.ini (Settings > Tablet & Pen): \fBoutput\fR maps the whole tablet to one
+output (by its connector name, such as HDMI-A-1; all outputs when not set) and
+\fBleft_handed=true\fR turns it around.
 .SH TABLET MODE
 When a convertible is folded into a tablet (libinput's tablet mode switch),
 the on-screen keyboard (\fBfl-osk\fR(1)) comes up when a text field gets the

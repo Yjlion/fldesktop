@@ -118,6 +118,12 @@ scale=1
 #transform=normal
 #enabled=true
 
+[tablet]
+# the output a pen tablet covers (all of them when not set)
+#output=HDMI-A-1
+# turned around for left-handed use
+left_handed=false
+
 [keys]
 # These lines add to (or replace) the built-in bindings; put
 # "defaults=false" first to start from an empty list instead.

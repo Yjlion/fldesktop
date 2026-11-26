@@ -1,4 +1,4 @@
-// Appearance: theme, accent, fonts, icons, cursor, title bars, wallpaper
+// Appearance: theme, accent, fonts, icons, cursor, title bars (the wallpaper: wallpaper.cpp)
 #include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
@@ -81,13 +81,11 @@ std::string choice_text(Fl_Choice *c, const std::vector<std::string> &items) {
 class AppearancePage : public Fl_Group {
 public:
   ConfigFile desk{desktop_ini_path()}, wm{wm_ini_path()};
-  Fl_Choice *theme, *style, *ui_font, *mono_font, *icons, *cursors, *titlebar, *panel_theme, *wp_mode;
+  Fl_Choice *theme, *style, *ui_font, *mono_font, *icons, *cursors, *titlebar, *panel_theme;
   Fl_Spinner *radius, *ui_size, *mono_size, *cursor_size;
   AccentSwatches *accent;
   Fl_Check_Button *icons_follow;
   Fl_Check_Button *toolkit_colors;
-  WallpaperGallery *gallery;
-  std::string wallpaper;
   std::vector<std::string> fonts, icon_themes, cursor_themes;
   Fl_Color accent_color;
 
@@ -233,34 +231,6 @@ public:
     cursor_size->value(wm.ini.get_int("cursor", "size", 24));
     cursor_size->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
 
-    f.heading(_("Wallpaper"));
-    f.row("", 96, wx, wy, ww);
-    gallery = new WallpaperGallery(wx, wy, ww, 96);
-    gallery->load(WallpaperGallery::default_dirs());
-    gallery->callback([](Fl_Widget *, void *d) {
-      AppearancePage *p = (AppearancePage *)d;
-      p->wallpaper = p->gallery->value();
-      p->save();
-    }, this);
-    f.row("", 28, wx, wy, ww);
-    Fl_Button *choose = new Fl_Button(wx, wy, 140, 28, _("Other Image…"));
-    choose->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->choose_wallpaper(); }, this);
-    wp_mode = new Fl_Choice(wx + 214, wy, 140, 28, _("Fit:"));
-    const char *modes[] = {"fill", "fit", "stretch", "center", "tile"};
-    std::string cur_mode = desk.ini.get("Desktop", "WallpaperMode", "fill");
-    for (int i = 0; i < 5; i++) {
-      std::string m = modes[i];
-      m[0] = (char)toupper((unsigned char)m[0]);
-      wp_mode->add(m.c_str());
-      if (cur_mode == modes[i]) wp_mode->value(i);
-    }
-    if (wp_mode->value() < 0) wp_mode->value(0);
-    wp_mode->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
-    std::string wp = expand_tilde(desk.ini.get("Desktop", "Wallpaper", ""));
-    if (wp.empty() || !file_exists(wp)) wp = fld_data_dir() + "/backgrounds/default.svg";
-    wallpaper = wp;
-    gallery->add_file(wp);
-    gallery->value(wp);
     f.space(4);
     f.note(_("The panel and desktop change right away; other applications use the new style the next time they start."), 2);
     g->end();
@@ -298,19 +268,6 @@ public:
     return fl_rgb_color((v >> 16) & 255, (v >> 8) & 255, v & 255);
   }
 
-  void choose_wallpaper() {
-    Fl_File_Chooser fc(dirname(wallpaper).c_str(), "Images (*.{png,jpg,jpeg,svg,gif,bmp,webp})",
-                       Fl_File_Chooser::SINGLE, "Choose Wallpaper");
-    fc.preview(1);
-    fc.show();
-    while (fc.shown()) Fl::wait();
-    if (!fc.value()) return;
-    wallpaper = fc.value();
-    gallery->add_file(wallpaper);
-    gallery->value(wallpaper);
-    save();
-  }
-
   void save() {
     desk.ini.load(desk.path); // pick up changes made elsewhere first
     wm.ini.load(wm.path);
@@ -339,9 +296,6 @@ public:
     desk.ini.set("General", "IconTheme", it);
     desk.ini.set_bool("Appearance", "IconsFollowAccent", icons_follow->value() != 0);
     desk.ini.set_bool("Appearance", "ToolkitColors", toolkit_colors->value() != 0);
-    desk.ini.set("Desktop", "Wallpaper", wallpaper);
-    const char *modes[] = {"fill", "fit", "stretch", "center", "tile"};
-    desk.ini.set("Desktop", "WallpaperMode", modes[std::max(0, wp_mode->value())]);
     desk.save();
     export_toolkit_theme(desk.ini); // GTK and Qt programs follow
     wm.ini.set("cursor", "theme", choice_text(cursors, cursor_themes));
@@ -381,7 +335,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new AppearancePage(x, y, w
 
 PageInfo page_appearance() {
   return {"appearance", _("Appearance"), "preferences-desktop-theme", "Personal",
-          _("theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar panel taskbar"), create};
+          _("theme dark light accent color style scheme widgets buttons rounded flat font icons cursor title bar panel taskbar"), create};
 }
 
 } // namespace fld

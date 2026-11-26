@@ -248,6 +248,9 @@ WallpaperGallery::~WallpaperGallery() = default;
 
 std::vector<std::string> WallpaperGallery::default_dirs() {
   std::vector<std::string> d{data_home() + "/backgrounds", fld_data_dir() + "/backgrounds"};
+  // the distribution's wallpapers and the user's own folder of them
+  for (std::string extra : {std::string("/usr/share/backgrounds"), user_dir("PICTURES") + "/Wallpapers"})
+    if (is_dir(extra)) d.push_back(extra);
   return d;
 }
 

@@ -383,6 +383,8 @@ int main(int argc, char **argv) {
     }
     if (a == "--list") {
       for (auto &p : fld::all_pages()) printf("%-12s %s\n", p.id.c_str(), p.title.c_str());
+      for (auto &s : fld::skipped_pages())
+        printf("%-12s (not in this build: needs %s)\n", s.first.c_str(), s.second.c_str());
       return 0;
     }
     if (a[0] != '-') start = a;
@@ -390,19 +392,23 @@ int main(int argc, char **argv) {
   fld::init_app("fl-settings", argc, argv);
   Fl::lock(); // pages with background work (sound, network) report via Fl::awake
 
-  // other settings programs, not the apps of pages we have (fl-<page>.desktop,
-  // or named here)
-  std::set<std::string> ours{"fl-settings.desktop"};
-  for (auto &p : fld::all_pages()) {
-    ours.insert("fl-" + p.id + ".desktop");
-    if (p.id == "updates") ours.insert("fl-packages.desktop");
-    if (p.id == "sound") ours.insert("fl-mixer.desktop");
-  }
-  for (auto &d : fld::all_applications()) {
-    bool settings = std::find(d.categories.begin(), d.categories.end(), "Settings") != d.categories.end();
-    if (!settings || ours.count(d.id)) continue;
-    g_external.push_back(d);
-  }
+  // other settings programs ("More"): read after the window shows, as
+  // reading every desktop entry takes a moment
+  Fl::add_timeout(0.2, [](void *) {
+    // not the apps of pages we have (fl-<page>.desktop, or named here)
+    std::set<std::string> ours{"fl-settings.desktop"};
+    for (auto &p : fld::all_pages()) {
+      ours.insert("fl-" + p.id + ".desktop");
+      if (p.id == "updates") ours.insert("fl-packages.desktop");
+      if (p.id == "sound") ours.insert("fl-mixer.desktop");
+    }
+    for (auto &d : fld::all_applications()) {
+      bool settings = std::find(d.categories.begin(), d.categories.end(), "Settings") != d.categories.end();
+      if (!settings || ours.count(d.id)) continue;
+      g_external.push_back(d);
+    }
+    if (!g_external.empty()) rebuild_list();
+  });
 
   // fits small screens; the page area scrolls when it is shorter than a page
   int sx, sy, sw, sh;

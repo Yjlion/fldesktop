@@ -397,6 +397,9 @@ bool config_load(struct flwm_config *c, const char *path) {
 				g->type = FLWM_ACTION_NONE;
 				if (*v && strcasecmp(v, "none")) parse_action(v, &g->type, &g->arg);
 			}
+		} else if (!strcasecmp(section, "tablet")) {
+			if (!strcmp(k, "output")) set_str(&c->tablet_output, v);
+			else if (!strcmp(k, "left_handed")) c->tablet_left_handed = parse_bool(v);
 		} else if (!strcasecmp(section, "cursor")) {
 			if (!strcmp(k, "theme")) set_str(&c->cursor_theme, v);
 			else if (!strcmp(k, "size")) c->cursor_size = atoi(v);
@@ -529,6 +532,7 @@ void config_free(struct flwm_config *c) {
 	free(c->launcher_cmd);
 	free(c->lock_cmd);
 	free(c->scroll_method);
+	free(c->tablet_output);
 	free(c->gesture_up.arg);
 	free(c->gesture_down.arg);
 	for (int i = 0; i < 4; i++) free(c->hot_corner[i].arg);

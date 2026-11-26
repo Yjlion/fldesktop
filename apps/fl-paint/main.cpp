@@ -37,7 +37,9 @@
 #include "fld/widgets.h"
 #include "fld/window_size.h"
 #include "ora.h"
+#include "fld/ini.h"
 #include "paint_util.h"
+#include "pen.h"
 
 using paint::Canvas;
 using paint::Color;
@@ -63,6 +65,11 @@ struct Doc {
 Tool g_tool = BRUSH;
 Color g_color = paint::rgba(0x20, 0x20, 0x20);
 double g_size = 6;
+bool g_pen_pressure = false;  // [Paint] PenPressure: the pen's pressure sets the brush size
+// the brush size now: with a pen pressing, by its pressure
+static double brush_size() {
+  return g_pen_pressure && pen::active() ? paint::pressure_size(g_size, pen::pressure()) : g_size;
+}
 bool g_fill_shapes = false;
 paint::Rect g_sel; // the selection, empty when none
 Canvas g_clip;     // copied pixels
@@ -241,7 +248,8 @@ public:
         }
         before = cur();
         dragging = true;
-        if (g_tool == BRUSH || g_tool == ERASER) paint::stroke(cur(), ix, iy, ix, iy, g_color, g_size, g_tool == ERASER);
+        if (g_tool == BRUSH || g_tool == ERASER)
+          paint::stroke(cur(), ix, iy, ix, iy, g_color, brush_size(), g_tool == ERASER);
         changed();
         return 1;
       }
@@ -249,7 +257,7 @@ public:
         if (!dragging) return 1;
         to_image(ix, iy);
         if (g_tool == BRUSH || g_tool == ERASER) {
-          paint::stroke(cur(), lx, ly, ix, iy, g_color, g_size, g_tool == ERASER);
+          paint::stroke(cur(), lx, ly, ix, iy, g_color, brush_size(), g_tool == ERASER);
         } else if (g_tool == SELECT) {
           g_sel = paint::span((int)x0, (int)y0, (int)ix, (int)iy, img_w(), img_h());
           redraw();
@@ -753,6 +761,17 @@ void menu_cb(Fl_Widget *, void *v) {
     if (ask_size("New Picture", W, H, nullptr)) new_doc(W, H, true);
   } else if (a == "open") open_dialog();
   else if (a == "save") save();
+  else if (a == "pen") {
+    g_pen_pressure = !g_pen_pressure;
+    fld::Ini c;
+    std::string p = fld::fld_config_dir() + "/paint.ini";
+    c.load(p);
+    c.set_bool("Paint", "PenPressure", g_pen_pressure);
+    c.save(p);
+    if (g_pen_pressure && !pen::start(g_win))
+      fl_message("%s", "The pen's pressure is used from the next start of Paint (it needs a tablet and the "
+                       "Wayland tablet protocol).");
+  }
   else if (a == "saveas") save_as();
   else if (a == "quit") {
     if (confirm_discard()) g_win->hide();
@@ -865,7 +884,8 @@ int main(int argc, char **argv) {
                {"&View/Zoom &In", FL_CTRL + '=', "zoomin", 0},
                {"&View/Zoom &Out", FL_CTRL + '-', "zoomout", 0},
                {"&View/&Actual Size", FL_CTRL + '0', "zoom1", 0},
-               {"&View/&Fit", FL_CTRL + '9', "zoomfit", 0},
+               {"&View/&Fit", FL_CTRL + '9', "zoomfit", FL_MENU_DIVIDER},
+               {"&View/&Pen Pressure", 0, "pen", FL_MENU_TOGGLE},
                {"&Help/&About", 0, "about", 0}};
   for (auto &m : items) mb->add(m.path, m.key, menu_cb, (void *)m.act, m.flags);
 
@@ -996,6 +1016,19 @@ int main(int argc, char **argv) {
   set_tool(BRUSH);
   fld::remember_window_size(g_win, "fl-paint");
   g_win->show();
+  {
+    // the pen: only bound when asked for, as the compositor then stops
+    // turning it into a pointer for this window (pen.h)
+    fld::Ini c;
+    c.load(fld::fld_config_dir() + "/paint.ini");
+    g_pen_pressure = c.get_bool("Paint", "PenPressure", false);
+    if (g_pen_pressure) pen::start(g_win);
+    for (int i = 0; i < mb->size(); i++)
+      if (const char *t = mb->menu()[i].label())
+        if (!strcmp(t, "&Pen Pressure")) {
+          if (g_pen_pressure) ((Fl_Menu_Item *)&mb->menu()[i])->set();
+        }
+  }
   if (file.empty() || !load(file)) new_doc(1024, 768, true);
   return Fl::run();
 }

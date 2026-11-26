@@ -113,6 +113,7 @@ void save_settings() {
   c.remove("Files", "Zoom");
   c.set_int("Files", "IconSize", kZoomPx[S.def.zoom]);
   c.set_bool("Files", "Thumbnails", S.thumbnails);
+  c.set_bool("Files", "GitMarks", S.git_marks);
   c.set_int("Files", "Sort", S.def.sort);
   c.set_bool("Files", "SortDescending", S.def.desc);
   c.set_bool("Files", "RememberPerFolder", S.per_folder);
@@ -145,6 +146,7 @@ static void load_settings() {
   S.def.view = (ViewMode)std::max(0, std::min(2, view));
   S.def.zoom = read_zoom(c, "Files", kZoomDefault);
   S.thumbnails = c.get_bool("Files", "Thumbnails", true);
+  S.git_marks = c.get_bool("Files", "GitMarks", true);
   S.def.sort = (SortKey)std::max(0, std::min(SORT_COUNT - 1, c.get_int("Files", "Sort", 0)));
   S.def.desc = c.get_bool("Files", "SortDescending", false);
   S.per_folder = c.get_bool("Files", "RememberPerFolder", true);
@@ -358,6 +360,11 @@ static void build_menu(fld::Menu &m, bool for_bar) {
       S.thumbnails = !S.thumbnails;
       save_settings();
       g_view->clear_thumbs();
+      refresh();
+    });
+    m.toggle("Show &Git Status", S.git_marks, [] {
+      S.git_marks = !S.git_marks;
+      save_settings();
       refresh();
     });
     m.toggle("Show &Menu Bar", S.menubar, [] { toggle_menubar(); });

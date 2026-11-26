@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <vector>
 
+#include "fld/git_status.h"
 #include "fld/ini.h"
 #include "fld/menus.h"
 #include "fld/tab_bar.h"
@@ -47,7 +48,7 @@
 
 struct Settings {
   bool line_numbers = true, wrap = false, highlight = true, spaces = false, auto_indent = true;
-  bool brackets = true, minimap = true, lsp = true, restore_session = true, spell = true;
+  bool brackets = true, minimap = true, lsp = true, restore_session = true, spell = true, git_gutter = true;
   int font_size = 14, tab_width = 4;
   std::string theme = "auto";
   std::vector<std::string> recent;
@@ -105,6 +106,7 @@ public:
   Editor(int x, int y, int w, int h, Doc *d) : Fl_Text_Editor(x, y, w, h), doc(d) {}
   int handle(int e) override;
   void draw() override;
+  void draw_git_marks();
   int handle_carets(int k, int st);
   void multi_edit(const std::string &text, int dir);
   void move_carets(int k);
@@ -130,6 +132,7 @@ static const int MINIMAP_W = 96;
 class Doc : public Fl_Group {
 public:
   std::string path;
+  std::vector<fld::git::Hunk> git_hunks; // the saved file against git (gutter marks)
   bool modified = false;
   bool loading = false;
   bool is_new = false;             // a path that does not exist yet: created on save
@@ -444,7 +447,13 @@ public:
     apply_settings();
     update_tab_label(this);
     lsp_reopen();
+    refresh_git();
     return true;
+  }
+
+  void refresh_git() {
+    git_hunks = S.git_gutter && !path.empty() ? fld::git::diff_lines(path) : std::vector<fld::git::Hunk>{};
+    if (ed) ed->redraw();
   }
 
   bool save(const std::string &p) {
@@ -470,6 +479,7 @@ public:
     modified = false;
     is_new = false;
     update_tab_label(this);
+    refresh_git();
     return true;
   }
 };

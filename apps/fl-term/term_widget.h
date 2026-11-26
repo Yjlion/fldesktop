@@ -3,6 +3,7 @@
 #include <functional>
 #include <FL/Fl_Widget.H>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 #include <sys/types.h>
@@ -121,6 +122,19 @@ private:
     std::string uri;
   };
   std::vector<Link> links_;
+  // Sixel images, anchored like links at an absolute line and a column
+  struct SixelImage {
+    long line;
+    int col, rows;
+    std::unique_ptr<class Fl_RGB_Image> img;
+    std::vector<unsigned char> pixels;  // what img shows
+  };
+  std::vector<SixelImage> images_;
+  std::string dcs_buf_;
+  bool dcs_sixel_ = false;
+  int pending_rows_ = 0;  // cursor movement after an image (applied after the ST)
+  void sixel_done(const std::string &params);
+  void write_vt(const char *buf, size_t n);  // to libvterm, splitting at string terminators
   bool link_open_ = false;
   long link_line_ = 0;
   int link_col_ = 0;
@@ -128,6 +142,7 @@ private:
   void osc8(const std::string &payload);
   const Link *link_at(long line, int col) const;
   static int osc_cb(int command, VTermStringFragment frag, void *user);
+  static int dcs_cb(const char *command, size_t commandlen, VTermStringFragment frag, void *user);
   // OSC 52: programs may set the clipboard (not read it)
   std::string sel_buf_;
   bool typing_ = false; // the key or paste being handled: output is the user's

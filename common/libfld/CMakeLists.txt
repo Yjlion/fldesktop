@@ -1,5 +1,6 @@
 add_library(fld STATIC
   util.cpp
+  git_status.cpp
   text.cpp
   frame_watch.cpp
   window_size.cpp

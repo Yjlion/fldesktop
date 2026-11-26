@@ -45,6 +45,12 @@ static double disc_cover(double d, double r) {
   return r + 0.5 - d;
 }
 
+double pressure_size(double size, double pressure) {
+  if (!(pressure >= 0)) pressure = 0;  // NaN too
+  if (pressure > 1) pressure = 1;
+  return std::max(1.0, size * (0.2 + 0.8 * pressure));
+}
+
 void stroke(Canvas &c, double x0, double y0, double x1, double y1, Color col, double size, bool erase) {
   double r = std::max(0.5, size / 2);
   // the distance of each pixel to the segment: one pass over its bounding box

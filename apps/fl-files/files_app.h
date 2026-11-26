@@ -67,6 +67,7 @@
 #include "gvfs_ui.h"
 #endif
 #include "fld/desktop_entry.h"
+#include "fld/git_status.h"
 #include "fld/icons.h"
 #include "fld/ini.h"
 #include "fld/menus.h"
@@ -147,6 +148,7 @@ struct Place {
 struct Settings {
   bool show_hidden = false;
   bool thumbnails = true;
+  bool git_marks = true;  // a dot on files with uncommitted changes in git
   ViewState def;               // defaults for folders without their own settings
   bool per_folder = true;      // remember view and sort per folder
   bool folders_first = true;
@@ -313,11 +315,29 @@ struct Entry {
   fld::TrashItem trash;       // in the trash view
   std::string target;         // in the network view: the location it opens
   std::string icon_name;      // its own icon (network view)
+  fld::git::State git = fld::git::State::Clean;
   const std::string &get_mime() {
     if (mime.empty()) mime = is_dir ? "inode/directory" : fld::mime_type(path);
     return mime;
   }
 };
+
+// the git mark: a dot in the corner of an item's icon (none when clean or ignored)
+inline void draw_git_mark(fld::git::State st, int cx, int cy) {
+  using fld::git::State;
+  Fl_Color c;
+  switch (st) {
+    case State::Modified: c = fl_rgb_color(0xe5, 0xa5, 0x0a); break;
+    case State::Added: case State::Untracked: c = fl_rgb_color(0x2e, 0xc2, 0x7e); break;
+    case State::Renamed: c = fl_rgb_color(0x35, 0x84, 0xe4); break;
+    case State::Deleted: case State::Conflicted: c = fl_rgb_color(0xe0, 0x1b, 0x24); break;
+    default: return;
+  }
+  fl_color(fld::palette().bg2);
+  fl_pie(cx - 6, cy - 6, 12, 12, 0, 360);
+  fl_color(c);
+  fl_pie(cx - 4, cy - 4, 8, 8, 0, 360);
+}
 
 struct PaneGuard {
   Tab *t = nullptr;
@@ -730,6 +750,7 @@ public:
         Entry e;
         if (stat_entry(fld::path_join(dir, n), e)) all.push_back(e);
       }
+      mark_git(dir);
     }
     top = 0;
     apply_filter_sort();
@@ -737,6 +758,16 @@ public:
       for (int i = 0; i < (int)items.size(); i++)
         if (entry(i).name == select_name) { sel = {i}; focus = anchor = i; ensure_visible(i); }
     }
+  }
+
+  // the git state of each entry, when the folder is in a work tree
+  void mark_git(const std::string &dir) {
+    if (!S.git_marks || is_remote(dir)) return;
+    std::string top_dir = fld::git::work_tree(dir);
+    if (top_dir.empty()) return;
+    auto st = fld::git::status(top_dir);
+    std::string rel = dir.size() > top_dir.size() ? dir.substr(top_dir.size() + 1) + "/" : "";
+    for (auto &e : all) e.git = fld::git::state_of(st, rel + e.name, e.is_dir);
   }
 
   // search results arrive in batches
@@ -942,6 +973,7 @@ public:
         }
         Fl_Color fg = s ? p.accent_fg : p.fg;
         if (Fl_Image *ic = open_icon ? open_icon : icon_for(e, false)) draw_icon(ic, ix + 8, iy + (ih - SM) / 2);
+        draw_git_mark(e.git, ix + 8 + SM - 2, iy + (ih - SM) / 2 + SM - 2);
         fl_font(FL_HELVETICA, 13);
         fl_color(cut || ghosted ? (s ? fl_color_average(fg, sel_bg, 0.6f) : p.fg_dim) : fg);
         int cx = ix + 8;
@@ -966,6 +998,7 @@ public:
           fl_rounded_rectf(ix, iy, iw - 6, ih, 4);
         }
         if (Fl_Image *ic = open_icon ? open_icon : icon_for(e, false)) draw_icon(ic, ix + 4, iy + (ih - SM) / 2);
+        draw_git_mark(e.git, ix + 4 + SM - 2, iy + (ih - SM) / 2 + SM - 2);
         fl_font(FL_HELVETICA, 13);
         fl_color(s ? (ghosted ? fl_color_average(p.accent_fg, sel_bg, 0.6f) : p.accent_fg) : cut || ghosted ? p.fg_dim : p.fg);
         fl_draw(fld::escape_at(fld::ellipsize(e.name, iw - SM - 20)).c_str(), ix + SM + 10, iy, iw - SM - 20, ih,
@@ -996,6 +1029,7 @@ public:
         if (e.is_link) {
           if (Fl_Image *em = fld::icon("emblem-symbolic-link", 16)) em->draw(ix + iw / 2 + B / 4, iy + B - 12);
         }
+        draw_git_mark(e.git, ix + iw / 2 - B / 2 + 6, iy + B - 2);
         fl_font(FL_HELVETICA, 12);
         auto lines = wrap_name(e.name, iw - 16, s ? 3 : 2);
         int ly = iy + B + 8;

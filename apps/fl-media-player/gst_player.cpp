@@ -48,13 +48,59 @@ bool Player::ensure_engine() {
   vsink_ = fgst::make_sink(&slot_);
   if (vsink_) g_object_set(playbin_, "video-sink", vsink_, NULL);
   fgst::set_scale_to(vsink_, scale_w_, scale_h_);
-  // keep the pitch when playing faster or slower
-  if (GstElement *st = gst_element_factory_make("scaletempo", nullptr)) g_object_set(playbin_, "audio-filter", st, NULL);
+  build_filters();
   if (getenv("FLD_VIDEO_DEBUG")) gst_debug_set_threshold_from_string("*:2", TRUE);
   set_volume(volume_);
   set_mute(muted_);
   Fl::add_timeout(0.05, poll_cb, this);
   return true;
+}
+
+// the audio filters: scaletempo keeps the pitch at other speeds, rgvolume
+// levels the volume from ReplayGain tags, the equalizer shapes the sound
+void Player::build_filters() {
+  filters_dirty_ = false;
+  eq_ = nullptr;
+  GstElement *bin = gst_bin_new("audiofilters");
+  std::vector<GstElement *> chain;
+  for (const char *name : {"scaletempo", replaygain_ ? "rgvolume" : "", "audioconvert", "equalizer-10bands"}) {
+    if (!*name) continue;
+    GstElement *e = gst_element_factory_make(name, nullptr);
+    if (!e) continue;
+    if (!strcmp(name, "equalizer-10bands")) eq_ = e;
+    gst_bin_add(GST_BIN(bin), e);
+    if (!chain.empty()) gst_element_link(chain.back(), e);
+    chain.push_back(e);
+  }
+  if (chain.empty()) {
+    gst_object_unref(bin);
+    return;
+  }
+  GstPad *sink = gst_element_get_static_pad(chain.front(), "sink");
+  GstPad *src = gst_element_get_static_pad(chain.back(), "src");
+  gst_element_add_pad(bin, gst_ghost_pad_new("sink", sink));
+  gst_element_add_pad(bin, gst_ghost_pad_new("src", src));
+  gst_object_unref(sink);
+  gst_object_unref(src);
+  g_object_set(playbin_, "audio-filter", bin, NULL);
+  set_equalizer(eq_gains_);
+}
+
+void Player::set_replaygain(bool on) {
+  if (on == replaygain_) return;
+  replaygain_ = on;
+  filters_dirty_ = true;
+}
+
+void Player::set_equalizer(const std::vector<double> &gains) {
+  for (size_t i = 0; i < eq_gains_.size() && i < gains.size(); i++)
+    eq_gains_[i] = std::max(-24.0, std::min(12.0, gains[i]));
+  if (!eq_) return;
+  for (int i = 0; i < 10; i++) {
+    char band[8];
+    snprintf(band, sizeof band, "band%d", i);
+    g_object_set(eq_, band, eq_gains_[(size_t)i], NULL);
+  }
 }
 
 void Player::set_scale_to(int w, int h) {
@@ -317,7 +363,9 @@ void Player::start_item(int i, bool play) {
   last_pos_ = last_dur_ = -1;
   rate_ = 1.0;
   slot_.clear();
+  chapters_.clear();
   gst_element_set_state(playbin_, GST_STATE_READY);
+  if (filters_dirty_) build_filters();
   std::string uri = item.resolved.empty() ? video::to_uri(item.location) : item.resolved;
   std::string sub = item.resolved.empty() ? video::find_subtitle(item.location) : "";
   g_object_set(playbin_, "uri", uri.c_str(), "suburi", sub.empty() ? nullptr : video::to_uri(sub).c_str(), NULL);
@@ -783,6 +831,34 @@ void Player::handle(GstMessage *m) {
         if (on_error) on_error(msg);
       }
       break;
+    case GST_MESSAGE_TOC: {
+      GstToc *toc = nullptr;
+      gst_message_parse_toc(m, &toc, nullptr);
+      if (!toc) break;
+      chapters_.clear();
+      // chapters are entries of type chapter, possibly inside an edition
+      std::vector<GstTocEntry *> stack;
+      for (GList *l = gst_toc_get_entries(toc); l; l = l->next) stack.push_back((GstTocEntry *)l->data);
+      for (size_t k = 0; k < stack.size(); k++) {
+        GstTocEntry *e = stack[k];
+        if (gst_toc_entry_get_entry_type(e) == GST_TOC_ENTRY_TYPE_CHAPTER) {
+          gint64 start = 0, stop = 0;
+          gst_toc_entry_get_start_stop_times(e, &start, &stop);
+          std::string title;
+          if (GstTagList *tl = gst_toc_entry_get_tags(e)) {
+            gchar *t = nullptr;
+            if (gst_tag_list_get_string(tl, GST_TAG_TITLE, &t) && t) title = t;
+            g_free(t);
+          }
+          chapters_.push_back({start / 1e9, title});
+        }
+        for (GList *l = gst_toc_entry_get_sub_entries(e); l; l = l->next) stack.push_back((GstTocEntry *)l->data);
+      }
+      std::sort(chapters_.begin(), chapters_.end(), [](const Chapter &a, const Chapter &b) { return a.start < b.start; });
+      gst_toc_unref(toc);
+      if (on_tags) on_tags();
+      break;
+    }
     case GST_MESSAGE_TAG: {
       GstTagList *tags = nullptr;
       gst_message_parse_tag(m, &tags);

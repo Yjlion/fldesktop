@@ -1261,6 +1261,66 @@ static void go_to_definition() {
   });
 }
 
+// edits from the language server to a document's text, as one undo step
+static bool apply_lsp_edits(Doc *d, const std::vector<lsp::TextEdit> &edits) {
+  if (edits.empty()) return true;
+  char *t = d->buf->text();
+  std::string text = t;
+  free(t);
+  std::string before = text;
+  if (!lsp::apply_edits(text, edits)) return false;
+  if (text == before) return true;
+  int pos = d->ed->insert_position();
+  d->buf->replace(0, d->buf->length(), text.c_str());
+  d->ed->insert_position(std::min(pos, d->buf->length()));
+  d->ed->show_insert_position();
+  return true;
+}
+
+// Ctrl+Shift+I
+static void format_document() {
+  Doc *d = current();
+  if (!need_server(d)) return;
+  d->lsp_flush();
+  lspc::format(d->lsp, d->path, S.tab_width, S.spaces, [d](const std::vector<lsp::TextEdit> &edits) {
+    if (doc_index(d) < 0) return;
+    if (edits.empty()) status_note("Nothing to change (or the server cannot format this file)");
+    else if (!apply_lsp_edits(d, edits)) status_note("The server's changes did not fit the text");
+    else status_note("Formatted");
+  });
+}
+
+// F2
+static void rename_symbol() {
+  Doc *d = current();
+  if (!need_server(d)) return;
+  d->lsp_flush();
+  int pos = d->ed->insert_position(), line, col;
+  int a = d->buf->word_start(pos), b = d->buf->word_end(pos);
+  char *w = d->buf->text_range(a, b);
+  std::string word = w;
+  free(w);
+  const char *nn = fl_input("Rename %s to:", word.c_str(), word.empty() ? "the symbol" : word.c_str());
+  if (!nn || !*nn || word == nn) return;
+  std::string new_name = nn;
+  d->lsp_position(pos, line, col);
+  lspc::rename(d->lsp, d->path, line, col, new_name,
+               [](const std::vector<std::pair<std::string, std::vector<lsp::TextEdit>>> &files, const std::string &err) {
+    if (!err.empty()) {
+      status_note(err);
+      return;
+    }
+    int changed = 0;
+    for (auto &f : files) {
+      // every file is opened (or shown) so the change can be looked at and saved
+      open_file(f.first);
+      Doc *t = current();
+      if (t && t->path == fld::abs_path(f.first) && apply_lsp_edits(t, f.second)) changed++;
+    }
+    status_note("Renamed in " + std::to_string(changed) + (changed == 1 ? " file" : " files") + " (not saved yet)");
+  });
+}
+
 // F8 and Shift+F8
 static void next_problem(bool back) {
   Doc *d = current();
@@ -1454,6 +1514,8 @@ static void menu_cb(Fl_Widget *, void *v) {
     case 23: if (d) d->ed->add_caret_vertical(1); break;
     case 24: complete(); break;
     case 25: go_to_definition(); break;
+    case 28: format_document(); break;
+    case 29: rename_symbol(); break;
     case 26: next_problem(false); break;
     case 27: next_problem(true); break;
     case 42: S.minimap = !S.minimap; apply_all(); break;
@@ -1810,7 +1872,9 @@ int main(int argc, char **argv) {
   g_menu->add("&Edit/Add Caret A&bove", FL_CTRL + FL_ALT + FL_Up, menu_cb, (void *)22);
   g_menu->add("&Edit/Add Caret Be&low", FL_CTRL + FL_ALT + FL_Down, menu_cb, (void *)23);
   g_menu->add("&Code/&Complete", FL_CTRL + ' ', menu_cb, (void *)24);
-  g_menu->add("&Code/Go to &Definition", FL_F + 12, menu_cb, (void *)25, FL_MENU_DIVIDER);
+  g_menu->add("&Code/Go to &Definition", FL_F + 12, menu_cb, (void *)25);
+  g_menu->add("&Code/&Rename Symbol…", FL_F + 2, menu_cb, (void *)29);
+  g_menu->add("&Code/&Format Document", FL_CTRL + FL_SHIFT + 'i', menu_cb, (void *)28, FL_MENU_DIVIDER);
   g_menu->add("&Code/&Next Problem", FL_F + 8, menu_cb, (void *)26);
   g_menu->add("&Code/&Previous Problem", FL_SHIFT + FL_F + 8, menu_cb, (void *)27, FL_MENU_DIVIDER);
   g_menu->add("&Code/&Language Servers", 0, menu_cb, (void *)43, FL_MENU_TOGGLE | (S.lsp ? FL_MENU_VALUE : 0));

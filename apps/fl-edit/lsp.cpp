@@ -236,6 +236,25 @@ void definition(Client *c, const std::string &path, int line, int col16,
           [done](const fld::Json &r) { done(lsp::parse_locations(r)); });
 }
 
+void format(Client *c, const std::string &path, int tab_size, bool insert_spaces,
+            std::function<void(const std::vector<lsp::TextEdit> &)> done) {
+  if (!c) return;
+  std::string uri = lsp::path_to_uri(path);
+  request(c, [&](int id) { return lsp::formatting(id, uri, tab_size, insert_spaces); },
+          [done](const fld::Json &r) { done(lsp::parse_text_edits(r)); });
+}
+
+void rename(Client *c, const std::string &path, int line, int col16, const std::string &new_name,
+            std::function<void(const std::vector<std::pair<std::string, std::vector<lsp::TextEdit>>> &,
+                               const std::string &error)> done) {
+  if (!c) return;
+  std::string uri = lsp::path_to_uri(path);
+  request(c, [&](int id) { return lsp::rename(id, uri, line, col16, new_name); }, [done](const fld::Json &r) {
+    auto edits = lsp::parse_workspace_edit(r);
+    done(edits, edits.empty() ? "The language server cannot rename this." : "");
+  });
+}
+
 std::string name(const Client *c) { return c && !c->dead ? fld::basename(c->argv[0]) : ""; }
 
 void shutdown_all() {

@@ -33,6 +33,8 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <cmath>
+#include <sys/stat.h>
 #include <vector>
 
 #include "adblock.h"
@@ -151,6 +153,38 @@ static std::string data_dir() { return fld::data_home() + "/fl-web"; }
 static std::string bookmarks_path() { return data_dir() + "/bookmarks.tsv"; }
 static std::string history_path() { return data_dir() + "/history.tsv"; }
 static std::string session_path() { return data_dir() + "/session.txt"; }
+// the zoom chosen for each site ([Zoom] host=1.25); 100 % is not stored
+static std::string zoom_path() { return data_dir() + "/zoom.ini"; }
+
+static double site_zoom(const std::string &uri) {
+  std::string host = url_host(uri);
+  if (host.empty()) return 1.0;
+  static fld::Ini ini;
+  static time_t loaded = -1;
+  struct stat st;
+  time_t m = stat(zoom_path().c_str(), &st) == 0 ? st.st_mtime : 0;
+  if (m != loaded) {
+    ini = fld::Ini();
+    ini.load(zoom_path());
+    loaded = m;
+  }
+  double z = ini.get_double("Zoom", host, 1.0);
+  return z >= 0.3 && z <= 3.0 ? z : 1.0;
+}
+
+static void remember_site_zoom(const std::string &uri, double z) {
+  std::string host = url_host(uri);
+  if (host.empty()) return;
+  fld::Ini ini;
+  ini.load(zoom_path());
+  if (z > 0.99 && z < 1.01) ini.remove("Zoom", host);
+  else {
+    char buf[16];
+    snprintf(buf, sizeof buf, "%.2f", z);
+    ini.set("Zoom", host, buf);
+  }
+  ini.save(zoom_path());
+}
 
 static WebKitNetworkSession *g_session;
 static WebKitNetworkSession *g_private_session; // private windows: nothing is stored
@@ -674,6 +708,9 @@ public:
     if (dir > 0) { nz = steps[12]; for (double s : steps) if (s > z + 0.01) { nz = s; break; } }
     else if (dir < 0) { nz = steps[0]; for (double s : steps) if (s < z - 0.01) nz = s; }
     webkit_web_view_set_zoom_level(view(), nz);
+    // the site opens at this zoom next time (not remembered in private windows)
+    const char *u = webkit_web_view_get_uri(view());
+    if (!priv && u) remember_site_zoom(u, nz);
     set_status("Zoom " + std::to_string((int)(nz * 100 + 0.5)) + " %", 1.5);
     glib_loop_poke();
   }
@@ -978,6 +1015,9 @@ void Browser::connect(Tab *t) {
       // leaving the article (a link, back, another address) ends reader mode
       if (t->reader && str(webkit_web_view_get_uri(v)) != t->reader_of) t->reader = false;
       t->filled = false;
+      // the zoom chosen for this site before
+      double z = site_zoom(str(webkit_web_view_get_uri(v)));
+      if (std::fabs(webkit_web_view_get_zoom_level(v) - z) > 0.01) webkit_web_view_set_zoom_level(v, z);
     }
     if (t->win->tab() == t) t->win->update_chrome();
     if (ev == WEBKIT_LOAD_FINISHED && !t->reader) {
@@ -1930,6 +1970,8 @@ static void show_passwords() {
   auto *copy = new Fl_Button(108, 348, 90, 30, "Copy");
   auto *open = new Fl_Button(204, 348, 90, 30, "Open Site");
   auto *del = new Fl_Button(300, 348, 90, 30, "Remove");
+  auto *imp = new Fl_Button(396, 348, 152, 30, "Import from CSV…");
+  imp->tooltip("Passwords exported from Firefox or Chrome (a .csv file)");
   auto *close = new Fl_Return_Button(448, 380, 100, 30, "Close");
   close->callback([](Fl_Widget *b, void *) { b->window()->hide(); });
   auto refill = [](Fl_Widget *, void *v) {
@@ -1997,6 +2039,44 @@ static void show_passwords() {
     if (!secret::delete_item(it->path, err)) fl_alert("%s", fld::escape_at(err).c_str());
     d.items = saved_logins("");
     d.filter->do_callback();
+  }, &d);
+  imp->callback([](Fl_Widget *, void *v) {
+    Dlg &d = *(Dlg *)v;
+    Fl_Native_File_Chooser fc;
+    fc.title("Import Passwords");
+    fc.filter("Password exports\t*.csv");
+    if (fc.show() != 0 || !fc.filename()) return;
+    std::string text, err;
+    if (!fld::read_file(fc.filename(), text, 32u << 20)) {
+      fl_alert("Cannot read %s", fld::escape_at(fc.filename()).c_str());
+      return;
+    }
+    auto logins = web::parse_password_csv(text, &err);
+    if (logins.empty()) {
+      fl_alert("%s", fld::escape_at(err.empty() ? "No passwords in this file." : err).c_str());
+      return;
+    }
+    std::string coll = secret::default_collection();
+    if (coll.empty() || !secret::unlock(coll, err)) {
+      fl_alert("The keyring could not be opened: %s", fld::escape_at(err).c_str());
+      return;
+    }
+    int added = 0, same = 0;
+    for (auto &l : logins) {
+      // not twice: the same site and user name is left as it is
+      bool have = false;
+      for (auto &it : d.items)
+        if (item_attr(it, "origin") == l.origin && item_attr(it, "username") == l.user) have = true;
+      if (have) { same++; continue; }
+      std::string who = l.user.empty() ? l.origin : l.user + " on " + l.origin;
+      if (secret::create_item(coll, "Web login for " + who,
+                              {{"xdg:schema", kLoginSchema}, {"origin", l.origin}, {"username", l.user}}, l.pass, err))
+        added++;
+    }
+    d.items = saved_logins("");
+    d.filter->do_callback();
+    d.shown->copy_label(("Imported " + std::to_string(added) + (same ? ", " + std::to_string(same) + " already saved" : "") +
+                         ". Delete the CSV file: it holds the passwords unencrypted.").c_str());
   }, &d);
   d.list->callback([](Fl_Widget *, void *v) { ((Dlg *)v)->shown->label(""); }, &d);
   d.w->end();
@@ -2557,6 +2637,24 @@ int main(int argc, char **argv) {
     webkit_user_script_unref(us);
   }
 #endif
+  // userscripts: data_dir()/userscripts/*.user.js, on the pages their @match names
+  for (auto &n : fld::list_dir(data_dir() + "/userscripts")) {
+    if (!fld::ends_with(n, ".js")) continue;
+    std::string text;
+    web::UserScript us;
+    if (!fld::read_file(data_dir() + "/userscripts/" + n, text, 4u << 20) || !web::parse_userscript(text, us)) continue;
+    std::vector<const char *> allow, block;
+    for (auto &p : us.matches) allow.push_back(p.c_str());
+    for (auto &p : us.excludes) block.push_back(p.c_str());
+    allow.push_back(nullptr);
+    block.push_back(nullptr);
+    WebKitUserScript *s = webkit_user_script_new(us.source.c_str(), WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                                                 us.at_start ? WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START
+                                                             : WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+                                                 allow.data(), us.excludes.empty() ? nullptr : block.data());
+    webkit_user_content_manager_add_script(g_ucm, s);
+    webkit_user_script_unref(s);
+  }
   Backend::on_copy = [](const std::string &text) { Fl::copy(text.c_str(), (int)text.size(), 1); };
 
   glib_loop_start();

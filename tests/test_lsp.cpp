@@ -75,5 +75,39 @@ int main() {
   CHECK_EQ(locs[0].line, 10);
   CHECK(parse_locations(fld::Json()).empty());
   CHECK(parse("not json").kind == Message::Other);
+  // formatting and rename
+  {
+    std::string f = lsp::formatting(7, "file:///a.c", 4, true);
+    CHECK(f.find("\"textDocument/formatting\"") != std::string::npos && f.find("\"tabSize\":4") != std::string::npos);
+    std::string r = lsp::rename(8, "file:///a.c", 1, 2, "nn");
+    CHECK(r.find("\"newName\":\"nn\"") != std::string::npos);
+    std::string text = "int a;\nint  b = a;\n";
+    fld::Json edits;
+    CHECK(fld::Json::parse(R"([{"range":{"start":{"line":1,"character":3},"end":{"line":1,"character":5}},"newText":" "},
+                              {"range":{"start":{"line":0,"character":4},"end":{"line":0,"character":5}},"newText":"x"}])",
+                           edits));
+    auto te = lsp::parse_text_edits(edits);
+    CHECK_EQ(te.size(), (size_t)2);
+    CHECK(lsp::apply_edits(text, te));
+    CHECK_EQ(text, std::string("int x;\nint b = a;\n"));
+    // overlapping edits are refused
+    std::string t2 = "abcdef";
+    std::vector<lsp::TextEdit> ov = {{0, 1, 0, 4, "X"}, {0, 2, 0, 5, "Y"}};
+    CHECK(!lsp::apply_edits(t2, ov));
+    // UTF-16 columns: é is one column
+    std::string t3 = "é = 1;";
+    std::vector<lsp::TextEdit> u = {{0, 4, 0, 5, "2"}};
+    CHECK(lsp::apply_edits(t3, u));
+    CHECK_EQ(t3, std::string("é = 2;"));
+    fld::Json we;
+    CHECK(fld::Json::parse(R"({"changes":{"file:///p/a.c":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"newText":"b"}]}})", we));
+    auto files = lsp::parse_workspace_edit(we);
+    CHECK_EQ(files.size(), (size_t)1);
+    CHECK_EQ(files[0].first, std::string("/p/a.c"));
+    CHECK(fld::Json::parse(R"({"documentChanges":[{"textDocument":{"uri":"file:///p/b.c","version":3},"edits":[]}]})", we));
+    files = lsp::parse_workspace_edit(we);
+    CHECK_EQ(files.size(), (size_t)1);
+    CHECK_EQ(files[0].first, std::string("/p/b.c"));
+  }
   return test_result("lsp");
 }

@@ -21,6 +21,13 @@ Ctrl+Shift+E splits the current terminal side by side, Ctrl+Shift+O one above th
 pane runs a shell in the same directory. Ctrl+Shift+arrows move between panes (a click does too;
 a line along the top marks the current one), dragging the gap between two panes resizes them and
 Ctrl+Shift+W closes the current pane (the last one closes the tab).
+Ctrl+Shift+I (Send Input to All Panes) sends what is typed or pasted in one pane of the tab to
+all of them, for running the same commands on several machines.
+.SS Links and the clipboard
+Programs can print hyperlinks (OSC 8, as \fBls \-\-hyperlink\fR, \fBgcc\fR and \fBsystemctl\fR
+do): they are underlined with dots and Ctrl+click opens them (http, https, file and mailto links
+only). Programs may also put text on the clipboard (OSC 52, as tmux and vim do over SSH); reading
+the clipboard that way is refused, so a program in the terminal cannot see what you copied.
 .SS Searching the scrollback
 Ctrl+Shift+F opens a search bar at the bottom. Enter (or the up arrow) finds the text further up,
 towards older output, Shift+Enter (or the down arrow) further down; the match is selected and

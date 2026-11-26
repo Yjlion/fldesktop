@@ -91,6 +91,22 @@ public:
     bool selected;
   };
   std::vector<Track> tracks() const;
+
+  // chapters of the current item (from its table of contents): start, title
+  struct Chapter {
+    double start;
+    std::string title;
+  };
+  const std::vector<Chapter> &chapters() const { return chapters_; }
+
+  // the sound: volume levelling from ReplayGain tags, and a 10-band
+  // equalizer (gains in dB, -24 .. +12; 31 Hz .. 16 kHz). The ReplayGain
+  // switch takes effect from the next item.
+  void set_replaygain(bool on);
+  bool replaygain() const { return replaygain_; }
+  bool has_equalizer() const { return eq_ != nullptr; }
+  void set_equalizer(const std::vector<double> &gains);
+  const std::vector<double> &equalizer() const { return eq_gains_; }
   void select_track(const std::string &type, int index);
   void cycle_track(const std::string &type);
   void subtitles_off();
@@ -119,6 +135,11 @@ public:
 
 private:
   GstElement *playbin_ = nullptr, *vsink_ = nullptr;
+  GstElement *eq_ = nullptr;            // in the audio filter bin
+  bool replaygain_ = false, filters_dirty_ = true;
+  std::vector<double> eq_gains_ = std::vector<double>(10, 0.0);
+  std::vector<Chapter> chapters_;
+  void build_filters(); // scaletempo ! [rgvolume !] equalizer-10bands, in READY or NULL
   fgst::FrameSlot slot_;
   std::string init_error_;
   std::vector<Item> list_;

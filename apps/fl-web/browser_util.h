@@ -68,4 +68,22 @@ bool parse_login_message(const std::string &json, std::string &origin, std::stri
 // it) unless the password field already holds something; returns 1 when it did
 std::string login_fill_script(const std::string &user, const std::string &pass);
 
+// Saved passwords exported by Firefox (url,username,password,...) or
+// Chrome/Chromium (name,url,username,password,...) as CSV
+struct CsvLogin {
+  std::string origin, user, pass;
+};
+std::vector<CsvLogin> parse_password_csv(const std::string &text, std::string *err = nullptr);
+// one CSV record's fields (RFC 4180 quoting); pos moves past the record
+std::vector<std::string> csv_record(const std::string &text, size_t &pos);
+
+// A userscript (Greasemonkey style): the // ==UserScript== header
+struct UserScript {
+  std::string name;
+  std::vector<std::string> matches, excludes; // URL patterns (@match/@include, @exclude)
+  bool at_start = false;                      // @run-at document-start
+  std::string source;
+};
+bool parse_userscript(const std::string &text, UserScript &out);
+
 } // namespace web

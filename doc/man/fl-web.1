@@ -128,5 +128,19 @@ compiled ad blocking rules (\fIcontent-filters/\fR).
 .TP
 \fI~/.cache/fl-web/\fR
 The web cache, and the downloaded filter lists (\fIadblock/\fR).
+.SH ZOOM, PASSWORDS AND USERSCRIPTS
+The zoom chosen for a site (Ctrl+plus, Ctrl+minus) is kept and used again when the site
+opens (\fI~/.local/share/fl-web/zoom.ini\fR; not in private windows).
+.PP
+\fBSaved Passwords\fR imports a CSV export of Firefox (\fBabout:logins\fR, Export Logins)
+or Chrome (Password Manager, Export passwords) into the keyring; logins already saved for the
+same site and user name are left as they are. Delete the CSV file afterwards: it holds the
+passwords unencrypted.
+.PP
+Userscripts (Greasemonkey style, with a \fB// ==UserScript==\fR header) in
+\fI~/.local/share/fl-web/userscripts/*.js\fR run on the pages their \fB@match\fR (or
+\fB@include\fR) patterns name, except \fB@exclude\fR; \fB@run-at document-start\fR runs them
+before the page's own scripts. A script without a pattern is not loaded. They are read when
+fl-web starts.
 .SH SEE ALSO
 \fBfl-files\fR(1)

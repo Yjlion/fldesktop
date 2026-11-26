@@ -22,7 +22,9 @@ When a language server for the file's language is installed, fl-edit starts it a
 (the Language Server Protocol): problems are underlined (red for errors, blue for warnings), counted
 in the status bar with the message for the current line, and marked in the minimap. F8 and
 Shift+F8 go to the next and previous problem, Ctrl+Space completes the word at the cursor and F12
-goes to the definition of the name at the cursor. One server runs per project folder (the nearest
+goes to the definition of the name at the cursor. F2 renames it everywhere the server finds it
+(the files it touches open in tabs, unsaved, to look at first) and Ctrl+Shift+I formats the
+document with the server's formatter (clang-format for clangd, and so on). One server runs per project folder (the nearest
 folder up with \fB.git\fR, \fBcompile_commands.json\fR, \fBCargo.toml\fR, \fBgo.mod\fR,
 \fBpackage.json\fR, \fBpyproject.toml\fR and the like). The servers used: \fBclangd\fR (C/C++),
 \fBpylsp\fR (Python), \fBrust-analyzer\fR, \fBgopls\fR, \fBtypescript-language-server\fR

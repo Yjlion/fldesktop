@@ -230,6 +230,83 @@ std::string definition(int id, const std::string &uri, int line, int col16) {
   return request(id, "textDocument/definition", position_params(uri, line, col16)).dump();
 }
 
+std::string formatting(int id, const std::string &uri, int tab_size, bool insert_spaces) {
+  Json p = Json::object(), opt = Json::object();
+  p.set("textDocument", doc_id(uri));
+  opt.set("tabSize", tab_size);
+  opt.set("insertSpaces", insert_spaces);
+  p.set("options", opt);
+  return request(id, "textDocument/formatting", p).dump();
+}
+
+std::string rename(int id, const std::string &uri, int line, int col16, const std::string &new_name) {
+  Json p = position_params(uri, line, col16);
+  p.set("newName", new_name);
+  return request(id, "textDocument/rename", p).dump();
+}
+
+std::vector<TextEdit> parse_text_edits(const Json &result) {
+  std::vector<TextEdit> out;
+  for (auto &e : result.items()) {
+    const Json &r = e["range"];
+    if (!r.is_object()) continue;
+    TextEdit t;
+    t.line = (int)r["start"]["line"].as_number();
+    t.col = (int)r["start"]["character"].as_number();
+    t.end_line = (int)r["end"]["line"].as_number();
+    t.end_col = (int)r["end"]["character"].as_number();
+    t.new_text = e["newText"].as_string();
+    out.push_back(t);
+  }
+  return out;
+}
+
+std::vector<std::pair<std::string, std::vector<TextEdit>>> parse_workspace_edit(const Json &result) {
+  std::vector<std::pair<std::string, std::vector<TextEdit>>> out;
+  if (result["documentChanges"].is_array()) {
+    for (auto &dc : result["documentChanges"].items()) {
+      std::string p = uri_to_path(dc["textDocument"]["uri"].as_string());
+      if (!p.empty() && dc["edits"].is_array()) out.push_back({p, parse_text_edits(dc["edits"])});
+    }
+  } else if (result["changes"].is_object()) {
+    for (auto &kv : result["changes"].members()) {
+      std::string p = uri_to_path(kv.first);
+      if (!p.empty()) out.push_back({p, parse_text_edits(kv.second)});
+    }
+  }
+  return out;
+}
+
+bool apply_edits(std::string &text, std::vector<TextEdit> edits) {
+  // line starts
+  std::vector<size_t> starts{0};
+  for (size_t i = 0; i < text.size(); i++)
+    if (text[i] == '\n') starts.push_back(i + 1);
+  auto offset = [&](int line, int col16, size_t &out) {
+    if (line < 0) return false;
+    if ((size_t)line >= starts.size()) {
+      out = text.size(); // past the end: the end (servers do this for the last line)
+      return true;
+    }
+    size_t a = starts[(size_t)line], b = (size_t)line + 1 < starts.size() ? starts[(size_t)line + 1] - 1 : text.size();
+    out = a + (size_t)byte_col(text.substr(a, b - a), col16);
+    return true;
+  };
+  struct Span { size_t a, b; std::string t; };
+  std::vector<Span> spans;
+  for (auto &e : edits) {
+    size_t a, b;
+    if (!offset(e.line, e.col, a) || !offset(e.end_line, e.end_col, b) || b < a) return false;
+    spans.push_back({a, b, e.new_text});
+  }
+  // from the end, so the offsets stay right
+  std::stable_sort(spans.begin(), spans.end(), [](const Span &x, const Span &y) { return x.a > y.a; });
+  for (size_t i = 1; i < spans.size(); i++)
+    if (spans[i].b > spans[i - 1].a) return false; // overlapping
+  for (auto &s : spans) text.replace(s.a, s.b - s.a, s.t);
+  return true;
+}
+
 std::string shutdown(int id) {
   Json j = Json::object();
   j.set("jsonrpc", "2.0");

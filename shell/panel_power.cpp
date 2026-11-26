@@ -244,7 +244,7 @@ void power_indicator_start(fld::FlatButton *battery) {
                 [p] { up::Client::get().set_profile(p, [](const std::string &) {}); });
       m.divider();
     }
-    m.item("Power Settings…", [] { fld::spawn({"fl-settings", "power"}); }).divider();
+    m.item(_("Power Settings…"), [] { fld::spawn({"fl-settings", "power"}); }).divider();
     panel_menu_items(m);
   });
   up::Client::get().on_changed = update;

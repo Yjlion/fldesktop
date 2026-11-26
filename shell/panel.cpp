@@ -699,8 +699,8 @@ public:
 
 static void volume_menu(fld::Menu &m) {
   m.toggle("Mute", P.muted, [] { toggle_mute(); }).divider();
-  m.item("Sound Settings…", [] { fld::spawn({"fl-settings", "sound"}); });
-  m.item("Volume Mixer…", [] { fld::spawn({"fl-mixer"}); });
+  m.item(_("Sound Settings…"), [] { fld::spawn({"fl-settings", "sound"}); });
+  m.item(_("Volume Mixer…"), [] { fld::spawn({"fl-mixer"}); });
 }
 
 static void volume_cb(Fl_Widget *w, void *) {
@@ -821,23 +821,23 @@ static void quick_menu(fld::DesktopEntry *e, fld::Menu &m) {
   auto ids = quick_ids();
   int i = (int)(std::find(ids.begin(), ids.end(), id) - ids.begin());
   int n = (int)ids.size();
-  m.item("Open", [e] { e->launch(); });
+  m.item(_("Open"), [e] { e->launch(); });
   for (auto &a : e->actions) {
     std::string aid = a.id;
     m.item(fld::Menu::text(a.name), [e, aid] { e->launch_action(aid); });
   }
   m.divider();
-  m.item("Move Left", [i] {
+  m.item(_("Move Left"), [i] {
     auto l = quick_ids();
     if (i > 0 && i < (int)l.size()) std::swap(l[(size_t)i], l[(size_t)i - 1]);
     set_quick_ids(l);
   }, i > 0 && i < n ? 0 : FL_MENU_INACTIVE);
-  m.item("Move Right", [i] {
+  m.item(_("Move Right"), [i] {
     auto l = quick_ids();
     if (i + 1 < (int)l.size()) std::swap(l[(size_t)i], l[(size_t)i + 1]);
     set_quick_ids(l);
   }, i + 1 < n ? 0 : FL_MENU_INACTIVE);
-  m.item("Remove from Quick Launch", [id] {
+  m.item(_("Remove from Quick Launch"), [id] {
     auto l = quick_ids();
     l.erase(std::remove(l.begin(), l.end(), id), l.end());
     set_quick_ids(l);
@@ -853,11 +853,11 @@ static void clock_menu(fld::Menu &m) {
     strftime(buf, sizeof buf, fmt, localtime(&t));
     Fl::copy(buf, (int)strlen(buf), 1);
   };
-  m.item("Copy Date", [copy] { copy("%Y-%m-%d"); });
-  m.item("Copy Time", [copy] { copy("%H:%M:%S"); });
-  m.item("Copy Date and Time", [copy] { copy("%c"); }).divider();
-  m.item("Date && Time Settings…", [] { fld::spawn({"fl-settings", "datetime"}); });
-  m.item("Clock Format…", [] { fld::spawn({"fl-settings", "panel"}); });
+  m.item(_("Copy Date"), [copy] { copy("%Y-%m-%d"); });
+  m.item(_("Copy Time"), [copy] { copy("%H:%M:%S"); });
+  m.item(_("Copy Date and Time"), [copy] { copy("%c"); }).divider();
+  m.item(_("Date && Time Settings…"), [] { fld::spawn({"fl-settings", "datetime"}); });
+  m.item(_("Clock Format…"), [] { fld::spawn({"fl-settings", "panel"}); });
 }
 
 static void volume_menu(fld::Menu &m);
@@ -1021,22 +1021,22 @@ static std::map<Fl_Widget *, std::function<void(fld::Menu &)>> &context_menus() 
 void panel_context_menu(Fl_Widget *w, std::function<void(fld::Menu &)> fill) { context_menus()[w] = std::move(fill); }
 
 void panel_menu_items(fld::Menu &m) {
-  m.item("Panel Settings…", [] { fld::spawn({"fl-settings", "panel"}); });
+  m.item(_("Panel Settings…"), [] { fld::spawn({"fl-settings", "panel"}); });
 }
 
 // the panel's own menu (a right click on an empty part)
 static void panel_menu() {
   fld::Menu m;
-  m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
-  m.item("Applications…", [] { fld::toggle_launcher(); }).divider();
-  m.item("Lock Screen", [] { fld::lock_screen(); }, fld::can_lock() ? 0 : FL_MENU_INACTIVE).divider();
+  m.item(_("Task Manager…"), [] { fld::spawn({"fl-taskmgr"}); });
+  m.item(_("Applications…"), [] { fld::toggle_launcher(); }).divider();
+  m.item(_("Lock Screen"), [] { fld::lock_screen(); }, fld::can_lock() ? 0 : FL_MENU_INACTIVE).divider();
   nightlight_menu_items(m);
 #ifdef FLD_HAVE_NOTIFY
   dnd_menu_items(m);
 #endif
   weather_menu_items(m);
   if (!P.sysmon || !P.sysmon->visible())
-    m.item("Show a System Monitor", [] {
+    m.item(_("Show a System Monitor"), [] {
       fld::Ini c;
       c.load(fld::fld_config_dir() + "/panel.ini");
       c.set_bool("Panel", "SystemMonitor", true);
@@ -1044,7 +1044,7 @@ static void panel_menu() {
     });
   m.divider();
   panel_menu_items(m);
-  m.item("Settings…", [] { fld::spawn({"fl-settings"}); });
+  m.item(_("Settings…"), [] { fld::spawn({"fl-settings"}); });
   m.popup();
 }
 
@@ -1227,9 +1227,9 @@ int main(int argc, char **argv) {
     P.menu_btn->icon_name("applications-other", 20);
 
   panel_context_menu(P.menu_btn, [](fld::Menu &m) {
-    m.item("Open Applications", [] { fld::toggle_launcher(); }).divider();
-    m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
-    m.item("Settings…", [] { fld::spawn({"fl-settings"}); }).divider();
+    m.item(_("Open Applications"), [] { fld::toggle_launcher(); }).divider();
+    m.item(_("Task Manager…"), [] { fld::spawn({"fl-taskmgr"}); });
+    m.item(_("Settings…"), [] { fld::spawn({"fl-settings"}); }).divider();
     panel_menu_items(m);
   });
 
@@ -1268,8 +1268,8 @@ int main(int argc, char **argv) {
                           [](Fl_Widget *, void *) { fld::spawn({"fl-osk"}); });
     if (!fld::icon("input-keyboard", 20)) P.keyboard->copy_label("⌨");
     panel_context_menu(P.keyboard, [](fld::Menu &m) {
-      m.item("Show On-screen Keyboard", [] { fld::spawn({"fl-osk"}); });
-      m.item("Keyboard Settings…", [] { fld::spawn({"fl-settings", "keyboard"}); }).divider();
+      m.item(_("Show On-screen Keyboard"), [] { fld::spawn({"fl-osk"}); });
+      m.item(_("Keyboard Settings…"), [] { fld::spawn({"fl-settings", "keyboard"}); }).divider();
       panel_menu_items(m);
     });
   }
@@ -1317,7 +1317,7 @@ int main(int argc, char **argv) {
       if (a == PowerAction::LogOut) m.divider();
     }
     m.divider();
-    m.item("Power Settings…", [] { fld::spawn({"fl-settings", "power"}); });
+    m.item(_("Power Settings…"), [] { fld::spawn({"fl-settings", "power"}); });
   });
   P.win->end();
   P.win->resizable(P.tasks);

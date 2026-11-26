@@ -1,6 +1,10 @@
 // Helpers shared by the settings pages
 #pragma once
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Button.H>
+#include <functional>
+#include <utility>
+#include <vector>
 #include <FL/Fl_Group.H>
 #include <string>
 
@@ -45,6 +49,21 @@ std::string panel_ini_path();
 void save_wm(ConfigFile &f);
 
 // The page background group with a title header; returns the content top y.
+// The title is translated here (mark it with N_() or pass _()).
 Fl_Group *page_group(int x, int y, int w, int h, const char *title, int &content_y);
+
+// (section, key) pairs of a config file that a page sets
+using ConfigKeys = std::vector<std::pair<std::string, std::string>>;
+// Removes the keys (so the programs use their defaults) and saves; a wm.ini
+// also makes fl-wm reload it.
+void reset_keys(ConfigFile &f, const ConfigKeys &keys);
+// A "Reset to Defaults" button: asks first, then reset_keys() and done()
+// (which shows the default values on the page).
+Fl_Button *reset_button(int x, int y, ConfigFile &f, ConfigKeys keys, std::function<void()> done);
+// The same for keys in several files (path, keys); afterwards the page is
+// made again from the files (reload_current_page()).
+Fl_Button *reset_page_button(int x, int y, std::vector<std::pair<std::string, ConfigKeys>> files);
+// Makes the page shown now again (main.cpp), e.g. after its settings changed.
+void reload_current_page();
 
 } // namespace fld

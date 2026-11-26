@@ -23,7 +23,7 @@ class SoundPage : public Fl_Group {
 public:
   SoundPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Sound", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Sound"), cy);
     resizable(g);
     if (!g_backend) g_backend = AudioBackend::create();
     Fl_Tabs *tabs = new fld::Tabs(X + 16, cy, W - 32, H - (cy - Y) - 56);

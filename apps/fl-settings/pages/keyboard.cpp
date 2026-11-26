@@ -55,7 +55,7 @@ public:
   KeyboardPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     rules.load();
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Keyboard", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Keyboard"), cy);
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
@@ -139,6 +139,8 @@ public:
     f.note(_("For Chinese, Japanese, Korean and other composed input. Takes effect at the next login."), 2);
     f.row(_("Test here:"), 28, wx, wy, ww);
     new Fl_Input(wx, wy, ww, 28);
+    f.space(8);
+    reset_page_button(f.widget_x(), f.y(), {{wm_ini_path(), {{"keyboard", "repeat_delay"}, {"keyboard", "repeat_rate"}, {"keyboard", "options"}}}});
     g->end();
     end();
     fill();

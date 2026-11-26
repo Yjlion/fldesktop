@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-25 16:39-0600\n"
+"POT-Creation-Date: 2026-11-25 19:21-0600\n"
 "PO-Revision-Date: 2026-11-25 12:00+0000\n"
 "Last-Translator: fldesktop contributors\n"
 "Language-Team: German\n"
@@ -16,38 +16,43 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: apps/fl-settings/main.cpp:53
+#: apps/fl-settings/main.cpp:54
 msgid "Hardware"
 msgstr "Hardware"
 
-#: apps/fl-settings/main.cpp:53 apps/fl-settings/pages/network.cpp:34
+#: apps/fl-settings/main.cpp:54 apps/fl-settings/pages/network.cpp:18
+#: apps/fl-settings/pages/network.cpp:34
 msgid "Network"
 msgstr "Netzwerk"
 
-#: apps/fl-settings/main.cpp:53
+#: apps/fl-settings/main.cpp:54
 msgid "Personal"
 msgstr "Persönlich"
 
-#: apps/fl-settings/main.cpp:53
+#: apps/fl-settings/main.cpp:54
 msgid "System"
 msgstr "System"
 
-#: apps/fl-settings/main.cpp:107 shell/launcher.cpp:459
+#: apps/fl-settings/main.cpp:108 shell/launcher.cpp:459
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: apps/fl-settings/main.cpp:121
+#: apps/fl-settings/main.cpp:122
 msgid "More"
 msgstr "Mehr"
 
-#: apps/fl-settings/main.cpp:265
+#: apps/fl-settings/main.cpp:266
 #, c-format
 msgid "%s – Settings"
 msgstr "%s – Einstellungen"
 
-#: apps/fl-settings/main.cpp:395 apps/fl-settings/main.cpp:396
+#: apps/fl-settings/main.cpp:420 apps/fl-settings/main.cpp:421
 msgid "Search settings"
 msgstr "Einstellungen durchsuchen"
+
+#: apps/fl-settings/pages/about.cpp:77 apps/fl-settings/pages/about.cpp:136
+msgid "About"
+msgstr "Info"
 
 #: apps/fl-settings/pages/about.cpp:85
 msgid "A lightweight Wayland desktop built with FLTK"
@@ -66,12 +71,13 @@ msgid "Processor, memory, graphics, disks, devices, batteries and temperatures i
 msgstr ""
 
 #: apps/fl-settings/pages/about.cpp:136
-msgid "About"
-msgstr "Info"
-
-#: apps/fl-settings/pages/about.cpp:136
 msgid "about system information version hardware cpu memory"
 msgstr ""
+
+#: apps/fl-settings/pages/accessibility.cpp:45
+#: apps/fl-settings/pages/accessibility.cpp:154
+msgid "Accessibility"
+msgstr "Barrierefreiheit"
 
 #: apps/fl-settings/pages/accessibility.cpp:51
 msgid "Seeing"
@@ -134,13 +140,61 @@ msgstr "Tippen"
 msgid "Sticky keys: press Shift, Ctrl, Alt or Super, then the key"
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:154
-msgid "Accessibility"
-msgstr "Barrierefreiheit"
-
 #: apps/fl-settings/pages/accessibility.cpp:155
 msgid "accessibility a11y contrast text size large font zoom magnifier screen reader orca sticky bounce keys pointer cursor size"
 msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:32
+#: apps/fl-settings/pages/advanced.cpp:86
+msgid "Advanced"
+msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:36
+msgid "These settings take effect at the next login."
+msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:39
+msgid "Graphics"
+msgstr "Grafik"
+
+#: apps/fl-settings/pages/advanced.cpp:40
+msgid "Drawing:"
+msgstr "Zeichnen:"
+
+#: apps/fl-settings/pages/advanced.cpp:42
+msgid "Automatic|Graphics card (OpenGL ES)|Graphics card (Vulkan, experimental)|Software (least memory)"
+msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:45
+#, fuzzy, c-format
+msgid "Now: %s."
+msgstr "Jetzt:"
+
+#: apps/fl-settings/pages/advanced.cpp:46
+msgid "Software drawing needs about 50 MB less memory on older graphics cards, but more processor time while windows move."
+msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:50
+msgid "X11 Programs"
+msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:53
+msgid "Run X11 programs (Xwayland)"
+msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:55
+msgid "Xwayland starts with the first X11 program. Off: only Wayland programs run."
+msgstr ""
+
+#: apps/fl-settings/pages/advanced.cpp:87
+msgid "advanced renderer drawing graphics card gpu opengl gles vulkan software pixman xwayland x11 xorg"
+msgstr ""
+
+#: apps/fl-settings/pages/appearance.cpp:96
+#: apps/fl-settings/pages/appearance.cpp:383
+#: apps/fl-settings/pages/login.cpp:94
+msgid "Appearance"
+msgstr "Erscheinungsbild"
 
 #: apps/fl-settings/pages/appearance.cpp:100
 msgid "Style"
@@ -288,15 +342,11 @@ msgstr "Einpassen:"
 msgid "The panel and desktop change right away; other applications use the new style the next time they start."
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:383
-#: apps/fl-settings/pages/login.cpp:94
-msgid "Appearance"
-msgstr "Erscheinungsbild"
-
 #: apps/fl-settings/pages/appearance.cpp:384
 msgid "theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar panel taskbar"
 msgstr ""
 
+#: apps/fl-settings/pages/bluetooth.cpp:17
 #: apps/fl-settings/pages/bluetooth.cpp:32 shell/panel_bluetooth.cpp:81
 msgid "Bluetooth"
 msgstr "Bluetooth"
@@ -304,6 +354,11 @@ msgstr "Bluetooth"
 #: apps/fl-settings/pages/bluetooth.cpp:33
 msgid "bluetooth pair headset headphones mouse keyboard speaker wireless"
 msgstr ""
+
+#: apps/fl-settings/pages/datetime.cpp:53
+#: apps/fl-settings/pages/datetime.cpp:189
+msgid "Date & Time"
+msgstr "Datum & Uhrzeit"
 
 #: apps/fl-settings/pages/datetime.cpp:57
 msgid "Now:"
@@ -351,13 +406,14 @@ msgstr ""
 msgid "%s needs timedatectl (systemd) or pkexec (polkit)."
 msgstr ""
 
-#: apps/fl-settings/pages/datetime.cpp:189
-msgid "Date & Time"
-msgstr "Datum & Uhrzeit"
-
 #: apps/fl-settings/pages/datetime.cpp:190
 msgid "date time clock timezone time zone ntp network time"
 msgstr ""
+
+#: apps/fl-settings/pages/default_apps.cpp:52
+#: apps/fl-settings/pages/default_apps.cpp:162
+msgid "Default Applications"
+msgstr "Standardanwendungen"
 
 #: apps/fl-settings/pages/default_apps.cpp:78
 msgid "(no application installed)"
@@ -379,136 +435,106 @@ msgstr ""
 msgid "The window gpg-agent opens to ask for a passphrase (gpg-agent.conf: pinentry-program)"
 msgstr ""
 
-#: apps/fl-settings/pages/default_apps.cpp:162
-msgid "Default Applications"
-msgstr "Standardanwendungen"
-
 #: apps/fl-settings/pages/default_apps.cpp:163
 msgid "default applications browser mail email file manager terminal editor image viewer music video pdf open with"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:285
+#: apps/fl-settings/pages/displays.cpp:264
+#: apps/fl-settings/pages/displays.cpp:524
+msgid "Displays"
+msgstr "Bildschirme"
+
+#: apps/fl-settings/pages/displays.cpp:280
 msgid "Enabled"
 msgstr "Aktiviert"
 
-#: apps/fl-settings/pages/displays.cpp:287
+#: apps/fl-settings/pages/displays.cpp:282
 msgid "Resolution:"
 msgstr "Auflösung:"
 
-#: apps/fl-settings/pages/displays.cpp:290
+#: apps/fl-settings/pages/displays.cpp:285
 msgid "Scale:"
 msgstr "Skalierung:"
 
-#: apps/fl-settings/pages/displays.cpp:294
+#: apps/fl-settings/pages/displays.cpp:289
 msgid "Rotation:"
 msgstr "Drehung:"
 
-#: apps/fl-settings/pages/displays.cpp:298
-#: apps/fl-settings/pages/displays.cpp:443 apps/fl-settings/pages/panel.cpp:44
+#: apps/fl-settings/pages/displays.cpp:293
+#: apps/fl-settings/pages/displays.cpp:378 apps/fl-settings/pages/panel.cpp:44
 msgid "Position:"
 msgstr "Position:"
 
-#: apps/fl-settings/pages/displays.cpp:306 apps/fl-settings/pages/proxy.cpp:115
+#: apps/fl-settings/pages/displays.cpp:301 apps/fl-settings/pages/proxy.cpp:115
 #: apps/fl-settings/pages/sharing.cpp:82
 msgid "Apply"
 msgstr "Anwenden"
 
-#: apps/fl-settings/pages/displays.cpp:317
+#: apps/fl-settings/pages/displays.cpp:312
 msgid "Rotate the built-in screen with the device"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:318
+#: apps/fl-settings/pages/displays.cpp:313
 msgid "For convertibles and tablets with a rotation sensor (iio-sensor-proxy)"
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:333 shell/panel_power.cpp:168
+#: apps/fl-settings/pages/displays.cpp:328 shell/panel_power.cpp:168
 msgid "Brightness"
 msgstr "Helligkeit"
 
-#: apps/fl-settings/pages/displays.cpp:334
+#: apps/fl-settings/pages/displays.cpp:329
 msgid "Built-in screen:"
 msgstr "Eingebauter Bildschirm:"
 
-#: apps/fl-settings/pages/displays.cpp:345
+#: apps/fl-settings/pages/displays.cpp:340
 msgid "The brightness keys change it too."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:350
-msgid "Night Light"
-msgstr "Nachtlicht"
-
-#: apps/fl-settings/pages/displays.cpp:355
-msgid "Warmer colours at night"
+#: apps/fl-settings/pages/displays.cpp:345
+#, fuzzy
+msgid "Warmer colours at night: Night Light."
 msgstr "Wärmere Farben in der Nacht"
 
-#: apps/fl-settings/pages/displays.cpp:358
-msgid "When:"
-msgstr "Wann:"
-
-#: apps/fl-settings/pages/displays.cpp:360
-msgid "Sunset to sunrise|Custom hours|All the time"
-msgstr "Sonnenuntergang bis -aufgang|Eigene Zeiten|Immer"
-
-#: apps/fl-settings/pages/displays.cpp:364
-msgid "From:"
-msgstr "Von:"
-
-#: apps/fl-settings/pages/displays.cpp:375
-msgid "Warmth:"
-msgstr "Wärme:"
-
-#: apps/fl-settings/pages/displays.cpp:384
-msgid "Sunset and sunrise are worked out from the time zone (Date & Time)."
+#: apps/fl-settings/pages/displays.cpp:347
+msgid "How the screen is drawn (graphics card or software): Advanced."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:389
-msgid "Graphics"
-msgstr "Grafik"
-
-#: apps/fl-settings/pages/displays.cpp:390
-msgid "Drawing:"
-msgstr "Zeichnen:"
-
-#: apps/fl-settings/pages/displays.cpp:392
-msgid "Automatic|Graphics card (OpenGL ES)|Graphics card (Vulkan, experimental)|Software (least memory)"
-msgstr ""
-
-#: apps/fl-settings/pages/displays.cpp:421
+#: apps/fl-settings/pages/displays.cpp:356
 msgid "The compositor does not support output management (wlr-output-management)."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:510 apps/fl-settings/pages/login.cpp:179
+#: apps/fl-settings/pages/displays.cpp:445 apps/fl-settings/pages/login.cpp:179
 #: apps/fl-settings/pages/users.cpp:549
 msgid "Revert"
 msgstr "Zurücksetzen"
 
-#: apps/fl-settings/pages/displays.cpp:511
+#: apps/fl-settings/pages/displays.cpp:446
 msgid "Keep"
 msgstr "Behalten"
 
-#: apps/fl-settings/pages/displays.cpp:590
+#: apps/fl-settings/pages/displays.cpp:493
 msgid "At least one display must stay enabled."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:592
+#: apps/fl-settings/pages/displays.cpp:495
 msgid "The display configuration could not be applied."
 msgstr ""
 
-#: apps/fl-settings/pages/displays.cpp:599
+#: apps/fl-settings/pages/displays.cpp:502
 msgid "Saved."
 msgstr "Gespeichert."
 
-#: apps/fl-settings/pages/displays.cpp:602
+#: apps/fl-settings/pages/displays.cpp:505
 msgid "Reverted."
 msgstr "Zurückgesetzt."
 
-#: apps/fl-settings/pages/displays.cpp:621
-msgid "Displays"
-msgstr "Bildschirme"
-
-#: apps/fl-settings/pages/displays.cpp:622
-msgid "display monitor screen resolution scale hidpi rotation position output refresh night light warm colour color temperature brightness backlight"
+#: apps/fl-settings/pages/displays.cpp:525
+msgid "display monitor screen resolution scale hidpi rotation position output refresh brightness backlight"
 msgstr ""
+
+#: apps/fl-settings/pages/drives.cpp:24 apps/fl-settings/pages/drives.cpp:68
+msgid "Removable Drives"
+msgstr "Wechseldatenträger"
 
 #: apps/fl-settings/pages/drives.cpp:29
 msgid "When a Drive Is Plugged In"
@@ -546,14 +572,11 @@ msgstr ""
 msgid "Disks is an advanced tool: changing partitions can erase the data on a drive."
 msgstr ""
 
-#: apps/fl-settings/pages/drives.cpp:68
-msgid "Removable Drives"
-msgstr "Wechseldatenträger"
-
 #: apps/fl-settings/pages/drives.cpp:69
 msgid "usb stick drive disk mount automount removable media sd card eject"
 msgstr ""
 
+#: apps/fl-settings/pages/firewall.cpp:15
 #: apps/fl-settings/pages/firewall.cpp:30
 msgid "Firewall"
 msgstr "Firewall"
@@ -615,19 +638,26 @@ msgstr ""
 msgid "Disabled"
 msgstr "Aktiviert"
 
+#: apps/fl-settings/pages/keyboard.cpp:58
+#: apps/fl-settings/pages/keyboard.cpp:276
+msgid "Keyboard"
+msgstr "Tastatur"
+
 #: apps/fl-settings/pages/keyboard.cpp:64
 msgid "Layouts"
 msgstr "Belegungen"
 
 #: apps/fl-settings/pages/keyboard.cpp:68
 #: apps/fl-settings/pages/notifications.cpp:86
-#: apps/fl-settings/pages/panel.cpp:77
+#: apps/fl-settings/pages/panel.cpp:77 apps/fl-settings/pages/shortcuts.cpp:241
+#: apps/fl-settings/pages/startup.cpp:99
 msgid "Add…"
 msgstr "Hinzufügen …"
 
 #: apps/fl-settings/pages/keyboard.cpp:70
 #: apps/fl-settings/pages/notifications.cpp:88
-#: apps/fl-settings/pages/panel.cpp:79 apps/fl-settings/pages/users.cpp:247
+#: apps/fl-settings/pages/panel.cpp:79 apps/fl-settings/pages/shortcuts.cpp:241
+#: apps/fl-settings/pages/startup.cpp:101 apps/fl-settings/pages/users.cpp:247
 msgid "Remove"
 msgstr "Entfernen"
 
@@ -671,18 +701,19 @@ msgstr ""
 msgid "Test here:"
 msgstr "Hier testen:"
 
-#: apps/fl-settings/pages/keyboard.cpp:162
+#: apps/fl-settings/pages/keyboard.cpp:164
 msgid "Variant:"
 msgstr "Variante:"
 
-#: apps/fl-settings/pages/keyboard.cpp:163 apps/fl-settings/pages/panel.cpp:136
+#: apps/fl-settings/pages/keyboard.cpp:165 apps/fl-settings/pages/panel.cpp:140
 #: apps/fl-settings/pages/privacy.cpp:85
-#: apps/fl-settings/pages/shortcuts.cpp:367
-#: apps/fl-settings/pages/shortcuts.cpp:439
-#: apps/fl-settings/pages/shortcuts.cpp:466
-#: apps/fl-settings/pages/users.cpp:112 apps/fl-settings/pages/users.cpp:201
-#: apps/fl-settings/pages/users.cpp:246 apps/fl-settings/pages/users.cpp:444
-#: apps/fl-settings/pages/users.cpp:711 common/libfld/file_dialog.cpp:202
+#: apps/fl-settings/pages/shortcuts.cpp:285
+#: apps/fl-settings/pages/shortcuts.cpp:357
+#: apps/fl-settings/pages/shortcuts.cpp:384
+#: apps/fl-settings/pages/startup.cpp:60 apps/fl-settings/pages/users.cpp:112
+#: apps/fl-settings/pages/users.cpp:201 apps/fl-settings/pages/users.cpp:246
+#: apps/fl-settings/pages/users.cpp:444 apps/fl-settings/pages/users.cpp:711
+#: apps/fl-settings/settings_common.cpp:106 common/libfld/file_dialog.cpp:202
 #: common/libfld/file_dialog.cpp:441 common/libfld/file_dialog.cpp:458
 #: common/libfld/fileops_ui.cpp:127 common/libfld/fileops_ui.cpp:145
 #: common/libfld/session.cpp:258 common/libfld/session.cpp:262
@@ -691,22 +722,23 @@ msgstr "Variante:"
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: apps/fl-settings/pages/keyboard.cpp:164 apps/fl-settings/pages/panel.cpp:137
-#: apps/fl-settings/pages/users.cpp:202
+#: apps/fl-settings/pages/keyboard.cpp:166 apps/fl-settings/pages/panel.cpp:141
+#: apps/fl-settings/pages/startup.cpp:61 apps/fl-settings/pages/users.cpp:202
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: apps/fl-settings/pages/keyboard.cpp:183
+#: apps/fl-settings/pages/keyboard.cpp:185
 msgid "(default)"
 msgstr "(Standard)"
 
-#: apps/fl-settings/pages/keyboard.cpp:274
-msgid "Keyboard"
-msgstr "Tastatur"
-
-#: apps/fl-settings/pages/keyboard.cpp:275
+#: apps/fl-settings/pages/keyboard.cpp:277
 msgid "keyboard layout language input xkb compose caps lock repeat delay rate switch input method ime fcitx ibus chinese japanese korean"
 msgstr ""
+
+#: apps/fl-settings/pages/language.cpp:44
+#: apps/fl-settings/pages/language.cpp:133
+msgid "Language & Region"
+msgstr "Sprache & Region"
 
 #: apps/fl-settings/pages/language.cpp:57
 msgid "Language"
@@ -752,13 +784,13 @@ msgstr ""
 msgid "Words are checked in all the languages chosen."
 msgstr ""
 
-#: apps/fl-settings/pages/language.cpp:133
-msgid "Language & Region"
-msgstr "Sprache & Region"
-
 #: apps/fl-settings/pages/language.cpp:134
 msgid "language locale region formats date time currency numbers translation"
 msgstr ""
+
+#: apps/fl-settings/pages/lock.cpp:27 apps/fl-settings/pages/lock.cpp:136
+msgid "Screen Lock"
+msgstr "Bildschirmsperre"
 
 #: apps/fl-settings/pages/lock.cpp:33
 msgid "Locking"
@@ -792,7 +824,7 @@ msgstr ""
 msgid "or press Super+L"
 msgstr ""
 
-#: apps/fl-settings/pages/lock.cpp:69
+#: apps/fl-settings/pages/lock.cpp:69 shell/panel.cpp:1032
 msgid "Lock Screen"
 msgstr ""
 
@@ -816,19 +848,20 @@ msgstr ""
 msgid "The desktop wallpaper"
 msgstr ""
 
-#: apps/fl-settings/pages/lock.cpp:136
-msgid "Screen Lock"
-msgstr "Bildschirmsperre"
-
 #: apps/fl-settings/pages/lock.cpp:137
 msgid "lock screen locker idle timeout suspend password privacy blank screen off dpms power saving"
 msgstr ""
+
+#: apps/fl-settings/pages/login.cpp:83 apps/fl-settings/pages/login.cpp:360
+msgid "Login Screen"
+msgstr "Anmeldebildschirm"
 
 #: apps/fl-settings/pages/login.cpp:130
 msgid "The image is copied to /etc/fldesktop so the login screen can read it"
 msgstr ""
 
-#: apps/fl-settings/pages/login.cpp:133 apps/fl-settings/pages/users.cpp:797
+#: apps/fl-settings/pages/login.cpp:133 apps/fl-settings/pages/users.cpp:476
+#: apps/fl-settings/pages/users.cpp:797
 msgid "Users"
 msgstr "Benutzer"
 
@@ -901,10 +934,6 @@ msgstr ""
 msgid "Not saved: the authentication was cancelled or failed."
 msgstr ""
 
-#: apps/fl-settings/pages/login.cpp:360
-msgid "Login Screen"
-msgstr "Anmeldebildschirm"
-
 #: apps/fl-settings/pages/login.cpp:361
 msgid "login screen greeter greetd fl-greet users background display manager"
 msgstr ""
@@ -913,11 +942,12 @@ msgstr ""
 msgid "Open the launcher"
 msgstr ""
 
-#: apps/fl-settings/pages/mouse.cpp:35
+#: apps/fl-settings/pages/mouse.cpp:35 apps/fl-settings/pages/windows.cpp:30
 msgid "Show the desktop"
 msgstr ""
 
 #: apps/fl-settings/pages/mouse.cpp:36 apps/fl-settings/pages/shortcuts.cpp:55
+#: apps/fl-settings/pages/windows.cpp:31
 #, fuzzy
 msgid "Next workspace"
 msgstr "Netzwerk"
@@ -926,9 +956,13 @@ msgstr "Netzwerk"
 msgid "Previous workspace"
 msgstr ""
 
-#: apps/fl-settings/pages/mouse.cpp:37
+#: apps/fl-settings/pages/mouse.cpp:37 apps/fl-settings/pages/windows.cpp:29
 msgid "Nothing"
 msgstr ""
+
+#: apps/fl-settings/pages/mouse.cpp:55 apps/fl-settings/pages/mouse.cpp:136
+msgid "Mouse & Touchpad"
+msgstr "Maus & Touchpad"
 
 #: apps/fl-settings/pages/mouse.cpp:60
 msgid "Pointer"
@@ -1019,24 +1053,59 @@ msgid "Other gestures, such as pinching to zoom, go to the program under the poi
 msgstr ""
 
 #: apps/fl-settings/pages/mouse.cpp:97
-msgid "Windows"
-msgstr "Fenster"
-
-#: apps/fl-settings/pages/mouse.cpp:98
-msgid "Focus follows the mouse"
+#, fuzzy
+msgid "Focus follows the mouse: Windows & Workspaces."
 msgstr "Fokus folgt der Maus"
 
-#: apps/fl-settings/pages/mouse.cpp:133
-msgid "Mouse & Touchpad"
-msgstr "Maus & Touchpad"
-
-#: apps/fl-settings/pages/mouse.cpp:134
-msgid "mouse touchpad pointer speed acceleration tap click scroll natural left handed focus gestures swipe fingers"
+#: apps/fl-settings/pages/mouse.cpp:137
+msgid "mouse touchpad pointer speed acceleration tap click scroll natural left handed gestures swipe fingers"
 msgstr ""
 
 #: apps/fl-settings/pages/network.cpp:35
 msgid "network wifi wi-fi wireless ethernet wired ip address dns gateway vpn networkmanager"
 msgstr ""
+
+#: apps/fl-settings/pages/nightlight.cpp:33
+#: apps/fl-settings/pages/nightlight.cpp:132
+msgid "Night Light"
+msgstr "Nachtlicht"
+
+#: apps/fl-settings/pages/nightlight.cpp:41
+msgid "Warmer colours at night"
+msgstr "Wärmere Farben in der Nacht"
+
+#: apps/fl-settings/pages/nightlight.cpp:44
+msgid "When:"
+msgstr "Wann:"
+
+#: apps/fl-settings/pages/nightlight.cpp:46
+msgid "Sunset to sunrise|Custom hours|All the time"
+msgstr "Sonnenuntergang bis -aufgang|Eigene Zeiten|Immer"
+
+#: apps/fl-settings/pages/nightlight.cpp:50
+msgid "From:"
+msgstr "Von:"
+
+#: apps/fl-settings/pages/nightlight.cpp:53
+msgid "to"
+msgstr ""
+
+#: apps/fl-settings/pages/nightlight.cpp:61
+msgid "Warmth:"
+msgstr "Wärme:"
+
+#: apps/fl-settings/pages/nightlight.cpp:70
+msgid "Sunset and sunrise are worked out from the time zone (Date & Time)."
+msgstr ""
+
+#: apps/fl-settings/pages/nightlight.cpp:133
+msgid "night light warm colour color temperature blue light evening sunset sunrise redshift"
+msgstr ""
+
+#: apps/fl-settings/pages/notifications.cpp:34
+#: apps/fl-settings/pages/notifications.cpp:140 shell/panel_notify.cpp:232
+msgid "Notifications"
+msgstr "Benachrichtigungen"
 
 #: apps/fl-settings/pages/notifications.cpp:38
 msgid "Popups"
@@ -1070,7 +1139,7 @@ msgstr ""
 msgid "Keep the last:"
 msgstr ""
 
-#: apps/fl-settings/pages/notifications.cpp:76
+#: apps/fl-settings/pages/notifications.cpp:76 shell/panel_clipboard.cpp:195
 msgid "Clear History"
 msgstr ""
 
@@ -1082,12 +1151,12 @@ msgstr ""
 msgid "Notifications of these applications do not pop up (critical ones still do)."
 msgstr ""
 
-#: apps/fl-settings/pages/notifications.cpp:140 shell/panel_notify.cpp:232
-msgid "Notifications"
-msgstr "Benachrichtigungen"
-
 #: apps/fl-settings/pages/notifications.cpp:141
 msgid "notifications popups do not disturb dnd history mute alerts"
+msgstr ""
+
+#: apps/fl-settings/pages/panel.cpp:39 apps/fl-settings/pages/panel.cpp:184
+msgid "Panel & Desktop"
 msgstr ""
 
 #: apps/fl-settings/pages/panel.cpp:43
@@ -1138,13 +1207,13 @@ msgstr ""
 msgid "The wallpaper is set on the Appearance page."
 msgstr ""
 
-#: apps/fl-settings/pages/panel.cpp:180
-msgid "Panel & Desktop"
-msgstr ""
-
-#: apps/fl-settings/pages/panel.cpp:181
+#: apps/fl-settings/pages/panel.cpp:185
 msgid "taskbar panel clock quick launch desktop icons position top bottom"
 msgstr ""
+
+#: apps/fl-settings/pages/power.cpp:42 apps/fl-settings/pages/power.cpp:194
+msgid "Power"
+msgstr "Energie"
 
 #: apps/fl-settings/pages/power.cpp:48
 msgid "Battery"
@@ -1189,14 +1258,11 @@ msgstr ""
 msgid "The panel warns once at each level and waits 30 seconds before acting."
 msgstr ""
 
-#: apps/fl-settings/pages/power.cpp:191
-msgid "Power"
-msgstr "Energie"
-
-#: apps/fl-settings/pages/power.cpp:192
+#: apps/fl-settings/pages/power.cpp:195
 msgid "power battery charge suspend hibernate profile performance saver energy laptop"
 msgstr ""
 
+#: apps/fl-settings/pages/printers.cpp:14
 #: apps/fl-settings/pages/printers.cpp:28
 msgid "Printers"
 msgstr "Drucker"
@@ -1204,6 +1270,10 @@ msgstr "Drucker"
 #: apps/fl-settings/pages/printers.cpp:29
 msgid "printers printing cups queue jobs paper scanner driver ipp default printer"
 msgstr ""
+
+#: apps/fl-settings/pages/privacy.cpp:63 apps/fl-settings/pages/privacy.cpp:144
+msgid "Privacy"
+msgstr "Datenschutz"
 
 #: apps/fl-settings/pages/privacy.cpp:69
 msgid "Recent Files"
@@ -1249,13 +1319,13 @@ msgstr ""
 msgid "The panel's indicator also names the programs recording from a microphone. Sound > Recording shows them with their volume."
 msgstr ""
 
-#: apps/fl-settings/pages/privacy.cpp:144
-msgid "Privacy"
-msgstr "Datenschutz"
-
 #: apps/fl-settings/pages/privacy.cpp:145
 msgid "privacy recent files history recently used camera webcam microphone mic indicator"
 msgstr ""
+
+#: apps/fl-settings/pages/proxy.cpp:52 apps/fl-settings/pages/proxy.cpp:203
+msgid "Proxy"
+msgstr "Proxy"
 
 #: apps/fl-settings/pages/proxy.cpp:60
 msgid "Connection"
@@ -1302,13 +1372,13 @@ msgstr ""
 msgid "\"%s\" is not a proxy address. Use host:port, for example proxy.example.com:3128."
 msgstr ""
 
-#: apps/fl-settings/pages/proxy.cpp:203
-msgid "Proxy"
-msgstr "Proxy"
-
 #: apps/fl-settings/pages/proxy.cpp:204
 msgid "proxy http https socks ftp no_proxy environment internet connection"
 msgstr ""
+
+#: apps/fl-settings/pages/sharing.cpp:67 apps/fl-settings/pages/sharing.cpp:174
+msgid "Sharing"
+msgstr "Freigabe"
 
 #: apps/fl-settings/pages/sharing.cpp:71
 msgid "This computer"
@@ -1359,10 +1429,6 @@ msgid ""
 "%s failed:\n"
 "%s"
 msgstr ""
-
-#: apps/fl-settings/pages/sharing.cpp:174
-msgid "Sharing"
-msgstr "Freigabe"
 
 #: apps/fl-settings/pages/sharing.cpp:175
 msgid "sharing computer name hostname mdns avahi bonjour zeroconf discovery local ssh sftp vnc samba announce"
@@ -1418,6 +1484,7 @@ msgid "Snap to the right third"
 msgstr ""
 
 #: apps/fl-settings/pages/shortcuts.cpp:49
+#: apps/fl-settings/pages/windows.cpp:29
 msgid "Overview of the windows"
 msgstr ""
 
@@ -1458,135 +1525,162 @@ msgid "Show window on all workspaces"
 msgstr ""
 
 #: apps/fl-settings/pages/shortcuts.cpp:61
-msgid "Zoom in (magnifier)"
+msgid "Tile or stack the windows of the workspace"
 msgstr ""
 
 #: apps/fl-settings/pages/shortcuts.cpp:62
+msgid "Zoom in (magnifier)"
+msgstr ""
+
+#: apps/fl-settings/pages/shortcuts.cpp:63
 #, fuzzy
 msgid "Zoom out"
 msgstr "Zoom:"
 
-#: apps/fl-settings/pages/shortcuts.cpp:63
+#: apps/fl-settings/pages/shortcuts.cpp:64
 msgid "End the zoom"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:64
+#: apps/fl-settings/pages/shortcuts.cpp:65
+#: apps/fl-settings/pages/windows.cpp:31
 msgid "Lock the screen"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:65
+#: apps/fl-settings/pages/shortcuts.cpp:66
 msgid "Reload configuration"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:66
+#: apps/fl-settings/pages/shortcuts.cpp:67
 msgid "Log out (quit fl-wm)"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:190
+#: apps/fl-settings/pages/shortcuts.cpp:191
 msgid "No application has asked for shortcuts."
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:231
-msgid "Nothing|Overview of the windows|Applications|Show the desktop|Lock the screen|Next workspace"
+#: apps/fl-settings/pages/shortcuts.cpp:228
+#: apps/fl-settings/pages/shortcuts.cpp:411
+msgid "Shortcuts"
+msgstr "Tastenkürzel"
+
+#: apps/fl-settings/pages/shortcuts.cpp:232
+msgid "Alt+Tab, snapping, moving windows and hot corners: Windows & Workspaces"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:263
-msgid "Window switching (Alt+Tab) shows a list of the windows"
+#: apps/fl-settings/pages/shortcuts.cpp:241
+msgid "Edit…"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:264
-msgid "Off: each Alt+Tab raises the next window directly"
+#: apps/fl-settings/pages/shortcuts.cpp:242
+msgid "Application Shortcuts…"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:274
-msgid "Snap assist: after snapping a window to a side, offer the others for the rest"
+#: apps/fl-settings/pages/shortcuts.cpp:242
+#: apps/fl-settings/settings_common.cpp:99
+msgid "Reset to Defaults"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:283
-msgid "Workspaces:"
-msgstr ""
-
-#: apps/fl-settings/pages/shortcuts.cpp:289
-msgid "How many workspaces there are (all screens switch together)"
-msgstr ""
-
-#: apps/fl-settings/pages/shortcuts.cpp:299
-msgid "Move windows with:"
-msgstr ""
-
-#: apps/fl-settings/pages/shortcuts.cpp:301
-msgid "Super+drag|Alt+drag|Super or Alt+drag|Only the title bar"
-msgstr ""
-
-#: apps/fl-settings/pages/shortcuts.cpp:307
-msgid "Hold this key and drag with the left button to move a window, with the right button to resize it"
-msgstr ""
-
-#: apps/fl-settings/pages/shortcuts.cpp:357
+#: apps/fl-settings/pages/shortcuts.cpp:278
 msgid "Global shortcuts that applications asked for (through the desktop portal)"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:360
-msgid "What pushing the pointer into a corner of the screen does"
-msgstr ""
-
-#: apps/fl-settings/pages/shortcuts.cpp:367
+#: apps/fl-settings/pages/shortcuts.cpp:285
 msgid "Replace all shortcuts with the defaults?"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:367
+#: apps/fl-settings/pages/shortcuts.cpp:285
+#: apps/fl-settings/settings_common.cpp:106
 msgid "Reset"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:412
+#: apps/fl-settings/pages/shortcuts.cpp:330
 msgid "Keys:"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:414
+#: apps/fl-settings/pages/shortcuts.cpp:332
 msgid "Action:"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:416
+#: apps/fl-settings/pages/shortcuts.cpp:334
+#: apps/fl-settings/pages/startup.cpp:49
 msgid "Command:"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:440
+#: apps/fl-settings/pages/shortcuts.cpp:358
 msgid "OK"
 msgstr "OK"
 
-#: apps/fl-settings/pages/shortcuts.cpp:458
+#: apps/fl-settings/pages/shortcuts.cpp:376
 msgid "The workspace is a number from 1 to 9."
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:466
+#: apps/fl-settings/pages/shortcuts.cpp:384
 #, c-format
 msgid "%s is already used for \"%s\". Replace it?"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:466 common/libfld/file_dialog.cpp:441
+#: apps/fl-settings/pages/shortcuts.cpp:384 common/libfld/file_dialog.cpp:441
 #: common/libfld/file_dialog.cpp:459 common/libfld/fileops_ui.cpp:127
 msgid "Replace"
 msgstr ""
 
-#: apps/fl-settings/pages/shortcuts.cpp:493
-msgid "Shortcuts"
-msgstr "Tastenkürzel"
-
-#: apps/fl-settings/pages/shortcuts.cpp:494
+#: apps/fl-settings/pages/shortcuts.cpp:412
 msgid "keyboard shortcuts hotkeys bindings keys super launcher"
 msgstr ""
+
+#: apps/fl-settings/pages/sound.cpp:26 apps/fl-settings/pages/sound.cpp:52
+msgid "Sound"
+msgstr "Klang"
 
 #: apps/fl-settings/pages/sound.cpp:38
 msgid "Open Volume Mixer"
 msgstr ""
 
-#: apps/fl-settings/pages/sound.cpp:52
-msgid "Sound"
-msgstr "Klang"
-
 #: apps/fl-settings/pages/sound.cpp:53
 msgid "sound audio volume speakers headphones microphone input output pipewire mute"
 msgstr ""
+
+#: apps/fl-settings/pages/startup.cpp:42
+msgid "Add a Startup Program"
+msgstr ""
+
+#: apps/fl-settings/pages/startup.cpp:44
+#, fuzzy
+msgid "Application:"
+msgstr "Standardanwendungen"
+
+#: apps/fl-settings/pages/startup.cpp:45
+msgid "Other command"
+msgstr ""
+
+#: apps/fl-settings/pages/startup.cpp:48 common/libfld/file_dialog.cpp:160
+msgid "Name:"
+msgstr ""
+
+#: apps/fl-settings/pages/startup.cpp:50
+msgid "The program and its arguments, as in a desktop entry's Exec="
+msgstr ""
+
+#: apps/fl-settings/pages/startup.cpp:87 apps/fl-settings/pages/startup.cpp:151
+#, fuzzy
+msgid "Startup Applications"
+msgstr "Standardanwendungen"
+
+#: apps/fl-settings/pages/startup.cpp:90
+msgid "Programs that start when you log in. Unticked ones stay installed but do not start."
+msgstr ""
+
+#: apps/fl-settings/pages/startup.cpp:102
+msgid "Programs installed for everyone are turned off instead"
+msgstr ""
+
+#: apps/fl-settings/pages/startup.cpp:152
+msgid "startup applications autostart login start programs session"
+msgstr ""
+
+#: apps/fl-settings/pages/updates.cpp:28 apps/fl-settings/pages/updates.cpp:72
+msgid "Software Updates"
+msgstr "Softwareaktualisierungen"
 
 #: apps/fl-settings/pages/updates.cpp:32
 msgid "Automatic checks"
@@ -1615,10 +1709,6 @@ msgstr ""
 #: apps/fl-settings/pages/updates.cpp:53
 msgid "fl-packages (PackageKit) is not installed."
 msgstr ""
-
-#: apps/fl-settings/pages/updates.cpp:72
-msgid "Software Updates"
-msgstr "Softwareaktualisierungen"
 
 #: apps/fl-settings/pages/updates.cpp:73
 msgid "updates software packages upgrade security packagekit automatic check"
@@ -1652,7 +1742,8 @@ msgstr "Administrator"
 msgid "@iNone yet"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:444
+#: apps/fl-settings/pages/users.cpp:444 common/libfld/menus.cpp:172
+#: common/libfld/menus.cpp:197
 msgid "Delete"
 msgstr "Löschen"
 
@@ -1773,6 +1864,139 @@ msgstr ""
 msgid "users accounts user password administrator admin add remove delete groups picture avatar face autologin automatic login"
 msgstr ""
 
+#: apps/fl-settings/pages/windows.cpp:26
+msgid "Bottom left corner:"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:26
+msgid "Top left corner:"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:26
+msgid "Top right corner:"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:27
+msgid "Bottom right corner:"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:30
+#, fuzzy
+msgid "Applications"
+msgstr "Standardanwendungen"
+
+#: apps/fl-settings/pages/windows.cpp:47 apps/fl-settings/pages/windows.cpp:175
+msgid "Windows & Workspaces"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:53
+msgid "Focus"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:54
+msgid "Focus follows the mouse"
+msgstr "Fokus folgt der Maus"
+
+#: apps/fl-settings/pages/windows.cpp:55
+msgid "Alt+Tab shows a list of the windows"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:56
+msgid "Off: each Alt+Tab raises the next window directly"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:58
+#, fuzzy
+msgid "Workspaces"
+msgstr "Netzwerk"
+
+#: apps/fl-settings/pages/windows.cpp:59
+#, fuzzy
+msgid "Number of workspaces:"
+msgstr "Netzwerk"
+
+#: apps/fl-settings/pages/windows.cpp:66
+msgid "All screens switch workspaces together."
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:67
+msgid "Reopen the windows of the last session at login"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:68
+msgid "The programs start again and their windows go back to their workspace, place and size"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:70
+msgid "Snapping and Moving"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:71
+msgid "Tile the windows (the oldest on the left, the others beside it)"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:72
+msgid "Super+Shift+T tiles or stacks the windows of one workspace"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:73
+msgid "Snap windows dragged to an edge or a corner of the screen"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:74
+msgid "Snap assist: after snapping a window to a side, offer the others for the rest"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:75
+msgid "Move windows with:"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:77
+msgid "Super+drag|Alt+drag|Super or Alt+drag|Only the title bar"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:78
+msgid "Hold this key and drag with the left button to move a window, with the right button to resize it"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:81
+#, fuzzy
+msgid "Hot Corners"
+msgstr "Ecken:"
+
+#: apps/fl-settings/pages/windows.cpp:89
+msgid "Title Bars and Shadows"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:90
+#, fuzzy
+msgid "Title bar height:"
+msgstr "Titelleisten:"
+
+#: apps/fl-settings/pages/windows.cpp:97
+msgid "The active window's border has the accent color"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:98
+msgid "Shadows under windows"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:99
+msgid "Title bar colors follow the theme (Appearance)."
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:176
+msgid "windows workspaces virtual desktops focus follows mouse snap snapping tiling assist drag move modifier super alt hot corners title bar height shadows border alt tab switcher session restore reopen"
+msgstr ""
+
+#: apps/fl-settings/settings_common.cpp:102
+msgid "Use the default values for the settings on this page"
+msgstr ""
+
+#: apps/fl-settings/settings_common.cpp:106
+msgid "Use the default values for the settings on this page?"
+msgstr ""
+
 #: common/libfld/file_dialog.cpp:120
 msgid "Parent folder (Alt+Up)"
 msgstr ""
@@ -1789,8 +2013,12 @@ msgstr ""
 msgid "Show hidden files (Ctrl+H)"
 msgstr ""
 
-#: common/libfld/file_dialog.cpp:160
-msgid "Name:"
+#: common/libfld/file_dialog.cpp:217
+msgid "Open Folder"
+msgstr ""
+
+#: common/libfld/file_dialog.cpp:219 common/libfld/pickers.cpp:223
+msgid "Copy Path"
 msgstr ""
 
 #: common/libfld/file_dialog.cpp:303
@@ -1839,6 +2067,46 @@ msgstr ""
 #: common/libfld/fileops_ui.cpp:127
 msgid "Keep Both"
 msgstr ""
+
+#: common/libfld/menus.cpp:160 common/libfld/menus.cpp:190
+msgid "Undo"
+msgstr ""
+
+#: common/libfld/menus.cpp:161 common/libfld/menus.cpp:191
+msgid "Redo"
+msgstr ""
+
+#: common/libfld/menus.cpp:163 common/libfld/menus.cpp:194
+msgid "Cut"
+msgstr ""
+
+#: common/libfld/menus.cpp:169 common/libfld/menus.cpp:195
+#: common/libfld/menus.cpp:201
+msgid "Copy"
+msgstr ""
+
+#: common/libfld/menus.cpp:171 common/libfld/menus.cpp:196
+msgid "Paste"
+msgstr ""
+
+#: common/libfld/menus.cpp:178 common/libfld/menus.cpp:199
+#: common/libfld/menus.cpp:206
+msgid "Select All"
+msgstr ""
+
+#: common/libfld/pickers.cpp:217
+#, fuzzy
+msgid "Set as Wallpaper"
+msgstr "Hintergrundbild"
+
+#: common/libfld/pickers.cpp:221
+msgid "Open in Image Viewer"
+msgstr ""
+
+#: common/libfld/pickers.cpp:222
+#, fuzzy
+msgid "Show in Files"
+msgstr "In Dateien öffnen"
 
 #: common/libfld/session.cpp:68
 #, c-format
@@ -1910,6 +2178,30 @@ msgstr ""
 msgid "Could not copy the launcher to %s."
 msgstr ""
 
+#: shell/launcher.cpp:238 shell/panel.cpp:824
+msgid "Open"
+msgstr ""
+
+#: shell/launcher.cpp:247 shell/panel.cpp:840
+msgid "Remove from Quick Launch"
+msgstr ""
+
+#: shell/launcher.cpp:253
+msgid "Add to Quick Launch"
+msgstr ""
+
+#: shell/launcher.cpp:258
+msgid "Add to Desktop"
+msgstr ""
+
+#: shell/launcher.cpp:260
+msgid "Remove from Recent"
+msgstr ""
+
+#: shell/launcher.cpp:265
+msgid "Show Desktop File"
+msgstr ""
+
 #: shell/launcher.cpp:463
 msgid "Open Settings"
 msgstr ""
@@ -1920,6 +2212,15 @@ msgstr ""
 
 #: shell/launcher.cpp:578
 msgid "Type to search, Enter to start, Esc to close"
+msgstr ""
+
+#: shell/panel.cpp:702 shell/panel_privacy.cpp:126
+#, fuzzy
+msgid "Sound Settings…"
+msgstr "Einstellungen"
+
+#: shell/panel.cpp:703
+msgid "Volume Mixer…"
 msgstr ""
 
 #: shell/panel.cpp:763
@@ -1938,9 +2239,82 @@ msgstr ""
 msgid "Volume Mixer"
 msgstr ""
 
+#: shell/panel.cpp:830
+#, fuzzy
+msgid "Move Left"
+msgstr "Nach oben"
+
+#: shell/panel.cpp:835
+msgid "Move Right"
+msgstr ""
+
+#: shell/panel.cpp:856
+msgid "Copy Date"
+msgstr ""
+
+#: shell/panel.cpp:857
+msgid "Copy Time"
+msgstr ""
+
+#: shell/panel.cpp:858
+#, fuzzy
+msgid "Copy Date and Time"
+msgstr "Datum & Uhrzeit"
+
+#: shell/panel.cpp:859
+#, fuzzy
+msgid "Date && Time Settings…"
+msgstr "Datum & Uhrzeit"
+
+#: shell/panel.cpp:860
+msgid "Clock Format…"
+msgstr ""
+
+#: shell/panel.cpp:1024
+#, fuzzy
+msgid "Panel Settings…"
+msgstr "Einstellungen"
+
+#: shell/panel.cpp:1030 shell/panel.cpp:1231 shell/panel_sysmon.cpp:80
+msgid "Task Manager…"
+msgstr ""
+
+#: shell/panel.cpp:1031
+#, fuzzy
+msgid "Applications…"
+msgstr "Standardanwendungen"
+
+#: shell/panel.cpp:1039
+msgid "Show a System Monitor"
+msgstr ""
+
+#: shell/panel.cpp:1047 shell/panel.cpp:1232
+#, fuzzy
+msgid "Settings…"
+msgstr "Einstellungen"
+
 #: shell/panel.cpp:1224
 msgid "Apps"
 msgstr ""
+
+#: shell/panel.cpp:1230
+#, fuzzy
+msgid "Open Applications"
+msgstr "Standardanwendungen"
+
+#: shell/panel.cpp:1271
+msgid "Show On-screen Keyboard"
+msgstr ""
+
+#: shell/panel.cpp:1272
+#, fuzzy
+msgid "Keyboard Settings…"
+msgstr "Einstellungen durchsuchen"
+
+#: shell/panel.cpp:1320 shell/panel_power.cpp:247
+#, fuzzy
+msgid "Power Settings…"
+msgstr "Einstellungen"
 
 #: shell/panel_bluetooth.cpp:131
 msgid "No paired devices"
@@ -1949,6 +2323,16 @@ msgstr ""
 #: shell/panel_bluetooth.cpp:136
 msgid "Bluetooth Settings"
 msgstr ""
+
+#: shell/panel_bluetooth.cpp:158
+#, fuzzy
+msgid "Bluetooth Devices…"
+msgstr "Bluetooth"
+
+#: shell/panel_bluetooth.cpp:159
+#, fuzzy
+msgid "Bluetooth Settings…"
+msgstr "Bluetooth"
 
 #: shell/panel_clipboard.cpp:142
 msgid "Clipboard"
@@ -1994,9 +2378,18 @@ msgstr ""
 msgid "Network Settings"
 msgstr ""
 
+#: shell/panel_network.cpp:525
+msgid "Network Settings…"
+msgstr ""
+
 #: shell/panel_nightlight.cpp:58
 msgid "Night light is on. Click to turn it off."
 msgstr ""
+
+#: shell/panel_nightlight.cpp:62
+#, fuzzy
+msgid "Night Light Settings…"
+msgstr "Nachtlicht"
 
 #: shell/panel_notify.cpp:240
 msgid "Clear all"
@@ -2005,6 +2398,28 @@ msgstr ""
 #: shell/panel_notify.cpp:254
 msgid "No notifications"
 msgstr ""
+
+#: shell/panel_notify.cpp:276
+msgid "Do Not Disturb for 1 Hour"
+msgstr ""
+
+#: shell/panel_notify.cpp:277
+msgid "Do Not Disturb Until Tomorrow"
+msgstr ""
+
+#: shell/panel_notify.cpp:289
+msgid "Clear All"
+msgstr ""
+
+#: shell/panel_notify.cpp:294
+#, fuzzy
+msgid "Notification Settings…"
+msgstr "Benachrichtigungen"
+
+#: shell/panel_pager.cpp:184
+#, fuzzy
+msgid "Workspace Settings…"
+msgstr "Netzwerk"
 
 #: shell/panel_power.cpp:219
 msgid "Power Settings"
@@ -2022,6 +2437,23 @@ msgstr ""
 msgid "Printer Settings"
 msgstr ""
 
+#: shell/panel_printers.cpp:197
+#, fuzzy
+msgid "Printers…"
+msgstr "Drucker"
+
+#: shell/panel_printers.cpp:198
+msgid "Printer Settings…"
+msgstr ""
+
+#: shell/panel_privacy.cpp:125
+msgid "Privacy Settings…"
+msgstr ""
+
+#: shell/panel_sysmon.cpp:81
+msgid "Hide the System Monitor"
+msgstr ""
+
 #: shell/panel_weather.cpp:96
 msgid "Weather for which place?"
 msgstr ""
@@ -2035,6 +2467,21 @@ msgstr ""
 msgid "Weather data by Open-Meteo"
 msgstr ""
 
-#: shell/panel_weather.cpp:188
+#: shell/panel_weather.cpp:188 shell/panel_weather.cpp:216
 msgid "Change Place…"
 msgstr ""
+
+#: shell/panel_weather.cpp:201
+msgid "Show the Weather…"
+msgstr ""
+
+#: shell/panel_weather.cpp:215
+msgid "Update Now"
+msgstr ""
+
+#: shell/panel_weather.cpp:217
+msgid "Hide the Weather"
+msgstr ""
+
+#~ msgid "Windows"
+#~ msgstr "Fenster"

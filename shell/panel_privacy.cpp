@@ -5,6 +5,7 @@
 // open /dev/video* themselves, from /proc: scanned only when inotify reports
 // that a camera device was opened or closed, so nothing polls. The microphone
 // comes from PipeWire's recording streams (privacy_audio, from the volume code).
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/fl_draw.H>
 #include <sys/inotify.h>
@@ -121,8 +122,8 @@ fld::FlatButton *privacy_create(bool on) {
     for (auto &c : g_p->cam) m.item(fld::Menu::text("Camera: " + c), nullptr, FL_MENU_INACTIVE);
     for (auto &c : g_p->mic) m.item(fld::Menu::text("Microphone: " + c), nullptr, FL_MENU_INACTIVE);
     m.divider();
-    m.item("Privacy Settings…", [] { fld::spawn({"fl-settings", "privacy"}); });
-    m.item("Sound Settings…", [] { fld::spawn({"fl-settings", "sound"}); });
+    m.item(_("Privacy Settings…"), [] { fld::spawn({"fl-settings", "privacy"}); });
+    m.item(_("Sound Settings…"), [] { fld::spawn({"fl-settings", "sound"}); });
   });
   g_p->callback([](Fl_Widget *, void *) { fld::spawn({"fl-settings", "privacy"}); });
   if (!on) {

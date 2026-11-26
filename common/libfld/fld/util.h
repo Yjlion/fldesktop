@@ -89,6 +89,12 @@ std::string session_env_snapshot_path();
 // Changes wm.ini [environment] makes to the environment: (KEY, value); a
 // value of "\x01" means unset.
 std::vector<std::pair<std::string, std::string>> session_env_changes();
+// Whether a process of this user with that name (/proc/<pid>/comm, at most
+// 15 characters) runs.
+bool process_running(const std::string &comm);
+// Starts argv (spawn()) unless a process of this user named like argv[0]
+// runs already. Returns false when starting it failed.
+bool ensure_running(const std::vector<std::string> &argv);
 // Finds an executable in $PATH.
 std::string which(const std::string &prog);
 // Preferred terminal emulator command (fl-term, then fallbacks)

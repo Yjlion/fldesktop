@@ -15,7 +15,7 @@ class NetworkPage : public Fl_Group {
 public:
   NetworkPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Network", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Network"), cy);
     resizable(g);
     nm::Client::get().start();
     nm::NetworkView *v = new nm::NetworkView(X + 8, cy - 8, W - 16, H - (cy - Y));

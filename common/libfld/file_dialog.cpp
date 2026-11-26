@@ -214,9 +214,9 @@ public:
       int i = list->value() - 1;
       bool ok = i >= 0 && i < (int)items.size();
       std::string full = ok ? (cwd == "/" ? "/" + items[(size_t)i].name : cwd + "/" + items[(size_t)i].name) : "";
-      if (ok && items[(size_t)i].dir) m.item("Open Folder", [this, full] { go(full); });
+      if (ok && items[(size_t)i].dir) m.item(_("Open Folder"), [this, full] { go(full); });
       m.button(accept).divider();
-      m.item("Copy Path", [full] { Fl::copy(full.c_str(), (int)full.size(), 1); }, ok ? 0 : FL_MENU_INACTIVE);
+      m.item(_("Copy Path"), [full] { Fl::copy(full.c_str(), (int)full.size(), 1); }, ok ? 0 : FL_MENU_INACTIVE);
       m.button(up, "Parent Folder").button(newdir).divider().button(hidden, "Show Hidden Files");
     });
     end();

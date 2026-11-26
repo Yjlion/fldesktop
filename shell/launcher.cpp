@@ -235,7 +235,7 @@ static void app_menu(int vis_index) {
   bool in_ql = std::find(ql.begin(), ql.end(), id) != ql.end();
   bool in_recent = std::find(g_recent.begin(), g_recent.end(), e.id) != g_recent.end();
   fld::Menu m;
-  m.item("Open", [vis_index] { launch_index(vis_index); });
+  m.item(_("Open"), [vis_index] { launch_index(vis_index); });
   for (auto &a : e.actions)
     m.item(fld::Menu::text(a.name), [e, a] {
       e.launch_action(a.id);
@@ -244,25 +244,25 @@ static void app_menu(int vis_index) {
     });
   m.divider();
   if (in_ql)
-    m.item("Remove from Quick Launch", [id] {
+    m.item(_("Remove from Quick Launch"), [id] {
       auto l = quick_launch();
       l.erase(std::remove(l.begin(), l.end(), id), l.end());
       set_quick_launch(l);
     });
   else
-    m.item("Add to Quick Launch", [id] {
+    m.item(_("Add to Quick Launch"), [id] {
       auto l = quick_launch();
       l.push_back(id);
       set_quick_launch(l);
     });
-  m.item("Add to Desktop", [e] { add_to_desktop(e); });
+  m.item(_("Add to Desktop"), [e] { add_to_desktop(e); });
   if (in_recent)
-    m.item("Remove from Recent", [e] {
+    m.item(_("Remove from Recent"), [e] {
       g_recent.erase(std::remove(g_recent.begin(), g_recent.end(), e.id), g_recent.end());
       fld::write_file(recent_path(), fld::join(g_recent, "\n"));
     });
   m.divider();
-  m.item("Show Desktop File", [e] { fld::spawn({"fl-files", e.path}); });
+  m.item(_("Show Desktop File"), [e] { fld::spawn({"fl-files", e.path}); });
   g_modal++;
   m.popup();
   g_modal--;

@@ -50,7 +50,7 @@ public:
 
   DateTimePage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Date & Time", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Date & Time"), cy);
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;

@@ -12,7 +12,7 @@ class FirewallPage : public Fl_Group {
 public:
   FirewallPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Firewall", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Firewall"), cy);
     resizable(g);
     fw::FirewallView *v = new fw::FirewallView(X + 16, cy, W - 32, H - (cy - Y) - 12);
     g->resizable(v);

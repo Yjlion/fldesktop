@@ -1,3 +1,4 @@
+#include "fld/i18n.h"
 #include "fld/menus.h"
 
 #include <FL/Fl.H>
@@ -156,25 +157,25 @@ static bool input_menu(Fl_Input_ *in) {
   bool sel = in->insert_position() != in->mark();
   Menu m;
   if (!ro) {
-    m.item("Undo", [in] { in->undo(); }, in->can_undo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'z');
-    m.item("Redo", [in] { in->redo(); }, in->can_redo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + FL_SHIFT + 'z');
+    m.item(_("Undo"), [in] { in->undo(); }, in->can_undo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'z');
+    m.item(_("Redo"), [in] { in->redo(); }, in->can_redo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + FL_SHIFT + 'z');
     m.divider();
-    m.item("Cut", [in] {
+    m.item(_("Cut"), [in] {
       in->copy(1);
       in->cut();
       in->do_callback(FL_REASON_CHANGED);
     }, sel && !secret ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
   }
-  m.item("Copy", [in] { in->copy(1); }, sel && !secret ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
+  m.item(_("Copy"), [in] { in->copy(1); }, sel && !secret ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
   if (!ro) {
-    m.item("Paste", [in] { Fl::paste(*in, 1); }, 0, FL_CTRL + 'v');
-    m.item("Delete", [in] {
+    m.item(_("Paste"), [in] { Fl::paste(*in, 1); }, 0, FL_CTRL + 'v');
+    m.item(_("Delete"), [in] {
       in->cut();
       in->do_callback(FL_REASON_CHANGED);
     }, sel ? 0 : FL_MENU_INACTIVE);
   }
   m.divider();
-  m.item("Select All", [in] { in->insert_position(0, in->size()); }, in->size() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'a');
+  m.item(_("Select All"), [in] { in->insert_position(0, in->size()); }, in->size() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'a');
   m.popup();
   return true;
 }
@@ -186,23 +187,23 @@ static bool text_menu(Fl_Text_Display *td) {
   bool sel = b->selected();
   Menu m;
   if (ed) {
-    m.item("Undo", [ed] { Fl_Text_Editor::kf_undo(0, ed); }, b->can_undo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'z');
-    m.item("Redo", [ed] { Fl_Text_Editor::kf_redo(0, ed); }, b->can_redo() ? 0 : FL_MENU_INACTIVE,
+    m.item(_("Undo"), [ed] { Fl_Text_Editor::kf_undo(0, ed); }, b->can_undo() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'z');
+    m.item(_("Redo"), [ed] { Fl_Text_Editor::kf_redo(0, ed); }, b->can_redo() ? 0 : FL_MENU_INACTIVE,
            FL_CTRL + FL_SHIFT + 'z');
     m.divider();
-    m.item("Cut", [ed] { Fl_Text_Editor::kf_cut(0, ed); }, sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
-    m.item("Copy", [ed] { Fl_Text_Editor::kf_copy(0, ed); }, sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
-    m.item("Paste", [ed] { Fl_Text_Editor::kf_paste(0, ed); }, 0, FL_CTRL + 'v');
-    m.item("Delete", [ed] { Fl_Text_Editor::kf_delete(0, ed); }, sel ? 0 : FL_MENU_INACTIVE);
+    m.item(_("Cut"), [ed] { Fl_Text_Editor::kf_cut(0, ed); }, sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'x');
+    m.item(_("Copy"), [ed] { Fl_Text_Editor::kf_copy(0, ed); }, sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
+    m.item(_("Paste"), [ed] { Fl_Text_Editor::kf_paste(0, ed); }, 0, FL_CTRL + 'v');
+    m.item(_("Delete"), [ed] { Fl_Text_Editor::kf_delete(0, ed); }, sel ? 0 : FL_MENU_INACTIVE);
     m.divider();
-    m.item("Select All", [ed] { Fl_Text_Editor::kf_select_all(0, ed); }, 0, FL_CTRL + 'a');
+    m.item(_("Select All"), [ed] { Fl_Text_Editor::kf_select_all(0, ed); }, 0, FL_CTRL + 'a');
   } else {
-    m.item("Copy", [b] {
+    m.item(_("Copy"), [b] {
       char *t = b->selection_text();
       if (t && *t) Fl::copy(t, (int)strlen(t), 1);
       free(t);
     }, sel ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'c');
-    m.item("Select All", [td, b] {
+    m.item(_("Select All"), [td, b] {
       b->select(0, b->length());
       td->redraw();
     }, b->length() ? 0 : FL_MENU_INACTIVE, FL_CTRL + 'a');

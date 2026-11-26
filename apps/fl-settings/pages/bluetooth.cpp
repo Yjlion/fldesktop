@@ -14,7 +14,7 @@ class BluetoothPage : public Fl_Group {
 public:
   BluetoothPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Bluetooth", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Bluetooth"), cy);
     resizable(g);
     bt::BluetoothView *v = new bt::BluetoothView(X + 24, cy, std::min(W - 48, 720), H - (cy - Y) - 12);
     g->resizable(v);

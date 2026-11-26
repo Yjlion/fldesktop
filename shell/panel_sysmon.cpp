@@ -1,6 +1,7 @@
 // fl-panel: a small system monitor ([Panel] SystemMonitor=true): the
 // processor and memory use of the last minute as two graphs. A click
 // opens the task manager.
+#include "fld/i18n.h"
 #include <FL/fl_draw.H>
 
 #include <deque>
@@ -76,8 +77,8 @@ fld::FlatButton *sysmon_create(bool on) {
   g_mon->hover_color(panel_hover());
   g_mon->callback([](Fl_Widget *, void *) { fld::spawn({"fl-taskmgr"}); });
   panel_context_menu(g_mon, [](fld::Menu &m) {
-    m.item("Task Manager…", [] { fld::spawn({"fl-taskmgr"}); });
-    m.item("Hide the System Monitor", [] {
+    m.item(_("Task Manager…"), [] { fld::spawn({"fl-taskmgr"}); });
+    m.item(_("Hide the System Monitor"), [] {
       fld::Ini c;
       c.load(fld::fld_config_dir() + "/panel.ini");
       c.set_bool("Panel", "SystemMonitor", false);

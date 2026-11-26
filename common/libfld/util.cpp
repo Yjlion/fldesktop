@@ -437,6 +437,25 @@ std::vector<std::pair<std::string, std::string>> session_env_changes() {
 
 extern "C" char **environ;
 
+bool process_running(const std::string &comm) {
+  std::string want = comm.substr(0, 15);
+  uid_t me = getuid();
+  for (auto &pid : list_dir("/proc")) {
+    if (pid.empty() || pid[0] < '0' || pid[0] > '9') continue;
+    struct stat st;
+    if (stat(("/proc/" + pid).c_str(), &st) != 0 || st.st_uid != me) continue;
+    std::string c;
+    if (read_file("/proc/" + pid + "/comm", c, 64) && trim(c) == want) return true;
+  }
+  return false;
+}
+
+bool ensure_running(const std::vector<std::string> &argv) {
+  if (argv.empty()) return false;
+  if (process_running(basename(argv[0]))) return true;
+  return spawn(argv);
+}
+
 bool spawn(const std::vector<std::string> &argv, const std::string &cwd) {
   if (argv.empty()) return false;
   // the session environment as configured now (e.g. a proxy set in Settings

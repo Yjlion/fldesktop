@@ -36,7 +36,7 @@ public:
 
   PanelPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, "Panel & Desktop", cy);
+    Fl_Group *g = page_group(X, Y, W, H, N_("Panel & Desktop"), cy);
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
@@ -100,6 +100,10 @@ public:
     icons->value(desk.ini.get_bool("Desktop", "ShowIcons", true));
     icons->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
     f.note(_("The wallpaper is set on the Appearance page."));
+    f.space(8);
+    reset_page_button(f.widget_x(), f.y(), {{panel_ini_path(), {{"Clock", "Format"}, {"Panel", "KeyboardButton"}, {"Panel", "QuickLaunch"}}},
+                       {desktop_ini_path(), {{"Desktop", "ShowIcons"}}},
+                       {wm_ini_path(), {{"behaviour", "panel_position"}}}});
     g->end();
     end();
   }

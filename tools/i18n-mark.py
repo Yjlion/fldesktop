@@ -7,7 +7,7 @@ Only places where a literal is clearly shown to the user are changed:
   - the label (5th argument) of `new Widget(x, y, w, h, "Label")`
   - ->label("..."), ->tooltip("..."), ->copy_label("..."), ->copy_tooltip("...")
   - the text arguments of fl_alert, fl_message, fl_choice, fl_ask, fl_input, fl_password
-  - the first argument of ->add("...") (menu and choice items)
+  - the first argument of ->add("...") (menu and choice items) and fld::Menu .item("...") / .submenu("...")
   - fl-settings' form helpers: f.note("..."), f.row("..."), f.heading("..."), check(f, "..."), *_choice(f, "...")
 Literals that look like identifiers, paths, FLTK symbols (@...) or formats
 without words are left alone. Review the diff: text that a program compares
@@ -86,7 +86,7 @@ def mark(src):
         for a in args:
             wrap_arg(src, *a, edits)
     # fl-settings form helpers
-    for m in re.finditer(r"(?:->|\.)add\s*\(", src):  # menu and choice items
+    for m in re.finditer(r"(?:->|\.)(?:add|item|submenu)\s*\(", src):  # menu and choice items, fld::Menu
         args, end = split_args(src, m.end())
         if args:
             wrap_arg(src, *args[0], edits)

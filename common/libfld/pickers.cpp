@@ -1,3 +1,4 @@
+#include "fld/i18n.h"
 #include "fld/pickers.h"
 #include "fld/menus.h"
 #include "fld/accents.h"
@@ -213,13 +214,13 @@ public:
           WallpaperGallery *g = gal;
           std::string p = path;
           Menu m;
-          m.item("Set as Wallpaper", [g, p] {
+          m.item(_("Set as Wallpaper"), [g, p] {
             g->value(p);
             g->do_callback();
           });
-          m.item("Open in Image Viewer", [p] { spawn({"fl-view", p}); });
-          m.item("Show in Files", [p] { spawn({"fl-files", dirname(p)}); });
-          m.item("Copy Path", [p] { Fl::copy(p.c_str(), (int)p.size(), 1); });
+          m.item(_("Open in Image Viewer"), [p] { spawn({"fl-view", p}); });
+          m.item(_("Show in Files"), [p] { spawn({"fl-files", dirname(p)}); });
+          m.item(_("Copy Path"), [p] { Fl::copy(p.c_str(), (int)p.size(), 1); });
           m.popup();
         }
         return 1;

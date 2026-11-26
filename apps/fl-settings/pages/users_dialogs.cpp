@@ -40,26 +40,12 @@
 #include "users_model.h"
 #include "users_dialogs.h"
 
-#ifndef FLD_LIBEXECDIR
-#define FLD_LIBEXECDIR "/usr/libexec/fldesktop"
-#endif
 
 
 namespace fld {
 namespace users_ui {
 
 using namespace users;
-
-std::string users_helper_path() {
-  char buf[4096];
-  ssize_t n = readlink("/proc/self/exe", buf, sizeof buf - 1);
-  if (n > 0) {
-    buf[n] = 0;
-    std::string local = dirname(buf) + "/fl-users-helper";
-    if (file_exists(local) && !starts_with(local, "/usr/")) return local;
-  }
-  return std::string(FLD_LIBEXECDIR) + "/fl-users-helper";
-}
 
 
 // ---- dialogs ----------------------------------------------------------------

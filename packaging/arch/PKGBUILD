@@ -332,7 +332,7 @@ package_fldesktop-settings() {
               'greetd: automatic login'
               'fldesktop-icon-theme: the fldesktop icons')
   _app settings
-  _install_files usr/lib/fldesktop/fl-settings-helper usr/lib/fldesktop/fl-users-helper \
+  _install_files usr/lib/fldesktop/fl-settings-helper \
     usr/share/polkit-1/actions/org.fldesktop.settings.policy
 }
 package_fldesktop-osk()   { pkgdesc="fldesktop on-screen keyboard"; depends=(fltk wayland libxkbcommon); _app osk; }

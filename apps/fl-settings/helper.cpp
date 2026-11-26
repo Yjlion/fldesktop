@@ -1,6 +1,9 @@
 // fl-settings-helper: the parts of Settings that need root, run with pkexec.
+// One binary for every page; helper_args.cpp has the list of commands and
+// checks their arguments before anything else runs. The "users" commands are
+// in helper_users.cpp.
 //
-//   fl-settings-helper greeter-ini <new.ini> [<background image>]
+//   fl-settings-helper system greeter-ini <new.ini> [<background image>]
 //
 // Writes /etc/fldesktop/greeter.ini with the validated keys of <new.ini>.
 // A background image is copied to /etc/fldesktop/greeter-background.<ext>
@@ -8,16 +11,16 @@
 // user who ran pkexec.
 //
 // Date & Time on systems without systemd-timedated (Alpine, Devuan):
-//   fl-settings-helper timezone <Region/City>   /etc/localtime (+ /etc/timezone)
-//   fl-settings-helper set-time "YYYY-MM-DD HH:MM:SS"   date -s, hwclock -w
-//   fl-settings-helper ntp on|off   starts and enables (stops and disables)
+//   fl-settings-helper system timezone <Region/City>   /etc/localtime (+ /etc/timezone)
+//   fl-settings-helper system set-time "YYYY-MM-DD HH:MM:SS"   date -s, hwclock -w
+//   fl-settings-helper system ntp on|off   starts and enables (stops and disables)
 //                                   chronyd, ntpd or openntpd
 //
 // Sharing:
-//   fl-settings-helper hostname <name>      the computer's name (hostnamectl,
+//   fl-settings-helper system hostname <name>      the computer's name (hostnamectl,
 //                                           else /etc/hostname and /etc/hosts)
-//   fl-settings-helper avahi on|off         starts and enables avahi-daemon
-//   fl-settings-helper publish <id> on|off  /etc/avahi/services/fldesktop-<id>.service
+//   fl-settings-helper system avahi on|off         starts and enables avahi-daemon
+//   fl-settings-helper system publish <id> on|off  /etc/avahi/services/fldesktop-<id>.service
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -31,6 +34,7 @@
 #include "fld/util.h"
 #include "datetime_sys.h"
 #include "greeter_config.h"
+#include "helper_args.h"
 #include "helper_util.h"
 #include "sharing_util.h"
 
@@ -115,22 +119,7 @@ static int set_published(const std::string &id, bool on) {
   return 0; // avahi-daemon notices new service files itself
 }
 
-int main(int argc, char **argv) {
-  if (argc >= 3 && geteuid() != 0) return fail("must run as root (through pkexec)");
-  if (argc == 3) {
-    if (!strcmp(argv[1], "timezone")) return set_timezone(argv[2]);
-    if (!strcmp(argv[1], "set-time")) return set_time(argv[2]);
-    if (!strcmp(argv[1], "ntp") && (!strcmp(argv[2], "on") || !strcmp(argv[2], "off")))
-      return set_ntp(!strcmp(argv[2], "on"));
-    if (!strcmp(argv[1], "hostname")) return set_hostname(argv[2]);
-    if (!strcmp(argv[1], "avahi") && (!strcmp(argv[2], "on") || !strcmp(argv[2], "off")))
-      return set_avahi(!strcmp(argv[2], "on"));
-  }
-  if (argc == 4 && !strcmp(argv[1], "publish") && (!strcmp(argv[3], "on") || !strcmp(argv[3], "off")))
-    return set_published(argv[2], !strcmp(argv[3], "on"));
-  if (argc < 3 || strcmp(argv[1], "greeter-ini") != 0)
-    return fail("usage: fl-settings-helper greeter-ini <new.ini> [<background image>] | timezone <zone> | "
-                "set-time <time> | ntp on|off | hostname <name> | avahi on|off | publish <id> on|off");
+static int greeter_ini(int argc, char **argv) {
   uid_t uid = fld::helper_caller_uid();
 
   std::string text, err;
@@ -157,4 +146,29 @@ int main(int argc, char **argv) {
   std::string ini_path = fld::greeter_ini_path();
   if (!fld::write_atomic(ini_path, out.to_string())) return fail("cannot write " + ini_path);
   return 0;
+}
+
+// argv[0] is "system", argv[1] the command; helper_args.cpp checked them
+static int system_command(int argc, char **argv) {
+  std::string c = argv[1];
+  if (c == "timezone") return set_timezone(argv[2]);
+  if (c == "set-time") return set_time(argv[2]);
+  if (c == "ntp") return set_ntp(!strcmp(argv[2], "on"));
+  if (c == "hostname") return set_hostname(argv[2]);
+  if (c == "avahi") return set_avahi(!strcmp(argv[2], "on"));
+  if (c == "publish") return set_published(argv[2], !strcmp(argv[3], "on"));
+  if (c == "greeter-ini") return greeter_ini(argc, argv);
+  return fail("unknown command " + c);
+}
+
+int users_command(int argc, char **argv);  // helper_users.cpp
+
+int main(int argc, char **argv) {
+  std::vector<std::string> args(argv + 1, argv + argc);
+  std::string err = fld::helper::check(args);
+  if (!err.empty()) return fail(err);
+  if (geteuid() != 0) return fail("must run as root (through pkexec)");
+  umask(022);
+  if (args[0] == "users") return users_command(argc - 1, argv + 1);
+  return system_command(argc - 1, argv + 1);
 }

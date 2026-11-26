@@ -1,11 +1,5 @@
-// fl-users-helper: the root part of Settings > Users, run with pkexec.
-//
-//   fl-users-helper add <name> <full name> <admin 0|1>        (password on stdin)
-//   fl-users-helper delete <name> keep|remove-home
-//   fl-users-helper modify <name> <full name> <admin 0|1> <groups a,b|->
-//   fl-users-helper password <name>                            (password on stdin)
-//   fl-users-helper picture <name> <image file|->
-//   fl-users-helper autologin <name|->
+// fl-settings-helper users ...: the root part of Settings > Users, run with
+// pkexec. The commands and their argument checks are in helper_args.cpp.
 //
 // Only accounts of people (uid 1000-59999 with a login shell) are touched.
 // It refuses to delete the user who runs it or someone who is logged in, and
@@ -262,10 +256,8 @@ int cmd_autologin(int argc, char **argv) {
 
 }  // namespace
 
-int main(int argc, char **argv) {
-  if (argc < 2) return helper_fail("usage: fl-users-helper add|delete|modify|password|picture|autologin ...");
-  if (geteuid() != 0) return helper_fail("must run as root (through pkexec)");
-  umask(022);
+// argv[0] is "users", argv[1] the command; helper_args.cpp checked them
+int users_command(int argc, char **argv) {
   std::string c = argv[1];
   if (c == "add") return cmd_add(argc, argv);
   if (c == "delete") return cmd_delete(argc, argv);

@@ -3,5 +3,4 @@ usr/share/applications/fl-settings.desktop
 usr/share/icons/hicolor/scalable/apps/fl-settings.svg
 usr/share/man/man1/fl-settings.1
 usr/libexec/fldesktop/fl-settings-helper
-usr/libexec/fldesktop/fl-users-helper
 usr/share/polkit-1/actions/org.fldesktop.settings.policy

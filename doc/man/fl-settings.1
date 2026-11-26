@@ -49,7 +49,7 @@ member of \fBwheel\fR, or \fBsudo\fR where there is no wheel group),
 password, picture, groups such as \fBlp\fR, \fBuucp\fR or \fBdocker\fR,
 and automatic login with greetd (the \fB[initial_session]\fR of
 \fI/etc/greetd/config.toml\fR). The changes are made by
-\fBfl-users-helper\fR through pkexec with \fBuseradd\fR, \fBusermod\fR,
+\fBfl-settings-helper users\fR through pkexec with \fBuseradd\fR, \fBusermod\fR,
 \fBuserdel\fR, \fBgpasswd\fR and \fBchpasswd\fR; passwords are passed on
 its standard input. It refuses to remove your own account, a user who is
 logged in, or the last administrator. Pictures are kept in

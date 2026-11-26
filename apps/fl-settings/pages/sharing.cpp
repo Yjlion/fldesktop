@@ -26,7 +26,7 @@ namespace {
 
 // runs the helper through pkexec in a thread; done() in the FLTK thread
 void run_helper(std::vector<std::string> args, std::function<void(int, const std::string &)> done) {
-  std::vector<std::string> argv = {"pkexec", settings_helper_path()};
+  std::vector<std::string> argv = {"pkexec", settings_helper_path(), "system"};
   argv.insert(argv.end(), args.begin(), args.end());
   struct Res { int code; std::string out; std::function<void(int, const std::string &)> done; };
   std::thread([argv, done] {

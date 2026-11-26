@@ -43,6 +43,7 @@
 {"privacy", "Keep them for:"},
 {"privacy", "Camera and Microphone"},
 {"privacy", "Camera in use by:"},
+{"panel", "Quick settings button (Wi-Fi, Bluetooth, Do Not Disturb, …)"},
 {"panel", "Add…"},
 {"panel", "Remove"},
 {"panel", "Move Up"},

@@ -221,11 +221,62 @@ time_t tomorrow_morning() {
   return mktime(&tm);
 }
 
+// a program's notifications in the popup: its name, how many, and a cross
+// that clears them all
+class GroupHeader : public Fl_Widget {
+public:
+  std::string app;
+  int count;
+  GroupHeader(int X, int Y, int W, const std::string &a, int n) : Fl_Widget(X, Y, W, 26), app(a), count(n) {}
+  void draw() override {
+    const fld::Palette &p = fld::palette();
+    fl_color(fl_color_average(p.bg2, p.fg, 0.92f));
+    fl_rectf(x(), y(), w(), h());
+    fl_color(p.fg_dim);
+    fl_font(FL_HELVETICA_BOLD, 12);
+    std::string l = (app.empty() ? std::string(_("Other")) : app) + (count > 1 ? "  (" + std::to_string(count) + ")" : "");
+    fl_draw(fld::escape_at(l).c_str(), x() + 10, y(), w() - 40, h(), FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
+    if (count > 1) {
+      int cx = x() + w() - 22, cy = y() + 9;
+      fl_line(cx, cy, cx + 8, cy + 8);
+      fl_line(cx + 8, cy, cx, cy + 8);
+    }
+  }
+  int handle(int ev) override {
+    if (ev == FL_PUSH) return 1;
+    if (ev == FL_RELEASE && count > 1 && Fl::event_x() >= x() + w() - 30) {
+      for (auto &e : std::vector<fld::HistoryEntry>(g_list))
+        if (e.app == app) fld::NotifyHistory::get().remove(e.id);
+      g_list.erase(std::remove_if(g_list.begin(), g_list.end(), [this](auto &x) { return x.app == app; }), g_list.end());
+      update_button();
+      window()->hide(); // shown again by the next click, without them
+      return 1;
+    }
+    return 0;
+  }
+};
+
+// the history by program: the one with the newest notification first, and
+// its notifications newest first
+std::vector<std::pair<std::string, std::vector<const fld::HistoryEntry *>>> grouped() {
+  std::vector<std::pair<std::string, std::vector<const fld::HistoryEntry *>>> g;
+  for (auto &e : g_list) { // newest first already
+    auto it = std::find_if(g.begin(), g.end(), [&](auto &x) { return x.first == e.app; });
+    if (it == g.end()) g.push_back({e.app, {&e}});
+    else it->second.push_back(&e);
+  }
+  return g;
+}
+
 void bell_cb(Fl_Widget *w, void *) {
   if (panel_popup_toggle(w)) return; // open: a second click closes it
   const int W = 360;
+  auto groups = grouped();
+  // headers only when more than one program has something
+  bool headers = groups.size() > 1;
   int list_h = 0;
   for (auto &e : g_list) list_h += EntryBox::height_for(e, W - 18);
+  if (headers) list_h += 26 * (int)groups.size();
   int H = 44 + std::max(60, std::min(440, list_h)) + 1;
   PanelPopup pop(W, H);
   const fld::Palette &p = fld::palette();
@@ -256,10 +307,16 @@ void bell_cb(Fl_Widget *w, void *) {
     none->labelsize(13);
   }
   int y = 44;
-  for (auto &e : g_list) {
-    int h = EntryBox::height_for(e, W - 18);
-    new EntryBox(1, y, W - 18, h, e);
-    y += h;
+  for (auto &g : groups) {
+    if (headers) {
+      new GroupHeader(1, y, W - 18, g.first, (int)g.second.size());
+      y += 26;
+    }
+    for (auto *e : g.second) {
+      int h = EntryBox::height_for(*e, W - 18);
+      new EntryBox(1, y, W - 18, h, *e);
+      y += h;
+    }
   }
   sc->end();
   pop.end();
@@ -269,6 +326,9 @@ void bell_cb(Fl_Widget *w, void *) {
 }
 
 } // namespace
+
+bool dnd_on() { return g_dnd; }
+void dnd_set(bool on) { set_dnd(on, 0); }
 
 void dnd_menu_items(fld::Menu &m) {
   m.toggle("Do Not Disturb", g_dnd, [] { set_dnd(!g_dnd, 0); });

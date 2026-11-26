@@ -5,7 +5,7 @@ fld_wayland_protocol(PANEL_PROTO ${CMAKE_SOURCE_DIR}/protocols/wlr-foreign-tople
 add_library(fl-applets-util STATIC applets_util.cpp)
 target_include_directories(fl-applets-util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-applets-util PUBLIC fld)
-add_executable(fl-panel panel.cpp panel_nightlight.cpp panel_clipboard.cpp panel_osd.cpp panel_actions.cpp
+add_executable(fl-panel panel.cpp panel_quick.cpp panel_nightlight.cpp panel_clipboard.cpp panel_osd.cpp panel_actions.cpp
                panel_weather.cpp panel_sysmon.cpp panel_privacy.cpp ${PANEL_PROTO})
 target_include_directories(fl-panel PRIVATE ${FLD_PROTO_OUT})
 target_link_libraries(fl-panel PRIVATE fld fl-cliphist-store fl-applets-util PkgConfig::WAYLAND_CLIENT)
@@ -60,8 +60,13 @@ if(TARGET fld-audio)
   target_compile_definitions(fl-panel PRIVATE FLD_HAVE_AUDIO=1)
 endif()
 
+# results other than applications (calculator, units, commands, files);
+# fl-calc's evaluator is compiled in, so the launcher does not need fl-calc
+add_library(fl-launcher-providers STATIC launcher_providers.cpp ${CMAKE_SOURCE_DIR}/apps/fl-calc/calc_engine.cpp)
+target_include_directories(fl-launcher-providers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/apps/fl-calc)
+target_link_libraries(fl-launcher-providers PUBLIC fld)
 add_executable(fl-launcher launcher.cpp)
-target_link_libraries(fl-launcher PRIVATE fld)
+target_link_libraries(fl-launcher PRIVATE fld fl-launcher-providers)
 # kept ready from the start of the session (fl-launcher --daemon)
 install(FILES ${CMAKE_SOURCE_DIR}/data/autostart/fl-launcher.desktop
         DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/autostart)

@@ -1,4 +1,5 @@
 # files with translatable text (written by tools/update-po.py)
+apps/fl-notifyd/main.cpp
 apps/fl-settings/main.cpp
 apps/fl-settings/settings_common.cpp
 apps/fl-settings/pages/about.cpp
@@ -50,5 +51,6 @@ shell/panel_pager.cpp
 shell/panel_power.cpp
 shell/panel_printers.cpp
 shell/panel_privacy.cpp
+shell/panel_quick.cpp
 shell/panel_sysmon.cpp
 shell/panel_weather.cpp

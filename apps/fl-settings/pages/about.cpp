@@ -1,4 +1,5 @@
 // About: system information
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -81,7 +82,7 @@ public:
     name->labelfont(FL_HELVETICA_BOLD);
     name->labelsize(22);
     name->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
-    Fl_Box *sub = new Fl_Box(X + 136, cy + 52, 400, 24, "A lightweight Wayland desktop built with FLTK");
+    Fl_Box *sub = new Fl_Box(X + 136, cy + 52, 400, 24, _("A lightweight Wayland desktop built with FLTK"));
     sub->labelcolor(palette().fg_dim);
     sub->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
     struct utsname u;
@@ -111,15 +112,15 @@ public:
     }
     f.space(6);
     f.row("", 30, wx, wy, ww);
-    Fl_Button *copy = new Fl_Button(wx, wy, 180, 30, "Copy to Clipboard");
+    Fl_Button *copy = new Fl_Button(wx, wy, 180, 30, _("Copy to Clipboard"));
     copy->callback([](Fl_Widget *, void *d) {
       AboutPage *p = (AboutPage *)d;
       Fl::copy(p->info.c_str(), (int)p->info.size(), 1);
     }, this);
     // the full details: fl-sysinfo, when it is installed
     if (!which("fl-sysinfo").empty()) {
-      Fl_Button *more = new Fl_Button(wx + 190, wy, 200, 30, "System Information…");
-      more->tooltip("Processor, memory, graphics, disks, devices, batteries and temperatures in detail");
+      Fl_Button *more = new Fl_Button(wx + 190, wy, 200, 30, _("System Information…"));
+      more->tooltip(_("Processor, memory, graphics, disks, devices, batteries and temperatures in detail"));
       more->callback([](Fl_Widget *, void *) { spawn({"fl-sysinfo"}); });
     }
     g->end();
@@ -132,7 +133,7 @@ Fl_Group *create(int x, int y, int w, int h) { return new AboutPage(x, y, w, h);
 } // namespace
 
 PageInfo page_about() {
-  return {"about", "About", "help-about", "System", "about system information version hardware cpu memory", create};
+  return {"about", _("About"), "help-about", "System", _("about system information version hardware cpu memory"), create};
 }
 
 } // namespace fld

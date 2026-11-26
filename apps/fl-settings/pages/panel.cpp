@@ -1,4 +1,5 @@
 // Panel & Desktop: panel position, quick launch, clock, keyboard button, desktop icons
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -39,14 +40,14 @@ public:
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
-    f.heading("Panel");
-    f.row("Position:", 28, wx, wy, ww);
+    f.heading(_("Panel"));
+    f.row(_("Position:"), 28, wx, wy, ww);
     position = new Fl_Choice(wx, wy, 200, 28);
-    position->add("Bottom");
-    position->add("Top");
+    position->add(_("Bottom"));
+    position->add(_("Top"));
     position->value(lower(wm.ini.get("behaviour", "panel_position", "bottom")) == "top" ? 1 : 0);
     position->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
-    f.row("Clock:", 28, wx, wy, ww);
+    f.row(_("Clock:"), 28, wx, wy, ww);
     clock = new Fl_Choice(wx, wy, 260, 28);
     std::string cur = panel.ini.get("Clock", "Format", kClockFormats[0][0]);
     for (size_t i = 0; i < sizeof kClockFormats / sizeof kClockFormats[0]; i++) {
@@ -60,22 +61,22 @@ public:
     }
     if (clock->value() < 0) clock->value(0);
     clock->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
-    f.row("Keyboard button:", 28, wx, wy, ww);
+    f.row(_("Keyboard button:"), 28, wx, wy, ww);
     kbd = new Fl_Choice(wx, wy, 260, 28);
-    kbd->add("When there is no keyboard");
-    kbd->add("Always");
-    kbd->add("Never");
+    kbd->add(_("When there is no keyboard"));
+    kbd->add(_("Always"));
+    kbd->add(_("Never"));
     std::string km = panel.ini.get("Panel", "KeyboardButton", "auto");
     kbd->value(km == "always" ? 1 : km == "never" ? 2 : 0);
     kbd->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
 
-    f.row("Quick launch:", 150, wx, wy, ww);
+    f.row(_("Quick launch:"), 150, wx, wy, ww);
     quick = new Fl_Hold_Browser(wx, wy, ww - 110, 150);
     quick->textsize(13);
     quick_ids = split(panel.ini.get("Panel", "QuickLaunch", "fl-files;fl-term;fl-edit"), ';');
-    Fl_Button *add = new Fl_Button(wx + ww - 100, wy, 100, 28, "Add…");
+    Fl_Button *add = new Fl_Button(wx + ww - 100, wy, 100, 28, _("Add…"));
     add->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->add_app(); }, this);
-    Fl_Button *rm = new Fl_Button(wx + ww - 100, wy + 34, 100, 28, "Remove");
+    Fl_Button *rm = new Fl_Button(wx + ww - 100, wy + 34, 100, 28, _("Remove"));
     rm->callback([](Fl_Widget *, void *d) {
       PanelPage *p = (PanelPage *)d;
       int i = p->quick->value() - 1;
@@ -84,21 +85,21 @@ public:
       p->fill_quick();
       p->save();
     }, this);
-    Fl_Button *up = new Fl_Button(wx + ww - 100, wy + 68, 100, 28, "Move Up");
+    Fl_Button *up = new Fl_Button(wx + ww - 100, wy + 68, 100, 28, _("Move Up"));
     up->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->move(-1); }, this);
-    Fl_Button *down = new Fl_Button(wx + ww - 100, wy + 102, 100, 28, "Move Down");
+    Fl_Button *down = new Fl_Button(wx + ww - 100, wy + 102, 100, 28, _("Move Down"));
     fld::set_context_menu(quick, [add, rm, up, down](fld::Menu &m) {
       m.button(add).button(rm).divider().button(up).button(down);
     });
     down->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->move(1); }, this);
     fill_quick();
 
-    f.heading("Desktop");
+    f.heading(_("Desktop"));
     f.row("", 26, wx, wy, ww);
-    icons = new fld::CheckButton(wx, wy, ww, 26, "Show icons on the desktop");
+    icons = new fld::CheckButton(wx, wy, ww, 26, _("Show icons on the desktop"));
     icons->value(desk.ini.get_bool("Desktop", "ShowIcons", true));
     icons->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
-    f.note("The wallpaper is set on the Appearance page.");
+    f.note(_("The wallpaper is set on the Appearance page."));
     g->end();
     end();
   }
@@ -132,8 +133,8 @@ public:
       b->add(escape_at(a.name).c_str());
       b->icon(b->size(), icon_first({a.icon, "application-x-executable"}, 20));
     }
-    Fl_Button *cancel = new Fl_Button(160, 400, 100, 30, "Cancel");
-    Fl_Return_Button *ok = new Fl_Return_Button(270, 400, 100, 30, "Add");
+    Fl_Button *cancel = new Fl_Button(160, 400, 100, 30, _("Cancel"));
+    Fl_Return_Button *ok = new Fl_Return_Button(270, 400, 100, 30, _("Add"));
     static int result;
     result = 0;
     cancel->callback([](Fl_Widget *x, void *) { x->window()->hide(); });
@@ -176,8 +177,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new PanelPage(x, y, w, h);
 } // namespace
 
 PageInfo page_panel() {
-  return {"panel", "Panel & Desktop", "preferences-desktop", "Personal",
-          "taskbar panel clock quick launch desktop icons position top bottom", create};
+  return {"panel", _("Panel & Desktop"), "preferences-desktop", "Personal",
+          _("taskbar panel clock quick launch desktop icons position top bottom"), create};
 }
 
 } // namespace fld

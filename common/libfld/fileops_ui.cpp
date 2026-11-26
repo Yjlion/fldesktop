@@ -1,4 +1,5 @@
 // Drag and drop rules and the progress UI for file operations
+#include "fld/i18n.h"
 #include "fld/fileops.h"
 
 #include <FL/Fl.H>
@@ -123,7 +124,7 @@ void run_file_op(FileOp::Kind k, const std::vector<std::string> &src, const std:
       if (file_exists(d) && abs_path(d) != abs_path(s)) conflicts++;
     }
     if (conflicts) {
-      int c = fl_choice("%d item%s already exist%s in the destination.", "Cancel", "Keep Both", "Replace",
+      int c = fl_choice(_("%d item%s already exist%s in the destination."), _("Cancel"), _("Keep Both"), _("Replace"),
                         conflicts, conflicts == 1 ? "" : "s", conflicts == 1 ? "s" : "");
       if (c == 0) { delete op; return; }
       op->conflict = c == 1 ? FileOp::KEEP_BOTH : FileOp::REPLACE;
@@ -141,7 +142,7 @@ void run_file_op(FileOp::Kind k, const std::vector<std::string> &src, const std:
   pw->bar->minimum(0);
   pw->bar->maximum(100);
   pw->bar->selection_color(palette().accent);
-  Fl_Button *cancel = new Fl_Button(308, 70, 100, 30, "Cancel");
+  Fl_Button *cancel = new Fl_Button(308, 70, 100, 30, _("Cancel"));
   cancel->callback([](Fl_Widget *, void *d) { ((FileOp *)d)->cancel = true; }, op);
   pw->win->end();
   pw->win->set_non_modal();

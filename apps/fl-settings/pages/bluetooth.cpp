@@ -1,4 +1,5 @@
 // Bluetooth: the BlueZ view of fl-bluetooth
+#include "fld/i18n.h"
 #include <algorithm>
 
 #include "bt_ui.h"
@@ -28,8 +29,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new BluetoothPage(x, y, w,
 } // namespace
 
 PageInfo page_bluetooth() {
-  return {"bluetooth", "Bluetooth", "bluetooth-active", "Hardware",
-          "bluetooth pair headset headphones mouse keyboard speaker wireless", create};
+  return {"bluetooth", _("Bluetooth"), "bluetooth-active", "Hardware",
+          _("bluetooth pair headset headphones mouse keyboard speaker wireless"), create};
 }
 
 } // namespace fld

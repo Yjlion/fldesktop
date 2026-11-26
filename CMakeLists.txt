@@ -61,7 +61,8 @@ option(FLD_BUILD_WELCOME  "Build the fl-welcome first-run tour"           ON)
 
 find_package(PkgConfig REQUIRED)
 
-add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
+  -Wformat -Werror=format-security)
 
 # ---- Hardening, sanitizers, fuzzing ----------------------------------------
 option(FLD_HARDENING "Build with _FORTIFY_SOURCE=3, stack protector, RELRO and PIE" ON)
@@ -317,6 +318,7 @@ if(FLD_BUILD_PORTAL)
 endif()
 
 add_subdirectory(data)
+add_subdirectory(po)
 
 if(BUILD_TESTING)
   add_subdirectory(tests)

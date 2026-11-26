@@ -1,4 +1,5 @@
 // Appearance: theme, accent, fonts, icons, cursor, title bars, wallpaper
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Choice.H>
@@ -96,28 +97,28 @@ public:
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
-    f.heading("Style");
-    f.row("Style:", 28, wx, wy, ww);
+    f.heading(_("Style"));
+    f.row(_("Style:"), 28, wx, wy, ww);
     theme = new Fl_Choice(wx, wy, 200, 28);
-    theme->add("Light");
-    theme->add("Dark");
+    theme->add(_("Light"));
+    theme->add(_("Dark"));
     theme->value(lower(desk.ini.get("Appearance", "Theme", "light")) == "dark" ? 1 : 0);
     theme->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
-    f.row("Accent color:", 28, wx, wy, ww);
+    f.row(_("Accent color:"), 28, wx, wy, ww);
     accent = new AccentSwatches(wx, wy, AccentSwatches::preferred_width(28), 28);
     accent_color = palette().accent;
     accent->value(desk.ini.get("Appearance", "Accent", "#3584e4"));
     accent->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->accent_changed(); }, this);
     f.row("", 24, wx, wy, ww);
-    icons_follow = new fld::CheckButton(wx, wy, ww, 24, "Folder icons follow the accent color");
-    icons_follow->tooltip("Switches to the fldesktop icon theme in the accent color");
+    icons_follow = new fld::CheckButton(wx, wy, ww, 24, _("Folder icons follow the accent color"));
+    icons_follow->tooltip(_("Switches to the fldesktop icon theme in the accent color"));
     f.row("", 24, wx, wy, ww);
-    toolkit_colors = new fld::CheckButton(wx, wy, ww, 24, "GTK and Qt programs use these colors too");
-    toolkit_colors->tooltip("Writes the light or dark theme, the accent color, icons and font for GTK\n"
-                            "(gtk-3.0, gtk-4.0) and Qt (qt5ct, qt6ct) programs; they apply it when they start");
+    toolkit_colors = new fld::CheckButton(wx, wy, ww, 24, _("GTK and Qt programs use these colors too"));
+    toolkit_colors->tooltip(_("Writes the light or dark theme, the accent color, icons and font for GTK\n"
+                            "(gtk-3.0, gtk-4.0) and Qt (qt5ct, qt6ct) programs; they apply it when they start"));
     toolkit_colors->value(desk.ini.get_bool("Appearance", "ToolkitColors", true));
     toolkit_colors->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
-    f.row("Widget style:", 28, wx, wy, ww);
+    f.row(_("Widget style:"), 28, wx, wy, ww);
     style = new Fl_Choice(wx, wy, 200, 28);
     std::string cur_style = normalize_style(desk.ini.get("Appearance", "Scheme", "gtk+"));
     for (size_t i = 0; i < widget_styles().size(); i++) {
@@ -130,27 +131,27 @@ public:
       style->add(e.c_str());
       if (cur_style == widget_styles()[i].id) style->value((int)i);
     }
-    style->tooltip("How buttons, fields and frames are drawn");
+    style->tooltip(_("How buttons, fields and frames are drawn"));
     style->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->style_changed(); }, this);
-    radius = new Fl_Spinner(wx + 290, wy, 60, 28, "Corners:");
+    radius = new Fl_Spinner(wx + 290, wy, 60, 28, _("Corners:"));
     radius->range(0, 12);
     radius->value(desk.ini.get_int("Appearance", "Radius", 6));
-    radius->tooltip("Corner radius of the Rounded style");
+    radius->tooltip(_("Corner radius of the Rounded style"));
     radius->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->style_changed(); }, this);
-    f.row("Preview:", 64, wx, wy, ww);
+    f.row(_("Preview:"), 64, wx, wy, ww);
     {
       Fl_Group *pv = new Fl_Group(wx, wy, ww, 64);
-      new Fl_Button(wx, wy, 90, 28, "Button");
-      Fl_Button *def = new Fl_Button(wx + 98, wy, 90, 28, "Pressed");
+      new Fl_Button(wx, wy, 90, 28, _("Button"));
+      Fl_Button *def = new Fl_Button(wx + 98, wy, 90, 28, _("Pressed"));
       def->type(FL_TOGGLE_BUTTON);
       def->value(1);
       def->selection_color(fl_darker(palette().bg));
       Fl_Input *in = new Fl_Input(wx + 196, wy, std::max(80, ww - 196), 28);
       in->value("Text field");
-      in->tooltip("Sample text field");
-      Fl_Check_Button *cb = new fld::CheckButton(wx, wy + 34, 90, 26, "Check");
+      in->tooltip(_("Sample text field"));
+      Fl_Check_Button *cb = new fld::CheckButton(wx, wy + 34, 90, 26, _("Check"));
       cb->value(1);
-      Fl_Round_Button *rb = new fld::RadioButton(wx + 92, wy + 34, 80, 26, "Radio");
+      Fl_Round_Button *rb = new fld::RadioButton(wx + 92, wy + 34, 80, 26, _("Radio"));
       rb->type(FL_RADIO_BUTTON);
       rb->value(1);
       Fl_Slider *sl = new Fl_Slider(wx + 176, wy + 37, 110, 20);
@@ -162,12 +163,12 @@ public:
       pv->end();
     }
     update_radius();
-    f.row("Title bars:", 28, wx, wy, ww);
+    f.row(_("Title bars:"), 28, wx, wy, ww);
     titlebar = new Fl_Choice(wx, wy, 200, 28);
-    titlebar->add("Match theme");
-    titlebar->add("Dark");
-    titlebar->add("Light");
-    titlebar->add("Accent color");
+    titlebar->add(_("Match theme"));
+    titlebar->add(_("Dark"));
+    titlebar->add(_("Light"));
+    titlebar->add(_("Accent color"));
     if (!wm.ini.has("appearance", "active_title")) titlebar->value(0);
     else {
       std::string at = lower(wm.ini.get("appearance", "active_title", ""));
@@ -175,18 +176,18 @@ public:
     }
     titlebar->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
     // the panel can be dark with light windows, or the other way round
-    f.row("Panel:", 28, wx, wy, ww);
+    f.row(_("Panel:"), 28, wx, wy, ww);
     panel_theme = new Fl_Choice(wx, wy, 200, 28);
-    panel_theme->add("Match theme");
-    panel_theme->add("Dark");
-    panel_theme->add("Light");
+    panel_theme->add(_("Match theme"));
+    panel_theme->add(_("Dark"));
+    panel_theme->add(_("Light"));
     std::string pt = lower(desk.ini.get("Appearance", "PanelTheme", "auto"));
     panel_theme->value(pt == "dark" ? 1 : pt == "light" ? 2 : 0);
     panel_theme->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
 
-    f.heading("Fonts");
+    f.heading(_("Fonts"));
     fonts = font_families();
-    f.row("Interface:", 28, wx, wy, ww);
+    f.row(_("Interface:"), 28, wx, wy, ww);
     ui_font = new Fl_Choice(wx, wy, ww - 90, 28);
     fill_choice(ui_font, fonts, desk.ini.get("Appearance", "Font", "Sans"));
     ui_font->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
@@ -194,7 +195,7 @@ public:
     ui_size->range(8, 24);
     ui_size->value(desk.ini.get_int("Appearance", "FontSize", 14));
     ui_size->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
-    f.row("Monospace:", 28, wx, wy, ww);
+    f.row(_("Monospace:"), 28, wx, wy, ww);
     mono_font = new Fl_Choice(wx, wy, ww - 90, 28);
     fill_choice(mono_font, fonts, desk.ini.get("Appearance", "MonoFont", "Monospace"));
     mono_font->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
@@ -203,9 +204,9 @@ public:
     mono_size->value(desk.ini.get_int("Appearance", "MonoFontSize", 14));
     mono_size->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
 
-    f.heading("Icons and Cursor");
+    f.heading(_("Icons and Cursor"));
     icon_themes = theme_dirs(false);
-    f.row("Icon theme:", 28, wx, wy, ww);
+    f.row(_("Icon theme:"), 28, wx, wy, ww);
     icons = new Fl_Choice(wx, wy, ww, 28);
     // the theme in effect: a stale IconTheme that disagrees with the accent is corrected
     std::string cur_icons = effective_icon_theme(desk.ini, [this](const std::string &t) {
@@ -222,7 +223,7 @@ public:
     icons_follow->value(desk.ini.get_bool("Appearance", "IconsFollowAccent", is_accent_icon_theme(cur_icons)));
     icons_follow->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->accent_changed(); }, this);
     cursor_themes = theme_dirs(true);
-    f.row("Cursor:", 28, wx, wy, ww);
+    f.row(_("Cursor:"), 28, wx, wy, ww);
     cursors = new Fl_Choice(wx, wy, ww - 90, 28);
     fill_choice(cursors, cursor_themes, wm.ini.get("cursor", "theme", default_cursor_theme()));
     cursors->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
@@ -232,7 +233,7 @@ public:
     cursor_size->value(wm.ini.get_int("cursor", "size", 24));
     cursor_size->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->save(); }, this);
 
-    f.heading("Wallpaper");
+    f.heading(_("Wallpaper"));
     f.row("", 96, wx, wy, ww);
     gallery = new WallpaperGallery(wx, wy, ww, 96);
     gallery->load(WallpaperGallery::default_dirs());
@@ -242,9 +243,9 @@ public:
       p->save();
     }, this);
     f.row("", 28, wx, wy, ww);
-    Fl_Button *choose = new Fl_Button(wx, wy, 140, 28, "Other Image…");
+    Fl_Button *choose = new Fl_Button(wx, wy, 140, 28, _("Other Image…"));
     choose->callback([](Fl_Widget *, void *d) { ((AppearancePage *)d)->choose_wallpaper(); }, this);
-    wp_mode = new Fl_Choice(wx + 214, wy, 140, 28, "Fit:");
+    wp_mode = new Fl_Choice(wx + 214, wy, 140, 28, _("Fit:"));
     const char *modes[] = {"fill", "fit", "stretch", "center", "tile"};
     std::string cur_mode = desk.ini.get("Desktop", "WallpaperMode", "fill");
     for (int i = 0; i < 5; i++) {
@@ -261,7 +262,7 @@ public:
     gallery->add_file(wp);
     gallery->value(wp);
     f.space(4);
-    f.note("The panel and desktop change right away; other applications use the new style the next time they start.", 2);
+    f.note(_("The panel and desktop change right away; other applications use the new style the next time they start."), 2);
     g->end();
     end();
   }
@@ -379,8 +380,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new AppearancePage(x, y, w
 } // namespace
 
 PageInfo page_appearance() {
-  return {"appearance", "Appearance", "preferences-desktop-theme", "Personal",
-          "theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar panel taskbar", create};
+  return {"appearance", _("Appearance"), "preferences-desktop-theme", "Personal",
+          _("theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar panel taskbar"), create};
 }
 
 } // namespace fld

@@ -2,6 +2,7 @@
 //
 // app_id "fldesktop.desktop": fl-wm keeps it below all windows and sizes it
 // to the primary output. Icons are the files in the XDG desktop folder.
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_File_Chooser.H>
@@ -457,18 +458,18 @@ public:
     if (paths.empty()) return;
     std::string err;
     for (auto &p : paths)
-      if (!fld::trash(p, &err)) fl_alert("Could not move to trash:\n%s", err.c_str());
+      if (!fld::trash(p, &err)) fl_alert(_("Could not move to trash:\n%s"), err.c_str());
     reload();
   }
 
   void rename_item(int i) {
     Item &it = items[i];
     if (it.path == "trash:///" || it.path == fld::home_dir()) return;
-    const char *n = fl_input("New name:", fld::basename(it.path).c_str());
+    const char *n = fl_input("%s", fld::basename(it.path).c_str(), _("New name:"));
     if (!n || !*n || strchr(n, '/')) return;
     std::string dst = fld::path_join(dir, n);
-    if (fld::file_exists(dst)) { fl_alert("\"%s\" already exists.", n); return; }
-    if (rename(it.path.c_str(), dst.c_str()) != 0) fl_alert("Rename failed: %s", strerror(errno));
+    if (fld::file_exists(dst)) { fl_alert(_("\"%s\" already exists."), n); return; }
+    if (rename(it.path.c_str(), dst.c_str()) != 0) fl_alert(_("Rename failed: %s"), strerror(errno));
     reload();
   }
 
@@ -499,7 +500,7 @@ public:
     else if (id == 2) rename_item(i);
     else if (id == 3) trash_selected();
     else if (id == 5) {
-      if (fl_choice("Permanently delete all items in the Trash?", "Cancel", "Empty Trash", nullptr) == 1) {
+      if (fl_choice("%s", _("Cancel"), _("Empty Trash"), nullptr, _("Permanently delete all items in the Trash?")) == 1) {
         fld::trash_empty();
         reload();
       }

@@ -9,7 +9,12 @@ namespace settings_search {
 struct Item {
   const char *page, *label;
 };
-const std::vector<Item> &index(); // the generated table
+// the generated table; its labels are the source texts (msgids), as in the
+// program: "Speed:", "&Tap to click"; show them through clean_label(_(label))
+const std::vector<Item> &index();
+// a label as the search shows it: without "&" markers, "@" symbols, line
+// breaks and a trailing ":", "…" or "."
+std::string clean_label(const std::string &label);
 
 struct Hit {
   std::string page, label;

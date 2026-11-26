@@ -1,5 +1,6 @@
 // Power: battery state (UPower), power mode (power-profiles-daemon), what
 // happens when the battery runs low ([Power] in desktop.ini, used by fl-panel)
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Check_Button.H>
@@ -44,7 +45,7 @@ public:
     int wx, wy, ww;
     auto cb = [](Fl_Widget *, void *d) { ((PowerPage *)d)->save(); };
 
-    f.heading("Battery");
+    f.heading(_("Battery"));
     f.row("", 92, wx, wy, ww);
     int fx = X + 24;
     bat_icon = new Fl_Box(fx, wy + 4, 48, 48);
@@ -56,11 +57,11 @@ public:
     bat_details->labelcolor(palette().fg_dim);
     bat_details->align(FL_ALIGN_LEFT | FL_ALIGN_TOP | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
     f.row("", 26, wx, wy, ww);
-    percentage = new fld::CheckButton(wx, wy, ww, 26, "Show the battery percentage in the panel");
+    percentage = new fld::CheckButton(wx, wy, ww, 26, _("Show the battery percentage in the panel"));
     percentage->value(desk.ini.get_bool("Power", "ShowPercentage", true));
     percentage->callback(cb, this);
 
-    f.heading("Power Mode");
+    f.heading(_("Power Mode"));
     static const char *labels[] = {"Power Saver — longer battery life", "Balanced", "Performance — faster, more power"};
     static const char *names[] = {"power-saver", "balanced", "performance"};
     for (int i = 0; i < 3; i++) {
@@ -69,28 +70,28 @@ public:
       profile_btn[i]->type(FL_RADIO_BUTTON);
       profile_btn[i]->callback([](Fl_Widget *, void *d) {
         up::Client::get().set_profile((const char *)d, [](const std::string &e) {
-          if (!e.empty()) fl_alert("Could not change the power mode:\n%s", escape_at(e).c_str());
+          if (!e.empty()) fl_alert(_("Could not change the power mode:\n%s"), escape_at(e).c_str());
         });
       }, (void *)names[i]);
     }
     profile_note = f.note("");
 
-    f.heading("Low Battery");
-    f.row("Warn at:", 28, wx, wy, ww);
+    f.heading(_("Low Battery"));
+    f.row(_("Warn at:"), 28, wx, wy, ww);
     low = new Fl_Spinner(wx, wy, 70, 28);
     low->range(2, 50);
     low->value(desk.ini.get_int("Power", "LowBattery", 10));
     low->callback(cb, this);
     unit(wx + 76, wy);
-    f.row("Critical at:", 28, wx, wy, ww);
+    f.row(_("Critical at:"), 28, wx, wy, ww);
     critical = new Fl_Spinner(wx, wy, 70, 28);
     critical->range(2, 50);
     critical->value(desk.ini.get_int("Power", "CriticalBattery", 5));
     critical->callback(cb, this);
     unit(wx + 76, wy);
-    f.row("When the battery is empty:", 28, wx, wy, ww);
+    f.row(_("When the battery is empty:"), 28, wx, wy, ww);
     action = new Fl_Choice(wx, wy, 160, 28);
-    action->add("Do nothing|Suspend|Hibernate|Shut down");
+    action->add(_("Do nothing|Suspend|Hibernate|Shut down"));
     std::string a = desk.ini.get("Power", "CriticalAction", "suspend");
     action->value(1);
     for (int i = 0; i < 4; i++)
@@ -103,7 +104,7 @@ public:
     action_at->value(desk.ini.get_int("Power", "ActionBattery", 3));
     action_at->callback(cb, this);
     unit(wx + 270, wy);
-    f.note("The panel warns once at each level and waits 30 seconds before acting.");
+    f.note(_("The panel warns once at each level and waits 30 seconds before acting."));
 
     g->end();
     end();
@@ -187,8 +188,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new PowerPage(x, y, w, h);
 } // namespace
 
 PageInfo page_power() {
-  return {"power", "Power", "battery-good", "Hardware",
-          "power battery charge suspend hibernate profile performance saver energy laptop", create};
+  return {"power", _("Power"), "battery-good", "Hardware",
+          _("power battery charge suspend hibernate profile performance saver energy laptop"), create};
 }
 
 } // namespace fld

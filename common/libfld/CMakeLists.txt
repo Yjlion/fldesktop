@@ -5,6 +5,7 @@ add_library(fld STATIC
   window_size.cpp
   accents.cpp
   ini.cpp
+  i18n.cpp
   desktop_entry.cpp
   icons.cpp
   mime.cpp
@@ -29,6 +30,7 @@ add_library(fld STATIC
   toolkit_theme.cpp
 )
 target_include_directories(fld PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+set_source_files_properties(i18n.cpp PROPERTIES COMPILE_DEFINITIONS FLD_LOCALEDIR="${CMAKE_INSTALL_FULL_LOCALEDIR}")
 find_package(Threads REQUIRED)
 pkg_check_modules(FLD_CAIRO REQUIRED IMPORTED_TARGET cairo)
 target_link_libraries(fld PUBLIC fltk::images fltk::fltk Threads::Threads PkgConfig::FLD_CAIRO PkgConfig::WAYLAND_CLIENT)

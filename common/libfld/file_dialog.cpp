@@ -1,3 +1,4 @@
+#include "fld/i18n.h"
 #include "fld/file_dialog.h"
 #include "fld/menus.h"
 
@@ -116,7 +117,7 @@ public:
     const int W = w(), H = h(), side = 180;
     // top bar
     up = new Fl_Button(side + 12, 8, 32, 28, "@8->");
-    up->tooltip("Parent folder (Alt+Up)");
+    up->tooltip(_("Parent folder (Alt+Up)"));
     up->callback([](Fl_Widget *, void *d) {
       Dialog *dl = (Dialog *)d;
       dl->go(dirname(dl->cwd));
@@ -124,10 +125,10 @@ public:
     path = new Fl_Input(side + 50, 8, W - side - 50 - 230, 28);
     path->when(FL_WHEN_ENTER_KEY_ALWAYS);
     path->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->path_entered(); }, this);
-    newdir = new Fl_Button(W - 224, 8, 104, 28, "New Folder");
+    newdir = new Fl_Button(W - 224, 8, 104, 28, _("New Folder"));
     newdir->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->new_folder(); }, this);
-    hidden = new fld::CheckButton(W - 112, 8, 104, 28, "Hidden");
-    hidden->tooltip("Show hidden files (Ctrl+H)");
+    hidden = new fld::CheckButton(W - 112, 8, 104, 28, _("Hidden"));
+    hidden->tooltip(_("Show hidden files (Ctrl+H)"));
     hidden->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->refresh(); }, this);
     // places
     place_list = new Fl_Hold_Browser(8, 8, side - 4, H - 60);
@@ -156,7 +157,7 @@ public:
     list->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->list_clicked(); }, this);
     int y = 44 + list_h + 8;
     if (opt.mode == FileDialogOptions::SAVE) {
-      name = new Fl_Input(side + 70, y, W - side - 78, 28, "Name:");
+      name = new Fl_Input(side + 70, y, W - side - 78, 28, _("Name:"));
       name->value(opt.name.c_str());
       name->when(FL_WHEN_ENTER_KEY_ALWAYS);
       name->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->do_accept(); }, this);
@@ -165,7 +166,7 @@ public:
     if (!opt.filters.empty() || !opt.choices.empty()) {
       int x = side + 12;
       if (!opt.filters.empty()) {
-        filter = new Fl_Choice(x + 58, y, 260, 28, "Show:");
+        filter = new Fl_Choice(x + 58, y, 260, 28, _("Show:"));
         for (auto &f : opt.filters) {
           filter->add(menu_escape(f.name).c_str());
         }
@@ -198,7 +199,7 @@ public:
       }
       y += 36;
     }
-    cancel = new Fl_Button(W - 236, H - 40, 110, 30, "Cancel");
+    cancel = new Fl_Button(W - 236, H - 40, 110, 30, _("Cancel"));
     cancel->callback([](Fl_Widget *, void *d) { ((Dialog *)d)->finish(false); }, this);
     std::string al = opt.accept_label;
     if (al.empty()) al = opt.mode == FileDialogOptions::SAVE ? "Save" : (opt.directory || opt.mode == FileDialogOptions::SAVE_FILES) ? "Select" : "Open";
@@ -299,11 +300,11 @@ public:
   void go(const std::string &dir) {
     std::string d = abs_path(expand_tilde(dir));
     if (!is_dir(d)) {
-      fl_alert("The folder \"%s\" does not exist.", d.c_str());
+      fl_alert(_("The folder \"%s\" does not exist."), d.c_str());
       return;
     }
     if (access(d.c_str(), R_OK | X_OK) != 0) {
-      fl_alert("You do not have permission to open \"%s\".", d.c_str());
+      fl_alert(_("You do not have permission to open \"%s\"."), d.c_str());
       return;
     }
     cwd = d;
@@ -407,15 +408,15 @@ public:
       do_accept();
       return;
     }
-    fl_alert("\"%s\" was not found.", p.c_str());
+    fl_alert(_("\"%s\" was not found."), p.c_str());
   }
 
   void new_folder() {
-    const char *n = fl_input("Name of the new folder:", "New Folder");
+    const char *n = fl_input("%s", _("New Folder"), _("Name of the new folder:"));
     if (!n || !*trim(n).c_str()) return;
     std::string p = path_join(cwd, trim(n));
     if (mkdir(p.c_str(), 0755) != 0) {
-      fl_alert("Could not create the folder: %s", strerror(errno));
+      fl_alert(_("Could not create the folder: %s"), strerror(errno));
       return;
     }
     go(p);
@@ -437,7 +438,7 @@ public:
         name->value("");
         return;
       }
-      if (file_exists(p) && fl_choice("\"%s\" already exists.\nDo you want to replace it?", "Cancel", "Replace",
+      if (file_exists(p) && fl_choice(_("\"%s\" already exists.\nDo you want to replace it?"), _("Cancel"), _("Replace"),
                                       nullptr, basename(p).c_str()) != 1)
         return;
       finish_with({p});
@@ -454,8 +455,8 @@ public:
         for (auto &f : opt.files)
           if (file_exists(path_join(out[0], f))) clash.push_back(f);
         if (!clash.empty() &&
-            fl_choice("%d of the files already exist in this folder (%s).\nDo you want to replace them?", "Cancel",
-                      "Replace", nullptr, (int)clash.size(), clash[0].c_str()) != 1)
+            fl_choice(_("%d of the files already exist in this folder (%s).\nDo you want to replace them?"), _("Cancel"),
+                      _("Replace"), nullptr, (int)clash.size(), clash[0].c_str()) != 1)
           return;
       }
       finish_with(out);

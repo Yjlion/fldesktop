@@ -1,6 +1,7 @@
 // Users: add, remove and change the accounts of the people who use the
 // computer (full name, account type, password, picture, groups, automatic
 // login). Changes are made as root by pkexec fl-users-helper.
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -101,15 +102,15 @@ bool ask_password(const std::string &title, std::string &out) {
   bool done = false, ok = false;
   Fl_Double_Window w(420, 190);
   w.copy_label(title.c_str());
-  Fl_Box *l1 = new Fl_Box(20, 20, 130, 28, "New password:");
+  Fl_Box *l1 = new Fl_Box(20, 20, 130, 28, _("New password:"));
   l1->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
   Fl_Secret_Input *p1 = new Fl_Secret_Input(160, 20, 240, 28);
-  Fl_Box *l2 = new Fl_Box(20, 56, 130, 28, "Again:");
+  Fl_Box *l2 = new Fl_Box(20, 56, 130, 28, _("Again:"));
   l2->align(FL_ALIGN_INSIDE | FL_ALIGN_RIGHT);
   Fl_Secret_Input *p2 = new Fl_Secret_Input(160, 56, 240, 28);
   StrengthBox *st = new StrengthBox(160, 88, 240, 22);
-  Fl_Button *cancel = new Fl_Button(200, 140, 95, 30, "Cancel");
-  Fl_Return_Button *okb = new Fl_Return_Button(305, 140, 95, 30, "Change");
+  Fl_Button *cancel = new Fl_Button(200, 140, 95, 30, _("Cancel"));
+  Fl_Return_Button *okb = new Fl_Return_Button(305, 140, 95, 30, _("Change"));
   struct Ctx {
     Fl_Secret_Input *p1, *p2;
     StrengthBox *st;
@@ -182,11 +183,11 @@ bool ask_new_user(const std::vector<Account> &existing, NewUser &out) {
   c.full = new Fl_Input(170, 20, 270, 28);
   label(56, "User name:");
   c.name = new Fl_Input(170, 56, 270, 28);
-  c.name->tooltip("Lower case letters, digits, - and _. It cannot be changed later.");
+  c.name->tooltip(_("Lower case letters, digits, - and _. It cannot be changed later."));
   label(92, "Account type:");
   Fl_Choice *type = new Fl_Choice(170, 92, 180, 28);
-  type->add("Standard");
-  type->add("Administrator");
+  type->add(_("Standard"));
+  type->add(_("Administrator"));
   type->value(0);
   label(128, "Password:");
   c.p1 = new Fl_Secret_Input(170, 128, 270, 28);
@@ -197,8 +198,8 @@ bool ask_new_user(const std::vector<Account> &existing, NewUser &out) {
   c.msg->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_WRAP);
   c.msg->labelsize(12);
   c.msg->labelcolor(palette().danger);
-  Fl_Button *cancel = new Fl_Button(240, 280, 95, 30, "Cancel");
-  c.add = new Fl_Return_Button(345, 280, 95, 30, "Add");
+  Fl_Button *cancel = new Fl_Button(240, 280, 95, 30, _("Cancel"));
+  c.add = new Fl_Return_Button(345, 280, 95, 30, _("Add"));
   c.full->when(FL_WHEN_CHANGED);
   c.full->callback([](Fl_Widget *, void *d) {
     NewUserDialog *c = (NewUserDialog *)d;
@@ -242,8 +243,8 @@ bool ask_remove(const Account &a, bool &remove_home) {
   std::string hl = "Also delete the home folder " + a.home + " and all the files in it";
   home->copy_label(escape_at(hl).c_str());
   home->value(0);
-  Fl_Button *cancel = new Fl_Button(240, 150, 95, 30, "Cancel");
-  Fl_Button *rm = new Fl_Button(345, 150, 95, 30, "Remove");
+  Fl_Button *cancel = new Fl_Button(240, 150, 95, 30, _("Cancel"));
+  Fl_Button *rm = new Fl_Button(345, 150, 95, 30, _("Remove"));
   rm->color(palette().danger);
   rm->labelcolor(FL_WHITE);
   struct Ctx {
@@ -413,7 +414,7 @@ void fingerprint_dialog(const std::string &user) {
     void fill() {
       list->clear();
       for (auto &f : fprint::enrolled(user)) list->add(fprint::finger_label(f).c_str());
-      if (list->size() == 0) list->add("@iNone yet");
+      if (list->size() == 0) list->add(_("@iNone yet"));
     }
     void say(const std::string &t) {
       status_text = t;
@@ -440,9 +441,9 @@ void fingerprint_dialog(const std::string &user) {
   }, &ctx);
   del.callback([](Fl_Widget *, void *v) {
     Ctx *c = (Ctx *)v;
-    if (fl_choice("Delete all fingerprints of %s?", "Cancel", "Delete", nullptr, c->user.c_str()) != 1) return;
+    if (fl_choice(_("Delete all fingerprints of %s?"), _("Cancel"), _("Delete"), nullptr, c->user.c_str()) != 1) return;
     std::string err;
-    if (!fprint::delete_all(c->user, err)) fl_alert("The fingerprints were not deleted: %s", err.c_str());
+    if (!fprint::delete_all(c->user, err)) fl_alert(_("The fingerprints were not deleted: %s"), err.c_str());
     c->fill();
   }, &ctx);
   close.callback([](Fl_Widget *w, void *) { w->window()->hide(); });
@@ -481,38 +482,38 @@ public:
     f.row("", 150, wx, wy, ww);
     list = new Fl_Hold_Browser(wx - 200, wy, ww + 200 - 130, 150);
     list->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->pick(); }, this);
-    add_b = new Fl_Button(wx + ww - 120, wy, 120, 28, "Add User…");
+    add_b = new Fl_Button(wx + ww - 120, wy, 120, 28, _("Add User…"));
     add_b->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->add_user(); }, this);
-    remove_b = new Fl_Button(wx + ww - 120, wy + 36, 120, 28, "Remove…");
+    remove_b = new Fl_Button(wx + ww - 120, wy + 36, 120, 28, _("Remove…"));
     remove_b->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->remove_user(); }, this);
 
-    f.heading("Account");
-    f.row("Picture:", 72, wx, wy, ww);
+    f.heading(_("Account"));
+    f.row(_("Picture:"), 72, wx, wy, ww);
     pic = new Picture(wx, wy, 72, 72);
-    pic_b = new Fl_Button(wx + 84, wy + 4, 120, 28, "Choose…");
+    pic_b = new Fl_Button(wx + 84, wy + 4, 120, 28, _("Choose…"));
     pic_b->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->choose_picture(); }, this);
-    pic_rm = new Fl_Button(wx + 84, wy + 40, 120, 28, "No Picture");
+    pic_rm = new Fl_Button(wx + 84, wy + 40, 120, 28, _("No Picture"));
     pic_rm->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->remove_picture(); }, this);
-    f.row("User name:", 28, wx, wy, ww);
+    f.row(_("User name:"), 28, wx, wy, ww);
     uname = new Fl_Box(wx, wy, ww, 28);
     uname->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
-    f.row("Full name:", 28, wx, wy, ww);
+    f.row(_("Full name:"), 28, wx, wy, ww);
     full = new Fl_Input(wx, wy, ww, 28);
     full->when(FL_WHEN_CHANGED);
     full->callback(changed, this);
-    f.row("Account type:", 28, wx, wy, ww);
+    f.row(_("Account type:"), 28, wx, wy, ww);
     type = new Fl_Choice(wx, wy, 180, 28);
-    type->add("Standard");
-    type->add("Administrator");
+    type->add(_("Standard"));
+    type->add(_("Administrator"));
     type->callback(changed, this);
-    f.note("Administrators can install software, change system settings and manage users.", 2);
-    f.row("Password:", 28, wx, wy, ww);
-    pw_b = new Fl_Button(wx, wy, 180, 28, "Change Password…");
+    f.note(_("Administrators can install software, change system settings and manage users."), 2);
+    f.row(_("Password:"), 28, wx, wy, ww);
+    pw_b = new Fl_Button(wx, wy, 180, 28, _("Change Password…"));
     pw_b->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->change_password(); }, this);
 #ifdef FLD_HAVE_FPRINT
     // fingerprints: when there is a reader
     if (fprint::available()) {
-      fp_b = new Fl_Button(wx + 190, wy, 150, 28, "Fingerprints…");
+      fp_b = new Fl_Button(wx + 190, wy, 150, 28, _("Fingerprints…"));
       fp_b->callback([](Fl_Widget *, void *d) {
         UsersPage *p = (UsersPage *)d;
         if (const Account *a = p->current()) fingerprint_dialog(a->name);
@@ -520,7 +521,7 @@ public:
     }
 #endif
     f.row("", 26, wx, wy, ww);
-    auto_b = new fld::CheckButton(wx, wy, ww, 26, "Log in automatically when the computer starts");
+    auto_b = new fld::CheckButton(wx, wy, ww, 26, _("Log in automatically when the computer starts"));
     auto_b->callback(changed, this);
     // the list is as tall as its groups: a list that scrolls inside the
     // page, which scrolls itself, is hard to use with the wheel
@@ -535,17 +536,17 @@ public:
       attach_groups(as, gs, adm);
       grp_h = std::max(48, std::min(480, (int)editable_groups(gs, as, adm).size() * 20 + 6));
     }
-    f.row("Groups:", grp_h, wx, wy, ww);
+    f.row(_("Groups:"), grp_h, wx, wy, ww);
     grp = new Fl_Check_Browser(wx, wy, ww, grp_h);
     grp->when(FL_WHEN_CHANGED);
     grp->callback(changed, this);
-    f.note("Groups give access to devices and services, e.g. printers (lp), serial ports (uucp, dialout) or docker.", 2);
+    f.note(_("Groups give access to devices and services, e.g. printers (lp), serial ports (uucp, dialout) or docker."), 2);
     f.space(4);
     f.row("", 30, wx, wy, ww);
-    apply = new Fl_Button(wx, wy, 120, 30, "Apply…");
-    apply->tooltip("Changing a user account needs an administrator password");
+    apply = new Fl_Button(wx, wy, 120, 30, _("Apply…"));
+    apply->tooltip(_("Changing a user account needs an administrator password"));
     apply->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->save(); }, this);
-    revert = new Fl_Button(wx + 130, wy, 120, 30, "Revert");
+    revert = new Fl_Button(wx + 130, wy, 120, 30, _("Revert"));
     revert->callback([](Fl_Widget *, void *d) { ((UsersPage *)d)->show_selected(); }, this);
     f.row("", 40, wx, wy, ww);
     status = new Fl_Box(wx - 200, wy, ww + 200, 40);
@@ -615,7 +616,7 @@ public:
     auto_b->value(autologin == a->name);
     if (!greetd) {
       auto_b->deactivate();
-      auto_b->tooltip("Automatic login needs greetd (/etc/greetd/config.toml)");
+      auto_b->tooltip(_("Automatic login needs greetd (/etc/greetd/config.toml)"));
     }
     for (auto &gname : editable) grp->add(gname.c_str(), a->in(gname) ? 1 : 0);
     pic->set(find_picture(*a), a->name, a->real_name);
@@ -643,7 +644,7 @@ public:
   void run(std::vector<Job> jobs, const std::string &doing, const std::string &done_text) {
     if (jobs.empty()) return;
     if (which("pkexec").empty()) {
-      fl_alert("pkexec (polkit) is needed to change user accounts.");
+      fl_alert("%s", _("pkexec (polkit) is needed to change user accounts."));
       return;
     }
     busy = true;
@@ -690,7 +691,7 @@ public:
     }
     bool want_admin = type->value() == 1;
     if (a->admin && !want_admin && admin_count(accounts) <= 1) {
-      fl_alert("%s is the only administrator. Make someone else an administrator first.", a->name.c_str());
+      fl_alert(_("%s is the only administrator. Make someone else an administrator first."), a->name.c_str());
       return;
     }
     std::vector<std::string> want;
@@ -705,9 +706,9 @@ public:
       jobs.push_back({{"modify", a->name, fn, want_admin ? "1" : "0", groups_changed ? join(want, ",") : "-"}, ""});
     bool want_auto = auto_b->value() != 0;
     if (greetd && want_auto != (autologin == a->name)) {
-      if (want_auto && fl_choice("Log %s in automatically, without a password, when the computer starts?\n\n"
-                                 "Anyone who switches the computer on can then use the account.",
-                                 "Cancel", "Log In Automatically", nullptr, a->name.c_str()) != 1)
+      if (want_auto && fl_choice(_("Log %s in automatically, without a password, when the computer starts?\n\n"
+                                 "Anyone who switches the computer on can then use the account."),
+                                 _("Cancel"), _("Log In Automatically"), nullptr, a->name.c_str()) != 1)
         return;
       jobs.push_back({{"autologin", want_auto ? a->name : "-"}, ""});
     }
@@ -731,7 +732,7 @@ public:
     if (!a) return;
     if (a->uid == getuid()) return;
     if (a->admin && admin_count(accounts) <= 1) {
-      fl_alert("%s is the only administrator and cannot be removed.", a->name.c_str());
+      fl_alert(_("%s is the only administrator and cannot be removed."), a->name.c_str());
       return;
     }
     bool remove_home = false;
@@ -763,13 +764,13 @@ public:
     std::unique_ptr<Fl_Image> img(load_image(path));
     std::string data;
     if (!img || !avatar_png(img.get(), 256, data)) {
-      fl_alert("Cannot read %s", path.c_str());
+      fl_alert(_("Cannot read %s"), path.c_str());
       return;
     }
     std::string tmp = getenv_or("XDG_RUNTIME_DIR", "/tmp") + "/fl-settings-picture";
     unlink(tmp.c_str());
     if (!write_file(tmp, data)) {
-      fl_alert("Cannot write %s", tmp.c_str());
+      fl_alert(_("Cannot write %s"), tmp.c_str());
       return;
     }
     // your own picture also goes to ~/.face (no root needed for that)
@@ -793,9 +794,9 @@ Fl_Group *create(int x, int y, int w, int h) { return new UsersPage(x, y, w, h);
 }  // namespace
 
 PageInfo page_users() {
-  return {"users", "Users", "system-users", "System",
-          "users accounts user password administrator admin add remove delete groups picture avatar face "
-          "autologin automatic login",
+  return {"users", _("Users"), "system-users", "System",
+          _("users accounts user password administrator admin add remove delete groups picture avatar face "
+          "autologin automatic login"),
           create};
 }
 

@@ -1,4 +1,5 @@
 // Firewall: the firewalld view of fl-firewall
+#include "fld/i18n.h"
 #include "fw_ui.h"
 #include "fwclient.h"
 #include "settings_common.h"
@@ -26,8 +27,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new FirewallPage(x, y, w, 
 } // namespace
 
 PageInfo page_firewall() {
-  return {"firewall", "Firewall", "fl-firewall", "Network",
-          "firewall firewalld zone port service security masquerade forwarding nat", create};
+  return {"firewall", _("Firewall"), "fl-firewall", "Network",
+          _("firewall firewalld zone port service security masquerade forwarding nat"), create};
 }
 
 } // namespace fld

@@ -29,6 +29,29 @@ std::string normalize(const std::string &l) {
   return s == std::string::npos ? "" : out.substr(s);
 }
 
+std::string clean_label(const std::string &l) {
+  std::string out;
+  for (size_t i = 0; i < l.size(); i++) {
+    char c = l[i];
+    if (c == '&' && i + 1 < l.size() && (std::isalnum((unsigned char)l[i + 1]) || (unsigned char)l[i + 1] >= 0x80)) continue;
+    if (c == '@') { // an FLTK symbol up to the next space
+      while (i < l.size() && l[i] != ' ') i++;
+      continue;
+    }
+    out += c == '\n' ? ' ' : c;
+  }
+  auto trim = [](std::string &s) {
+    size_t a = s.find_first_not_of(' '), b = s.find_last_not_of(' ');
+    s = a == std::string::npos ? "" : s.substr(a, b - a + 1);
+  };
+  trim(out);
+  if (!out.empty() && out.back() == ':') out.pop_back();
+  if (out.size() >= 3 && out.compare(out.size() - 3, 3, "\xe2\x80\xa6") == 0) out.resize(out.size() - 3);
+  if (!out.empty() && out.back() == '.') out.pop_back();
+  trim(out);
+  return out;
+}
+
 static std::vector<std::string> words(const std::string &s) {
   std::vector<std::string> out;
   std::string cur;

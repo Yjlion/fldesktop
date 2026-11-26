@@ -2,6 +2,7 @@
 // is chosen ([Weather] in panel.ini: City, Latitude, Longitude, Units);
 // updated every half hour with curl (or wget), cached in
 // ~/.cache/fldesktop/weather.json.
+#include "fld/i18n.h"
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Hold_Browser.H>
@@ -92,14 +93,14 @@ void update(void *) { start_fetch(); }
 
 // asks for a place and saves it (the panel restarts with it)
 void choose_place() {
-  const char *q = fl_input("Weather for which place?", g_city.c_str());
+  const char *q = fl_input("%s", g_city.c_str(), _("Weather for which place?"));
   if (!q || !*q) return;
   fl_cursor(FL_CURSOR_WAIT);
   Fl::flush();
   std::vector<applets::Place> places = applets::parse_places(fetch(applets::search_url(q)));
   fl_cursor(FL_CURSOR_DEFAULT);
   if (places.empty()) {
-    fl_alert("No place called \"%s\" was found (or there is no network).", q);
+    fl_alert(_("No place called \"%s\" was found (or there is no network)."), q);
     return;
   }
   int pick = 0;
@@ -180,11 +181,11 @@ void popup(Fl_Widget *w, void *) {
     t->labelsize(12);
     y += 26;
   }
-  Fl_Box *src = new Fl_Box(12, y + 8, 160, 22, "Weather data by Open-Meteo");
+  Fl_Box *src = new Fl_Box(12, y + 8, 160, 22, _("Weather data by Open-Meteo"));
   src->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
   src->labelsize(10);
   src->labelcolor(fld::palette().fg_dim);
-  Fl_Button *ch = new Fl_Button(180, y + 6, 108, 26, "Change Place…");
+  Fl_Button *ch = new Fl_Button(180, y + 6, 108, 26, _("Change Place…"));
   ch->labelsize(12);
   ch->callback([](Fl_Widget *b, void *) {
     b->window()->hide();

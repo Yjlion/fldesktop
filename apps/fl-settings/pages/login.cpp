@@ -1,5 +1,6 @@
 // Login Screen: /etc/fldesktop/greeter.ini for fl-greet (greetd), saved as
 // root through pkexec fl-settings-helper
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Browser.H>
@@ -90,30 +91,30 @@ public:
     status->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
     status->labelsize(13);
 
-    f.heading("Appearance");
-    f.row("Style:", 28, wx, wy, ww);
+    f.heading(_("Appearance"));
+    f.row(_("Style:"), 28, wx, wy, ww);
     theme = new Fl_Choice(wx, wy, 160, 28);
-    theme->add("Light");
-    theme->add("Dark");
+    theme->add(_("Light"));
+    theme->add(_("Dark"));
     theme->callback(changed, this);
-    f.row("Accent color:", 28, wx, wy, ww);
+    f.row(_("Accent color:"), 28, wx, wy, ww);
     accent = new AccentSwatches(wx, wy, AccentSwatches::preferred_width(28), 28);
     accent->callback(changed, this);
-    f.row("Icon theme:", 28, wx, wy, ww);
+    f.row(_("Icon theme:"), 28, wx, wy, ww);
     icons = new Fl_Choice(wx, wy, ww, 28);
     icons->callback(changed, this);
-    f.row("Cursor:", 28, wx, wy, ww);
+    f.row(_("Cursor:"), 28, wx, wy, ww);
     cursor = new Fl_Choice(wx, wy, ww - 90, 28);
     cursor->callback(changed, this);
     cursor_size = new Fl_Spinner(wx + ww - 80, wy, 80, 28);
     cursor_size->range(16, 96);
     cursor_size->step(8);
     cursor_size->callback(changed, this);
-    f.row("Text size:", 28, wx, wy, ww);
+    f.row(_("Text size:"), 28, wx, wy, ww);
     font_size = new Fl_Spinner(wx, wy, 80, 28);
     font_size->range(8, 32);
     font_size->callback(changed, this);
-    f.row("Background:", 96, wx, wy, ww);
+    f.row(_("Background:"), 96, wx, wy, ww);
     gallery = new WallpaperGallery(wx, wy, ww, 96);
     // only system wallpapers: the greeter cannot read home folders
     gallery->load({fld_data_dir() + "/backgrounds", "/usr/share/backgrounds"});
@@ -125,19 +126,19 @@ public:
       p->set_changed();
     }, this);
     f.row("", 28, wx, wy, ww);
-    Fl_Button *other = new Fl_Button(wx, wy, 140, 28, "Other Image…");
-    other->tooltip("The image is copied to /etc/fldesktop so the login screen can read it");
+    Fl_Button *other = new Fl_Button(wx, wy, 140, 28, _("Other Image…"));
+    other->tooltip(_("The image is copied to /etc/fldesktop so the login screen can read it"));
     other->callback([](Fl_Widget *, void *d) { ((LoginPage *)d)->choose_image(); }, this);
 
-    f.heading("Users");
+    f.heading(_("Users"));
     f.row("", 26, wx, wy, ww);
-    remember = new fld::CheckButton(wx, wy, ww, 26, "Preselect the user who logged in last");
+    remember = new fld::CheckButton(wx, wy, ww, 26, _("Preselect the user who logged in last"));
     remember->callback(changed, this);
     f.row("", 26, wx, wy, ww);
-    pictures = new fld::CheckButton(wx, wy, ww, 26, "Show user pictures");
-    pictures->tooltip("The pictures set in Settings > Users; without them the login card is smaller");
+    pictures = new fld::CheckButton(wx, wy, ww, 26, _("Show user pictures"));
+    pictures->tooltip(_("The pictures set in Settings > Users; without them the login card is smaller"));
     pictures->callback(changed, this);
-    f.row("Lowest user ID:", 28, wx, wy, ww);
+    f.row(_("Lowest user ID:"), 28, wx, wy, ww);
     min_uid = new Fl_Spinner(wx, wy, 90, 28);
     min_uid->range(0, 65535);
     min_uid->callback([](Fl_Widget *, void *d) {
@@ -145,22 +146,22 @@ public:
       p->load_users();
       p->set_changed();
     }, this);
-    f.row("Show:", 110, wx, wy, ww);
+    f.row(_("Show:"), 110, wx, wy, ww);
     users = new Fl_Check_Browser(wx, wy, ww, 110);
     users->callback(changed, this);
     users->when(FL_WHEN_CHANGED);
 
-    f.heading("Other");
+    f.heading(_("Other"));
     f.row("", 26, wx, wy, ww);
-    clock24 = new fld::CheckButton(wx, wy, 200, 26, "24-hour clock");
+    clock24 = new fld::CheckButton(wx, wy, 200, 26, _("24-hour clock"));
     clock24->callback(changed, this);
-    power = new fld::CheckButton(wx + 210, wy, 260, 26, "Restart and Shut Down buttons");
+    power = new fld::CheckButton(wx + 210, wy, 260, 26, _("Restart and Shut Down buttons"));
     power->callback(changed, this);
-    f.row("On-screen keyboard:", 28, wx, wy, ww);
+    f.row(_("On-screen keyboard:"), 28, wx, wy, ww);
     kb_mode = new Fl_Choice(wx, wy, 180, 28);
-    kb_mode->add("Button to show it");
-    kb_mode->add("Always shown");
-    kb_mode->add("Never");
+    kb_mode->add(_("Button to show it"));
+    kb_mode->add(_("Always shown"));
+    kb_mode->add(_("Never"));
     kb_mode->callback(changed, this);
     kb_layout = new Fl_Choice(wx + 190, wy, 150, 28);
     for (auto &l : osk_layouts())
@@ -172,10 +173,10 @@ public:
 
     f.space(10);
     f.row("", 30, wx, wy, ww);
-    apply = new Fl_Button(wx, wy, 120, 30, "Apply…");
-    apply->tooltip("Saving the login screen settings needs an administrator password");
+    apply = new Fl_Button(wx, wy, 120, 30, _("Apply…"));
+    apply->tooltip(_("Saving the login screen settings needs an administrator password"));
     apply->callback([](Fl_Widget *, void *d) { ((LoginPage *)d)->save(); }, this);
-    revert = new Fl_Button(wx + 130, wy, 120, 30, "Revert");
+    revert = new Fl_Button(wx + 130, wy, 120, 30, _("Revert"));
     revert->callback([](Fl_Widget *, void *d) { ((LoginPage *)d)->load(); }, this);
     g->end();
     end();
@@ -304,20 +305,20 @@ public:
       return;
     }
     if (which("pkexec").empty()) {
-      fl_alert("pkexec (polkit) is needed to change the login screen.");
+      fl_alert("%s", _("pkexec (polkit) is needed to change the login screen."));
       return;
     }
     std::string dir = getenv_or("XDG_RUNTIME_DIR", "/tmp");
     std::string tmp = dir + "/fl-settings-greeter.ini";
     unlink(tmp.c_str());
     if (!n.save(tmp)) {
-      fl_alert("Cannot write %s", tmp.c_str());
+      fl_alert(_("Cannot write %s"), tmp.c_str());
       return;
     }
     std::vector<std::string> cmd{"pkexec", settings_helper_path(), "greeter-ini", tmp};
     if (!custom_background.empty()) cmd.push_back(custom_background);
     apply->deactivate();
-    status->copy_label("Saving… (polkit asks for an administrator password)");
+    status->copy_label(_("Saving… (polkit asks for an administrator password)"));
     status->redraw();
     // pkexec waits for the authentication dialog: not in the UI thread
     std::thread([this, cmd, tmp]() {
@@ -345,7 +346,7 @@ public:
     }
     apply->activate();
     // 126/127: the authentication was dismissed or failed
-    if (rc == 126 || rc == 127) status->copy_label("Not saved: the authentication was cancelled or failed.");
+    if (rc == 126 || rc == 127) status->copy_label(_("Not saved: the authentication was cancelled or failed."));
     else status->copy_label(("Not saved: " + trim(out)).c_str());
     redraw();
   }
@@ -356,8 +357,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new LoginPage(x, y, w, h);
 }  // namespace
 
 PageInfo page_login() {
-  return {"login", "Login Screen", "preferences-desktop-display", "System",
-          "login screen greeter greetd fl-greet users background display manager", create};
+  return {"login", _("Login Screen"), "preferences-desktop-display", "System",
+          _("login screen greeter greetd fl-greet users background display manager"), create};
 }
 
 }  // namespace fld

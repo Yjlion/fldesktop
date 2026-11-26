@@ -1,4 +1,5 @@
 // Notifications: do not disturb, popup timeout, history size, muted applications
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -34,13 +35,13 @@ public:
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
-    f.heading("Popups");
+    f.heading(_("Popups"));
     f.row("", 26, wx, wy, ww);
-    dnd = new fld::CheckButton(wx, wy, ww, 26, "Do not disturb");
+    dnd = new fld::CheckButton(wx, wy, ww, 26, _("Do not disturb"));
     dnd->value(cfg.ini.get_bool("Notifications", "DoNotDisturb", false));
     dnd->callback([](Fl_Widget *, void *d) { ((NotificationsPage *)d)->save(); }, this);
-    f.note("Only critical notifications pop up; the others go to the history.");
-    f.row("Show popups for:", 28, wx, wy, ww);
+    f.note(_("Only critical notifications pop up; the others go to the history."));
+    f.row(_("Show popups for:"), 28, wx, wy, ww);
     timeout = new Fl_Spinner(wx, wy, 80, 28);
     timeout->range(1, 120);
     timeout->step(1);
@@ -48,10 +49,10 @@ public:
     timeout->callback([](Fl_Widget *, void *d) { ((NotificationsPage *)d)->save(); }, this);
     Fl_Box *sec = new Fl_Box(wx + 86, wy, 120, 28, "seconds");
     sec->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    f.note("Programs may ask for another time. Critical notifications stay until closed.");
+    f.note(_("Programs may ask for another time. Critical notifications stay until closed."));
     Fl_Button *test = nullptr;
     f.row("", 28, wx, wy, ww);
-    test = new Fl_Button(wx, wy, 180, 28, "Send a Test Notification");
+    test = new Fl_Button(wx, wy, 180, 28, _("Send a Test Notification"));
     test->callback([](Fl_Widget *, void *) {
       Notification n;
       n.app_name = "Settings";
@@ -62,8 +63,8 @@ public:
       notify(n);
     });
 
-    f.heading("History");
-    f.row("Keep the last:", 28, wx, wy, ww);
+    f.heading(_("History"));
+    f.row(_("Keep the last:"), 28, wx, wy, ww);
     history = new Fl_Spinner(wx, wy, 80, 28);
     history->range(0, 500);
     history->step(10);
@@ -72,19 +73,19 @@ public:
     Fl_Box *nn = new Fl_Box(wx + 86, wy, 160, 28, "notifications");
     nn->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
     f.row("", 28, wx, wy, ww);
-    Fl_Button *clear = new Fl_Button(wx, wy, 140, 28, "Clear History");
+    Fl_Button *clear = new Fl_Button(wx, wy, 140, 28, _("Clear History"));
     clear->callback([](Fl_Widget *, void *) { NotifyHistory::get().clear(); });
 
-    f.heading("Muted applications");
-    f.note("Notifications of these applications do not pop up (critical ones still do).");
+    f.heading(_("Muted applications"));
+    f.note(_("Notifications of these applications do not pop up (critical ones still do)."));
     f.row("", 130, wx, wy, ww);
     muted = new Fl_Hold_Browser(wx, wy, ww - 110, 130);
     muted->textsize(13);
     for (auto &a : split(cfg.ini.get("Notifications", "Muted"), ';'))
       if (!trim(a).empty()) muted_apps.push_back(trim(a));
-    Fl_Button *add = new Fl_Button(wx + ww - 100, wy, 100, 28, "Add…");
+    Fl_Button *add = new Fl_Button(wx + ww - 100, wy, 100, 28, _("Add…"));
     add->callback([](Fl_Widget *, void *d) { ((NotificationsPage *)d)->add_app(); }, this);
-    Fl_Button *rm = new Fl_Button(wx + ww - 100, wy + 34, 100, 28, "Remove");
+    Fl_Button *rm = new Fl_Button(wx + ww - 100, wy + 34, 100, 28, _("Remove"));
     fld::set_context_menu(muted, [add, rm](fld::Menu &m) { m.button(add).button(rm); });
     rm->callback([](Fl_Widget *, void *d) {
       NotificationsPage *p = (NotificationsPage *)d;
@@ -136,8 +137,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new NotificationsPage(x, y
 } // namespace
 
 PageInfo page_notifications() {
-  return {"notifications", "Notifications", "preferences-system-notifications", "Personal",
-          "notifications popups do not disturb dnd history mute alerts", create};
+  return {"notifications", _("Notifications"), "preferences-system-notifications", "Personal",
+          _("notifications popups do not disturb dnd history mute alerts"), create};
 }
 
 } // namespace fld

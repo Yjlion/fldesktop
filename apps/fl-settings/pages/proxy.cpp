@@ -1,4 +1,5 @@
 // Proxy: inherit the session's proxy variables, no proxy, or manual proxies
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <thread>
 #include <FL/Fl_Button.H>
@@ -56,9 +57,9 @@ public:
     ProxySettings p = load_proxy(desk.ini);
     if (!desk.ini.has("Proxy", "Mode")) p.mode = default_mode(inherited);
 
-    f.heading("Connection");
+    f.heading(_("Connection"));
     f.row("", 26, wx, wy, ww);
-    m_inherit = new fld::RadioButton(wx, wy, ww, 26, "Use the proxy settings the session started with");
+    m_inherit = new fld::RadioButton(wx, wy, ww, 26, _("Use the proxy settings the session started with"));
     m_inherit->type(FL_RADIO_BUTTON);
     std::string desc;
     for (auto &kv : inherited) desc += kv.first + "=" + kv.second + "\n";
@@ -74,16 +75,16 @@ public:
     inherited_box->labelfont(FL_COURIER);
     inherited_box->labelcolor(palette().fg_dim);
     f.row("", 26, wx, wy, ww);
-    m_none = new fld::RadioButton(wx, wy, ww, 26, "No proxy");
+    m_none = new fld::RadioButton(wx, wy, ww, 26, _("No proxy"));
     m_none->type(FL_RADIO_BUTTON);
     f.row("", 26, wx, wy, ww);
-    m_manual = new fld::RadioButton(wx, wy, ww, 26, "Manual proxy configuration");
+    m_manual = new fld::RadioButton(wx, wy, ww, 26, _("Manual proxy configuration"));
     m_manual->type(FL_RADIO_BUTTON);
     for (auto *b : {m_inherit, m_none, m_manual})
       b->callback([](Fl_Widget *, void *d) { ((ProxyPage *)d)->mode_changed(); }, this);
     (p.mode == ProxySettings::Inherit ? m_inherit : p.mode == ProxySettings::None ? m_none : m_manual)->setonly();
 
-    f.heading("Manual Proxies");
+    f.heading(_("Manual Proxies"));
     int gy = f.y();
     manual_group = new Fl_Group(X + 24, gy, std::min(W - 48, 640), 6 * 36 + 40);
     auto field = [&](const char *label, const std::string &v) {
@@ -95,9 +96,9 @@ public:
       return in;
     };
     http = field("HTTP proxy:", p.http);
-    http->tooltip("host:port, e.g. proxy.example.com:3128");
+    http->tooltip(_("host:port, e.g. proxy.example.com:3128"));
     f.row("", 26, wx, wy, ww);
-    all = new fld::CheckButton(wx, wy, ww, 26, "Use this proxy for HTTPS and FTP too");
+    all = new fld::CheckButton(wx, wy, ww, 26, _("Use this proxy for HTTPS and FTP too"));
     all->value(p.use_http_for_all);
     all->callback([](Fl_Widget *, void *d) {
       ProxyPage *pg = (ProxyPage *)d;
@@ -107,16 +108,16 @@ public:
     https = field("HTTPS proxy:", p.https);
     ftp = field("FTP proxy:", p.ftp);
     socks = field("SOCKS host:", p.socks);
-    socks->tooltip("host:port of a SOCKS 5 proxy (all_proxy)");
+    socks->tooltip(_("host:port of a SOCKS 5 proxy (all_proxy)"));
     ignore = field("Ignore hosts:", p.no_proxy);
-    ignore->tooltip("Comma separated hosts and domains that are reached directly (no_proxy)");
+    ignore->tooltip(_("Comma separated hosts and domains that are reached directly (no_proxy)"));
     f.row("", 30, wx, wy, ww);
-    apply = new Fl_Button(wx, wy, 120, 30, "Apply");
+    apply = new Fl_Button(wx, wy, 120, 30, _("Apply"));
     apply->callback([](Fl_Widget *, void *d) { ((ProxyPage *)d)->save(); }, this);
     apply->deactivate();
     manual_group->end();
     f.space(6);
-    f.note("Programs started from now on use the new settings; running programs keep theirs until they restart.",
+    f.note(_("Programs started from now on use the new settings; running programs keep theirs until they restart."),
            2);
     g->end();
     end();
@@ -157,7 +158,7 @@ public:
     if (p.mode == ProxySettings::Manual) {
       for (auto *in : {http, https, ftp, socks})
         if (in->active() && !valid_proxy(in->value())) {
-          fl_alert("\"%s\" is not a proxy address. Use host:port, for example proxy.example.com:3128.",
+          fl_alert(_("\"%s\" is not a proxy address. Use host:port, for example proxy.example.com:3128."),
                    in->value());
           in->take_focus();
           return;
@@ -199,8 +200,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new ProxyPage(x, y, w, h);
 }  // namespace
 
 PageInfo page_proxy() {
-  return {"proxy", "Proxy", "preferences-system-network", "Network",
-          "proxy http https socks ftp no_proxy environment internet connection", create};
+  return {"proxy", _("Proxy"), "preferences-system-network", "Network",
+          _("proxy http https socks ftp no_proxy environment internet connection"), create};
 }
 
 }  // namespace fld

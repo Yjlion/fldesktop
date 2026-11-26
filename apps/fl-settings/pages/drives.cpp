@@ -1,5 +1,6 @@
 // Removable Drives: what happens when a drive is plugged in ([Drives] in
 // desktop.ini, used by fl-panel)
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -25,25 +26,25 @@ public:
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
     auto cb = [](Fl_Widget *, void *d) { ((DrivesPage *)d)->save(); };
-    f.heading("When a Drive Is Plugged In");
+    f.heading(_("When a Drive Is Plugged In"));
     f.row("", 26, wx, wy, ww);
-    automount = new fld::CheckButton(wx, wy, ww, 26, "Mount it");
+    automount = new fld::CheckButton(wx, wy, ww, 26, _("Mount it"));
     automount->value(desk.ini.get_bool("Drives", "Automount", true));
     automount->callback(cb, this);
     f.row("", 26, wx, wy, ww);
-    autoopen = new fld::CheckButton(wx, wy, ww, 26, "Open it in Files");
+    autoopen = new fld::CheckButton(wx, wy, ww, 26, _("Open it in Files"));
     autoopen->value(desk.ini.get_bool("Drives", "AutoOpen", false));
     autoopen->callback(cb, this);
-    f.note("Otherwise a notification offers to open it. Encrypted drives ask for their passphrase in Files.", 2);
+    f.note(_("Otherwise a notification offers to open it. Encrypted drives ask for their passphrase in Files."), 2);
     f.space(12);
-    f.note("Drives are listed in the sidebar of Files: click one to mount it, the eject button to remove it safely.", 2);
+    f.note(_("Drives are listed in the sidebar of Files: click one to mount it, the eject button to remove it safely."), 2);
     if (!which("fl-disks").empty()) {
-      f.heading("Disks and Partitions");
+      f.heading(_("Disks and Partitions"));
       f.row("", 30, wx, wy, ww);
-      Fl_Button *disks = new Fl_Button(wx, wy, 160, 30, "Open Disks…");
-      disks->tooltip("Partition, format and resize drives, back them up to images, check their health");
+      Fl_Button *disks = new Fl_Button(wx, wy, 160, 30, _("Open Disks…"));
+      disks->tooltip(_("Partition, format and resize drives, back them up to images, check their health"));
       disks->callback([](Fl_Widget *, void *) { spawn({"fl-disks"}); });
-      f.note("Disks is an advanced tool: changing partitions can erase the data on a drive.", 1);
+      f.note(_("Disks is an advanced tool: changing partitions can erase the data on a drive."), 1);
     }
     g->end();
     end();
@@ -64,8 +65,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new DrivesPage(x, y, w, h)
 } // namespace
 
 PageInfo page_drives() {
-  return {"drives", "Removable Drives", "drive-removable-media", "Hardware",
-          "usb stick drive disk mount automount removable media sd card eject", create};
+  return {"drives", _("Removable Drives"), "drive-removable-media", "Hardware",
+          _("usb stick drive disk mount automount removable media sd card eject"), create};
 }
 
 } // namespace fld

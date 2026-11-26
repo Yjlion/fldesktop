@@ -1,4 +1,5 @@
 // Sound: output and input devices (PipeWire), link to the mixer
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -34,7 +35,7 @@ public:
     }
     tabs->end();
     g->resizable(tabs);
-    Fl_Button *mixer = new Fl_Button(X + W - 16 - 160, Y + H - 46, 160, 32, "Open Volume Mixer");
+    Fl_Button *mixer = new Fl_Button(X + W - 16 - 160, Y + H - 46, 160, 32, _("Open Volume Mixer"));
     mixer->callback([](Fl_Widget *, void *) { spawn({"fl-mixer"}); });
     g->end();
     end();
@@ -48,8 +49,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new SoundPage(x, y, w, h);
 } // namespace
 
 PageInfo page_sound() {
-  return {"sound", "Sound", "audio-volume-high", "Hardware",
-          "sound audio volume speakers headphones microphone input output pipewire mute", create};
+  return {"sound", _("Sound"), "audio-volume-high", "Hardware",
+          _("sound audio volume speakers headphones microphone input output pipewire mute"), create};
 }
 
 } // namespace fld

@@ -1,6 +1,7 @@
 // Date & Time: time zone and network time through timedatectl (polkit asks for
 // permission); without systemd-timedated (Alpine, Devuan) through
 // fl-settings-helper run with pkexec
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
@@ -53,23 +54,23 @@ public:
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
-    f.row("Now:", 28, wx, wy, ww);
+    f.row(_("Now:"), 28, wx, wy, ww);
     now = new Fl_Box(wx, wy, ww, 28);
     now->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
     now->labelfont(FL_HELVETICA_BOLD);
     f.row("", 26, wx, wy, ww);
-    ntp = new fld::CheckButton(wx, wy, ww, 26, "Set the time automatically (network time)");
+    ntp = new fld::CheckButton(wx, wy, ww, 26, _("Set the time automatically (network time)"));
     ntp->callback([](Fl_Widget *, void *d) { ((DateTimePage *)d)->set_ntp(); }, this);
-    f.row("Set manually:", 28, wx, wy, ww);
+    f.row(_("Set manually:"), 28, wx, wy, ww);
     manual = new Fl_Input(wx, wy, 200, 28);
-    manual->tooltip("YYYY-MM-DD HH:MM:SS");
-    set_manual = new Fl_Button(wx + 210, wy, 80, 28, "Set");
+    manual->tooltip(_("YYYY-MM-DD HH:MM:SS"));
+    set_manual = new Fl_Button(wx + 210, wy, 80, 28, _("Set"));
     set_manual->callback([](Fl_Widget *, void *d) { ((DateTimePage *)d)->set_time(); }, this);
-    f.heading("Time Zone");
-    f.row("Current:", 26, wx, wy, ww);
+    f.heading(_("Time Zone"));
+    f.row(_("Current:"), 26, wx, wy, ww);
     zone_label = new Fl_Box(wx, wy, ww, 26);
     zone_label->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
-    f.row("Search:", 28, wx, wy, ww);
+    f.row(_("Search:"), 28, wx, wy, ww);
     filter = new Fl_Input(wx, wy, ww, 28);
     filter->when(FL_WHEN_CHANGED);
     filter->callback([](Fl_Widget *, void *d) { ((DateTimePage *)d)->fill_zones(); }, this);
@@ -82,7 +83,7 @@ public:
       if (i < 0 || i >= (int)p->shown.size()) return;
       p->set_zone(p->shown[i]);
     }, this);
-    f.note("Changing these settings needs administrator rights; you may be asked for a password.", 2);
+    f.note(_("Changing these settings needs administrator rights; you may be asked for a password."), 2);
     g->end();
     end();
     std::string out;
@@ -148,7 +149,7 @@ public:
   }
 
   void result(const char *what, int code, const std::string &out) {
-    if (code != 0) fl_alert("%s failed%s%s", what, out.empty() ? "." : ":\n", out.c_str());
+    if (code != 0) fl_alert(_("%s failed%s%s"), what, out.empty() ? "." : ":\n", out.c_str());
     update();
   }
 
@@ -157,7 +158,7 @@ public:
     std::vector<std::string> cmd;
     if (timedated) cmd = timedatectl;
     else if (which("pkexec").empty()) {
-      fl_alert("%s needs timedatectl (systemd) or pkexec (polkit).", what);
+      fl_alert(_("%s needs timedatectl (systemd) or pkexec (polkit)."), what);
       update();
       return;
     } else {
@@ -185,8 +186,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new DateTimePage(x, y, w, 
 } // namespace
 
 PageInfo page_datetime() {
-  return {"datetime", "Date & Time", "preferences-system-time", "System",
-          "date time clock timezone time zone ntp network time", create};
+  return {"datetime", _("Date & Time"), "preferences-system-time", "System",
+          _("date time clock timezone time zone ntp network time"), create};
 }
 
 } // namespace fld

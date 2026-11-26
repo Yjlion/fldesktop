@@ -1,4 +1,5 @@
 // fl-panel: the notification bell (history and do not disturb of fl-notifyd)
+#include "fld/i18n.h"
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>
@@ -228,15 +229,15 @@ void bell_cb(Fl_Widget *w, void *) {
   int H = 44 + std::max(60, std::min(440, list_h)) + 1;
   PanelPopup pop(W, H);
   const fld::Palette &p = fld::palette();
-  Fl_Box *title = new Fl_Box(10, 8, 140, 28, "Notifications");
+  Fl_Box *title = new Fl_Box(10, 8, 140, 28, _("Notifications"));
   title->labelfont(FL_HELVETICA_BOLD);
   title->labelsize(14);
   title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-  Fl_Check_Button *dnd = new fld::CheckButton(140, 8, 130, 28, "Do not disturb");
+  Fl_Check_Button *dnd = new fld::CheckButton(140, 8, 130, 28, _("Do not disturb"));
   dnd->labelsize(12);
   dnd->value(g_dnd);
   dnd->callback([](Fl_Widget *b, void *) { set_dnd(((Fl_Check_Button *)b)->value(), 0); });
-  Fl_Button *clear = new Fl_Button(W - 82, 9, 72, 26, "Clear all");
+  Fl_Button *clear = new Fl_Button(W - 82, 9, 72, 26, _("Clear all"));
   clear->labelsize(12);
   clear->callback([](Fl_Widget *b, void *) {
     fld::NotifyHistory::get().clear();
@@ -250,7 +251,7 @@ void bell_cb(Fl_Widget *w, void *) {
   sc->box(FL_FLAT_BOX);
   sc->color(p.bg2);
   if (g_list.empty()) {
-    Fl_Box *none = new Fl_Box(1, 44, W - 2, 60, "No notifications");
+    Fl_Box *none = new Fl_Box(1, 44, W - 2, 60, _("No notifications"));
     none->labelcolor(p.fg_dim);
     none->labelsize(13);
   }

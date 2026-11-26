@@ -1,4 +1,5 @@
 // Keyboard: layouts, switching key, compose, caps lock, repeat
+#include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <unistd.h>
 #include <FL/Fl_Button.H>
@@ -29,15 +30,15 @@ struct OptChoice {
 
 const std::vector<OptChoice> &opt_choices() {
   static const std::vector<OptChoice> o = {
-      {"Switch layout with:", "grp",
-       {{"", "(none)"}, {"grp:win_space_toggle", "Super+Space"}, {"grp:alt_shift_toggle", "Alt+Shift"},
-        {"grp:ctrl_shift_toggle", "Ctrl+Shift"}, {"grp:alt_space_toggle", "Alt+Space"}, {"grp:caps_toggle", "Caps Lock"}}},
-      {"Compose key:", "compose",
-       {{"", "(none)"}, {"compose:ralt", "Right Alt"}, {"compose:rwin", "Right Super"}, {"compose:menu", "Menu"},
-        {"compose:rctrl", "Right Ctrl"}, {"compose:caps", "Caps Lock"}}},
-      {"Caps Lock key:", "caps",
-       {{"", "Caps Lock"}, {"ctrl:nocaps", "Ctrl"}, {"caps:escape", "Escape"}, {"caps:backspace", "Backspace"},
-        {"caps:none", "Disabled"}}},
+      {N_("Switch layout with:"), "grp",
+       {{"", N_("(none)")}, {"grp:win_space_toggle", "Super+Space"}, {"grp:alt_shift_toggle", "Alt+Shift"},
+        {"grp:ctrl_shift_toggle", "Ctrl+Shift"}, {"grp:alt_space_toggle", "Alt+Space"}, {"grp:caps_toggle", N_("Caps Lock")}}},
+      {N_("Compose key:"), "compose",
+       {{"", N_("(none)")}, {"compose:ralt", N_("Right Alt")}, {"compose:rwin", N_("Right Super")}, {"compose:menu", N_("Menu")},
+        {"compose:rctrl", N_("Right Ctrl")}, {"compose:caps", N_("Caps Lock")}}},
+      {N_("Caps Lock key:"), "caps",
+       {{"", N_("Caps Lock")}, {"ctrl:nocaps", "Ctrl"}, {"caps:escape", N_("Escape")}, {"caps:backspace", N_("Backspace")},
+        {"caps:none", N_("Disabled")}}},
   };
   return o;
 }
@@ -60,13 +61,13 @@ public:
     int wx, wy, ww;
     layouts = xkb::split_layouts(wm.ini.get("keyboard", "layout", ""), wm.ini.get("keyboard", "variant", ""));
     if (layouts.empty()) layouts.push_back({"us", ""});
-    f.heading("Layouts");
+    f.heading(_("Layouts"));
     f.row("", 130, wx, wy, ww);
     list = new Fl_Hold_Browser(wx - 200, wy, ww + 200 - 110, 130);
     list->textsize(13);
-    Fl_Button *add = new Fl_Button(wx + ww - 100, wy, 100, 28, "Add…");
+    Fl_Button *add = new Fl_Button(wx + ww - 100, wy, 100, 28, _("Add…"));
     add->callback([](Fl_Widget *, void *d) { ((KeyboardPage *)d)->add_layout(); }, this);
-    Fl_Button *rm = new Fl_Button(wx + ww - 100, wy + 34, 100, 28, "Remove");
+    Fl_Button *rm = new Fl_Button(wx + ww - 100, wy + 34, 100, 28, _("Remove"));
     rm->callback([](Fl_Widget *, void *d) {
       KeyboardPage *p = (KeyboardPage *)d;
       int i = p->list->value() - 1;
@@ -75,7 +76,7 @@ public:
       p->fill();
       p->save();
     }, this);
-    Fl_Button *up = new Fl_Button(wx + ww - 100, wy + 68, 100, 28, "Move Up");
+    Fl_Button *up = new Fl_Button(wx + ww - 100, wy + 68, 100, 28, _("Move Up"));
     fld::set_context_menu(list, [add, rm, up](fld::Menu &m) { m.button(add).button(rm).divider().button(up); });
     up->callback([](Fl_Widget *, void *d) {
       KeyboardPage *p = (KeyboardPage *)d;
@@ -86,24 +87,24 @@ public:
       p->list->value(i);
       p->save();
     }, this);
-    f.note("The first layout is used when the session starts.");
+    f.note(_("The first layout is used when the session starts."));
 
-    f.heading("Keys");
+    f.heading(_("Keys"));
     std::vector<std::string> cur_opts = split(wm.ini.get("keyboard", "options", ""), ',');
     for (auto &oc : opt_choices()) {
-      f.row(oc.label, 28, wx, wy, ww);
+      f.row(_(oc.label), 28, wx, wy, ww);
       Fl_Choice *c = new Fl_Choice(wx, wy, 260, 28);
       int sel = 0;
       for (size_t i = 0; i < oc.items.size(); i++) {
-        c->add(oc.items[i].second);
+        c->add(_(oc.items[i].second));
         for (auto &o : cur_opts) if (o == oc.items[i].first) sel = (int)i;
       }
       c->value(sel);
       c->callback([](Fl_Widget *, void *d) { ((KeyboardPage *)d)->save(); }, this);
       opts.push_back(c);
     }
-    f.heading("Repeat");
-    f.row("Delay (ms):", 26, wx, wy, ww);
+    f.heading(_("Repeat"));
+    f.row(_("Delay (ms):"), 26, wx, wy, ww);
     delay = new Fl_Value_Slider(wx, wy, ww, 26);
     delay->type(FL_HOR_NICE_SLIDER);
     delay->bounds(150, 1000);
@@ -111,7 +112,7 @@ public:
     delay->value(wm.ini.get_int("keyboard", "repeat_delay", 600));
     delay->callback([](Fl_Widget *, void *d) { ((KeyboardPage *)d)->save(); }, this);
     delay->when(FL_WHEN_RELEASE);
-    f.row("Speed (per s):", 26, wx, wy, ww);
+    f.row(_("Speed (per s):"), 26, wx, wy, ww);
     rate = new Fl_Value_Slider(wx, wy, ww, 26);
     rate->type(FL_HOR_NICE_SLIDER);
     rate->bounds(5, 60);
@@ -119,8 +120,8 @@ public:
     rate->value(wm.ini.get_int("keyboard", "repeat_rate", 25));
     rate->callback([](Fl_Widget *, void *d) { ((KeyboardPage *)d)->save(); }, this);
     rate->when(FL_WHEN_RELEASE);
-    f.heading("Input Method");
-    f.row("Input method:", 28, wx, wy, ww);
+    f.heading(_("Input Method"));
+    f.row(_("Input method:"), 28, wx, wy, ww);
     im_choice = new Fl_Choice(wx, wy, 220, 28);
     {
       locale_env::EnvFile env;
@@ -135,8 +136,8 @@ public:
       if (im_choice->value() < 0) im_choice->value(0);
     }
     im_choice->callback([](Fl_Widget *, void *d) { ((KeyboardPage *)d)->save_im(); }, this);
-    f.note("For Chinese, Japanese, Korean and other composed input. Takes effect at the next login.", 2);
-    f.row("Test here:", 28, wx, wy, ww);
+    f.note(_("For Chinese, Japanese, Korean and other composed input. Takes effect at the next login."), 2);
+    f.row(_("Test here:"), 28, wx, wy, ww);
     new Fl_Input(wx, wy, ww, 28);
     g->end();
     end();
@@ -158,9 +159,9 @@ public:
     Fl_Input *search = new Fl_Input(10, 10, 440, 28);
     search->when(FL_WHEN_CHANGED);
     Fl_Hold_Browser *lb = new Fl_Hold_Browser(10, 46, 440, 280);
-    Fl_Choice *variant = new Fl_Choice(90, 336, 360, 28, "Variant:");
-    Fl_Button *cancel = new Fl_Button(240, 440, 100, 30, "Cancel");
-    Fl_Return_Button *ok = new Fl_Return_Button(350, 440, 100, 30, "Add");
+    Fl_Choice *variant = new Fl_Choice(90, 336, 360, 28, _("Variant:"));
+    Fl_Button *cancel = new Fl_Button(240, 440, 100, 30, _("Cancel"));
+    Fl_Return_Button *ok = new Fl_Return_Button(350, 440, 100, 30, _("Add"));
     std::vector<const xkb::Item *> shown;
     struct Ctx { xkb::Rules *rules; Fl_Input *search; Fl_Hold_Browser *lb; Fl_Choice *variant; std::vector<const xkb::Item *> *shown; int result; };
     Ctx ctx{&rules, search, lb, variant, &shown, 0};
@@ -179,7 +180,7 @@ public:
     lb->callback([](Fl_Widget *, void *d) {
       Ctx *c = (Ctx *)d;
       c->variant->clear();
-      c->variant->add("(default)");
+      c->variant->add(_("(default)"));
       int i = c->lb->value() - 1;
       if (i >= 0 && i < (int)c->shown->size()) {
         auto it = c->rules->variants.find((*c->shown)[i]->name);
@@ -270,8 +271,8 @@ Fl_Group *create(int x, int y, int w, int h) { return new KeyboardPage(x, y, w, 
 } // namespace
 
 PageInfo page_keyboard() {
-  return {"keyboard", "Keyboard", "input-keyboard", "Hardware",
-          "keyboard layout language input xkb compose caps lock repeat delay rate switch input method ime fcitx ibus chinese japanese korean", create};
+  return {"keyboard", _("Keyboard"), "input-keyboard", "Hardware",
+          _("keyboard layout language input xkb compose caps lock repeat delay rate switch input method ime fcitx ibus chinese japanese korean"), create};
 }
 
 } // namespace fld

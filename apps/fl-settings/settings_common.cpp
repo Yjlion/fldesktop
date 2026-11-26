@@ -9,6 +9,7 @@
 #include "fld/i18n.h"
 #include "fld/theme.h"
 #include "fld/util.h"
+#include "settings_page.h"
 
 namespace fld {
 
@@ -120,6 +121,27 @@ Fl_Group *page_group(int x, int y, int w, int h, const char *title, int &content
   t->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
   content_y = y + 60;
   g->resizable(nullptr); // rows keep their size when the window grows
+  return g;
+}
+
+const PageInfo *resolve_page(const std::string &id) {
+  const PageInfo *page = nullptr, *parent = nullptr;
+  for (auto &p : all_pages())
+    if (p.id == id) page = &p;
+  if (page && !page->merged_into.empty())
+    for (auto &p : all_pages())
+      if (p.id == page->merged_into) parent = &p;
+  return parent ? parent : page;
+}
+
+bool page_in_sidebar(const PageInfo &p) { return resolve_page(p.id) == &p; }
+
+Fl_Group *tab_group(int x, int y, int w, int h, int &content_y) {
+  Fl_Group *g = new Fl_Group(x, y, w, h);
+  g->box(FL_FLAT_BOX);
+  g->color(palette().bg2);
+  content_y = y + 12;
+  g->resizable(nullptr);
   return g;
 }
 

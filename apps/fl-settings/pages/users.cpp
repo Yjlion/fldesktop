@@ -1,6 +1,6 @@
 // Users: add, remove and change the accounts of the people who use the
 // computer (full name, account type, password, picture, groups, automatic
-// login). Changes are made as root by pkexec fl-users-helper.
+// login). Changes are made as root by pkexec fl-settings-helper users.
 #include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
@@ -249,11 +249,7 @@ public:
     busy = true;
     show_selected();
     set_status(doing + " (polkit asks for an administrator password)");
-    std::string helper = users_helper_path();
-    for (auto &j : jobs) {
-      j.args.insert(j.args.begin(), helper);
-      j.args.insert(j.args.begin(), "pkexec");
-    }
+    for (auto &j : jobs) j.args.insert(j.args.begin(), {"pkexec", settings_helper_path(), "users"});
     struct Res {
       UsersPage *page;
       int rc = 0;

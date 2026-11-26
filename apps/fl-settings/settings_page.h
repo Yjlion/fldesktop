@@ -16,7 +16,16 @@ struct PageInfo {
   std::string id, title, icon, category, keywords;
   // creates the page inside x,y,w,h (called when the page is first shown)
   Fl_Group *(*create)(int x, int y, int w, int h);
+  // when that page is in the build, this one is one of its tabs (labelled
+  // with this page's title) instead of a page of its own
+  std::string merged_into = {};
 };
+
+// the page to show for id: the page it is merged into when that one is in
+// the build; nullptr when the build has neither
+const PageInfo *resolve_page(const std::string &id);
+// false for pages shown as a tab of another page
+bool page_in_sidebar(const PageInfo &p);
 
 // all compiled-in pages, in sidebar order (generated: pages_registry.cpp)
 const std::vector<PageInfo> &all_pages();

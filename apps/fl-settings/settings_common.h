@@ -51,6 +51,8 @@ void save_wm(ConfigFile &f);
 // The page background group with a title header; returns the content top y.
 // The title is translated here (mark it with N_() or pass _()).
 Fl_Group *page_group(int x, int y, int w, int h, const char *title, int &content_y);
+// the same for the contents of a tab (no title)
+Fl_Group *tab_group(int x, int y, int w, int h, int &content_y);
 
 // (section, key) pairs of a config file that a page sets
 using ConfigKeys = std::vector<std::pair<std::string, std::string>>;

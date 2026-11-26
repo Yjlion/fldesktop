@@ -1,4 +1,5 @@
-// Proxy: inherit the session's proxy variables, no proxy, or manual proxies
+// Proxy: inherit the session's proxy variables, no proxy, or manual proxies.
+// A tab of the Network page when that page is in the build.
 #include "fld/i18n.h"
 #include <FL/Fl.H>
 #include <thread>
@@ -47,9 +48,9 @@ public:
   Fl_Button *apply;
   Fl_Group *manual_group;
 
-  ProxyPage(int X, int Y, int W, int H) : Fl_Group(X, Y, W, H) {
+  ProxyPage(int X, int Y, int W, int H, bool tab) : Fl_Group(X, Y, W, H) {
     int cy;
-    Fl_Group *g = page_group(X, Y, W, H, N_("Proxy"), cy);
+    Fl_Group *g = tab ? tab_group(X, Y, W, H, cy) : page_group(X, Y, W, H, N_("Proxy"), cy);
     resizable(g);
     Form f(g, X + 24, cy, std::min(W - 48, 640));
     int wx, wy, ww;
@@ -195,13 +196,15 @@ public:
   }
 };
 
-Fl_Group *create(int x, int y, int w, int h) { return new ProxyPage(x, y, w, h); }
+Fl_Group *create(int x, int y, int w, int h) { return new ProxyPage(x, y, w, h, false); }
 
 }  // namespace
 
+Fl_Group *proxy_tab(int x, int y, int w, int h) { return new ProxyPage(x, y, w, h, true); }
+
 PageInfo page_proxy() {
   return {"proxy", _("Proxy"), "preferences-system-network", "Network",
-          _("proxy http https socks ftp no_proxy environment internet connection"), create};
+          _("proxy http https socks ftp no_proxy environment internet connection"), create, "network"};
 }
 
 }  // namespace fld

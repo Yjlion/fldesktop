@@ -54,6 +54,14 @@ Settings > Privacy turns it off.
 The notification button's menu turns Do Not Disturb on until it is turned off,
 for an hour, or until tomorrow morning (07:00).
 .PP
+Other applets are plugins: shared libraries in
+\fI~/.local/lib/fldesktop/applets\fR or \fI/usr/lib/fldesktop/applets\fR
+(and the directories of \fBFLD_APPLET_PATH\fR) that export
+\fBfld_applet_v1\fR(); see \fI/usr/include/fldesktop/fld_applet.h\fR.
+They are placed before the system indicators. A plugin built for another
+version of the interface is not loaded (the panel says so on its standard
+error).
+.PP
 The panel restarts itself when its settings, the desktop theme or the
 compositor configuration change.
 .SH FILES
@@ -61,7 +69,9 @@ compositor configuration change.
 \fI~/.config/fldesktop/panel.ini\fR
 \fB[Panel]\fR QuickLaunch=id;id;..., KeyboardButton=auto|always|never,
 Pager=auto|never, OSD=true|false (the on-screen display),
-SystemMonitor=true|false, PrivacyIndicator=true|false;
+SystemMonitor=true|false, PrivacyIndicator=true|false,
+DisabledApplets=id,id (plugins not to load);
+\fB[Applet:\fIid\fB]\fR the settings of a plugin;
 \fB[Weather]\fR Enabled=, City=, Latitude=, Longitude=,
 Units=celsius|fahrenheit;
 \fB[Clock]\fR Format= (strftime format).

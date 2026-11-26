@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Users
+GenericName=User Accounts
+Comment=Add and change user accounts and set up the login screen
+Exec=fl-users
+Icon=fl-users
+Categories=Settings;System;
+Keywords=user;account;password;administrator;login;greeter;autologin;
+StartupWMClass=fl-users
+NotShowIn=fldesktop;

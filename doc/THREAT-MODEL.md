@@ -54,13 +54,19 @@ directory or `FLD_BINDIR`.
 
 | Helper | Polkit action | Commands |
 |--------|---------------|----------|
-| `fl-settings-helper` | `org.fldesktop.settings.login-screen` | greeter.ini and background, time zone, time, NTP, host name, Avahi, published services |
-| `fl-users-helper` | `org.fldesktop.settings.users` | add, delete, modify, password, picture, automatic login |
+| `fl-settings-helper system …` | `org.fldesktop.settings.login-screen` | greeter.ini and background, time zone, time, NTP, host name, Avahi, published services |
+| `fl-settings-helper users …` | `org.fldesktop.settings.users` | add, delete, modify, password, picture, automatic login |
 | `fl-disks-helper` | `org.fldesktop.disks.modify` | partition tables, partitions, format, resize, move, disk images |
 | `fl-services-helper` | `org.fldesktop.services` | enable and disable OpenRC services (names checked by `svc::valid_name`, no leading `-`) |
 | `fl-backlight-helper` | `org.fldesktop.backlight` (`yes` for the active session) | brightness |
 
 Reviewed properties:
+- Settings has a single helper. Its first argument (`system` or `users`) selects the polkit action through
+  `org.freedesktop.policykit.exec.argv1`. Before anything runs as root, `helper_args.cpp` checks the whole
+  command line against a fixed list of commands: the number of arguments and the form of each one (absolute
+  paths without control characters, names, `on`/`off`, `0`/`1`). `tests/test_settings_helper.cpp` covers it.
+  With a polkit too old for `exec.argv1`, pkexec takes the first action for the path; both actions are
+  `auth_admin_keep`.
 - All run tools with argv vectors (`fld::run_capture*`), never a shell. Passwords go on stdin
   (`chpasswd`), never in argv, and `valid_password()` rejects line breaks and NUL, so a password cannot add a
   second `user:password` line.
@@ -81,8 +87,6 @@ Open items:
   `auth_admin` for the users helper and for `fl-disks-helper` format and image-write.
 - `PKEXEC_UID` is trusted as the caller; this holds for pkexec, which clears the environment. Running the
   helpers through `sudo` keeps the caller's environment; they are only installed for pkexec.
-- Roadmap 2 proposes one helper with an action allowlist and unit tests for argument validation; that would
-  make this review smaller.
 
 ## 4. Running other programs
 

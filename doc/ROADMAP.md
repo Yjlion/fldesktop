@@ -90,6 +90,11 @@ Changes:
 ### 4. Shell & session
 - **Layer-shell through FLTK.** Add a `libfld` shim that uses wlr-layer-shell through FLTK's Wayland handle, so the
   panel and desktop no longer have to be recognized by name and executable path, and also work under other compositors.
+  *Blocked on FLTK (checked against 1.4.5 and master, November 2026):* `Fl_Wayland_Window_Driver::makeWindow()`
+  gives every top-level window an xdg_surface as soon as it is shown, and the public API (`FL/wayland.H`) has no
+  way to give it another role. A shim would have to intercept libwayland requests inside FLTK, which is too fragile
+  to ship. The way forward is an FLTK change: a hook (or a window type) that lets the program assign the surface
+  role itself. Propose it upstream, then add the shim here.
 - A **quick settings** popup with Wi-Fi, Bluetooth, DND, night light, power mode and volume.
 - Notifications grouped by app, with inline reply.
 - Launcher providers: a calculator, unit conversion, file search and commands.

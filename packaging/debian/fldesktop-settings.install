@@ -3,5 +3,8 @@ usr/share/applications/fl-settings.desktop
 usr/share/icons/hicolor/scalable/apps/fl-settings.svg
 usr/share/man/man1/fl-settings.1
 usr/libexec/fldesktop/fl-settings-helper
-usr/libexec/fldesktop/fl-users-helper
+usr/bin/fl-users
+usr/share/applications/fl-users.desktop
+usr/share/icons/hicolor/scalable/apps/fl-users.svg
+usr/share/man/man1/fl-users.1
 usr/share/polkit-1/actions/org.fldesktop.settings.policy

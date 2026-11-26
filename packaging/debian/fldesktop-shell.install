@@ -1,4 +1,5 @@
 usr/bin/fl-panel
+usr/include/fldesktop/fld_applet.h
 usr/bin/fl-launcher
 usr/bin/fl-desktop
 usr/bin/fl-autostart

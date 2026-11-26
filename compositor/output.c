@@ -368,6 +368,7 @@ void arrange_all(struct flwm_server *server) {
 	wl_list_for_each(view, &server->views, link)
 		if (view->role != FLWM_ROLE_NORMAL) view_reposition_shell(view);
 	views_reconfigure_maximized(server);
+	view_tile_arrange(server);
 	lock_arrange(server);
 }
 

@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 #include <sys/types.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
@@ -23,6 +24,9 @@
 
 #include "compat.h"
 #include "snap.h"
+#include "rules.h"
+#include "session.h"
+#include "tile.h"
 
 #define FLWM_MAX_BINDINGS 96
 #define FLWM_MAX_AUTOSTART 32
@@ -118,6 +122,7 @@ enum flwm_action_type {
 	FLWM_ACTION_OVERVIEW,
 	FLWM_ACTION_SNAP_THIRD_LEFT,
 	FLWM_ACTION_SNAP_THIRD_RIGHT,
+	FLWM_ACTION_TOGGLE_TILING, /* tile the current workspace's windows, or stack them again */
 	FLWM_ACTION_PORTAL_SHORTCUT, /* arg "app_id\x1fshortcut_id": a global shortcut (portal) */
 };
 
@@ -172,6 +177,10 @@ struct flwm_config {
 	char *launcher_cmd;
 	bool switcher; /* Alt+Tab shows the switcher (else raises each window) */
 	bool snap_assist; /* after snapping to a side: offer the other windows */
+	bool restore_session; /* reopen the windows of the last session (session.h) */
+	bool tiling;          /* workspaces start tiled (tile.h) */
+	double tile_ratio;    /* the master's share of the width */
+	int tile_gap;
 	uint32_t drag_mods; /* modifiers that make a click move / resize a window (WLR_MODIFIER_*) */
 	bool osk_in_tablet_mode; /* the on-screen keyboard for text fields in tablet mode */
 	bool xwayland; /* run X11 programs through Xwayland (read at start only) */
@@ -197,6 +206,9 @@ struct flwm_config {
 	int nbindings;
 	char *autostart[FLWM_MAX_AUTOSTART];
 	int nautostart;
+	/* [rule:<name>] sections (rules.h) */
+	struct flwm_rule rules[FLWM_MAX_RULES];
+	int nrules;
 	char *path; /* loaded file */
 };
 
@@ -230,6 +242,7 @@ struct flwm_server {
 	struct wlr_scene_tree *layer_background; /* layer-shell background + fl-desktop */
 	struct wlr_scene_tree *layer_bottom;
 	struct wlr_scene_tree *layer_views;
+	struct wlr_scene_tree *layer_above;      /* windows kept above the others (always_on_top) */
 	struct wlr_scene_tree *layer_top;        /* layer-shell top + fl-panel */
 	struct wlr_scene_tree *layer_xunmanaged; /* X11 menus and tooltips (override-redirect) */
 	struct wlr_scene_tree *layer_overlay;    /* layer-shell overlay + launcher */
@@ -261,6 +274,12 @@ struct flwm_server {
 
 	/* workspaces (workspace.c): one set shared by all outputs, 0-based */
 	int cur_workspace;
+	bool tiled[FLWM_MAX_WORKSPACES]; /* the workspace tiles its windows */
+	unsigned map_serial;             /* order windows were opened (the oldest is the master) */
+	/* the last session's windows, for the programs fl-autostart starts again */
+	struct flwm_session_entry last_session[FLWM_MAX_SESSION];
+	int nlast_session;
+	time_t session_until; /* entries are used only in the first minutes */
 	struct wlr_ext_workspace_manager_v1 *workspace_mgr; /* NULL before wlroots 0.20 */
 	struct wlr_ext_workspace_group_handle_v1 *workspace_group;
 	struct wlr_ext_workspace_handle_v1 *workspace_handles[FLWM_MAX_WORKSPACES];
@@ -419,6 +438,10 @@ struct flwm_view {
 	bool no_taskbar;   /* not in the panel's window list (X11 menus, splash screens) */
 	int workspace;     /* 0-based; see view_on_current() */
 	bool sticky;       /* shown on every workspace */
+	bool above;        /* kept above other windows (layer_above) */
+	bool rules_applied; /* the window rules ran (at the first map) */
+	unsigned serial;    /* when it first mapped (server->map_serial) */
+	float opacity;     /* 0 or 1: opaque; else a window rule's opacity */
 	int requested_w, requested_h; /* last size we asked a shell client for */
 	int committed_w, committed_h; /* last committed size of a shell client */
 	enum flwm_role role;
@@ -543,6 +566,10 @@ void switcher_view_gone(struct flwm_server *server, struct flwm_view *view);
 /* writes the normal windows (layout x y w h, then the title; topmost first)
  * to $XDG_RUNTIME_DIR/fl-wm-windows, for fl-snip's window mode (SIGUSR2) */
 void view_dump_windows(struct flwm_server *server);
+/* tiles the windows of the current workspace on each output, when it is tiled */
+void view_tile_arrange(struct flwm_server *server);
+/* writes the normal windows to the session file (session.h) */
+void view_save_session(struct flwm_server *server);
 void switcher_output_gone(struct flwm_server *server, struct flwm_output *o);
 struct flwm_output *output_primary(struct flwm_server *server);
 struct flwm_output *output_for_view(struct flwm_view *view);
@@ -619,6 +646,8 @@ bool view_is_cyclable(struct flwm_view *view);
 void workspace_switch(struct flwm_server *server, int n); /* 0-based */
 void view_move_to_workspace(struct flwm_view *view, int n);
 void view_set_sticky(struct flwm_view *view, bool sticky);
+/* keeps a window above the others (window rules, the window menu) */
+void view_set_above(struct flwm_view *view, bool above);
 
 /* decor.c */
 void decor_create(struct flwm_view *view);

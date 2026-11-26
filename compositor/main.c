@@ -312,6 +312,7 @@ int main(int argc, char *argv[]) {
 	server.layer_background = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_bottom = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_views = wlr_scene_tree_create(&server.scene->tree);
+	server.layer_above = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_top = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_xunmanaged = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_overlay = wlr_scene_tree_create(&server.scene->tree);
@@ -358,11 +359,21 @@ int main(int argc, char *argv[]) {
 		  "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP "
 		  "XDG_SESSION_TYPE FLWM_PID FLWM_RENDERER 2>/dev/null");
 
+	for (int i = 0; i < FLWM_MAX_WORKSPACES; i++) server.tiled[i] = server.config.tiling;
+	/* the last session's windows, for the programs fl-autostart reopens */
+	if (server.config.restore_session && !startup_cmd) {
+		char sp[1024];
+		session_path(sp, sizeof sp);
+		server.nlast_session = session_read(sp, server.last_session, FLWM_MAX_SESSION);
+		server.session_until = time(NULL) + 180;
+	}
 	if (startup_cmd) flwm_spawn(&server, startup_cmd);
 	else if (autostart)
 		for (int i = 0; i < server.config.nautostart; i++) flwm_spawn(&server, server.config.autostart[i]);
 
 	wl_display_run(server.wl_display);
+	/* logging out: remember the windows (or forget them) */
+	if (!startup_cmd) view_save_session(&server);
 
 	wl_event_source_remove(sig_int);
 	wl_event_source_remove(sig_term);

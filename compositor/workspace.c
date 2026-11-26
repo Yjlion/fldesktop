@@ -148,6 +148,7 @@ void workspace_switch(struct flwm_server *server, int n) {
 	if (server->workspace_mgr) publish_active(server);
 #endif
 	wlr_log(WLR_INFO, "workspace: %d", n + 1);
+	view_tile_arrange(server);
 	/* the window used last on this workspace (server->views is in focus order) */
 	struct flwm_view *focused = view_focused(server);
 	if (!focused || focused->role == FLWM_ROLE_NORMAL || focused->role == FLWM_ROLE_DESKTOP)
@@ -172,6 +173,7 @@ void view_move_to_workspace(struct flwm_view *view, int n) {
 	update_visibility(view);
 	wlr_log(WLR_DEBUG, "%s moves to workspace %d", view_title(view) ? view_title(view) : "?", n + 1);
 	if (!view_on_current(view)) unfocus_hidden(view);
+	view_tile_arrange(view->server);
 }
 
 void view_set_sticky(struct flwm_view *view, bool sticky) {

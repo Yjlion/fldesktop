@@ -57,6 +57,7 @@ Rules-Requires-Root: no
 Package: fldesktop
 Architecture: all
 Depends: fldesktop-wm (>= ${source:Version}),
+         fldesktop-l10n (>= ${source:Version}),
          fldesktop-shell (>= ${source:Version}),
          fldesktop-term (>= ${source:Version}),
          fldesktop-files (>= ${source:Version}),
@@ -114,6 +115,14 @@ Description: fldesktop screen locker
  it and keeps the screen covered until it reports a successful
  authentication, even if it crashes. Its daemon locks the screen before the
  system suspends and when logind asks (loginctl lock-session).
+
+Package: fldesktop-l10n
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Description: fldesktop translations
+ The translations of the fldesktop programs (gettext catalogs of the
+ "fldesktop" domain). Without them the programs are in English.
 
 Package: fldesktop-icon-theme
 Architecture: all

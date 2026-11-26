@@ -139,7 +139,8 @@ package_fldesktop-shell() {
     usr/bin/fl-cliphist etc/xdg/autostart/fl-cliphist.desktop \
     usr/bin/fl-session usr/bin/fl-screenshot usr/bin/fl-snip usr/share/wayland-sessions/fldesktop.desktop \
     usr/share/applications/fl-snip.desktop usr/share/icons/hicolor/scalable/apps/fl-snip.svg \
-    usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg
+    usr/share/fldesktop/backgrounds usr/share/icons/hicolor/scalable/apps/fldesktop.svg \
+    usr/include/fldesktop/fld_applet.h
   local m
   for m in fl-session fl-panel fl-launcher fl-desktop fl-autostart fl-screenshot fl-snip fl-nightlight fl-cliphist fl-autorotate; do
     _install_files usr/share/man/man1/$m.1

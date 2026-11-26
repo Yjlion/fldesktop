@@ -229,6 +229,9 @@ int run_locker() {
   // the title is how fl-wm recognises the lock window (with our pid)
   g_win = new Fl_Double_Window(W, H, "fldesktop.lock");
   g_win->border(0);
+  // Escape and close requests must not close the lock screen: Fl::run()
+  // would return and the locker exit
+  g_win->callback([](Fl_Widget *, void *) {});
   g_screen = new Screen(0, 0, W, H);
   g_pass = new Fl_Secret_Input(0, 0, 10, 10);
   g_pass->when(FL_WHEN_ENTER_KEY_ALWAYS);
@@ -289,7 +292,11 @@ int run_locker() {
     }));
   }
 #endif
-  return Fl::run();
+  Fl::run();
+  // Only finish_auth() unlocks (exit status 0). Leaving the event loop any
+  // other way (all windows gone) must keep the session locked: fl-wm starts
+  // the locker again.
+  return 3;
 }
 
 // asks the running fl-wm to lock

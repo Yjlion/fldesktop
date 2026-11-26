@@ -62,6 +62,31 @@ option(FLD_BUILD_WELCOME  "Build the fl-welcome first-run tour"           ON)
 find_package(PkgConfig REQUIRED)
 
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+
+# ---- Hardening, sanitizers, fuzzing ----------------------------------------
+option(FLD_HARDENING "Build with _FORTIFY_SOURCE=3, stack protector, RELRO and PIE" ON)
+set(FLD_SANITIZE "" CACHE STRING "Sanitizers to build with, e.g. address,undefined")
+option(FLD_FUZZ "Build the libFuzzer targets in tests/fuzz (needs clang)" OFF)
+
+if(FLD_HARDENING)
+  include(CheckPIESupported)
+  check_pie_supported(LANGUAGES C CXX)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  add_compile_options(-fstack-protector-strong)
+  # _FORTIFY_SOURCE needs optimization, and sanitizers replace the checks
+  if(NOT FLD_SANITIZE AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3)
+  endif()
+  add_link_options(-Wl,-z,relro -Wl,-z,now)
+endif()
+if(FLD_FUZZ)
+  # coverage feedback from the libraries the fuzz targets link
+  add_compile_options(-fsanitize=fuzzer-no-link)
+endif()
+if(FLD_SANITIZE)
+  add_compile_options(-fsanitize=${FLD_SANITIZE} -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
+  add_link_options(-fsanitize=${FLD_SANITIZE})
+endif()
 # The version shown by the programs. Packages pass it in (-DFLD_VERSION=...);
 # otherwise it comes from the git release tags (packaging/version.sh), and
 # without git from project() above.
@@ -85,6 +110,34 @@ add_compile_definitions(FLD_VERSION="${FLD_VERSION_STRING}"
                         FLD_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/fldesktop"
                         FLD_BINDIR="${CMAKE_INSTALL_FULL_BINDIR}")
 
+# fld_fuzz_target(<name> <source> [libs...]) builds a libFuzzer target
+# fuzz_<name> (FLD_FUZZ=ON, clang) or a program that replays the seed corpus
+# tests/fuzz/corpus/<name> (otherwise), run by ctest as fuzz-<name>.
+function(fld_fuzz_target name src)
+  if(NOT BUILD_TESTING AND NOT FLD_FUZZ)
+    return()
+  endif()
+  set(_dir ${CMAKE_SOURCE_DIR}/tests/fuzz)
+  if(FLD_FUZZ)
+    add_executable(fuzz_${name} ${src})
+    target_compile_options(fuzz_${name} PRIVATE -fsanitize=fuzzer)
+    target_link_options(fuzz_${name} PRIVATE -fsanitize=fuzzer)
+  else()
+    add_executable(fuzz_${name} ${src} ${_dir}/driver.cpp)
+  endif()
+  target_include_directories(fuzz_${name} PRIVATE ${_dir})
+  if(ARGN)
+    target_link_libraries(fuzz_${name} PRIVATE ${ARGN})
+  endif()
+  if(BUILD_TESTING)
+    if(FLD_FUZZ)
+      add_test(NAME fuzz-${name} COMMAND fuzz_${name} -runs=0 ${_dir}/corpus/${name})
+    else()
+      add_test(NAME fuzz-${name} COMMAND fuzz_${name} ${_dir}/corpus/${name})
+    endif()
+  endif()
+endfunction()
+
 # ---- FLTK 1.4 (needed by everything except the compositor) ----------------
 set(FLD_NEED_FLTK OFF)
 foreach(opt SHELL GREETER LOCK TERM CALC VIEW FILES EDIT OSK CHARMAP MIXER POLKIT NETWORK SETTINGS NOTIFYD PORTAL PRINTERS BLUETOOTH PACKAGES FLATPAK FIREWALL TASKMGR SYSINFO DISKS MEDIA_PLAYER WEBCAM ARCHIVE WEB SNIP DOCS KEYRING LOGS SERVICES PAINT FONTS CLOCK REMOTE SCAN WELCOME)
@@ -106,6 +159,10 @@ if(FLD_NEED_FLTK)
     execute_process(COMMAND ${FLTK_CONFIG} --use-images --ldflags  OUTPUT_VARIABLE _fl OUTPUT_STRIP_TRAILING_WHITESPACE)
     separate_arguments(_fc UNIX_COMMAND "${_fc}")
     separate_arguments(_fl UNIX_COMMAND "${_fl}")
+    # fltk-config repeats the flags FLTK itself was built with (on Arch:
+    # -flto=auto, -march, -O2, ...): keep only what using FLTK needs
+    list(FILTER _fc INCLUDE REGEX "^(-I|-isystem|-D|-pthread$)")
+    list(FILTER _fl INCLUDE REGEX "^(-L|-l|-pthread$|-Wl,-rpath|/)")
     add_library(fld_fltk_imported INTERFACE)
     target_compile_options(fld_fltk_imported INTERFACE ${_fc})
     target_link_libraries(fld_fltk_imported INTERFACE ${_fl})
@@ -178,8 +235,13 @@ function(fld_wayland_protocol out xml side)
   set(hdr ${FLD_PROTO_OUT}/${name}-${side}-protocol.h)
   set(src ${FLD_PROTO_OUT}/${name}-protocol.c)
   set_property(DIRECTORY ${CMAKE_SOURCE_DIR} APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${xml})
-  execute_process(COMMAND ${WAYLAND_SCANNER} ${side}-header ${xml} ${hdr} COMMAND_ERROR_IS_FATAL ANY)
-  execute_process(COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${src} COMMAND_ERROR_IS_FATAL ANY)
+  # written to a temporary file and copied only when different, so that
+  # configuring again does not rebuild everything that includes the header
+  execute_process(COMMAND ${WAYLAND_SCANNER} ${side}-header ${xml} ${hdr}.tmp COMMAND_ERROR_IS_FATAL ANY)
+  execute_process(COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${src}.tmp COMMAND_ERROR_IS_FATAL ANY)
+  configure_file(${hdr}.tmp ${hdr} COPYONLY)
+  configure_file(${src}.tmp ${src} COPYONLY)
+  file(REMOVE ${hdr}.tmp ${src}.tmp)
   set(${out} ${${out}} ${src} PARENT_SCOPE)
 endfunction()
 

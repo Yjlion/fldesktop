@@ -1,3 +1,5 @@
+add_subdirectory(fuzz)
+
 if(TARGET fld)
   add_executable(test_libfld test_libfld.cpp)
   target_link_libraries(test_libfld PRIVATE fld)
@@ -327,6 +329,12 @@ if(FLD_BUILD_WM)
   add_executable(test_popup_place test_popup_place.cpp ${CMAKE_SOURCE_DIR}/compositor/popup_place.c)
   target_include_directories(test_popup_place PRIVATE ${CMAKE_SOURCE_DIR}/compositor)
   add_test(NAME popup-place COMMAND test_popup_place)
+endif()
+
+# Escape or Alt+F4 must not unlock the session (doc/THREAT-MODEL.md)
+if(FLD_BUILD_WM AND TARGET fl-lock)
+  add_test(NAME lock-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/lock-smoke.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  set_tests_properties(lock-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 40)
 endif()
 
 if(FLD_BUILD_WM AND FLD_BUILD_CALC)

@@ -135,11 +135,18 @@ std::string Client::take_output() {
   return o;
 }
 
-void Client::resize(int w, int h) {
+// what a (possibly hostile) server may ask for: an 8K screen fits, and texts
+// are short
+static const size_t kMaxPixels = 8192u * 8192u;
+static const uint32_t kMaxText = 1u << 20;
+
+bool Client::resize(int w, int h) {
+  if ((size_t)w * (size_t)h > kMaxPixels) return fail("The server's screen is too large.");
   w_ = w;
   h_ = h;
   fb_.assign((size_t)w * h, 0);
   if (on_resize) on_resize();
+  return true;
 }
 
 void Client::client_init_messages() {
@@ -313,6 +320,7 @@ bool Client::step() {
     case FAIL_REASON: {
       if (in_.size() < 4) return false;
       uint32_t len = u32(in_, 0);
+      if (len > kMaxText) return fail("The server refused the connection.");
       if (in_.size() < 4 + (size_t)len) return false;
       std::string why = in_.substr(4, len);
       in_.erase(0, 4 + (size_t)len);
@@ -321,12 +329,13 @@ bool Client::step() {
     case SERVER_INIT: {
       if (in_.size() < 24) return false;
       uint32_t nl = u32(in_, 20);
+      if (nl > kMaxText) return fail("The server sent a name that is too long.");
       if (in_.size() < 24 + (size_t)nl) return false;
       int w = u16(in_, 0), h = u16(in_, 2);
       name_ = in_.substr(24, nl);
       in_.erase(0, 24 + (size_t)nl);
+      if (!resize(w, h)) return false;
       state_ = NORMAL;
-      resize(w, h);
       client_init_messages();
       if (on_connected) on_connected();
       return true;
@@ -336,6 +345,9 @@ bool Client::step() {
         if (in_.size() < 12) return false;
         int x = u16(in_, 0), y = u16(in_, 2), w = u16(in_, 4), h = u16(in_, 6);
         int32_t enc = (int32_t)u32(in_, 8);
+        // pixel rectangles must lie on the screen (that bounds what they need)
+        if ((enc == 0 || enc == 1) && ((size_t)x + w > (size_t)w_ || (size_t)y + h > (size_t)h_))
+          return fail("The server sent a picture outside the screen.");
         if (enc == 0) { // Raw
           size_t need = 12 + (size_t)w * h * 4;
           if (in_.size() < need) return false;
@@ -360,7 +372,7 @@ bool Client::step() {
           in_.erase(0, 16);
         } else if (enc == -223) { // DesktopSize
           in_.erase(0, 12);
-          resize(w, h);
+          if (!resize(w, h)) return false;
           rects_left_--;
           if (rects_left_ == 0) request_update(false);
           return true;
@@ -396,6 +408,7 @@ bool Client::step() {
       if (type == 3) { // ServerCutText
         if (in_.size() < 8) return false;
         uint32_t len = u32(in_, 4);
+        if (len > kMaxText) return fail("The server sent too much clipboard text.");
         if (in_.size() < 8 + (size_t)len) return false;
         std::string t = in_.substr(8, len);
         in_.erase(0, 8 + (size_t)len);

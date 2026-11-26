@@ -1,0 +1,18 @@
+# The style of the C++ code. Not applied to the whole tree at once: format
+# the lines you change (git clang-format), not whole files.
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 120
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+BreakBeforeBraces: Attach
+PointerAlignment: Right
+SortIncludes: Never
+IncludeBlocks: Preserve
+NamespaceIndentation: None
+FixNamespaceComments: true
+SpacesBeforeTrailingComments: 1
+Cpp11BracedListStyle: true

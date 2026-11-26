@@ -39,6 +39,7 @@ bool wlr_renderer_is_vk(struct wlr_renderer *wlr_renderer);
 #endif
 #include <wlr/util/log.h>
 
+#include "anim.h"
 #include "server.h"
 
 void flwm_spawn(struct flwm_server *server, const char *cmd) {
@@ -380,6 +381,7 @@ int main(int argc, char *argv[]) {
 	wl_event_source_remove(sig_hup);
 	wl_event_source_remove(sig_usr1);
 	wl_event_source_remove(sig_usr2);
+	anim_finish(&server);
 	lock_finish(&server);
 	xwayland_finish(&server);
 	workspace_finish(&server);

@@ -13,6 +13,7 @@
 #include <wlr/util/log.h>
 
 #include "compat.h"
+#include "anim.h"
 #include "server.h"
 
 #if FLWM_WLR_AT_LEAST(0, 20)
@@ -210,7 +211,11 @@ void workspace_switch(struct flwm_server *server, int n) {
 	}
 	server->cur_workspace = n;
 	struct flwm_view *v;
-	wl_list_for_each(v, &server->views, link) update_visibility(v);
+	wl_list_for_each(v, &server->views, link) {
+		bool was = v->tree->node.enabled;
+		update_visibility(v);
+		if (!was && v->tree->node.enabled) anim_view_show(v);
+	}
 #ifdef FLWM_EXT_WORKSPACE
 	if (server->workspace_mgr) publish_active(server);
 #endif

@@ -73,6 +73,7 @@
 {"accessibility", "Super+= zooms in, Super+- out, Super+0 back"},
 {"accessibility", "Seeing"},
 {"accessibility", "High contrast"},
+{"accessibility", "Reduce motion"},
 {"accessibility", "Text size:"},
 {"accessibility", "Pointer size:"},
 {"accessibility", "Zoom:"},

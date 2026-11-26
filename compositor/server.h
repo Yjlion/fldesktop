@@ -155,6 +155,7 @@ struct flwm_config {
 	uint32_t active_title, inactive_title, active_text, inactive_text, border_color;
 	bool accent_border; /* the focused window's border in the accent colour */
 	bool shadows;       /* soft shadows under windows */
+	bool animations;    /* windows fade in (anim.h); off: reduce motion */
 	char *font; /* pango font description, e.g. "Sans Bold 10" */
 	bool panel_top;
 	bool focus_follows_mouse;
@@ -369,6 +370,7 @@ struct flwm_server {
 	long lock_started;
 	struct wl_event_source *lock_restart_timer, *idle_timer, *sigchld;
 	struct wl_event_source *blank_timer; /* [power] blank_minutes */
+	struct wl_event_source *anim_timer;  /* anim.c, while windows animate */
 	bool blanked;                        /* screens off by blank_timer */
 	struct wlr_output_power_manager_v1 *output_power;
 	struct wl_listener output_power_set_mode;
@@ -448,6 +450,9 @@ struct flwm_view {
 	bool rules_applied; /* the window rules ran (at the first map) */
 	unsigned serial;    /* when it first mapped (server->map_serial) */
 	float opacity;     /* 0 or 1: opaque; else a window rule's opacity */
+	bool anim;         /* fading in (anim.c) */
+	int64_t anim_start;
+	int anim_rise;
 	int requested_w, requested_h; /* last size we asked a shell client for */
 	int committed_w, committed_h; /* last committed size of a shell client */
 	enum flwm_role role;

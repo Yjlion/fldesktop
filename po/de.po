@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-26 11:07-0600\n"
+"POT-Creation-Date: 2026-11-26 11:12-0600\n"
 "PO-Revision-Date: 2026-11-25 12:00+0000\n"
 "Last-Translator: fldesktop contributors\n"
 "Language-Team: German\n"
@@ -309,7 +309,7 @@ msgid "about system information version hardware cpu memory"
 msgstr ""
 
 #: apps/fl-settings/pages/accessibility.cpp:45
-#: apps/fl-settings/pages/accessibility.cpp:154
+#: apps/fl-settings/pages/accessibility.cpp:157
 msgid "Accessibility"
 msgstr "Barrierefreiheit"
 
@@ -322,59 +322,67 @@ msgid "High contrast"
 msgstr "Hoher Kontrast"
 
 #: apps/fl-settings/pages/accessibility.cpp:53
+msgid "Reduce motion"
+msgstr ""
+
+#: apps/fl-settings/pages/accessibility.cpp:54
+msgid "Windows appear at once instead of fading in"
+msgstr ""
+
+#: apps/fl-settings/pages/accessibility.cpp:55
 #: apps/fl-settings/pages/login.cpp:113
 msgid "Text size:"
 msgstr "Textgröße:"
 
-#: apps/fl-settings/pages/accessibility.cpp:55
+#: apps/fl-settings/pages/accessibility.cpp:57
 msgid "Default|Large (125%)|Larger (150%)|Largest (200%)"
 msgstr "Standard|Groß (125 %)|Größer (150 %)|Am größten (200 %)"
 
-#: apps/fl-settings/pages/accessibility.cpp:62
+#: apps/fl-settings/pages/accessibility.cpp:64
 msgid "Pointer size:"
 msgstr "Zeigergröße:"
 
-#: apps/fl-settings/pages/accessibility.cpp:64
+#: apps/fl-settings/pages/accessibility.cpp:66
 msgid "Default|Large|Larger|Largest"
 msgstr "Standard|Groß|Größer|Am größten"
 
-#: apps/fl-settings/pages/accessibility.cpp:70
+#: apps/fl-settings/pages/accessibility.cpp:72
 msgid "Programs that are open take the contrast and the text size when they start again."
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:71
+#: apps/fl-settings/pages/accessibility.cpp:73
 msgid "Zoom:"
 msgstr "Zoom:"
 
-#: apps/fl-settings/pages/accessibility.cpp:72
+#: apps/fl-settings/pages/accessibility.cpp:74
 msgid "Super+= zooms in, Super+- out, Super+0 back"
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:75
+#: apps/fl-settings/pages/accessibility.cpp:77
 msgid "Screen Reader"
 msgstr "Bildschirmleser"
 
-#: apps/fl-settings/pages/accessibility.cpp:77
+#: apps/fl-settings/pages/accessibility.cpp:79
 msgid "Read the screen aloud (Orca)"
 msgstr "Bildschirm vorlesen (Orca)"
 
-#: apps/fl-settings/pages/accessibility.cpp:80
+#: apps/fl-settings/pages/accessibility.cpp:82
 msgid "Install Orca for a screen reader. It reads the fldesktop programs (started after it) as well as GTK and Qt programs."
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:83
+#: apps/fl-settings/pages/accessibility.cpp:85
 msgid "Orca reads the fldesktop programs started after it, and GTK and Qt programs."
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:86
+#: apps/fl-settings/pages/accessibility.cpp:88
 msgid "Typing"
 msgstr "Tippen"
 
-#: apps/fl-settings/pages/accessibility.cpp:87
+#: apps/fl-settings/pages/accessibility.cpp:89
 msgid "Sticky keys: press Shift, Ctrl, Alt or Super, then the key"
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:155
+#: apps/fl-settings/pages/accessibility.cpp:158
 msgid "accessibility a11y contrast text size large font zoom magnifier screen reader orca sticky bounce keys pointer cursor size"
 msgstr ""
 

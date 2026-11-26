@@ -34,7 +34,7 @@ foreach(p staging/tearing-control/tearing-control-v1 staging/content-type/conten
   endif()
 endforeach()
 
-add_executable(fl-wm main.c config.c output.c view.c view_layout.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c rules.c session.c tile.c popup_place.c zoom.c a11y.c protocols.c)
+add_executable(fl-wm main.c anim.c config.c output.c view.c view_layout.c decor.c layer.c input.c lock.c switcher.c workspace.c capture.c gesture.c gesture_decide.c im.c inhibit.c snap.c rules.c session.c tile.c popup_place.c zoom.c a11y.c protocols.c)
 # wlroots has the glue code of the standard protocols; our own one is here
 target_sources(fl-wm PRIVATE ${FLD_PROTO_OUT}/fldesktop-window-v1-protocol.c)
 

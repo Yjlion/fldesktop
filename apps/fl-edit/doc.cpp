@@ -90,8 +90,38 @@ int Minimap::handle(int e) {
 
 // ---- carets ----------------------------------------------------------------------------
 
+// git marks left of the text: green for added lines, orange for changed
+// ones, a red notch where lines were deleted (the saved file against git)
+void Editor::draw_git_marks() {
+  if (doc->git_hunks.empty()) return;
+  int first = mTopLineNum, last = mTopLineNum + mNVisibleLines;
+  int bx = text_area.x - 5;
+  fl_push_clip(x(), text_area.y, text_area.x - x(), text_area.h);
+  for (auto &h : doc->git_hunks) {
+    using fld::git::Hunk;
+    if (h.kind == Hunk::Deleted) {
+      if (h.line < first || h.line > last) continue;
+      // lines went after this one: a notch on its lower edge
+      int X, Y;
+      if (!xy_of(buffer()->skip_lines(0, h.line - 1), X, Y)) continue;
+      Y += mMaxsize;
+      fl_color(fl_rgb_color(0xe0, 0x1b, 0x24));
+      fl_polygon(bx, Y - 4, bx + 5, Y, bx, Y + 4);
+      continue;
+    }
+    fl_color(h.kind == Hunk::Added ? fl_rgb_color(0x2e, 0xc2, 0x7e) : fl_rgb_color(0xe5, 0xa5, 0x0a));
+    int from = std::max(h.line, first), to = std::min(h.line + h.count - 1, last);
+    for (int l = from; l <= to; l++) {
+      int X, Y;
+      if (xy_of(buffer()->skip_lines(0, l - 1), X, Y)) fl_rectf(bx, Y, 3, mMaxsize);
+    }
+  }
+  fl_pop_clip();
+}
+
 void Editor::draw() {
   Fl_Text_Editor::draw();
+  draw_git_marks();
   if (scroll_row() != last_top) {
     last_top = scroll_row();
     if (doc->mini) doc->mini->redraw();

@@ -137,6 +137,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&state);
 
 	struct flwm_output *output = calloc(1, sizeof(*output));
+	output->workspace = server->cur_workspace; /* a new screen shows the current workspace */
 	output->wlr_output = wlr_output;
 	output->server = server;
 	wlr_output->data = output;

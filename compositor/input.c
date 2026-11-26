@@ -147,6 +147,7 @@ static bool signal_resident_launcher(void) {
 }
 
 bool input_run_action(struct flwm_server *server, enum flwm_action_type action, const char *arg) {
+	workspace_sync(server); /* the output the user is on decides the workspace */
 	struct flwm_view *v = focused_normal(server);
 	switch (action) {
 	case FLWM_ACTION_EXEC:
@@ -816,6 +817,7 @@ static void update_snap_preview(struct flwm_server *server) {
 
 void input_reset_cursor_mode(struct flwm_server *server) {
 	if (server->snap_preview) wlr_scene_node_set_enabled(&server->snap_preview->node, false);
+	if (server->cursor_mode == FLWM_CURSOR_MOVE && server->grabbed_view) workspace_view_moved(server->grabbed_view);
 	if (server->cursor_mode == FLWM_CURSOR_RESIZE && server->grabbed_view &&
 			server->grabbed_view->type == FLWM_VIEW_XDG)
 		wlr_xdg_toplevel_set_resizing(server->grabbed_view->xdg_toplevel, false);

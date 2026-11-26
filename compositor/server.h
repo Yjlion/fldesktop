@@ -182,6 +182,7 @@ struct flwm_config {
 	bool snap_assist; /* after snapping to a side: offer the other windows */
 	bool restore_session; /* reopen the windows of the last session (session.h) */
 	bool tiling;          /* workspaces start tiled (tile.h) */
+	bool workspaces_per_output; /* each output switches its own workspace */
 	double tile_ratio;    /* the master's share of the width */
 	int tile_gap;
 	uint32_t drag_mods; /* modifiers that make a click move / resize a window (WLR_MODIFIER_*) */
@@ -277,6 +278,7 @@ struct flwm_server {
 
 	/* workspaces (workspace.c): one set shared by all outputs, 0-based */
 	int cur_workspace;
+	struct flwm_output *ws_output; /* workspaces_per_output: the output switched last */
 	bool tiled[FLWM_MAX_WORKSPACES]; /* the workspace tiles its windows */
 	unsigned map_serial;             /* order windows were opened (the oldest is the master) */
 	/* the last session's windows, for the programs fl-autostart starts again */
@@ -398,6 +400,7 @@ struct flwm_output {
 	struct wl_listener frame;
 	struct wl_listener request_state;
 	struct wl_listener destroy;
+	int workspace;    /* its current workspace with workspaces_per_output */
 	bool powered_off; /* display off (DPMS), still in the layout */
 	bool idle_off;    /* turned off by the idle timeout: input turns it back on */
 	struct wlr_buffer *zoom_buffer; /* zoom.c: the magnified frame */
@@ -647,6 +650,12 @@ bool view_on_current(struct flwm_view *view);
 /* a window Alt+Tab, the panel and focus-next may pick */
 bool view_is_cyclable(struct flwm_view *view);
 void workspace_switch(struct flwm_server *server, int n); /* 0-based */
+/* with workspaces_per_output: makes cur_workspace the workspace of the output
+ * the user is on (the focused window's, else the pointer's) */
+void workspace_sync(struct flwm_server *server);
+/* a window moved by the user: with workspaces_per_output it joins the
+ * current workspace of the output it is on now */
+void workspace_view_moved(struct flwm_view *view);
 void view_move_to_workspace(struct flwm_view *view, int n);
 void view_set_sticky(struct flwm_view *view, bool sticky);
 /* keeps a window above the others (window rules, the window menu) */

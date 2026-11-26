@@ -497,6 +497,9 @@ if(VPTR_WL_FOUND AND EXISTS ${_ws_xml})
     add_test(NAME workspaces-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/workspaces-smoke.sh
              ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-workspaces>)
     set_tests_properties(workspaces-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+    add_test(NAME workspaces-output-smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/workspaces-output-smoke.sh
+             ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} $<TARGET_FILE:fl-workspaces>)
+    set_tests_properties(workspaces-output-smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
   endif()
 endif()
 

@@ -85,6 +85,7 @@
 {"windows", "Alt+Tab shows a list of the windows"},
 {"windows", "Workspaces"},
 {"windows", "Number of workspaces:"},
+{"windows", "Each screen switches its own workspace"},
 {"windows", "Reopen the windows of the last session at login"},
 {"windows", "Snapping and Moving"},
 {"windows", "Snap windows dragged to an edge or a corner of the screen"},

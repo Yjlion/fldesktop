@@ -342,6 +342,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "snap_assist")) c->snap_assist = parse_bool(v);
 			else if (!strcmp(k, "restore_session")) c->restore_session = parse_bool(v);
 			else if (!strcmp(k, "tiling")) c->tiling = parse_bool(v);
+			else if (!strcmp(k, "workspaces_per_output")) c->workspaces_per_output = parse_bool(v);
 			else if (!strcmp(k, "tile_ratio")) c->tile_ratio = atof(v);
 			else if (!strcmp(k, "tile_gap")) c->tile_gap = atoi(v);
 			else if (!strcmp(k, "drag_modifier")) {

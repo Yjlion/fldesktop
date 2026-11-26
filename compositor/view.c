@@ -1002,6 +1002,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 	if (!is_x11(view)) detect_role(view);
 	view->mapped = true;
 	/* new windows open on the workspace the user is on */
+	workspace_sync(server);
 	if (!view->sticky) view->workspace = server->cur_workspace;
 	wlr_log(WLR_DEBUG, "map: app_id=%s title=%s role=%d%s",
 		view_app_id(view) ? view_app_id(view) : "(null)", title_or(view, "(null)"), view->role,

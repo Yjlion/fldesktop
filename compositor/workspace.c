@@ -1,7 +1,12 @@
-/* Workspaces: one set shared by all outputs. A window belongs to one
- * workspace (or is sticky); windows of the other workspaces are hidden, left
- * out of the panel's window list and of Alt+Tab. With wlroots 0.20 the set is
- * published through ext-workspace-v1 for the panel's pager. */
+/* Workspaces: one set shared by all outputs, or with
+ * [behaviour] workspaces_per_output one current workspace for each output:
+ * switching then changes the output the user is on (the focused window's,
+ * else the pointer's) and the others stay. A window belongs to one workspace
+ * (or is sticky); windows of the other workspaces are hidden, left out of the
+ * panel's window list and of Alt+Tab. cur_workspace is the workspace of the
+ * output the user is on, so key bindings, tiling and the pager follow it.
+ * With wlroots 0.20 the set is published through ext-workspace-v1 for the
+ * panel's pager (its active workspace is that of the output the user is on). */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
@@ -20,9 +25,35 @@ static int count(struct flwm_server *server) {
 	return n < 1 ? 1 : n > FLWM_MAX_WORKSPACES ? FLWM_MAX_WORKSPACES : n;
 }
 
+static bool per_output(struct flwm_server *server) {
+	return server->config.workspaces_per_output;
+}
+
+/* the current workspace of the output a view is on */
+static int workspace_of(struct flwm_view *view) {
+	struct flwm_server *server = view->server;
+	if (!per_output(server)) return server->cur_workspace;
+	struct flwm_output *o = output_for_view(view);
+	return o ? o->workspace : server->cur_workspace;
+}
+
 bool view_on_current(struct flwm_view *view) {
 	if (view->role != FLWM_ROLE_NORMAL) return true;
-	return view->sticky || view->workspace == view->server->cur_workspace;
+	return view->sticky || view->workspace == workspace_of(view);
+}
+
+/* the output the user is on: the focused window's, else the one switched
+ * last (an empty workspace has no window to focus), else the pointer's */
+static struct flwm_output *active_output(struct flwm_server *server) {
+	struct flwm_view *f = view_focused(server);
+	struct flwm_output *o = f && f->role == FLWM_ROLE_NORMAL ? output_for_view(f) : NULL;
+	if (!o && server->ws_output) {
+		struct flwm_output *it;
+		wl_list_for_each(it, &server->outputs, link)
+			if (it == server->ws_output) o = it;
+	}
+	if (!o) o = output_at(server, server->cursor->x, server->cursor->y);
+	return o;
 }
 
 bool view_is_cyclable(struct flwm_view *view) {
@@ -33,6 +64,9 @@ bool view_is_cyclable(struct flwm_view *view) {
 static void update_visibility(struct flwm_view *view) {
 	if (!view->mapped || view->role != FLWM_ROLE_NORMAL) return;
 	bool here = view_on_current(view);
+	struct flwm_output *o = output_for_view(view);
+	wlr_log(WLR_DEBUG, "%s: workspace %d on %s, %s", view_title(view) ? view_title(view) : "?", view->workspace + 1,
+		o ? o->wlr_output->name : "?", here ? "shown" : "hidden");
 	wlr_scene_node_set_enabled(&view->tree->node, here && !view->minimized);
 	if (here) view_ftl_create(view);
 	else view_ftl_destroy(view);
@@ -114,10 +148,9 @@ void workspace_output_added(struct flwm_server *server, struct wlr_output *outpu
 }
 
 void workspace_output_removed(struct flwm_server *server, struct wlr_output *output) {
+	if (server->ws_output && server->ws_output->wlr_output == output) server->ws_output = NULL;
 #ifdef FLWM_EXT_WORKSPACE
 	if (server->workspace_group) wlr_ext_workspace_group_handle_v1_output_leave(server->workspace_group, output);
-#else
-	(void)server, (void)output;
 #endif
 }
 
@@ -130,17 +163,51 @@ void workspace_apply_config(struct flwm_server *server) {
 #ifdef FLWM_EXT_WORKSPACE
 	if (server->workspace_mgr && server->nworkspace_handles != n) create_handles(server);
 #endif
+	struct flwm_output *o;
+	wl_list_for_each(o, &server->outputs, link)
+		if (o->workspace >= n) o->workspace = n - 1;
+	if (!per_output(server)) {
+		/* back to one set: every output shows the current workspace */
+		wl_list_for_each(o, &server->outputs, link) o->workspace = server->cur_workspace;
+	}
 	if (server->cur_workspace >= n) workspace_switch(server, n - 1);
+	wl_list_for_each(v, &server->views, link) update_visibility(v);
 }
 
 /* ---- switching and moving ------------------------------------------------- */
 
+void workspace_sync(struct flwm_server *server) {
+	if (!per_output(server)) return;
+	struct flwm_output *o = active_output(server);
+	if (!o || o->workspace == server->cur_workspace) return;
+	server->cur_workspace = o->workspace;
+#ifdef FLWM_EXT_WORKSPACE
+	if (server->workspace_mgr) publish_active(server);
+#endif
+}
+
+void workspace_view_moved(struct flwm_view *view) {
+	if (!per_output(view->server) || view->role != FLWM_ROLE_NORMAL || view->sticky) return;
+	struct flwm_output *o = output_for_view(view);
+	if (o) view->workspace = o->workspace;
+}
+
 void workspace_switch(struct flwm_server *server, int n) {
+	workspace_sync(server);
 	if (n < 0 || n >= count(server) || n == server->cur_workspace) return;
 	if (server->grabbed_view) input_reset_cursor_mode(server);
 	if (switcher_active(server)) switcher_finish(server, false);
 	server->cycling = false;
 	server->cycle_current = NULL;
+	struct flwm_output *o;
+	if (per_output(server)) {
+		o = active_output(server);
+		if (o) o->workspace = n;
+		server->ws_output = o;
+		wlr_log(WLR_DEBUG, "workspace %d on %s", n + 1, o ? o->wlr_output->name : "?");
+	} else {
+		wl_list_for_each(o, &server->outputs, link) o->workspace = n;
+	}
 	server->cur_workspace = n;
 	struct flwm_view *v;
 	wl_list_for_each(v, &server->views, link) update_visibility(v);
@@ -151,8 +218,22 @@ void workspace_switch(struct flwm_server *server, int n) {
 	view_tile_arrange(server);
 	/* the window used last on this workspace (server->views is in focus order) */
 	struct flwm_view *focused = view_focused(server);
-	if (!focused || focused->role == FLWM_ROLE_NORMAL || focused->role == FLWM_ROLE_DESKTOP)
-		view_focus_next_available(server);
+	if (focused && focused->role != FLWM_ROLE_NORMAL && focused->role != FLWM_ROLE_DESKTOP) return;
+	if (per_output(server)) {
+		/* the focus stays on the output that switched, even with nothing on it */
+		struct flwm_output *on = server->ws_output;
+		wl_list_for_each(v, &server->views, link)
+			if (view_is_cyclable(v) && !v->minimized && output_for_view(v) == on) {
+				view_focus(v);
+				return;
+			}
+		if (focused && focused->role == FLWM_ROLE_NORMAL && output_for_view(focused) != on)
+			wlr_seat_keyboard_notify_clear_focus(server->seat);
+		else if (focused && !view_on_current(focused))
+			wlr_seat_keyboard_notify_clear_focus(server->seat);
+		return;
+	}
+	view_focus_next_available(server);
 }
 
 /* takes the keyboard from a window that was just hidden */
@@ -180,6 +261,6 @@ void view_set_sticky(struct flwm_view *view, bool sticky) {
 	if (view->role != FLWM_ROLE_NORMAL) return;
 	view->sticky = sticky;
 	/* unsticking keeps the window where the user is */
-	view->workspace = view->server->cur_workspace;
+	view->workspace = workspace_of(view);
 	update_visibility(view);
 }

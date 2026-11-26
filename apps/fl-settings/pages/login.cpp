@@ -305,7 +305,7 @@ public:
       return;
     }
     if (which("pkexec").empty()) {
-      fl_alert(_("pkexec (polkit) is needed to change the login screen."));
+      fl_alert("%s", _("pkexec (polkit) is needed to change the login screen."));
       return;
     }
     std::string dir = getenv_or("XDG_RUNTIME_DIR", "/tmp");

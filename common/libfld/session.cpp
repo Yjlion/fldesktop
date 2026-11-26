@@ -255,15 +255,15 @@ bool confirm_power(PowerAction a) {
       suspend();
       return true;
     case PowerAction::LogOut:
-      if (fl_choice(_("Log out of this session?"), _("Cancel"), _("Log Out"), nullptr) != 1) return false;
+      if (fl_choice("%s", _("Cancel"), _("Log Out"), nullptr, _("Log out of this session?")) != 1) return false;
       log_out();
       return true;
     case PowerAction::Reboot:
-      if (fl_choice(_("Restart the computer?"), _("Cancel"), _("Restart"), nullptr) != 1) return false;
+      if (fl_choice("%s", _("Cancel"), _("Restart"), nullptr, _("Restart the computer?")) != 1) return false;
       reboot();
       return true;
     case PowerAction::PowerOff:
-      if (fl_choice(_("Shut down the computer?"), _("Cancel"), _("Shut Down"), nullptr) != 1) return false;
+      if (fl_choice("%s", _("Cancel"), _("Shut Down"), nullptr, _("Shut down the computer?")) != 1) return false;
       power_off();
       return true;
   }

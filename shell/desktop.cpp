@@ -465,7 +465,7 @@ public:
   void rename_item(int i) {
     Item &it = items[i];
     if (it.path == "trash:///" || it.path == fld::home_dir()) return;
-    const char *n = fl_input(_("New name:"), fld::basename(it.path).c_str());
+    const char *n = fl_input("%s", fld::basename(it.path).c_str(), _("New name:"));
     if (!n || !*n || strchr(n, '/')) return;
     std::string dst = fld::path_join(dir, n);
     if (fld::file_exists(dst)) { fl_alert(_("\"%s\" already exists."), n); return; }
@@ -500,7 +500,7 @@ public:
     else if (id == 2) rename_item(i);
     else if (id == 3) trash_selected();
     else if (id == 5) {
-      if (fl_choice(_("Permanently delete all items in the Trash?"), _("Cancel"), _("Empty Trash"), nullptr) == 1) {
+      if (fl_choice("%s", _("Cancel"), _("Empty Trash"), nullptr, _("Permanently delete all items in the Trash?")) == 1) {
         fld::trash_empty();
         reload();
       }

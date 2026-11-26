@@ -93,7 +93,7 @@ void update(void *) { start_fetch(); }
 
 // asks for a place and saves it (the panel restarts with it)
 void choose_place() {
-  const char *q = fl_input(_("Weather for which place?"), g_city.c_str());
+  const char *q = fl_input("%s", g_city.c_str(), _("Weather for which place?"));
   if (!q || !*q) return;
   fl_cursor(FL_CURSOR_WAIT);
   Fl::flush();

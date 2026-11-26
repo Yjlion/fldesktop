@@ -412,7 +412,7 @@ public:
   }
 
   void new_folder() {
-    const char *n = fl_input(_("Name of the new folder:"), _("New Folder"));
+    const char *n = fl_input("%s", _("New Folder"), _("Name of the new folder:"));
     if (!n || !*trim(n).c_str()) return;
     std::string p = path_join(cwd, trim(n));
     if (mkdir(p.c_str(), 0755) != 0) {

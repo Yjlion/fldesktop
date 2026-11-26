@@ -148,6 +148,8 @@
 {"nightlight", "From:"},
 {"nightlight", "Warmth:"},
 {"sound", "Open Volume Mixer"},
+{"network", "Connections"},
+{"network", "Proxy"},
 {"proxy", "Use the proxy settings the session started with"},
 {"proxy", "No proxy"},
 {"proxy", "Manual proxy configuration"},

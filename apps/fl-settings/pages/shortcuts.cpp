@@ -364,7 +364,7 @@ public:
       m.button(add).button(ed).button(rm).divider().button(reset);
     });
     reset->callback([](Fl_Widget *, void *d) {
-      if (fl_choice(_("Replace all shortcuts with the defaults?"), _("Cancel"), _("Reset"), nullptr) != 1) return;
+      if (fl_choice("%s", _("Cancel"), _("Reset"), nullptr, _("Replace all shortcuts with the defaults?")) != 1) return;
       ShortcutsPage *p = (ShortcutsPage *)d;
       p->load_defaults();
       p->fill();
@@ -455,7 +455,7 @@ public:
     } else if (chosen.arg == kWorkspace) {
       int n = atoi(cmd->value());
       if (n < 1 || n > 9) {
-        fl_alert(_("The workspace is a number from 1 to 9."));
+        fl_alert("%s", _("The workspace is a number from 1 to 9."));
         return;
       }
       act += " " + std::to_string(n);

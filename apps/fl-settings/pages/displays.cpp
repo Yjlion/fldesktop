@@ -587,9 +587,9 @@ public:
     std::vector<HeadConfig> before = current_config();
     bool any_enabled = false;
     for (auto &c : edited) if (c.enabled) any_enabled = true;
-    if (!any_enabled) { fl_alert(_("At least one display must stay enabled.")); return; }
+    if (!any_enabled) { fl_alert("%s", _("At least one display must stay enabled.")); return; }
     if (!apply(edited)) {
-      fl_alert(_("The display configuration could not be applied."));
+      fl_alert("%s", _("The display configuration could not be applied."));
       dirty = false;
       refresh();
       return;

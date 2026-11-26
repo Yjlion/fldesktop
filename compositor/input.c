@@ -583,9 +583,23 @@ static void server_new_keyboard(struct flwm_server *server, struct wlr_input_dev
 /* ---- pointer devices ----------------------------------------------------- */
 
 static void pointer_apply_config(struct flwm_server *server, struct wlr_input_device *device) {
+	if (device->type == WLR_INPUT_DEVICE_TABLET) {
+		/* the whole tablet maps to one output, or to all of them */
+		struct wlr_output *to = NULL;
+		struct flwm_output *o;
+		if (server->config.tablet_output)
+			wl_list_for_each(o, &server->outputs, link)
+				if (!strcmp(o->wlr_output->name, server->config.tablet_output)) to = o->wlr_output;
+		wlr_cursor_map_input_to_output(server->cursor, device, to);
+	}
 	if (!wlr_input_device_is_libinput(device)) return;
 	struct libinput_device *li = wlr_libinput_get_device_handle(device);
 	struct flwm_config *c = &server->config;
+	if (device->type == WLR_INPUT_DEVICE_TABLET) {
+		if (libinput_device_config_left_handed_is_available(li))
+			libinput_device_config_left_handed_set(li, c->tablet_left_handed);
+		return;
+	}
 	if (libinput_device_config_tap_get_finger_count(li) > 0)
 		libinput_device_config_tap_set_enabled(li, c->tap_to_click
 			? LIBINPUT_CONFIG_TAP_ENABLED : LIBINPUT_CONFIG_TAP_DISABLED);

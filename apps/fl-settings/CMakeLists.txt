@@ -3,11 +3,13 @@
 set(FLD_SETTINGS_PAGE_IDS)
 set(FLD_SETTINGS_PAGE_SRCS)
 set(FLD_SETTINGS_PAGE_LIBS)
+set(FLD_SETTINGS_SKIPPED) # "id:target" of pages left out
 function(fld_settings_page id file)
   cmake_parse_arguments(P "" "" "REQUIRES" ${ARGN})
   foreach(t ${P_REQUIRES})
     if(NOT TARGET ${t})
       message(STATUS "fl-settings: page '${id}' skipped (needs ${t})")
+      set(FLD_SETTINGS_SKIPPED ${FLD_SETTINGS_SKIPPED} "${id}:${t}" PARENT_SCOPE)
       return()
     endif()
   endforeach()
@@ -17,6 +19,7 @@ function(fld_settings_page id file)
 endfunction()
 
 fld_settings_page(appearance pages/appearance.cpp)
+fld_settings_page(wallpaper  pages/wallpaper.cpp)
 fld_settings_page(lock       pages/lock.cpp)
 fld_settings_page(privacy    pages/privacy.cpp REQUIRES fl-applets-util)
 fld_settings_page(panel      pages/panel.cpp)
@@ -28,6 +31,7 @@ fld_settings_page(defaultapps pages/default_apps.cpp)
 fld_settings_page(keyboard   pages/keyboard.cpp)
 fld_settings_page(shortcuts  pages/shortcuts.cpp)
 fld_settings_page(mouse      pages/mouse.cpp)
+fld_settings_page(tablet     pages/tablet.cpp)
 fld_settings_page(displays   pages/displays.cpp)
 fld_settings_page(nightlight pages/nightlight.cpp)
 fld_settings_page(sound      pages/sound.cpp REQUIRES fld-audio-ui)
@@ -50,6 +54,11 @@ fld_settings_page(about      pages/about.cpp)
 # generate the registry (explicit list: no static constructors to lose)
 set(_decl "")
 set(_list "")
+set(_skipped "")
+foreach(s ${FLD_SETTINGS_SKIPPED})
+  string(REPLACE ":" "\", \"" s "${s}")
+  string(APPEND _skipped "      {\"${s}\"},\n")
+endforeach()
 foreach(id ${FLD_SETTINGS_PAGE_IDS})
   string(APPEND _decl "PageInfo page_${id}();\n")
   string(APPEND _list "      page_${id}(),\n")
@@ -64,6 +73,11 @@ const std::vector<PageInfo> &all_pages() {
 ${_list}  };
   return pages;
 }
+const std::vector<std::pair<std::string, std::string>> &skipped_pages() {
+  static const std::vector<std::pair<std::string, std::string>> pages = {
+${_skipped}  };
+  return pages;
+}
 } // namespace fld
 ")
 configure_file(${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp COPYONLY)
@@ -76,7 +90,7 @@ add_library(fl-settings-xkb STATIC xkb_rules.cpp locale_env.cpp proxy_env.cpp gr
 target_include_directories(fl-settings-xkb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-settings-xkb PUBLIC fld)
 
-add_executable(fl-settings main.cpp settings_common.cpp ${FLD_SETTINGS_PAGE_SRCS}
+add_executable(fl-settings main.cpp settings_common.cpp pages/users_dialogs.cpp ${FLD_SETTINGS_PAGE_SRCS}
                ${CMAKE_CURRENT_BINARY_DIR}/pages_registry.cpp ${DISPLAYS_PROTO})
 target_include_directories(fl-settings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${FLD_PROTO_OUT})
 target_link_libraries(fl-settings PRIVATE fld fl-settings-xkb PkgConfig::WAYLAND_CLIENT ${FLD_SETTINGS_PAGE_LIBS})

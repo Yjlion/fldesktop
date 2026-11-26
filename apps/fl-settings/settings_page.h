@@ -7,6 +7,7 @@
 #pragma once
 #include <FL/Fl_Group.H>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fld {
@@ -19,5 +20,7 @@ struct PageInfo {
 
 // all compiled-in pages, in sidebar order (generated: pages_registry.cpp)
 const std::vector<PageInfo> &all_pages();
+// pages left out of this build: (page id, the library target it needed)
+const std::vector<std::pair<std::string, std::string>> &skipped_pages();
 
 } // namespace fld

@@ -33,8 +33,11 @@ apps/fl-settings/pages/sharing.cpp
 apps/fl-settings/pages/shortcuts.cpp
 apps/fl-settings/pages/sound.cpp
 apps/fl-settings/pages/startup.cpp
+apps/fl-settings/pages/tablet.cpp
 apps/fl-settings/pages/updates.cpp
 apps/fl-settings/pages/users.cpp
+apps/fl-settings/pages/users_dialogs.cpp
+apps/fl-settings/pages/wallpaper.cpp
 apps/fl-settings/pages/windows.cpp
 apps/fl-snip/main.cpp
 common/libfld/file_dialog.cpp

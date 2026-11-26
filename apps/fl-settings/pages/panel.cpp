@@ -103,7 +103,7 @@ public:
     icons = new fld::CheckButton(wx, wy, ww, 26, _("Show icons on the desktop"));
     icons->value(desk.ini.get_bool("Desktop", "ShowIcons", true));
     icons->callback([](Fl_Widget *, void *d) { ((PanelPage *)d)->save(); }, this);
-    f.note(_("The wallpaper is set on the Appearance page."));
+    f.note(_("The wallpaper is set on the Wallpaper page."));
     f.space(8);
     reset_page_button(f.widget_x(), f.y(), {{panel_ini_path(), {{"Clock", "Format"}, {"Panel", "KeyboardButton"}, {"Panel", "QuickLaunch"},
                                                              {"Panel", "QuickSettings"}}},

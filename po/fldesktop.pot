@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-25 19:36-0600\n"
+"POT-Creation-Date: 2026-11-25 23:58-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -53,9 +53,11 @@ msgstr ""
 #: apps/fl-settings/pages/shortcuts.cpp:285
 #: apps/fl-settings/pages/shortcuts.cpp:357
 #: apps/fl-settings/pages/shortcuts.cpp:384
-#: apps/fl-settings/pages/startup.cpp:60 apps/fl-settings/pages/users.cpp:112
-#: apps/fl-settings/pages/users.cpp:201 apps/fl-settings/pages/users.cpp:246
-#: apps/fl-settings/pages/users.cpp:444 apps/fl-settings/pages/users.cpp:711
+#: apps/fl-settings/pages/startup.cpp:60 apps/fl-settings/pages/users.cpp:310
+#: apps/fl-settings/pages/users_dialogs.cpp:107
+#: apps/fl-settings/pages/users_dialogs.cpp:192
+#: apps/fl-settings/pages/users_dialogs.cpp:237
+#: apps/fl-settings/pages/users_dialogs.cpp:413
 #: apps/fl-settings/settings_common.cpp:106 common/libfld/file_dialog.cpp:202
 #: common/libfld/file_dialog.cpp:441 common/libfld/file_dialog.cpp:458
 #: common/libfld/fileops_ui.cpp:127 common/libfld/fileops_ui.cpp:145
@@ -65,7 +67,7 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
-#: apps/fl-diskusage/main.cpp:183 apps/fl-recorder/main.cpp:268
+#: apps/fl-diskusage/main.cpp:183 apps/fl-recorder/main.cpp:269
 msgid "Move to Trash"
 msgstr ""
 
@@ -158,70 +160,70 @@ msgstr ""
 msgid "Saved (the layers are merged in the PNG; OpenRaster .ora keeps them)."
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:92
+#: apps/fl-recorder/main.cpp:93
 msgid "No recordings yet"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:97 apps/fl-recorder/main.cpp:238
+#: apps/fl-recorder/main.cpp:98 apps/fl-recorder/main.cpp:239
 msgid "Record"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:97
+#: apps/fl-recorder/main.cpp:98
 msgid "Stop"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:148
+#: apps/fl-recorder/main.cpp:149
 #, c-format
 msgid "Recording failed: %s"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:175
+#: apps/fl-recorder/main.cpp:176
 #, c-format
 msgid "Cannot record in this format: %s"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:180
+#: apps/fl-recorder/main.cpp:181
 msgid "The microphone could not be opened."
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:206 shell/desktop.cpp:468
+#: apps/fl-recorder/main.cpp:207 shell/desktop.cpp:468
 msgid "New name:"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:212
+#: apps/fl-recorder/main.cpp:213
 #, c-format
 msgid "%s exists already."
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:233
+#: apps/fl-recorder/main.cpp:234
 msgid "Sound Recorder"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:242
+#: apps/fl-recorder/main.cpp:243
 msgid "Start or stop recording (Space)"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:244
+#: apps/fl-recorder/main.cpp:245
 msgid "Format:"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:254
+#: apps/fl-recorder/main.cpp:255
 msgid "Recordings"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:266
+#: apps/fl-recorder/main.cpp:267
 msgid "Play"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:267
+#: apps/fl-recorder/main.cpp:268
 msgid "Rename…"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:269
+#: apps/fl-recorder/main.cpp:270
 msgid "Open the Folder"
 msgstr ""
 
-#: apps/fl-recorder/main.cpp:271 common/libfld/file_dialog.cpp:217
+#: apps/fl-recorder/main.cpp:272 common/libfld/file_dialog.cpp:217
 msgid "Open Folder"
 msgstr ""
 
@@ -271,11 +273,11 @@ msgstr ""
 msgid "%s – Settings"
 msgstr ""
 
-#: apps/fl-settings/main.cpp:420 apps/fl-settings/main.cpp:421
+#: apps/fl-settings/main.cpp:426 apps/fl-settings/main.cpp:427
 msgid "Search settings"
 msgstr ""
 
-#: apps/fl-settings/pages/about.cpp:77 apps/fl-settings/pages/about.cpp:136
+#: apps/fl-settings/pages/about.cpp:77 apps/fl-settings/pages/about.cpp:146
 msgid "About"
 msgstr ""
 
@@ -295,7 +297,12 @@ msgstr ""
 msgid "Processor, memory, graphics, disks, devices, batteries and temperatures in detail"
 msgstr ""
 
-#: apps/fl-settings/pages/about.cpp:136
+#: apps/fl-settings/pages/about.cpp:132
+#, c-format
+msgid "Not in this build (a library was missing when fl-settings was built): %s"
+msgstr ""
+
+#: apps/fl-settings/pages/about.cpp:146
 msgid "about system information version hardware cpu memory"
 msgstr ""
 
@@ -415,160 +422,146 @@ msgstr ""
 msgid "advanced renderer drawing graphics card gpu opengl gles vulkan software pixman xwayland x11 xorg"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:96
-#: apps/fl-settings/pages/appearance.cpp:383
+#: apps/fl-settings/pages/appearance.cpp:94
+#: apps/fl-settings/pages/appearance.cpp:337
 #: apps/fl-settings/pages/login.cpp:94
 msgid "Appearance"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:100
+#: apps/fl-settings/pages/appearance.cpp:98
 msgid "Style"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:101
-#: apps/fl-settings/pages/login.cpp:95
+#: apps/fl-settings/pages/appearance.cpp:99 apps/fl-settings/pages/login.cpp:95
 msgid "Style:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:103
-#: apps/fl-settings/pages/appearance.cpp:170
-#: apps/fl-settings/pages/appearance.cpp:183
+#: apps/fl-settings/pages/appearance.cpp:101
+#: apps/fl-settings/pages/appearance.cpp:168
+#: apps/fl-settings/pages/appearance.cpp:181
 #: apps/fl-settings/pages/login.cpp:97
 msgid "Light"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:104
-#: apps/fl-settings/pages/appearance.cpp:169
-#: apps/fl-settings/pages/appearance.cpp:182
+#: apps/fl-settings/pages/appearance.cpp:102
+#: apps/fl-settings/pages/appearance.cpp:167
+#: apps/fl-settings/pages/appearance.cpp:180
 #: apps/fl-settings/pages/login.cpp:98
 msgid "Dark"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:107
+#: apps/fl-settings/pages/appearance.cpp:105
 #: apps/fl-settings/pages/login.cpp:100
 msgid "Accent color:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:113
+#: apps/fl-settings/pages/appearance.cpp:111
 msgid "Folder icons follow the accent color"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:114
+#: apps/fl-settings/pages/appearance.cpp:112
 msgid "Switches to the fldesktop icon theme in the accent color"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:116
+#: apps/fl-settings/pages/appearance.cpp:114
 msgid "GTK and Qt programs use these colors too"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:117
+#: apps/fl-settings/pages/appearance.cpp:115
 msgid ""
 "Writes the light or dark theme, the accent color, icons and font for GTK\n"
 "(gtk-3.0, gtk-4.0) and Qt (qt5ct, qt6ct) programs; they apply it when they start"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:121
+#: apps/fl-settings/pages/appearance.cpp:119
 msgid "Widget style:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:134
+#: apps/fl-settings/pages/appearance.cpp:132
 msgid "How buttons, fields and frames are drawn"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:136
+#: apps/fl-settings/pages/appearance.cpp:134
 msgid "Corners:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:139
+#: apps/fl-settings/pages/appearance.cpp:137
 msgid "Corner radius of the Rounded style"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:141
+#: apps/fl-settings/pages/appearance.cpp:139
 msgid "Preview:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:144
+#: apps/fl-settings/pages/appearance.cpp:142
 msgid "Button"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:145
+#: apps/fl-settings/pages/appearance.cpp:143
 msgid "Pressed"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:151
+#: apps/fl-settings/pages/appearance.cpp:149
 msgid "Sample text field"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:152
+#: apps/fl-settings/pages/appearance.cpp:150
 msgid "Check"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:154
+#: apps/fl-settings/pages/appearance.cpp:152
 msgid "Radio"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:166
+#: apps/fl-settings/pages/appearance.cpp:164
 msgid "Title bars:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:168
-#: apps/fl-settings/pages/appearance.cpp:181
+#: apps/fl-settings/pages/appearance.cpp:166
+#: apps/fl-settings/pages/appearance.cpp:179
 msgid "Match theme"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:171
+#: apps/fl-settings/pages/appearance.cpp:169
 msgid "Accent color"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:179
+#: apps/fl-settings/pages/appearance.cpp:177
 msgid "Panel:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:188
+#: apps/fl-settings/pages/appearance.cpp:186
 msgid "Fonts"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:190
+#: apps/fl-settings/pages/appearance.cpp:188
 msgid "Interface:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:198
+#: apps/fl-settings/pages/appearance.cpp:196
 msgid "Monospace:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:207
+#: apps/fl-settings/pages/appearance.cpp:205
 msgid "Icons and Cursor"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:209
+#: apps/fl-settings/pages/appearance.cpp:207
 #: apps/fl-settings/pages/login.cpp:103
 msgid "Icon theme:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:226
+#: apps/fl-settings/pages/appearance.cpp:224
 #: apps/fl-settings/pages/login.cpp:106
 msgid "Cursor:"
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:236
-msgid "Wallpaper"
-msgstr ""
-
-#: apps/fl-settings/pages/appearance.cpp:246
-#: apps/fl-settings/pages/login.cpp:129
-msgid "Other Image…"
-msgstr ""
-
-#: apps/fl-settings/pages/appearance.cpp:248
-msgid "Fit:"
-msgstr ""
-
-#: apps/fl-settings/pages/appearance.cpp:265
+#: apps/fl-settings/pages/appearance.cpp:235
 msgid "The panel and desktop change right away; other applications use the new style the next time they start."
 msgstr ""
 
-#: apps/fl-settings/pages/appearance.cpp:384
-msgid "theme dark light accent color style scheme widgets buttons rounded flat font icons cursor wallpaper background title bar panel taskbar"
+#: apps/fl-settings/pages/appearance.cpp:338
+msgid "theme dark light accent color style scheme widgets buttons rounded flat font icons cursor title bar panel taskbar"
 msgstr ""
 
 #: apps/fl-settings/pages/bluetooth.cpp:17
@@ -729,7 +722,7 @@ msgid "The compositor does not support output management (wlr-output-management)
 msgstr ""
 
 #: apps/fl-settings/pages/displays.cpp:445 apps/fl-settings/pages/login.cpp:179
-#: apps/fl-settings/pages/users.cpp:549
+#: apps/fl-settings/pages/users.cpp:148
 msgid "Revert"
 msgstr ""
 
@@ -880,7 +873,8 @@ msgstr ""
 #: apps/fl-settings/pages/keyboard.cpp:70
 #: apps/fl-settings/pages/notifications.cpp:88
 #: apps/fl-settings/pages/panel.cpp:83 apps/fl-settings/pages/shortcuts.cpp:241
-#: apps/fl-settings/pages/startup.cpp:101 apps/fl-settings/pages/users.cpp:247
+#: apps/fl-settings/pages/startup.cpp:101
+#: apps/fl-settings/pages/users_dialogs.cpp:238
 msgid "Remove"
 msgstr ""
 
@@ -929,7 +923,8 @@ msgid "Variant:"
 msgstr ""
 
 #: apps/fl-settings/pages/keyboard.cpp:166 apps/fl-settings/pages/panel.cpp:146
-#: apps/fl-settings/pages/startup.cpp:61 apps/fl-settings/pages/users.cpp:202
+#: apps/fl-settings/pages/startup.cpp:61
+#: apps/fl-settings/pages/users_dialogs.cpp:193
 msgid "Add"
 msgstr ""
 
@@ -1062,12 +1057,16 @@ msgstr ""
 msgid "Login Screen"
 msgstr ""
 
+#: apps/fl-settings/pages/login.cpp:129 apps/fl-settings/pages/wallpaper.cpp:45
+msgid "Other Image…"
+msgstr ""
+
 #: apps/fl-settings/pages/login.cpp:130
 msgid "The image is copied to /etc/fldesktop so the login screen can read it"
 msgstr ""
 
-#: apps/fl-settings/pages/login.cpp:133 apps/fl-settings/pages/users.cpp:476
-#: apps/fl-settings/pages/users.cpp:797
+#: apps/fl-settings/pages/login.cpp:133 apps/fl-settings/pages/users.cpp:75
+#: apps/fl-settings/pages/users.cpp:396
 msgid "Users"
 msgstr ""
 
@@ -1115,7 +1114,7 @@ msgstr ""
 msgid "Never"
 msgstr ""
 
-#: apps/fl-settings/pages/login.cpp:176 apps/fl-settings/pages/users.cpp:546
+#: apps/fl-settings/pages/login.cpp:176 apps/fl-settings/pages/users.cpp:145
 msgid "Apply…"
 msgstr ""
 
@@ -1127,7 +1126,7 @@ msgstr ""
 msgid "pkexec (polkit) is needed to change the login screen."
 msgstr ""
 
-#: apps/fl-settings/pages/login.cpp:315 apps/fl-settings/pages/users.cpp:773
+#: apps/fl-settings/pages/login.cpp:315 apps/fl-settings/pages/users.cpp:372
 #, c-format
 msgid "Cannot write %s"
 msgstr ""
@@ -1412,7 +1411,7 @@ msgid "Show icons on the desktop"
 msgstr ""
 
 #: apps/fl-settings/pages/panel.cpp:106
-msgid "The wallpaper is set on the Appearance page."
+msgid "The wallpaper is set on the Wallpaper page."
 msgstr ""
 
 #: apps/fl-settings/pages/panel.cpp:191
@@ -1883,6 +1882,30 @@ msgstr ""
 msgid "startup applications autostart login start programs session"
 msgstr ""
 
+#: apps/fl-settings/pages/tablet.cpp:41 apps/fl-settings/pages/tablet.cpp:89
+msgid "Tablet & Pen"
+msgstr ""
+
+#: apps/fl-settings/pages/tablet.cpp:45
+msgid "The tablet covers:"
+msgstr ""
+
+#: apps/fl-settings/pages/tablet.cpp:49
+msgid "Left-handed (the tablet is turned around)"
+msgstr ""
+
+#: apps/fl-settings/pages/tablet.cpp:51
+msgid "Programs that know tablets get the pen's pressure and tilt; for the others the pen moves the pointer."
+msgstr ""
+
+#: apps/fl-settings/pages/tablet.cpp:65
+msgid "All screens"
+msgstr ""
+
+#: apps/fl-settings/pages/tablet.cpp:90
+msgid "tablet pen stylus wacom drawing graphics tablet left handed screen map pressure"
+msgstr ""
+
 #: apps/fl-settings/pages/updates.cpp:28 apps/fl-settings/pages/updates.cpp:72
 msgid "Software Updates"
 msgstr ""
@@ -1919,131 +1942,98 @@ msgstr ""
 msgid "updates software packages upgrade security packagekit automatic check"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:105
-msgid "New password:"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:108
-msgid "Again:"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:113
-msgid "Change"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:186
-msgid "Lower case letters, digits, - and _. It cannot be changed later."
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:189 apps/fl-settings/pages/users.cpp:506
-msgid "Standard"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:190 apps/fl-settings/pages/users.cpp:507
-msgid "Administrator"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:417
-msgid "@iNone yet"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:444 common/libfld/menus.cpp:172
-#: common/libfld/menus.cpp:197
-msgid "Delete"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:444
-#, c-format
-msgid "Delete all fingerprints of %s?"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:446
-#, c-format
-msgid "The fingerprints were not deleted: %s"
-msgstr ""
-
-#: apps/fl-settings/pages/users.cpp:485
+#: apps/fl-settings/pages/users.cpp:84
 msgid "Add User…"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:487
+#: apps/fl-settings/pages/users.cpp:86
 msgid "Remove…"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:490
+#: apps/fl-settings/pages/users.cpp:89
 msgid "Account"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:491
+#: apps/fl-settings/pages/users.cpp:90
 msgid "Picture:"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:493
+#: apps/fl-settings/pages/users.cpp:92
 msgid "Choose…"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:495
+#: apps/fl-settings/pages/users.cpp:94
 msgid "No Picture"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:497
+#: apps/fl-settings/pages/users.cpp:96
 msgid "User name:"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:500
+#: apps/fl-settings/pages/users.cpp:99
 msgid "Full name:"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:504
+#: apps/fl-settings/pages/users.cpp:103
 msgid "Account type:"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:509
+#: apps/fl-settings/pages/users.cpp:105
+#: apps/fl-settings/pages/users_dialogs.cpp:180
+msgid "Standard"
+msgstr ""
+
+#: apps/fl-settings/pages/users.cpp:106
+#: apps/fl-settings/pages/users_dialogs.cpp:181
+msgid "Administrator"
+msgstr ""
+
+#: apps/fl-settings/pages/users.cpp:108
 msgid "Administrators can install software, change system settings and manage users."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:510
+#: apps/fl-settings/pages/users.cpp:109
 msgid "Password:"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:511
+#: apps/fl-settings/pages/users.cpp:110
 msgid "Change Password…"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:516
+#: apps/fl-settings/pages/users.cpp:115
 msgid "Fingerprints…"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:524
+#: apps/fl-settings/pages/users.cpp:123
 msgid "Log in automatically when the computer starts"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:539
+#: apps/fl-settings/pages/users.cpp:138
 msgid "Groups:"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:543
+#: apps/fl-settings/pages/users.cpp:142
 msgid "Groups give access to devices and services, e.g. printers (lp), serial ports (uucp, dialout) or docker."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:547
+#: apps/fl-settings/pages/users.cpp:146
 msgid "Changing a user account needs an administrator password"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:619
+#: apps/fl-settings/pages/users.cpp:218
 msgid "Automatic login needs greetd (/etc/greetd/config.toml)"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:647
+#: apps/fl-settings/pages/users.cpp:246
 msgid "pkexec (polkit) is needed to change user accounts."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:694
+#: apps/fl-settings/pages/users.cpp:293
 #, c-format
 msgid "%s is the only administrator. Make someone else an administrator first."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:709
+#: apps/fl-settings/pages/users.cpp:308
 #, c-format
 msgid ""
 "Log %s in automatically, without a password, when the computer starts?\n"
@@ -2051,22 +2041,98 @@ msgid ""
 "Anyone who switches the computer on can then use the account."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:711
+#: apps/fl-settings/pages/users.cpp:310
 msgid "Log In Automatically"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:735
+#: apps/fl-settings/pages/users.cpp:334
 #, c-format
 msgid "%s is the only administrator and cannot be removed."
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:767
+#: apps/fl-settings/pages/users.cpp:366
 #, c-format
 msgid "Cannot read %s"
 msgstr ""
 
-#: apps/fl-settings/pages/users.cpp:798
+#: apps/fl-settings/pages/users.cpp:397
 msgid "users accounts user password administrator admin add remove delete groups picture avatar face autologin automatic login"
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:100
+msgid "New password:"
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:103
+msgid "Again:"
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:108
+msgid "Change"
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:177
+msgid "Lower case letters, digits, - and _. It cannot be changed later."
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:386
+msgid "@iNone yet"
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:413 common/libfld/menus.cpp:172
+#: common/libfld/menus.cpp:197
+msgid "Delete"
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:413
+#, c-format
+msgid "Delete all fingerprints of %s?"
+msgstr ""
+
+#: apps/fl-settings/pages/users_dialogs.cpp:415
+#, c-format
+msgid "The fingerprints were not deleted: %s"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:20
+msgid "Center"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:20
+msgid "Fill the screen"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:20
+msgid "Fit (whole picture)"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:20
+msgid "Stretch"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:21
+msgid "Tile"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:32
+#: apps/fl-settings/pages/wallpaper.cpp:98
+msgid "Wallpaper"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:47
+msgid "Fit:"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:51
+msgid "Pictures from fldesktop, /usr/share/backgrounds, ~/.local/share/backgrounds and Pictures/Wallpapers; the desktop changes right away."
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:74
+msgid "Choose Wallpaper"
+msgstr ""
+
+#: apps/fl-settings/pages/wallpaper.cpp:99
+msgid "wallpaper background desktop picture image fill fit stretch center tile"
 msgstr ""
 
 #: apps/fl-settings/pages/windows.cpp:26

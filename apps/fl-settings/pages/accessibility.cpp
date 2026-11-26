@@ -27,7 +27,7 @@ std::string orca_autostart() { return config_home() + "/autostart/fl-orca.deskto
 class AccessibilityPage : public Fl_Group {
 public:
   ConfigFile desk{desktop_ini_path()}, wm{wm_ini_path()};
-  Fl_Check_Button *contrast, *reader, *sticky, *bounce;
+  Fl_Check_Button *contrast, *motion, *reader, *sticky, *bounce;
   Fl_Choice *text, *cursor;
   Fl_Spinner *bounce_ms;
 
@@ -50,6 +50,8 @@ public:
 
     f.heading(_("Seeing"));
     contrast = check(f, _("High contrast"), lower(desk.ini.get("Appearance", "Contrast", "normal")) == "high");
+    motion = check(f, _("Reduce motion"), !wm.ini.get_bool("appearance", "animations", true));
+    motion->tooltip(_("Windows appear at once instead of fading in"));
     f.row(_("Text size:"), 28, wx, wy, ww);
     text = new Fl_Choice(wx, wy, 220, 28);
     text->add(_("Default|Large (125%)|Larger (150%)|Largest (200%)"));
@@ -123,6 +125,7 @@ public:
     wm.ini.load(wm.path);
     wm.ini.set_int("cursor", "size", kCursorSizes[std::max(0, cursor->value())]);
     wm.ini.set_bool("accessibility", "sticky_keys", sticky->value());
+    wm.ini.set_bool("appearance", "animations", !motion->value());
     wm.ini.set_int("accessibility", "bounce_keys", bounce->value() ? (int)bounce_ms->value() : 0);
     save_wm(wm);
 

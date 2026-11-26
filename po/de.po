@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fldesktop\n"
 "Report-Msgid-Bugs-To: https://github.com/Yjlion/fldesktop/issues\n"
-"POT-Creation-Date: 2026-11-26 10:28-0600\n"
+"POT-Creation-Date: 2026-11-26 13:06-0600\n"
 "PO-Revision-Date: 2026-11-25 12:00+0000\n"
 "Last-Translator: fldesktop contributors\n"
 "Language-Team: German\n"
@@ -80,7 +80,7 @@ msgstr ""
 msgid "Show This Folder"
 msgstr "In Dateien öffnen"
 
-#: apps/fl-diskusage/main.cpp:228 shell/launcher.cpp:298 shell/panel.cpp:837
+#: apps/fl-diskusage/main.cpp:228 shell/launcher.cpp:298 shell/panel.cpp:839
 msgid "Open"
 msgstr ""
 
@@ -333,7 +333,7 @@ msgid "about system information version hardware cpu memory"
 msgstr ""
 
 #: apps/fl-settings/pages/accessibility.cpp:45
-#: apps/fl-settings/pages/accessibility.cpp:154
+#: apps/fl-settings/pages/accessibility.cpp:157
 msgid "Accessibility"
 msgstr "Barrierefreiheit"
 
@@ -346,59 +346,67 @@ msgid "High contrast"
 msgstr "Hoher Kontrast"
 
 #: apps/fl-settings/pages/accessibility.cpp:53
+msgid "Reduce motion"
+msgstr ""
+
+#: apps/fl-settings/pages/accessibility.cpp:54
+msgid "Windows appear at once instead of fading in"
+msgstr ""
+
+#: apps/fl-settings/pages/accessibility.cpp:55
 #: apps/fl-settings/pages/login.cpp:113
 msgid "Text size:"
 msgstr "Textgröße:"
 
-#: apps/fl-settings/pages/accessibility.cpp:55
+#: apps/fl-settings/pages/accessibility.cpp:57
 msgid "Default|Large (125%)|Larger (150%)|Largest (200%)"
 msgstr "Standard|Groß (125 %)|Größer (150 %)|Am größten (200 %)"
 
-#: apps/fl-settings/pages/accessibility.cpp:62
+#: apps/fl-settings/pages/accessibility.cpp:64
 msgid "Pointer size:"
 msgstr "Zeigergröße:"
 
-#: apps/fl-settings/pages/accessibility.cpp:64
+#: apps/fl-settings/pages/accessibility.cpp:66
 msgid "Default|Large|Larger|Largest"
 msgstr "Standard|Groß|Größer|Am größten"
 
-#: apps/fl-settings/pages/accessibility.cpp:70
+#: apps/fl-settings/pages/accessibility.cpp:72
 msgid "Programs that are open take the contrast and the text size when they start again."
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:71
+#: apps/fl-settings/pages/accessibility.cpp:73
 msgid "Zoom:"
 msgstr "Zoom:"
 
-#: apps/fl-settings/pages/accessibility.cpp:72
+#: apps/fl-settings/pages/accessibility.cpp:74
 msgid "Super+= zooms in, Super+- out, Super+0 back"
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:75
+#: apps/fl-settings/pages/accessibility.cpp:77
 msgid "Screen Reader"
 msgstr "Bildschirmleser"
 
-#: apps/fl-settings/pages/accessibility.cpp:77
+#: apps/fl-settings/pages/accessibility.cpp:79
 msgid "Read the screen aloud (Orca)"
 msgstr "Bildschirm vorlesen (Orca)"
 
-#: apps/fl-settings/pages/accessibility.cpp:80
+#: apps/fl-settings/pages/accessibility.cpp:82
 msgid "Install Orca for a screen reader. It reads the fldesktop programs (started after it) as well as GTK and Qt programs."
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:83
+#: apps/fl-settings/pages/accessibility.cpp:85
 msgid "Orca reads the fldesktop programs started after it, and GTK and Qt programs."
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:86
+#: apps/fl-settings/pages/accessibility.cpp:88
 msgid "Typing"
 msgstr "Tippen"
 
-#: apps/fl-settings/pages/accessibility.cpp:87
+#: apps/fl-settings/pages/accessibility.cpp:89
 msgid "Sticky keys: press Shift, Ctrl, Alt or Super, then the key"
 msgstr ""
 
-#: apps/fl-settings/pages/accessibility.cpp:155
+#: apps/fl-settings/pages/accessibility.cpp:158
 msgid "accessibility a11y contrast text size large font zoom magnifier screen reader orca sticky bounce keys pointer cursor size"
 msgstr ""
 
@@ -994,7 +1002,7 @@ msgstr ""
 msgid "or press Super+L"
 msgstr ""
 
-#: apps/fl-settings/pages/lock.cpp:69 shell/panel.cpp:1049
+#: apps/fl-settings/pages/lock.cpp:69 shell/panel.cpp:1090
 msgid "Lock Screen"
 msgstr ""
 
@@ -2154,7 +2162,7 @@ msgstr ""
 msgid "Applications"
 msgstr "Standardanwendungen"
 
-#: apps/fl-settings/pages/windows.cpp:47 apps/fl-settings/pages/windows.cpp:175
+#: apps/fl-settings/pages/windows.cpp:47 apps/fl-settings/pages/windows.cpp:178
 msgid "Windows & Workspaces"
 msgstr ""
 
@@ -2185,76 +2193,80 @@ msgid "Number of workspaces:"
 msgstr "Netzwerk"
 
 #: apps/fl-settings/pages/windows.cpp:66
-msgid "All screens switch workspaces together."
+msgid "Each screen switches its own workspace"
 msgstr ""
 
 #: apps/fl-settings/pages/windows.cpp:67
-msgid "Reopen the windows of the last session at login"
+msgid "Off: all screens switch workspaces together"
 msgstr ""
 
 #: apps/fl-settings/pages/windows.cpp:68
+msgid "Reopen the windows of the last session at login"
+msgstr ""
+
+#: apps/fl-settings/pages/windows.cpp:69
 msgid "The programs start again and their windows go back to their workspace, place and size"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:70
+#: apps/fl-settings/pages/windows.cpp:71
 msgid "Snapping and Moving"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:71
+#: apps/fl-settings/pages/windows.cpp:72
 msgid "Tile the windows (the oldest on the left, the others beside it)"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:72
+#: apps/fl-settings/pages/windows.cpp:73
 msgid "Super+Shift+T tiles or stacks the windows of one workspace"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:73
+#: apps/fl-settings/pages/windows.cpp:74
 msgid "Snap windows dragged to an edge or a corner of the screen"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:74
+#: apps/fl-settings/pages/windows.cpp:75
 msgid "Snap assist: after snapping a window to a side, offer the others for the rest"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:75
+#: apps/fl-settings/pages/windows.cpp:76
 msgid "Move windows with:"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:77
+#: apps/fl-settings/pages/windows.cpp:78
 msgid "Super+drag|Alt+drag|Super or Alt+drag|Only the title bar"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:78
+#: apps/fl-settings/pages/windows.cpp:79
 msgid "Hold this key and drag with the left button to move a window, with the right button to resize it"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:81
+#: apps/fl-settings/pages/windows.cpp:82
 #, fuzzy
 msgid "Hot Corners"
 msgstr "Ecken:"
 
-#: apps/fl-settings/pages/windows.cpp:89
+#: apps/fl-settings/pages/windows.cpp:90
 msgid "Title Bars and Shadows"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:90
+#: apps/fl-settings/pages/windows.cpp:91
 #, fuzzy
 msgid "Title bar height:"
 msgstr "Titelleisten:"
 
-#: apps/fl-settings/pages/windows.cpp:97
+#: apps/fl-settings/pages/windows.cpp:98
 msgid "The active window's border has the accent color"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:98
+#: apps/fl-settings/pages/windows.cpp:99
 msgid "Shadows under windows"
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:99
+#: apps/fl-settings/pages/windows.cpp:100
 msgid "Title bar colors follow the theme (Appearance)."
 msgstr ""
 
-#: apps/fl-settings/pages/windows.cpp:176
+#: apps/fl-settings/pages/windows.cpp:179
 msgid "windows workspaces virtual desktops focus follows mouse snap snapping tiling assist drag move modifier super alt hot corners title bar height shadows border alt tab switcher session restore reopen"
 msgstr ""
 
@@ -2272,11 +2284,11 @@ msgid ""
 "Adds, removes and changes user accounts and sets up the login screen.\n"
 msgstr ""
 
-#: apps/fl-snip/main.cpp:467
+#: apps/fl-snip/capture.cpp:246
 msgid "Click a pixel to copy its colour · Esc cancels"
 msgstr ""
 
-#: apps/fl-snip/main.cpp:468
+#: apps/fl-snip/capture.cpp:247
 msgid "Drag to measure · Enter copies · Esc closes"
 msgstr ""
 
@@ -2518,7 +2530,7 @@ msgstr ""
 msgid "Could not copy the launcher to %s."
 msgstr ""
 
-#: shell/launcher.cpp:307 shell/panel.cpp:853
+#: shell/launcher.cpp:307 shell/panel.cpp:855
 msgid "Remove from Quick Launch"
 msgstr ""
 
@@ -2552,104 +2564,104 @@ msgid ""
 "Also: 2*(3+4) calculates, 10 km in mi converts, >command runs in a terminal."
 msgstr ""
 
-#: shell/panel.cpp:715 shell/panel_privacy.cpp:126
+#: shell/panel.cpp:717 shell/panel_privacy.cpp:126
 #, fuzzy
 msgid "Sound Settings…"
 msgstr "Einstellungen"
 
-#: shell/panel.cpp:716
+#: shell/panel.cpp:718
 msgid "Volume Mixer…"
 msgstr ""
 
-#: shell/panel.cpp:776
+#: shell/panel.cpp:778
 msgid "Mute"
 msgstr ""
 
-#: shell/panel.cpp:782
+#: shell/panel.cpp:784
 msgid "On the icon: scroll to adjust, middle-click to mute"
 msgstr ""
 
-#: shell/panel.cpp:784
+#: shell/panel.cpp:786
 msgid "Sound Settings"
 msgstr ""
 
-#: shell/panel.cpp:790
+#: shell/panel.cpp:792
 msgid "Volume Mixer"
 msgstr ""
 
-#: shell/panel.cpp:843
+#: shell/panel.cpp:845
 #, fuzzy
 msgid "Move Left"
 msgstr "Nach oben"
 
-#: shell/panel.cpp:848
+#: shell/panel.cpp:850
 msgid "Move Right"
 msgstr ""
 
-#: shell/panel.cpp:869
+#: shell/panel.cpp:871
 msgid "Copy Date"
 msgstr ""
 
-#: shell/panel.cpp:870
+#: shell/panel.cpp:872
 msgid "Copy Time"
 msgstr ""
 
-#: shell/panel.cpp:871
+#: shell/panel.cpp:873
 #, fuzzy
 msgid "Copy Date and Time"
 msgstr "Datum & Uhrzeit"
 
-#: shell/panel.cpp:872
+#: shell/panel.cpp:874
 #, fuzzy
 msgid "Date && Time Settings…"
 msgstr "Datum & Uhrzeit"
 
-#: shell/panel.cpp:873
+#: shell/panel.cpp:875
 msgid "Clock Format…"
 msgstr ""
 
-#: shell/panel.cpp:1041
+#: shell/panel.cpp:1082
 #, fuzzy
 msgid "Panel Settings…"
 msgstr "Einstellungen"
 
-#: shell/panel.cpp:1047 shell/panel.cpp:1248 shell/panel_sysmon.cpp:80
+#: shell/panel.cpp:1088 shell/panel.cpp:1289 shell/panel_sysmon.cpp:80
 msgid "Task Manager…"
 msgstr ""
 
-#: shell/panel.cpp:1048
+#: shell/panel.cpp:1089
 #, fuzzy
 msgid "Applications…"
 msgstr "Standardanwendungen"
 
-#: shell/panel.cpp:1056
+#: shell/panel.cpp:1097
 msgid "Show a System Monitor"
 msgstr ""
 
-#: shell/panel.cpp:1064 shell/panel.cpp:1249
+#: shell/panel.cpp:1105 shell/panel.cpp:1290
 #, fuzzy
 msgid "Settings…"
 msgstr "Einstellungen"
 
-#: shell/panel.cpp:1241
+#: shell/panel.cpp:1282
 msgid "Apps"
 msgstr ""
 
-#: shell/panel.cpp:1247
+#: shell/panel.cpp:1288
 #, fuzzy
 msgid "Open Applications"
 msgstr "Standardanwendungen"
 
-#: shell/panel.cpp:1288
+#: shell/panel.cpp:1329
 msgid "Show On-screen Keyboard"
 msgstr ""
 
-#: shell/panel.cpp:1289
+#: shell/panel.cpp:1330
 #, fuzzy
 msgid "Keyboard Settings…"
 msgstr "Einstellungen durchsuchen"
 
-#: shell/panel.cpp:1339 shell/panel_power.cpp:247
+#: shell/panel.cpp:1381 shell/panel_power.cpp:247
 #, fuzzy
 msgid "Power Settings…"
 msgstr "Einstellungen"

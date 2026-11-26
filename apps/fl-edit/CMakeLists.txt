@@ -3,7 +3,7 @@ target_include_directories(fl-edit-syntax PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(fl-edit-lsp STATIC lsp_util.cpp)
 target_include_directories(fl-edit-lsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fl-edit-lsp PUBLIC fld)
-add_executable(fl-edit main.cpp lsp.cpp)
+add_executable(fl-edit main.cpp doc.cpp lsp_commands.cpp find.cpp lsp.cpp)
 target_link_libraries(fl-edit PRIVATE fl-edit-syntax fl-edit-lsp fld)
 if(TARGET fld-spell) # misspelt words underlined, suggestions on right-click
   target_link_libraries(fl-edit PRIVATE fld-spell)

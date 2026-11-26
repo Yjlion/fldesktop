@@ -15,6 +15,7 @@
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 
+#include "anim.h"
 #include "server.h"
 #include "popup_place.h"
 #include "view_internal.h"
@@ -1002,6 +1003,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 	if (!is_x11(view)) detect_role(view);
 	view->mapped = true;
 	/* new windows open on the workspace the user is on */
+	workspace_sync(server);
 	if (!view->sticky) view->workspace = server->cur_workspace;
 	wlr_log(WLR_DEBUG, "map: app_id=%s title=%s role=%d%s",
 		view_app_id(view) ? view_app_id(view) : "(null)", title_or(view, "(null)"), view->role,
@@ -1035,6 +1037,7 @@ void view_handle_map(struct flwm_view *view, bool maximized, bool fullscreen, bo
 	if (focus) view_focus(view);
 	else view_raise(view);
 	view_tile_arrange(server);
+	anim_view_open(view);
 }
 
 static void view_map(struct wl_listener *listener, void *data) {
@@ -1045,6 +1048,7 @@ static void view_map(struct wl_listener *listener, void *data) {
 
 void view_handle_unmap(struct flwm_view *view) {
 	struct flwm_server *server = view->server;
+	anim_view_stop(view);
 	wlr_log(WLR_DEBUG, "unmap: %s", title_or(view, "?"));
 	if (view == server->grabbed_view) input_reset_cursor_mode(server);
 	if (server->cycle_current == view) server->cycle_current = NULL;
@@ -1118,7 +1122,7 @@ static void view_commit(struct wl_listener *listener, void *data) {
 void view_handle_commit(struct flwm_view *view) {
 	update_surface_offset(view);
 	if (!view->mapped) return;
-	if (view->opacity > 0 && view->opacity < 1) view_apply_opacity(view);
+	if (view->opacity > 0 && view->opacity < 1 && !anim_running(view)) view_apply_opacity(view);
 	if (view->role != FLWM_ROLE_NORMAL) {
 		struct wlr_box geo;
 		content_geometry(view, &geo);

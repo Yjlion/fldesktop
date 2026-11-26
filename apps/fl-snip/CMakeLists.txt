@@ -4,7 +4,7 @@ if(NOT TARGET fld-glib)
   message(WARNING "GLib not found: fl-snip is not built")
   return()
 endif()
-add_executable(fl-snip main.cpp)
+add_executable(fl-snip main.cpp capture.cpp glyphs.cpp output.cpp editor.cpp)
 target_link_libraries(fl-snip PRIVATE fl-snip-util fld fld-glib)
 install(TARGETS fl-snip RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 

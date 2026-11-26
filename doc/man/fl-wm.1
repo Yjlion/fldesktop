@@ -82,7 +82,10 @@ lock. The touchpad swipes (\fB[gestures]\fR swipe_up, swipe_down) can be set to
 \fBoverview\fR as well.
 .SH WORKSPACES
 There are four workspaces by default (\fBworkspaces=\fR1 to 9 in the \fB[behaviour]\fR section of
-\fIwm.ini\fR); all outputs switch together. Super+1 to Super+9 go to a workspace and
+\fIwm.ini\fR); all outputs switch together, or with \fBworkspaces_per_output=true\fR each output
+has its own current workspace: switching changes the output of the focused window (or the one
+switched last, or the one under the pointer), and a window dragged to another output joins that
+output's workspace. Super+1 to Super+9 go to a workspace and
 Super+Ctrl+Left/Right to the previous or next one; Super+Shift+1 to Super+Shift+9 send the focused
 window to a workspace, Super+Ctrl+Shift+Left/Right take it along to the previous or next one. The
 \fBsticky\fR action (unbound by default) shows a window on every workspace. New windows open on the
@@ -154,6 +157,10 @@ modifier (Shift, Ctrl, Alt, Super) pressed and released on its own apply to the 
 shortcuts can be typed one key at a time; pressed twice it stays on until pressed once more.
 \fBbounce_keys=\fR\fIMS\fR ignores a key pressed again within \fIMS\fR milliseconds of its
 release.
+.PP
+Windows that open rise a little and fade in, and the windows a workspace switch shows fade in
+(160 ms). \fBanimations=false\fR in \fB[appearance]\fR (Settings > Accessibility > Reduce
+motion) turns that off.
 .SH X11 PROGRAMS
 X11 programs (Steam, games, Wine, older Electron and Java programs) run through
 \fBXwayland\fR, which fl-wm starts when the first one connects; \fBDISPLAY\fR is

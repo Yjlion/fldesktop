@@ -38,7 +38,7 @@ const char *const kDragMods[] = {"super", "alt", "super+alt", "none"};
 class WindowsPage : public Fl_Group {
 public:
   ConfigFile wm{wm_ini_path()};
-  Fl_Check_Button *ffm, *switcher, *drag_snap, *assist, *shadows, *accent_border, *restore, *tiling;
+  Fl_Check_Button *ffm, *switcher, *drag_snap, *assist, *shadows, *accent_border, *restore, *tiling, *per_output;
   Fl_Spinner *workspaces, *title_height;
   Fl_Choice *drag_mod, *corner[4];
 
@@ -63,7 +63,8 @@ public:
     workspaces->step(1);
     workspaces->when(FL_WHEN_CHANGED);
     workspaces->callback(cb, this);
-    f.note(_("All screens switch workspaces together."));
+    per_output = check(f, _("Each screen switches its own workspace"));
+    per_output->tooltip(_("Off: all screens switch workspaces together"));
     restore = check(f, _("Reopen the windows of the last session at login"));
     restore->tooltip(_("The programs start again and their windows go back to their workspace, place and size"));
 
@@ -100,7 +101,7 @@ public:
 
     f.space(8);
     reset_button(f.widget_x(), f.y(), wm,
-                 {{B, "focus_follows_mouse"}, {B, "switcher"}, {B, "workspaces"}, {B, "restore_session"}, {B, "drag_snap"}, {B, "tiling"},
+                 {{B, "focus_follows_mouse"}, {B, "switcher"}, {B, "workspaces"}, {B, "restore_session"}, {B, "workspaces_per_output"}, {B, "drag_snap"}, {B, "tiling"},
                   {B, "snap_assist"}, {B, "drag_modifier"}, {B, kCornerKeys[0]}, {B, kCornerKeys[1]},
                   {B, kCornerKeys[2]}, {B, kCornerKeys[3]}, {A, "title_height"}, {A, "accent_border"},
                   {A, "shadows"}},
@@ -125,6 +126,7 @@ public:
     switcher->value(wm.ini.get_bool(B, "switcher", true));
     workspaces->value(std::clamp(wm.ini.get_int(B, "workspaces", 4), 1, 9));
     restore->value(wm.ini.get_bool(B, "restore_session", false));
+    per_output->value(wm.ini.get_bool(B, "workspaces_per_output", false));
     drag_snap->value(wm.ini.get_bool(B, "drag_snap", true));
     tiling->value(wm.ini.get_bool(B, "tiling", false));
     assist->value(wm.ini.get_bool(B, "snap_assist", true));
@@ -150,6 +152,7 @@ public:
     int n = (int)workspaces->value();
     if (n >= 1 && n <= 9) wm.ini.set_int(B, "workspaces", n);
     wm.ini.set_bool(B, "restore_session", restore->value());
+    wm.ini.set_bool(B, "workspaces_per_output", per_output->value());
     wm.ini.set_bool(B, "drag_snap", drag_snap->value());
     wm.ini.set_bool(B, "tiling", tiling->value());
     wm.ini.set_bool(B, "snap_assist", assist->value());

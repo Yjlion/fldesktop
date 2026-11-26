@@ -155,6 +155,7 @@ struct flwm_config {
 	uint32_t active_title, inactive_title, active_text, inactive_text, border_color;
 	bool accent_border; /* the focused window's border in the accent colour */
 	bool shadows;       /* soft shadows under windows */
+	bool animations;    /* windows fade in (anim.h); off: reduce motion */
 	char *font; /* pango font description, e.g. "Sans Bold 10" */
 	bool panel_top;
 	bool focus_follows_mouse;
@@ -182,6 +183,7 @@ struct flwm_config {
 	bool snap_assist; /* after snapping to a side: offer the other windows */
 	bool restore_session; /* reopen the windows of the last session (session.h) */
 	bool tiling;          /* workspaces start tiled (tile.h) */
+	bool workspaces_per_output; /* each output switches its own workspace */
 	double tile_ratio;    /* the master's share of the width */
 	int tile_gap;
 	uint32_t drag_mods; /* modifiers that make a click move / resize a window (WLR_MODIFIER_*) */
@@ -277,6 +279,7 @@ struct flwm_server {
 
 	/* workspaces (workspace.c): one set shared by all outputs, 0-based */
 	int cur_workspace;
+	struct flwm_output *ws_output; /* workspaces_per_output: the output switched last */
 	bool tiled[FLWM_MAX_WORKSPACES]; /* the workspace tiles its windows */
 	unsigned map_serial;             /* order windows were opened (the oldest is the master) */
 	/* the last session's windows, for the programs fl-autostart starts again */
@@ -367,6 +370,7 @@ struct flwm_server {
 	long lock_started;
 	struct wl_event_source *lock_restart_timer, *idle_timer, *sigchld;
 	struct wl_event_source *blank_timer; /* [power] blank_minutes */
+	struct wl_event_source *anim_timer;  /* anim.c, while windows animate */
 	bool blanked;                        /* screens off by blank_timer */
 	struct wlr_output_power_manager_v1 *output_power;
 	struct wl_listener output_power_set_mode;
@@ -398,6 +402,7 @@ struct flwm_output {
 	struct wl_listener frame;
 	struct wl_listener request_state;
 	struct wl_listener destroy;
+	int workspace;    /* its current workspace with workspaces_per_output */
 	bool powered_off; /* display off (DPMS), still in the layout */
 	bool idle_off;    /* turned off by the idle timeout: input turns it back on */
 	struct wlr_buffer *zoom_buffer; /* zoom.c: the magnified frame */
@@ -445,6 +450,9 @@ struct flwm_view {
 	bool rules_applied; /* the window rules ran (at the first map) */
 	unsigned serial;    /* when it first mapped (server->map_serial) */
 	float opacity;     /* 0 or 1: opaque; else a window rule's opacity */
+	bool anim;         /* fading in (anim.c) */
+	int64_t anim_start;
+	int anim_rise;
 	int requested_w, requested_h; /* last size we asked a shell client for */
 	int committed_w, committed_h; /* last committed size of a shell client */
 	enum flwm_role role;
@@ -647,6 +655,12 @@ bool view_on_current(struct flwm_view *view);
 /* a window Alt+Tab, the panel and focus-next may pick */
 bool view_is_cyclable(struct flwm_view *view);
 void workspace_switch(struct flwm_server *server, int n); /* 0-based */
+/* with workspaces_per_output: makes cur_workspace the workspace of the output
+ * the user is on (the focused window's, else the pointer's) */
+void workspace_sync(struct flwm_server *server);
+/* a window moved by the user: with workspaces_per_output it joins the
+ * current workspace of the output it is on now */
+void workspace_view_moved(struct flwm_view *view);
 void view_move_to_workspace(struct flwm_view *view, int n);
 void view_set_sticky(struct flwm_view *view, bool sticky);
 /* keeps a window above the others (window rules, the window menu) */

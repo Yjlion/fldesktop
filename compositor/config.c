@@ -180,6 +180,7 @@ void config_init_defaults(struct flwm_config *c) {
 	}
 	c->accent_border = true;
 	c->shadows = true;
+	c->animations = true;
 	c->font = strdup("Sans Bold 10");
 	c->repeat_rate = 25;
 	c->repeat_delay = 600;
@@ -333,6 +334,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "border_color")) c->border_color = parse_color(v, c->border_color);
 			else if (!strcmp(k, "accent_border")) c->accent_border = parse_bool(v);
 			else if (!strcmp(k, "shadows")) c->shadows = parse_bool(v);
+			else if (!strcmp(k, "animations")) c->animations = parse_bool(v);
 		} else if (!strcasecmp(section, "behaviour") || !strcasecmp(section, "behavior")) {
 			if (!strcmp(k, "panel_position")) c->panel_top = !strcasecmp(v, "top");
 			else if (!strcmp(k, "focus_follows_mouse")) c->focus_follows_mouse = parse_bool(v);
@@ -342,6 +344,7 @@ bool config_load(struct flwm_config *c, const char *path) {
 			else if (!strcmp(k, "snap_assist")) c->snap_assist = parse_bool(v);
 			else if (!strcmp(k, "restore_session")) c->restore_session = parse_bool(v);
 			else if (!strcmp(k, "tiling")) c->tiling = parse_bool(v);
+			else if (!strcmp(k, "workspaces_per_output")) c->workspaces_per_output = parse_bool(v);
 			else if (!strcmp(k, "tile_ratio")) c->tile_ratio = atof(v);
 			else if (!strcmp(k, "tile_gap")) c->tile_gap = atoi(v);
 			else if (!strcmp(k, "drag_modifier")) {

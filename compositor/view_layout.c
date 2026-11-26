@@ -77,9 +77,10 @@ static bool tiles(struct flwm_view *v, struct flwm_output *o) {
 }
 
 void view_tile_arrange(struct flwm_server *server) {
-	if (!server->tiled[server->cur_workspace]) return;
 	struct flwm_output *o;
 	wl_list_for_each(o, &server->outputs, link) {
+		int ws = server->config.workspaces_per_output ? o->workspace : server->cur_workspace;
+		if (ws < 0 || ws >= FLWM_MAX_WORKSPACES || !server->tiled[ws]) continue;
 		struct flwm_view *list[64], *v;
 		int n = 0;
 		wl_list_for_each(v, &server->views, link)

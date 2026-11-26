@@ -28,7 +28,7 @@ static std::vector<VTermScreenCell> line(const char32_t *text, int cols) {
   std::vector<VTermScreenCell> v;
   bool end = false;
   for (int i = 0; i < cols; i++) {
-    if (!text[i]) end = true;
+    if (!end && !text[i]) end = true; // not past the terminator
     v.push_back(cell(end ? 0 : text[i]));
   }
   return v;
